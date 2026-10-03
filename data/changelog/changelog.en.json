@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 424],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 424],
     "highlights": [
       "If Quotinator cannot make the backup it needs before updating or loading your database, it now stops safely and tells you why, offering only the choices that can work, with a guide explaining how to fix the rest.",
       "Quotinator now warns you while the backups folder is filling up rather than only once it is full: backups carry on from the space held in reserve, and the warning says how much room is left and clears itself once you have freed some.",
@@ -75,6 +75,8 @@
       "Every automated test host now starts with the source refresh and the bundled sources off and a data directory of its own, removed when the host stops, and a test that needs a schema is given a prepared database: test maintenance with no effect on the application (issue #424)"
     ],
     "fixed": [
+      "While Quotinator is still starting up, it now refuses anything that would change data, instead of accepting it and reporting success: a reset sent during startup used to answer \"OK\" and a web page while nothing had actually been reset (issue #419)",
+      "Startup now finishes its own work before the application reports itself ready, so an action taken the moment it becomes available can no longer interrupt it (issue #419)",
       "The notice about two renamed API operation IDs showed as expired on databases created with version 1.8.3 or earlier, although the change it describes still applies. It is now shown as current, and stays dismissed if you had already dismissed it (issue #413)",
       "That same notice ran as one unbroken paragraph; it is now laid out over several lines, with each renamed ID on its own line, in every language (issue #413)",
       "A pending database migration ran without its safety backup when that backup could not be taken. Startup now refuses the migration, stays in a limited state, and says which obstacle stood in the way and how to resolve it (issue #348)",

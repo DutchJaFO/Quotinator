@@ -9,8 +9,8 @@
 
 ## Next action
 
-**Step 4: the live document.** Steps 1 to 3 are done and the full solution is green across two
-consecutive `-m:1` runs. What remains is the T2 document, the Knowledgebase entry, and the close-out.
+**T1 by the developer (row 19).** Steps 1 to 5 are done and rows 1 to 18 are ✅. Step 6's remaining
+items are the boyscout pass, the changelog entries, and then the `Waiting for release` list.
 
 ---
 
@@ -170,7 +170,7 @@ that selected it, and the sentence in its `WithDescription` describing the reduc
 
 ### 4. Extend the live documents
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 A T2 document that posts a write during the startup window and asserts `503` with a JSON body, and asks
 for a page and asserts `503` with the HTML one. Red against a build from the commit before step 2, then
@@ -182,7 +182,7 @@ green.
 
 ### 5. Resolve the Knowledgebase entry
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, deleted
 
 *The what's-new notification could not be seeded, after a reset*
 (`docs/knowledgebase/whats-new-notification-fails-to-seed-after-a-reset.md`, `QTN-KNOWN`). The condition
@@ -191,7 +191,7 @@ is development-only, so once the gate removes it the entry is **deleted** rather
 
 ### 6. Close out
 
-**Status:** ⬜ Not started
+**Status:** 🔄 Boyscout pass and changelog in progress; the `Waiting for release` list waits on T1
 
 Boyscout pass over the touched files, the changelog `unreleased` entry in all three languages, and the
 `Waiting for release` checklist.

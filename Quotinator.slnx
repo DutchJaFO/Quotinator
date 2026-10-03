@@ -360,7 +360,6 @@
     <File Path="docs/knowledgebase/transport-connection-cancelled-during-a-request.md" />
     <File Path="docs/knowledgebase/two-backups-of-one-database-show-different-versions.md" />
     <File Path="docs/knowledgebase/uploaded-file-is-rejected-as-invalid-json.md" />
-    <File Path="docs/knowledgebase/whats-new-notification-fails-to-seed-after-a-reset.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/api-surface/">
     <File Path="docs/automated-testing/api-surface/01-baseline.md" />
