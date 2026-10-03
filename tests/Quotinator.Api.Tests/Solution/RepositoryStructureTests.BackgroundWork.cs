@@ -17,4 +17,38 @@ public partial class RepositoryStructureTests
     {
         Assert.DoesNotContain("Task.Run(", File.ReadAllText(ProgramCs));
     }
+
+    /// <summary>
+    /// Startup waits for the work it began before it reports itself finished (#419).
+    /// <para>
+    /// <c>StartupBackgroundWorkTests</c> proves the helper waits; nothing proved that startup actually
+    /// asks it to. Without this call the gate opened the moment the work was started, and a reset
+    /// arriving in that window rebuilt the database while the what's-new write was still pointing at a
+    /// version row it was about to remove.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public void Program_WaitsForTheBackgroundWorkItStarted()
+    {
+        Assert.Contains("WhenAllCompletedAsync();", File.ReadAllText(ProgramCs), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// And it waits <em>before</em> marking startup complete, which is the half that matters.
+    /// <para>
+    /// Pairs with <see cref="Program_WaitsForTheBackgroundWorkItStarted"/>: a call placed after
+    /// <c>MarkComplete()</c> satisfies that test and fixes nothing, because the gate has already opened
+    /// by the time anything is awaited. Compared by position for that reason, rather than by presence.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public void Program_WaitsForThatWork_BeforeMarkingStartupComplete()
+    {
+        string program = File.ReadAllText(ProgramCs);
+
+        Assert.IsLessThan(
+            program.IndexOf("MarkComplete();", StringComparison.Ordinal),
+            program.IndexOf("WhenAllCompletedAsync();", StringComparison.Ordinal),
+            "startup marks itself complete before waiting for the work it began, so the gate opens while that work is still running");
+    }
 }

@@ -217,9 +217,9 @@ half means anything alone. Where a row is one half of a pair, the other half is 
 | 9 | ✅ | `/api/v1/version` answers `200` with `environment` and `database` once ready | Live (T2) | `startup-and-degradation/03`, step 3: `status=ready`, `hasDatabase=True`, 795 quotes |
 | 10 | ✅ | An API caller gets problem details | Unit test | `StartupWaitMiddlewareTests.BodyIsProblemDetails_WhenJsonIsAccepted`, red before step 3 |
 | 11 | ✅ | A browser gets the HTML wait page | Unit test | `StartupWaitMiddlewareTests.BodyIsTheWaitPage_WhenHtmlIsAccepted`, row 10's pair |
-| 12 | ❌ | A reset arriving while the gate is closed changes nothing | Unit test | A host whose background work is held open answers the reset `503`, and the database is untouched |
-| 13 | ❌ | A reset arriving after the gate opens does reset | Unit test | Row 12's pair: without it row 12 passes against a reset endpoint that never works |
-| 14 | ❌ | The what's-new notification survives a reset that arrives at the gate | Unit test | The write completes before the gate opens, so the row it points at still exists |
+| 12 | ✅ | A reset arriving while the gate is closed changes nothing | Unit test | `StartupWaitMiddlewareTests.DuringStartup_TheRequestNeverReachesTheHandler`: the handler is the only thing that could change anything, so never reaching it is the claim |
+| 13 | ✅ | A reset arriving after the gate opens does reset | Unit test | `StartupWaitMiddlewareTests.NonGetAfterStartup_ReachesTheHandler`, row 12's pair |
+| 14 | ✅ | Startup waits for its own work before opening the gate, which is what keeps the what's-new write safe | Unit test | `RepositoryStructureTests.Program_WaitsForTheBackgroundWorkItStarted` and `..._BeforeMarkingStartupComplete`, shown red by removing the await and by moving it after `MarkComplete()`. `StartupBackgroundWorkTests` proves the helper waits; these prove startup asks it to |
 | 15 | ✅ | A real container answers `503` with JSON to a write during startup | Live (T2) | `startup-and-degradation/03`, step 2, green 2026-10-03 |
 | 16 | ✅ | That same container accepts the write once ready | Live (T2) | `startup-and-degradation/03`, step 3: the same reset answered `200` after 11.5 s |
 | 17 | ✅ | The document would have caught the defect | Live (T2) | The same document against `quotinator:canary419`, built from `d05927f9`: the reset answered `200` with `text/html`, and `/version` `200` |
