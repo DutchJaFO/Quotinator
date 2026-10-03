@@ -1,6 +1,6 @@
 # #419: A reset in the first moments after startup races the what's-new notification's write
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #419
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,8 +9,19 @@
 
 ## Next action
 
-**T1 by the developer (row 19).** Steps 1 to 5 are done and rows 1 to 18 are ✅. Step 6's remaining
-items are the boyscout pass, the changelog entries, and then the `Waiting for release` list.
+**All six steps are done and all nineteen verification rows are ✅.** T1 passed 2026-10-04, on both
+schema paths. The issue is ready for `Waiting for release`: tick the Definition of done, then post the
+closing comment with the verification table.
+
+**The startup log is itself evidence of the gate.** The three `[Changelog - Read] served 126 entries`
+lines, which are the what's-new producer reading the changelog, now appear before `[Server] listening`
+rather than after `Quotinator ready`. On the fresh-database run that ordering holds across twelve seconds
+of seeding: schema at baseline, 795 quotes imported, stats, then those reads, then listening. Every piece
+of startup work is inside the gate.
+
+**And the original symptom is gone where it was observed.** The fresh-database run's notification page
+carries the what's-new notification, which is the one this issue was filed because a reset could lose.
+No `[Runtime - Exception]` line in that run.
 
 ---
 
@@ -107,6 +118,34 @@ after 180s" gave it away. The runs above use `HttpClient`.
 
 ---
 
+## Scope changes
+
+**The fix is not the one the issue describes, and is broader than it** (developer, 2026-10-03). The issue
+asks for the what's-new producer to stop racing a reset: "either the write completes against the version
+it was computed for, or it is recomputed after the reset". Neither is what was built.
+
+What was built is a rule about the application rather than about that producer: no external write reaches
+the database until startup has finished its own work. The race in the issue is one consequence of the gate
+opening too early, and the changelog import sat in exactly the same position without anyone having noticed.
+Fixing the producer would have left that second case alone.
+
+Two things in the issue's own text are superseded:
+
+- **Its mechanism is stale.** It names "a detached task (`Program.cs`, the `Task.Run` beside
+  `WhatsNewNotification.SeedAsync`)". #424 replaced that with `StartupBackgroundWork`, which made the host
+  wait at shutdown and did nothing for this.
+- **Its remedy is declined.** "Recomputed after the reset" would mean a reset reseeding notifications,
+  which breaches `CLAUDE.md`'s endpoint side-effect policy (developer, 2026-10-03). Nothing is reseeded.
+
+**What the issue asked for is still delivered**, by construction rather than by repair: the write cannot
+race a reset, because a reset cannot arrive until the write has finished.
+
+**A larger defect was found while measuring it.** A write during startup was answered `200` with an HTML
+wait page: an API caller was told its reset had succeeded, handed a web page, and nothing was reset. That
+is deterministic across the whole startup window rather than a sub-second race, and it is now a `503`.
+
+---
+
 ## Known hazard
 
 **Delaying `MarkComplete()` has broken the test suite once before.** `Program.cs:1214` records that
@@ -191,7 +230,7 @@ is development-only, so once the gate removes it the entry is **deleted** rather
 
 ### 6. Close out
 
-**Status:** 🔄 Boyscout pass and changelog in progress; the `Waiting for release` list waits on T1
+**Status:** ✅ Done
 
 Boyscout pass over the touched files, the changelog `unreleased` entry in all three languages, and the
 `Waiting for release` checklist.
@@ -224,7 +263,7 @@ half means anything alone. Where a row is one half of a pair, the other half is 
 | 16 | ✅ | That same container accepts the write once ready | Live (T2) | `startup-and-degradation/03`, step 3: the same reset answered `200` after 11.5 s |
 | 17 | ✅ | The document would have caught the defect | Live (T2) | The same document against `quotinator:canary419`, built from `d05927f9`: the reset answered `200` with `text/html`, and `/version` `200` |
 | 18 | ✅ | The suite's duration is not materially worse | Live | Measured back to back on `Quotinator.Api.Tests`: 4m19s without the gate, 5m19s with it, same 1186 tests |
-| 19 | ❌ | The application starts | Live (T1) | The developer starts it in Visual Studio and it reaches `Quotinator ready` |
+| 19 | ✅ | The application starts | Live (T1) | Step 6: the developer ran it twice, 2026-10-04, on both schema paths. Against a database needing migrations (data 3 to 27, app 5 to 9), and against an empty data directory, which takes the baseline path instead. Both reached `Quotinator ready` with both listeners bound |
 
 ---
 ## Observed effect
