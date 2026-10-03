@@ -1,6 +1,6 @@
 # #413: The operation-ID announcement expires while it still applies, and its text is one unbroken paragraph
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #413
 **Tiers required:** T1, T2
 **Depends on:** #312 and #319, both `Waiting for release`
@@ -9,8 +9,10 @@
 
 ## Next action
 
-**T1 by the developer (row 9).** Steps 1 to 5 are done, rows 1 to 8 are ✅, and step 6's boyscout pass
-and changelog entries are in. The `Waiting for release` list is all that follows T1.
+**All six steps are done and all nine verification rows are ✅.** T1 passed 2026-10-03: migration 27
+applied (`version 3 to 27`), the announcement renders over four lines and is no longer Expired, and no
+`[Runtime - Exception]` appeared. The issue is ready for `Waiting for release`: tick the Definition of
+done, then post the closing comment with the verification table.
 
 ---
 
@@ -165,7 +167,7 @@ documents, then remove the container, image and worktree.
 
 ### 6. Close out
 
-**Status:** 🔄 Boyscout pass and changelog done; the `Waiting for release` list waits on T1
+**Status:** ✅ Done
 
 Boyscout pass over the touched files (`.editorconfig` scoped sections for the `.cs` files this issue
 edits), the changelog `unreleased` entry in all three languages, and the `Waiting for release`
@@ -185,7 +187,7 @@ checklist.
 | 6 | ✅ | Every language's announcement body is multi-line | Unit test | `OperationIdRenameAnnouncementTests.EveryLanguagesBody_IsLaidOutOverSeveralLines` (`en-GB`, `nl`, `de`), beside `TheProducersBody_GivesEachRenamedOperationIdItsOwnLine`. Held here rather than in `TranslationCompletenessTests`, whose subject is key completeness rather than one key's shape |
 | 7 | ✅ | A real 1.8.3 upgrade shows one active, multi-line announcement | Live (T2) | *Upgrading a v1.8.3 database enriches its notification rather than duplicating it*, green 2026-10-02: count `1`, `sameRow=True`, `cleared=True`, `bodyLines after = 4`, and `lines=4` in all three languages |
 | 8 | ✅ | That document would have caught the defect | Live (T2) | The same document against `quotinator:canary413`, built from `0924b058`: step 2 red on `cleared=False` and `bodyLines after = 1`, step 3 red on `lines=1` for every language, while count and `sameRow` stayed correct |
-| 9 | ❌ | The application starts | Live (T1) | The developer starts it in Visual Studio and it reaches `Quotinator ready` |
+| 9 | ✅ | The application starts | Live (T1) | Step 6: the developer ran it 2026-10-03, applying migration 27 on a real database and reaching `Quotinator ready`; the announcement renders over four lines and is no longer Expired |
 
 ---
 
