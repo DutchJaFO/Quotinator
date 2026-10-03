@@ -10,7 +10,7 @@ namespace Quotinator.Data.Testing.Database;
 /// </summary>
 public sealed class TempDatabase : IDisposable
 {
-    private readonly string _tempDir;
+    private readonly TempDirectory _tempDir;
 
     /// <summary>Absolute path to the temporary database file.</summary>
     public string DbPath { get; }
@@ -24,21 +24,19 @@ public sealed class TempDatabase : IDisposable
     /// <param name="ddlStatements">DDL statements to run after the database file is created (e.g. CREATE TABLE).</param>
     public TempDatabase(IReadOnlyList<string> ddlStatements)
     {
-        _tempDir          = Directory.CreateTempSubdirectory("quotinator_test_").FullName;
-        DbPath            = Path.Combine(_tempDir, "test.db");
+        _tempDir          = new TempDirectory("quotinator_test_");
+        DbPath            = Path.Combine(_tempDir.Path, "test.db");
         ConnectionFactory = new SqliteConnectionFactory(DbPath);
 
-        using var conn = new SqliteConnection($"Data Source={DbPath}");
+        using SqliteConnection conn = new($"Data Source={DbPath}");
         conn.Open();
-        foreach (var ddl in ddlStatements)
+        foreach (string ddl in ddlStatements)
             conn.Execute(ddl);
     }
 
-    /// <summary>Clears all pooled SQLite connections and deletes the temporary directory and database file.</summary>
-    public void Dispose()
-    {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
+    /// <summary>
+    /// Deletes the temporary directory and the database file in it, via <see cref="TempDirectory"/>:
+    /// one implementation of "clear the pools, then delete", and one place a failure is reported from.
+    /// </summary>
+    public void Dispose() => _tempDir.Dispose();
 }

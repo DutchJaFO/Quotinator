@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Quotinator.Api.Startup;
 using Quotinator.Api.Tests.Startup;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Api.Tests;
 
@@ -40,8 +41,9 @@ internal sealed class QuotinatorWebApplicationFactory(bool preparedDatabase = fa
     /// Every host is also self-contained (#424): a test depends on nothing outside the project unless that
     /// is what it tests (<c>docs/testing-policy.md</c>). So the source refresh is off (left on, startup
     /// fetched the bundled sources from GitHub whenever the cached copy was a day old), the bundled sources
-    /// are off, and the data directory is a new temporary one, removed when the host stops, instead of the
-    /// build output's own folder, which kept every run's database, backups and key ring for the next. A
+    /// are off, and the data directory is a new temporary one, removed when this factory is
+    /// disposed, instead of the build output's own folder, which kept every run's database, backups and
+    /// key ring for the next. A
     /// test whose subject needs one of these otherwise sets it with its own <c>UseSetting</c>, which runs
     /// after this.
     /// </para>
@@ -49,17 +51,16 @@ internal sealed class QuotinatorWebApplicationFactory(bool preparedDatabase = fa
     /// <param name="builder">The host's web builder.</param>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        string dataDirectory = Path.Combine(Path.GetTempPath(), "quotinator-apitest-" + Guid.NewGuid().ToString("N"));
+        TempDirectory dataDirectory = new("quotinator-apitest-");
 
         if (preparedDatabase)
         {
-            Directory.CreateDirectory(dataDirectory);
-            File.Copy(PreparedDatabase.FilePath, Path.Combine(dataDirectory, Quotinator.Data.Paths.DataPaths.DatabaseFile));
+            File.Copy(PreparedDatabase.FilePath, Path.Combine(dataDirectory.Path, Quotinator.Data.Paths.DataPaths.DatabaseFile));
         }
 
         builder.UseSetting("Quotinator:AutoUpdateSources", "false");
         builder.UseSetting("Quotinator:IncludeDefaultSources", "false");
-        builder.UseSetting("Quotinator:DataDir", dataDirectory);
+        builder.UseSetting("Quotinator:DataDir", dataDirectory.Path);
 
         builder.ConfigureServices(services =>
         {
@@ -67,42 +68,6 @@ internal sealed class QuotinatorWebApplicationFactory(bool preparedDatabase = fa
             services.AddSingleton<IHostedService>(provider =>
                 new DataDirectoryRemoval(dataDirectory, provider.GetRequiredService<IHostApplicationLifetime>()));
         });
-    }
-
-    /// <summary>
-    /// Removes a host's temporary data directory once the host has stopped (#424).
-    /// <para>
-    /// Tied to the host rather than to the factory: a test usually disposes the factory
-    /// <c>WithWebHostBuilder</c> returned, not the one it constructed, so a factory-level cleanup would
-    /// leak. <c>ApplicationStopped</c> fires after every hosted service has stopped, and SQLite's pool is
-    /// cleared first so no pooled handle keeps the database file open.
-    /// </para>
-    /// <para>
-    /// The application's own background work is finished by then: its host waits for it when stopping
-    /// (<see cref="Quotinator.Api.Startup.StartupBackgroundWork"/>), so every connection it opened is
-    /// already closed, by that work itself.
-    /// </para>
-    /// </summary>
-    /// <param name="dataDirectory">The directory this host was given.</param>
-    /// <param name="lifetime">The host's lifetime, whose stop the removal waits for.</param>
-    private sealed class DataDirectoryRemoval(string dataDirectory, IHostApplicationLifetime lifetime) : IHostedService
-    {
-        /// <inheritdoc/>
-        public Task StartAsync(CancellationToken cancellationToken)
-        {
-            lifetime.ApplicationStopped.Register(Remove);
-            return Task.CompletedTask;
-        }
-
-        /// <inheritdoc/>
-        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-        private void Remove()
-        {
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-            if (Directory.Exists(dataDirectory))
-                Directory.Delete(dataDirectory, recursive: true);
-        }
     }
 
     /// <inheritdoc/>
@@ -119,12 +84,37 @@ internal sealed class QuotinatorWebApplicationFactory(bool preparedDatabase = fa
 
         return host;
     }
-}
 
-/// <summary>
-/// The bounded wait behind <see cref="QuotinatorWebApplicationFactory"/>, extracted so the timeout path
-/// is testable: a guard whose failure mode cannot be exercised is not a verified guard.
-/// </summary>
+    /// <summary>
+    /// Deletes a host's temporary data directory once that host has stopped (#424).
+    /// <para>
+    /// Tied to the host rather than to the factory, deliberately: a test usually disposes the factory
+    /// <c>WithWebHostBuilder</c> returned, not the one it constructed, so a factory-level cleanup would
+    /// leak. <c>ApplicationStopped</c> fires after every hosted service has stopped.
+    /// </para>
+    /// <para>
+    /// The deletion itself belongs to <see cref="TempDirectory"/> (#419), so this project and
+    /// <c>Quotinator.Data.Tests</c> share one implementation of "clear the pools, then delete", and a
+    /// deletion that cannot happen is reported instead of vanishing. It used to be written out here and
+    /// to throw into a lifetime event that swallowed it, which is how a directory outlived its host with
+    /// nothing to say so.
+    /// </para>
+    /// </summary>
+    /// <param name="dataDirectory">The directory this host was given, and will delete.</param>
+    /// <param name="lifetime">The host's lifetime, whose stop the removal waits for.</param>
+    private sealed class DataDirectoryRemoval(TempDirectory dataDirectory, IHostApplicationLifetime lifetime) : IHostedService
+    {
+        /// <inheritdoc/>
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            lifetime.ApplicationStopped.Register(dataDirectory.Dispose);
+            return Task.CompletedTask;
+        }
+
+        /// <inheritdoc/>
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+}
 internal static class StartupReadiness
 {
     /// <summary>
