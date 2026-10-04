@@ -9,9 +9,9 @@
 
 ## Next action
 
-**Execute this plan**, starting at step 1. Nothing is outstanding: shape A is decided (developer,
-2026-10-04, recorded in step 1), the cross-check against the authoritative sources is done, and every
-finding it produced is settled in *Scope changes* below rather than left open.
+**Execute step 2.** Step 1 is done — ADR 023 is written and indexed. Nothing else is outstanding: shape A
+is decided (developer, 2026-10-04, recorded in ADR 023), the cross-check against the authoritative
+sources is done, and every finding it produced is settled in *Scope changes* below rather than left open.
 
 **One of those findings corrects the issue body**, and is the reason steps 2 and 8 read as they do: the
 issue's point 2 specifies `JsonElement?` for the per-field recorded value on the grounds that it keeps
@@ -43,7 +43,10 @@ tolerates any number keyed on entity id plus field, and `Merge` rejects it by th
 
 ### 1. Write ADR 023
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-04 — [023-one-conflict-rule-entry-per-entity.md](../../architecture-decisions/023-one-conflict-rule-entry-per-entity.md),
+indexed in `docs/architecture-decisions/README.md` and registered in `Quotinator.slnx`. Its rule 3 carries
+the three-state requirement and rule 4 the `WhenWritingDefault` attribute, so the type and the write-path
+defect both have a decision behind them rather than only a plan step.
 
 One entry per entity stays the contract, and the recorded incoming value moves from the entry to the
 field it governs. Records the rejected alternative (several entries per entity become the supported

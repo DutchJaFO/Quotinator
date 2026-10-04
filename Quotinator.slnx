@@ -136,6 +136,7 @@
     <File Path="docs/architecture-decisions/020-openapi-tags-are-declared-with-descriptions.md" />
     <File Path="docs/architecture-decisions/021-file-inputs-are-schema-validated.md" />
     <File Path="docs/architecture-decisions/022-exceptions-only-for-undetectable-conditions.md" />
+    <File Path="docs/architecture-decisions/023-one-conflict-rule-entry-per-entity.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />
