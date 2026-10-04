@@ -268,6 +268,92 @@ public class ImportRuleEndpointsTests
         Assert.Contains("44444444-4444-4444-4444-444444444444", entityIds, "the newly generated rule must be included");
     }
 
+    /// <summary>#420: the reported defect, at the surface it was reported on. A rule file naming one
+    /// entity twice made `ConflictRuleGenerator.Merge`'s per-entity dictionary throw
+    /// `ArgumentException`, which reached the client as an unhandled 500. Per ADR 022 the condition is
+    /// checkable, so it is a stated 422 that names the file and the repeated id.</summary>
+    [TestMethod]
+    public async Task GenerateConflictRuleFile_ExistingFileNamesOneEntityTwice_Returns422()
+    {
+        WriteBundledRuleFile("rules.json", DuplicateEntityRuleFile);
+
+        var fakeService = new FakeImportActionService
+        {
+            ReturnExportRows =
+            [
+                new ImportActionFieldRowResponse
+                {
+                    ActionId      = Guid.NewGuid(),
+                    EntityId      = "44444444-4444-4444-4444-444444444444",
+                    EntityType    = "Quote",
+                    Field         = "source",
+                    ExistingValue = "Old Title",
+                    IncomingValue = "New Title",
+                    Decision      = FieldResolutionChoice.Replace,
+                },
+            ],
+        };
+        using var factory = CreateFactory(fakeService);
+        using var client  = CreateAuthorizedClient(factory);
+
+        var response = await client.PostAsync("/api/v1/import/rules/conflict/generate?fileName=rules.json&origin=Bundled&batchId=my-batch", content: null, TestContext.CancellationToken);
+        string body   = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "A duplicate entity id is a stated outcome, never an unhandled 500");
+        Assert.Contains("rules.json", body, "The response names the file so the operator knows which one to fix");
+        Assert.Contains("11111111-1111-1111-1111-111111111111", body, "The response names the repeated entity id");
+    }
+
+    /// <summary>#420: a second unhandled 500 on this endpoint, reachable once `fields[]` carries a
+    /// recorded value. The endpoint serializes `Merge`'s output straight back to the override file, and
+    /// serializing an `Undefined` `JsonElement` throws — so a hand-authored file that legitimately omits
+    /// a field's `recordedIncomingValue` would fail on write. It must round-trip as absent, never be
+    /// invented as an explicit null, which would silently change that field's next outcome away from
+    /// Stale.</summary>
+    [TestMethod]
+    public async Task GenerateConflictRuleFile_ExistingFieldHasNoRecordedValue_RoundTripsWithoutInventingNull()
+    {
+        WriteBundledRuleFile("rules.json", SampleRuleFile);
+
+        // A batch adding a second field to the SAME entity, so the entry whose field has no recorded
+        // value is rewritten rather than merely copied.
+        var fakeService = new FakeImportActionService
+        {
+            ReturnExportRows =
+            [
+                new ImportActionFieldRowResponse
+                {
+                    ActionId      = Guid.NewGuid(),
+                    EntityId      = "11111111-1111-1111-1111-111111111111",
+                    EntityType    = "Quote",
+                    Field         = "source",
+                    ExistingValue = "Old Title",
+                    IncomingValue = "New Title",
+                    Decision      = FieldResolutionChoice.Replace,
+                },
+            ],
+        };
+        using var factory = CreateFactory(fakeService);
+        using var client  = CreateAuthorizedClient(factory);
+
+        var response = await client.PostAsync("/api/v1/import/rules/conflict/generate?fileName=rules.json&origin=Bundled&batchId=my-batch", content: null, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "A field with no recorded value is permitted and must not fail the write");
+
+        string written = await File.ReadAllTextAsync(Path.Combine(_overrideDir, "rules.json"), TestContext.CancellationToken);
+        using JsonDocument doc = JsonDocument.Parse(written);
+        JsonElement dateField = doc.RootElement.GetProperty("rules").EnumerateArray()
+            .Single(r => r.GetProperty("entityId").GetString() == "11111111-1111-1111-1111-111111111111")
+            .GetProperty("fields").EnumerateArray()
+            .Single(f => f.GetProperty("field").GetString() == "date");
+
+        Assert.IsFalse(dateField.TryGetProperty("recordedIncomingValue", out _),
+            "A field that recorded nothing must round-trip as absent — writing an explicit null would turn 'not recorded' into 'recorded as null' and stop that field reporting Stale");
+    }
+
+    private const string DuplicateEntityRuleFile =
+        """{"rules":[{"entityId":"11111111-1111-1111-1111-111111111111","existingRecord":{"date":"1990"},"incomingRecord":{"date":"1991"},"fields":[{"field":"date","resolution":"Custom","customValue":"1992","recordedIncomingValue":"1991"}]},{"entityId":"11111111-1111-1111-1111-111111111111","existingRecord":{"character":null},"incomingRecord":{"character":null},"fields":[{"field":"character","resolution":"Custom","customValue":"Someone","recordedIncomingValue":null}]}]}""";
+
     // ── DELETE /conflict ───────────────────────────────────────────────────
 
     [TestMethod]

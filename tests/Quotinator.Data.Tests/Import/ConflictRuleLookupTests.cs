@@ -177,24 +177,106 @@ public class ConflictRuleLookupTests
             "An already-correct stored value must not mask a rule whose incoming side has moved");
     }
 
-    /// <summary>#374: half of the split of `TryResolve_GovernedFieldMissingFromRecordedSnapshot_IsStale`
-    /// — a field absent from the rule's own recorded <c>incomingRecord</c> can never be confirmed fresh.</summary>
+    /// <summary>#374, rewritten for #420: the same statement — a governed field with no recorded
+    /// incoming value can never be confirmed fresh — now asserted through the absent per-field value
+    /// rather than an empty entry-level <c>incomingRecord</c> (ADR 023). The entry-level record
+    /// deliberately *does* carry the field here, and the live incoming value deliberately matches it, so
+    /// this test fails rather than passes if the lookup still reads that record: the only thing that can
+    /// make it green is reading the field's own recorded value and finding none.</summary>
     [TestMethod]
-    public void TryResolve_GovernedFieldMissingFromIncomingRecord_ReportsStale()
+    public void TryResolve_FieldWithNoRecordedIncomingValue_ReportsStale()
     {
         ConflictResolutionRule rule = new ConflictResolutionRule
         {
             EntityId       = "abc123",
             ExistingRecord = Record("""{"date":"1980"}"""),
-            IncomingRecord = EmptyRecord,
+            IncomingRecord = Record("""{"date":"1975"}"""),
             Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
-        bool found = lookup.TryResolve("abc123", "date", "1980", null, out _, out ConflictRuleOutcome outcome);
+        bool found = lookup.TryResolve("abc123", "date", "1980", "1975", out _, out ConflictRuleOutcome outcome);
 
         Assert.IsTrue(found);
-        Assert.AreEqual(ConflictRuleOutcome.Stale, outcome, "A field absent from the recorded incoming snapshot can never be confirmed fresh");
+        Assert.AreEqual(ConflictRuleOutcome.Stale, outcome,
+            "A field with no recorded incoming value of its own can never be confirmed fresh, whatever the entry-level record happens to say");
+    }
+
+    /// <summary>#420: the case that cannot be expressed at all under the old shape, and the reason the
+    /// recorded value had to move. Two fields of one entity whose recorded incoming values differ — the
+    /// Mr. Robot case, where the `date` rule was authored after the `character` rule had already
+    /// enriched the incoming side — are each judged against their own, so one is fresh and the other
+    /// stale from a single entry.</summary>
+    [TestMethod]
+    public void TryResolve_TwoFieldsWithDifferentRecordedIncomingValues_EachJudgedAgainstItsOwn()
+    {
+        ConflictResolutionRule rule = new ConflictResolutionRule
+        {
+            EntityId       = "abc123",
+            ExistingRecord = EmptyRecord,
+            IncomingRecord = EmptyRecord,
+            Fields =
+            [
+                new ConflictResolutionFieldRule
+                {
+                    Field                 = "date",
+                    Resolution            = FieldResolutionChoice.Custom,
+                    CustomValue           = "2015",
+                    RecordedIncomingValue = Record("\"2017\""),
+                },
+                new ConflictResolutionFieldRule
+                {
+                    Field                 = "character",
+                    Resolution            = FieldResolutionChoice.Custom,
+                    CustomValue           = "Fernando Vera",
+                    RecordedIncomingValue = Record("null"),
+                },
+            ],
+        };
+        ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
+
+        // date: live incoming still "2017", matching its own recorded value — not stale.
+        Assert.IsTrue(lookup.TryResolve("abc123", "date", "2015", "2017", out _, out ConflictRuleOutcome dateOutcome));
+        Assert.AreNotEqual(ConflictRuleOutcome.Stale, dateOutcome,
+            "The date field's own recorded value still matches the live incoming side");
+
+        // character: recorded null, live incoming has moved to a real value — stale.
+        Assert.IsTrue(lookup.TryResolve("abc123", "character", "Fernando Vera", "Someone Else", out _, out ConflictRuleOutcome characterOutcome));
+        Assert.AreEqual(ConflictRuleOutcome.Stale, characterOutcome,
+            "The character field's own recorded value (null) no longer matches the live incoming side");
+    }
+
+    /// <summary>#420 / ADR 023 rule 3: an explicit <c>null</c> is a real recorded value, distinct from
+    /// "not recorded at all". This is the assertion a <c>JsonElement?</c>-typed property cannot satisfy —
+    /// it resolves an explicit null and an absent property to the same <c>HasValue == false</c>, so a
+    /// field recording null would wrongly report Stale against a live null that in fact still
+    /// matches.</summary>
+    [TestMethod]
+    public void TryResolve_FieldRecordingExplicitNull_IsJudgedAgainstNull()
+    {
+        ConflictResolutionRule rule = new ConflictResolutionRule
+        {
+            EntityId       = "abc123",
+            ExistingRecord = EmptyRecord,
+            IncomingRecord = EmptyRecord,
+            Fields =
+            [
+                new ConflictResolutionFieldRule
+                {
+                    Field                 = "character",
+                    Resolution            = FieldResolutionChoice.Custom,
+                    CustomValue           = "Fernando Vera",
+                    RecordedIncomingValue = Record("null"),
+                },
+            ],
+        };
+        ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
+
+        bool found = lookup.TryResolve("abc123", "character", "Fernando Vera", null, out _, out ConflictRuleOutcome outcome);
+
+        Assert.IsTrue(found);
+        Assert.AreEqual(ConflictRuleOutcome.AlreadyApplied, outcome,
+            "A recorded explicit null matching a live null incoming value is fresh, not stale — and the stored value already equals the rule's outcome");
     }
 
     /// <summary>#374: the other half of the split — the visible record of the reversal. A field absent

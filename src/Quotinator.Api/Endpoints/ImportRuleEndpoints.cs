@@ -102,7 +102,10 @@ internal static class ImportRuleEndpoints
                     fileName!, parsedOrigin, pathResolver, registry, logger, logPrefix: "[Api - Import]");
                 ConflictResolutionRuleFileDto? existingFile = existingContent is null ? null : ParseConflictRuleFile(existingContent);
 
-                ConflictResolutionRuleFileDto merged     = ConflictRuleGenerator.Merge(existingFile, generated);
+                ConflictRuleMergeResult mergeResult = ConflictRuleGenerator.Merge(existingFile, generated);
+                // Step 7 of #420 replaces this with the stated 422; until then a duplicate still throws
+                // inside Merge, so File is always populated by the time control reaches here.
+                ConflictResolutionRuleFileDto merged = mergeResult.File!;
                 int rulesAdded = merged.Rules.Count - (existingFile?.Rules.Count ?? 0);
 
                 string json         = System.Text.Json.JsonSerializer.Serialize(merged, RuleFileWriteOptions);

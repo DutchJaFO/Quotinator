@@ -135,7 +135,7 @@ public class ConflictRuleGeneratorTests
     {
         var generated = ConflictRuleGenerator.Generate([Row("date", "1939", null, FieldResolutionChoice.Keep)]);
 
-        var merged = ConflictRuleGenerator.Merge(null, generated);
+        ConflictResolutionRuleFileDto merged = ConflictRuleGenerator.Merge(null, generated).File!;
 
         Assert.HasCount(1, merged.Rules);
     }
@@ -149,7 +149,7 @@ public class ConflictRuleGeneratorTests
         };
         var generated = ConflictRuleGenerator.Generate([Row("date", "1994", null, FieldResolutionChoice.Keep, entityId: "e0000002-0000-4000-8000-000000000002")]);
 
-        var merged = ConflictRuleGenerator.Merge(existingFile, generated);
+        ConflictResolutionRuleFileDto merged = ConflictRuleGenerator.Merge(existingFile, generated).File!;
 
         Assert.HasCount(2, merged.Rules);
     }
@@ -164,7 +164,7 @@ public class ConflictRuleGeneratorTests
         // A generated rule for the SAME field, with a DIFFERENT resolution — must never win.
         var generated = ConflictRuleGenerator.Generate([Row("date", "1939", null, FieldResolutionChoice.Keep)]);
 
-        var merged = ConflictRuleGenerator.Merge(existingFile, generated);
+        ConflictResolutionRuleFileDto merged = ConflictRuleGenerator.Merge(existingFile, generated).File!;
 
         var rule = merged.Rules.Single(r => r.EntityId == EntityId);
         var field = rule.Fields.Single(f => f.Field == "date");
@@ -181,7 +181,7 @@ public class ConflictRuleGeneratorTests
         };
         var generated = ConflictRuleGenerator.Generate([Row("character", null, "Rick Blaine", FieldResolutionChoice.Replace)]);
 
-        var merged = ConflictRuleGenerator.Merge(existingFile, generated);
+        ConflictResolutionRuleFileDto merged = ConflictRuleGenerator.Merge(existingFile, generated).File!;
 
         var rule = merged.Rules.Single(r => r.EntityId == EntityId);
         Assert.HasCount(2, rule.Fields, "A genuinely new field for an already-covered entity must be added alongside the existing one");
@@ -189,13 +189,144 @@ public class ConflictRuleGeneratorTests
         Assert.Contains(f => f.Field == "character", rule.Fields);
     }
 
+    // ── #420: the recorded incoming value belongs to the field it governs (ADR 023) ────────────
+
+    /// <summary>#420: `Generate` already holds each row's own `IncomingValue`; ADR 023 records it on the
+    /// field rather than only in the entry-level snapshot, so two fields of one entity can each carry the
+    /// value that is correct for them.</summary>
+    [TestMethod]
+    public void Generate_RecordsEachFieldsOwnIncomingValue()
+    {
+        var rows = new[]
+        {
+            Row("date", "1939", "2017", FieldResolutionChoice.Keep),
+            Row("character", null, null, FieldResolutionChoice.Custom, "Fernando Vera"),
+        };
+
+        var rule = ConflictRuleGenerator.Generate(rows).Single();
+
+        var date = rule.Fields.Single(f => f.Field == "date");
+        Assert.AreEqual("2017", date.RecordedIncomingValue.GetString(), "The date field must record its own incoming value");
+        var character = rule.Fields.Single(f => f.Field == "character");
+        Assert.AreEqual(JsonValueKind.Null, character.RecordedIncomingValue.ValueKind,
+            "A null incoming value is recorded as an explicit JSON null, never left Undefined — Undefined means 'not recorded'");
+    }
+
+    /// <summary>#420: a `genres` row decodes to a list, and the per-field recorded value has to carry
+    /// that shape rather than the delimited string.</summary>
+    [TestMethod]
+    public void Generate_RecordedIncomingValueForGenres_IsAnArray()
+    {
+        var rows = new[] { Row("genres", "drama", "drama;sci-fi", FieldResolutionChoice.Replace) };
+
+        var rule = ConflictRuleGenerator.Generate(rows).Single();
+
+        var recorded = rule.Fields.Single().RecordedIncomingValue;
+        Assert.AreEqual(JsonValueKind.Array, recorded.ValueKind);
+        Assert.AreSequenceEqual(["drama", "sci-fi"], recorded.EnumerateArray().Select(e => e.GetString()).ToArray());
+    }
+
+    /// <summary>#420: the field a merge adds carries its own recorded value, so it is judged on its own
+    /// terms instead of inheriting the entry's snapshot — which is what made "which entry does a new
+    /// field join" an arbitrary choice under the old shape.</summary>
+    [TestMethod]
+    public void Merge_NewFieldCarriesItsOwnRecordedIncomingValue()
+    {
+        var existingFile = new ConflictResolutionRuleFileDto
+        {
+            Rules = [BuildRule(EntityId, "date", FieldResolutionChoice.Keep)],
+        };
+        var generated = ConflictRuleGenerator.Generate([Row("character", null, "Rick Blaine", FieldResolutionChoice.Replace)]);
+
+        ConflictResolutionRuleFileDto merged = ConflictRuleGenerator.Merge(existingFile, generated).File!;
+
+        var added = merged.Rules.Single(r => r.EntityId == EntityId).Fields.Single(f => f.Field == "character");
+        Assert.AreEqual("Rick Blaine", added.RecordedIncomingValue.GetString());
+    }
+
+    /// <summary>#420: the defect this issue exists for. `Merge` keyed a dictionary on entity id, so a
+    /// file naming one entity twice threw `ArgumentException` and surfaced as an unhandled 500. The
+    /// condition is checkable before the dictionary is built, so per ADR 022 it is an outcome.</summary>
+    [TestMethod]
+    public void Merge_ExistingFileNamesOneEntityTwice_ReportsTheDuplicateInsteadOfThrowing()
+    {
+        var existingFile = new ConflictResolutionRuleFileDto
+        {
+            Rules =
+            [
+                BuildRule(EntityId, "date", FieldResolutionChoice.Custom, "2015"),
+                BuildRule(EntityId, "character", FieldResolutionChoice.Custom, "Fernando Vera"),
+            ],
+        };
+        var generated = ConflictRuleGenerator.Generate([Row("type", "tv", "tv", FieldResolutionChoice.Keep)]);
+
+        ConflictRuleMergeResult result = ConflictRuleGenerator.Merge(existingFile, generated);
+
+        Assert.IsFalse(result.IsMerged, "A file naming one entity twice must be refused, not merged");
+        Assert.AreEqual(EntityId, result.DuplicateEntityId, "The repeated id is named so the caller can report which one it was");
+        Assert.IsNull(result.File);
+    }
+
+    /// <summary>#420: the duplicate check is case-insensitive, per this project's id-comparison
+    /// convention — two entries differing only in casing are the same entity, and `Merge`'s own
+    /// dictionary already used `OrdinalIgnoreCase`, so a case-variant pair threw exactly as an exact
+    /// one did.</summary>
+    [TestMethod]
+    public void Merge_ExistingFileNamesOneEntityTwiceDifferingOnlyByCase_IsStillADuplicate()
+    {
+        var existingFile = new ConflictResolutionRuleFileDto
+        {
+            Rules =
+            [
+                BuildRule(EntityId.ToLowerInvariant(), "date", FieldResolutionChoice.Keep),
+                BuildRule(EntityId.ToUpperInvariant(), "character", FieldResolutionChoice.Keep),
+            ],
+        };
+
+        ConflictRuleMergeResult result = ConflictRuleGenerator.Merge(existingFile, []);
+
+        Assert.IsFalse(result.IsMerged, "Entity ids differing only by case are the same entity");
+    }
+
+    /// <summary>#420: the duplicate check must not fire on a file that is merely long, nor on the same
+    /// id appearing in two different rule files — `Merge` runs for one file at a time.</summary>
+    [TestMethod]
+    public void Merge_ExistingFileNamesEachEntityOnce_IsMerged()
+    {
+        var existingFile = new ConflictResolutionRuleFileDto
+        {
+            Rules =
+            [
+                BuildRule("e0000001-0000-4000-8000-000000000001", "date", FieldResolutionChoice.Keep),
+                BuildRule("e0000002-0000-4000-8000-000000000002", "date", FieldResolutionChoice.Keep),
+            ],
+        };
+
+        ConflictRuleMergeResult result = ConflictRuleGenerator.Merge(existingFile, []);
+
+        Assert.IsTrue(result.IsMerged);
+        Assert.IsNull(result.DuplicateEntityId);
+        Assert.HasCount(2, result.File!.Rules);
+    }
+
     private static readonly JsonElement EmptyRecord = JsonSerializer.Deserialize<JsonElement>("{}");
+
+    private static JsonElement Value(string json) => JsonSerializer.Deserialize<JsonElement>(json);
 
     private static ConflictResolutionRule BuildRule(string entityId, string field, FieldResolutionChoice resolution, string? customValue = null) => new()
     {
         EntityId       = entityId,
         ExistingRecord = EmptyRecord,
         IncomingRecord = EmptyRecord,
-        Fields         = [new ConflictResolutionFieldRule { Field = field, Resolution = resolution, CustomValue = customValue }],
+        Fields         =
+        [
+            new ConflictResolutionFieldRule
+            {
+                Field                 = field,
+                Resolution            = resolution,
+                CustomValue           = customValue,
+                RecordedIncomingValue = Value("null"),
+            },
+        ],
     };
 }

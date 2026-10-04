@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Json.Schema;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Tests.Data;
 
@@ -264,6 +265,40 @@ public class SourceDataIntegrityTests
             Assert.IsTrue(result.IsValid, FormatErrors(name, result));
         }
     }
+
+    /// <summary>
+    /// #420 / ADR 023: a rule file names each entity at most once. JSON Schema cannot express uniqueness
+    /// by a property, so <see cref="RuleFiles_ConformToSchema"/> passes a file with a repeated entity id
+    /// and always will — this is what enforces that half of the contract. Matching is case-insensitive,
+    /// per this project's id-comparison convention and matching what `ConflictRuleGenerator.Merge`'s own
+    /// dictionary does.
+    /// </summary>
+    [TestMethod]
+    public void RuleFiles_NameEachEntityAtMostOnce()
+    {
+        List<string> offenders = [];
+
+        foreach (string file in RuleFiles)
+        {
+            ConflictResolutionRuleFileDto? parsed =
+                JsonSerializer.Deserialize<ConflictResolutionRuleFileDto>(File.ReadAllText(file), RuleFileReadOptions);
+
+            IEnumerable<string> duplicates = (parsed?.Rules ?? [])
+                .GroupBy(r => r.EntityId, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .Select(g => $"{Path.GetFileName(file)}: {g.Key} appears {g.Count()} times");
+
+            offenders.AddRange(duplicates);
+        }
+
+        Assert.IsEmpty(offenders,
+            "A rule file may name an entity at most once (ADR 023) — a second entry for one entity is how a "
+            + "per-entry snapshot read per field used to be worked around, and it made POST /import/rules/conflict/generate "
+            + "throw. Collapse the entries into one, with each field carrying its own recordedIncomingValue. Offenders: "
+            + string.Join("; ", offenders));
+    }
+
+    private static readonly JsonSerializerOptions RuleFileReadOptions = new() { PropertyNameCaseInsensitive = true };
 
     /// <summary>Each per-source title-alias file (#181) conforms to schemas/source-alias-rules.schema.json.</summary>
     [TestMethod]

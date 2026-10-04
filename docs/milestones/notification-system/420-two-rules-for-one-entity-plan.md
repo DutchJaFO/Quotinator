@@ -9,9 +9,12 @@
 
 ## Next action
 
-**Execute step 2.** Step 1 is done — ADR 023 is written and indexed. Nothing else is outstanding: shape A
-is decided (developer, 2026-10-04, recorded in ADR 023), the cross-check against the authoritative
-sources is done, and every finding it produced is settled in *Scope changes* below rather than left open.
+**Execute step 4** — migrate the existing rule fixtures, together with step 5, which is what turns them
+green. Steps 1 to 3 are done: ADR 023 is written and indexed, the schema and model carry the per-field
+value, and 11 tests are red on their own assertions. Step 8 needs no separate code change (see step 3).
+Nothing else is outstanding: shape A is decided (developer, 2026-10-04, recorded in ADR 023), the
+cross-check against the authoritative sources is done, and every finding it produced is settled in
+*Scope changes* below rather than left open.
 
 **One of those findings corrects the issue body**, and is the reason steps 2 and 8 read as they do: the
 issue's point 2 specifies `JsonElement?` for the per-field recorded value on the grounds that it keeps
@@ -108,7 +111,52 @@ hand-written file that omits it still degrades to `Stale`, which is the behaviou
 
 ### 3. Write the new tests and confirm them red
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-04 — **11 red, each on its own assertion or its own exception**, with the
+rest of every touched suite still green. Build clean, 0 warnings.
+
+| Test | Red because |
+|---|---|
+| `TryResolve_FieldWithNoRecordedIncomingValue_ReportsStale` | `AreEqual(Stale, outcome)` |
+| `TryResolve_TwoFieldsWithDifferentRecordedIncomingValues_EachJudgedAgainstItsOwn` | `AreNotEqual(Stale, dateOutcome)` |
+| `TryResolve_FieldRecordingExplicitNull_IsJudgedAgainstNull` | `AreEqual(AlreadyApplied, outcome)` |
+| `Generate_RecordsEachFieldsOwnIncomingValue` | `InvalidOperationException` — `.GetString()` on an `Undefined` element |
+| `Generate_RecordedIncomingValueForGenres_IsAnArray` | `ValueKind` is `Undefined`, not `Array` |
+| `Merge_NewFieldCarriesItsOwnRecordedIncomingValue` | `InvalidOperationException`, same cause |
+| `Merge_ExistingFileNamesOneEntityTwice_ReportsTheDuplicateInsteadOfThrowing` | `ArgumentException: An item with the same key has already been added` |
+| `Merge_ExistingFileNamesOneEntityTwiceDifferingOnlyByCase_IsStillADuplicate` | the same `ArgumentException` |
+| `RuleFiles_NameEachEntityAtMostOnce` | nikhilnamal17 names one id twice |
+| `RuleFiles_ConformToSchema` | from step 2 |
+| `GenerateConflictRuleFile_ExistingFileNamesOneEntityTwice_Returns422` | 500, from the same `ArgumentException` reaching the endpoint |
+| `ConflictRuleDocuments_StateTheOneEntryPerEntityContract` | `docs/api-endpoints.md` is silent (step 12) |
+
+**The two duplicate tests and the endpoint test reproduce the issue's reported "Actual behaviour"
+exactly** — `ArgumentException: An item with the same key has already been added. Key: …` — so the
+defect is now pinned by a unit test and by an endpoint test, not only by a live run.
+
+**Two tests are controls/guards, not reds, and are recorded as such rather than counted above:**
+
+- `Merge_ExistingFileNamesEachEntityOnce_IsMerged` — green by design, proving the duplicate check does
+  not fire on a file that merely has several entities.
+- `GenerateConflictRuleFile_ExistingFieldHasNoRecordedValue_RoundTripsWithoutInventingNull` — **green
+  already**, because step 2 shipped `[JsonIgnore(WhenWritingDefault)]` together with the property, so
+  the write-path defect never existed in a committed state. It was proven failable rather than assumed
+  so: removing the attribute turns it red on its *status code* assertion, i.e. the endpoint answering a
+  500 from `InvalidOperationException` — the predicted write-path defect, demonstrated live through the
+  real endpoint, then the attribute restored. Step 8 is therefore already satisfied by step 2 and
+  carries no separate code change.
+
+**Scope note — the `Merge` signature moved here from step 6.** The duplicate tests cannot compile
+without an outcome type to assert on, so `ConflictRuleMergeResult`
+(`src/Quotinator.Core/Database/ConflictRuleMergeResult.cs`, `Result` per ADR 016) and `Merge`'s new
+return type land here, with the body unchanged — this project's established "red against the
+signatures" pattern, so each test fails on behaviour rather than on compilation. Its four existing
+`Merge` tests and the endpoint's one call site were updated to the new shape; the endpoint's
+`mergeResult.File!` carries a comment naming step 7 as what replaces it.
+
+**Three tests beyond the Verification table were added** where writing the listed ones showed the
+assertion was incomplete: the `genres` array shape, the case-variant duplicate (`Merge`'s dictionary was
+already `OrdinalIgnoreCase`, so a case-variant pair threw exactly as an exact one did), and the
+each-entity-once control.
 
 Every test named in the Verification table that does not yet exist, confirmed red against the code as it
 stands after step 2, before any behaviour changes. Step 2 supplies the property the tests need to
