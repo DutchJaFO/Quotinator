@@ -9,6 +9,7 @@ using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Services;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Core.Tests.Database;
 
@@ -29,24 +30,22 @@ public class SourceCacheWiringTests
 
     private static string CuratedFile => Path.Combine(SourcesDir, "quotinator-curated.json");
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private string _backups = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_sourcecachewiring_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
-        _backups = Path.Combine(_tempDir, "backups");
+        _tempDir = new TempDirectory("quotinator_sourcecachewiring_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
+        _backups = Path.Combine(_tempDir.Path, "backups");
     }
 
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private QuotinatorDatabaseInitializer CreateInitializer(SpySourceCacheUpdater spy, bool autoUpdateSources)
@@ -149,7 +148,7 @@ public class SourceCacheWiringTests
     [TestMethod]
     public async Task PreviewSeedAsync_MalformedFile_ReportsInvalidJsonIssue()
     {
-        string malformedPath = Path.Combine(_tempDir, "malformed.json");
+        string malformedPath = Path.Combine(_tempDir.Path, "malformed.json");
         File.WriteAllText(malformedPath, "{ this is not valid json");
 
         SqliteConnectionFactory factory       = new SqliteConnectionFactory(_dbPath);
@@ -190,7 +189,7 @@ public class SourceCacheWiringTests
     [TestMethod]
     public async Task PreviewSeedAsync_MissingFile_ReportsMissingIssue()
     {
-        string missingPath = Path.Combine(_tempDir, "does-not-exist.json");
+        string missingPath = Path.Combine(_tempDir.Path, "does-not-exist.json");
 
         SqliteConnectionFactory factory       = new SqliteConnectionFactory(_dbPath);
         DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };

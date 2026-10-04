@@ -15,6 +15,7 @@ using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Services;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Core.Tests.Database;
 
@@ -27,18 +28,18 @@ namespace Quotinator.Core.Tests.Database;
 [TestClass]
 public class ImportActionPlannerTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private SqliteConnectionFactory _factory = null!;
 
     [TestInitialize]
     public async Task TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_planner_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_planner_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
         _factory = new SqliteConnectionFactory(_dbPath);
 
-        DatabaseOptions options       = new() { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir, "backups") };
+        DatabaseOptions options       = new() { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir.Path, "backups") };
         SqliteImportBatchRepository importBatches = new(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         ImportActionReader actionReader  = new(_factory);
         ImportActionWriter actionWriter  = new(_factory);
@@ -67,9 +68,7 @@ public class ImportActionPlannerTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private static SourceQuoteDto BuildQuote(string id, string source = "Casablanca", string? character = "Rick Blaine", string? author = null, string quoteText = "Here's looking at you, kid.", string? date = null, Core.Enums.QuoteType type = Core.Enums.QuoteType.Movie) => new()

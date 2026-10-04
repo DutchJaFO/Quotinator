@@ -13,6 +13,7 @@ using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Queries;
 using Quotinator.Core.Services;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Core.Tests.Database;
 
@@ -26,24 +27,22 @@ public class ConflictResolutionTests
 {
     private const string SharedId = "11111111-1111-1111-1111-111111111111";
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private string _backups = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_conflict_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
-        _backups = Path.Combine(_tempDir, "backups");
+        _tempDir = new TempDirectory("quotinator_conflict_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
+        _backups = Path.Combine(_tempDir.Path, "backups");
     }
 
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private QuotinatorDatabaseInitializer CreateInitializer(
@@ -77,7 +76,7 @@ public class ConflictResolutionTests
 
     private string WriteQuoteFile(string name, string json)
     {
-        string path = Path.Combine(_tempDir, name);
+        string path = Path.Combine(_tempDir.Path, name);
         File.WriteAllText(path, json);
         return path;
     }

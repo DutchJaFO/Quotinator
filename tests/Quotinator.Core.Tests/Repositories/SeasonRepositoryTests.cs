@@ -5,6 +5,7 @@ using Quotinator.Core.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Core.Tests.Repositories;
@@ -20,15 +21,15 @@ namespace Quotinator.Core.Tests.Repositories;
 [TestClass]
 public class SeasonRepositoryTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath = null!;
     private SqliteRepository<SeasonEntity> _repository = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_season_repo_test_").FullName;
-        _dbPath = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_season_repo_test_");
+        _dbPath = Path.Combine(_tempDir.Path, "test.db");
 
         using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
@@ -56,9 +57,7 @@ public class SeasonRepositoryTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     /// <summary>The repository-level control CLAUDE.md's pagination contract asks for: an endpoint

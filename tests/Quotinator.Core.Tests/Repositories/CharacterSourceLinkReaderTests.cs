@@ -4,6 +4,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Core.Queries;
 using Quotinator.Core.Repositories;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Core.Tests.Repositories;
 
@@ -15,7 +16,7 @@ namespace Quotinator.Core.Tests.Repositories;
 [TestClass]
 public class CharacterSourceLinkReaderTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath = null!;
     private SqliteConnectionFactory _factory = null!;
     private CharacterSourceLinkReader _reader = null!;
@@ -23,8 +24,8 @@ public class CharacterSourceLinkReaderTests
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_csl_test_").FullName;
-        _dbPath = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_csl_test_");
+        _dbPath = Path.Combine(_tempDir.Path, "test.db");
         _factory = new SqliteConnectionFactory(_dbPath);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -51,9 +52,7 @@ public class CharacterSourceLinkReaderTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private void InsertSource(Guid id, string title, bool isDeleted = false) =>

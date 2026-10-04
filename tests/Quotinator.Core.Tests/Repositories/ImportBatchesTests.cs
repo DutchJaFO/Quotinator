@@ -10,6 +10,7 @@ using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Services;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Core.Tests.Repositories;
 
@@ -25,25 +26,22 @@ public class ImportBatchesTests
     private static string VilaboimFile      => Path.Combine(SourcesDir, "vilaboim_movie-quotes.json");
     private static string NikhilNamal17File => Path.Combine(SourcesDir, "NikhilNamal17_popular-movie-quotes.json");
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private string _backups = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_ibtest_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
-        _backups = Path.Combine(_tempDir, "backups");
+        _tempDir = new TempDirectory("quotinator_ibtest_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
+        _backups = Path.Combine(_tempDir.Path, "backups");
     }
 
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private QuotinatorDatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches, bool useBaseline = true)
@@ -254,7 +252,7 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Seeding_EmptyOrInvalidJsonSourceFile_IsSkippedWithoutCrashing()
     {
-        string emptyFile = Path.Combine(_tempDir, "empty.json");
+        string emptyFile = Path.Combine(_tempDir.Path, "empty.json");
         File.WriteAllText(emptyFile, string.Empty);
 
         SeedFile curatedFile = new SeedFile(CuratedFile, null);

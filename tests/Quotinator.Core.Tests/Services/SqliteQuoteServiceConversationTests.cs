@@ -10,6 +10,7 @@ using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Services;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Core.Tests.Services;
 
@@ -33,7 +34,7 @@ public class SqliteQuoteServiceConversationTests
     private const string Conversation1Id   = "eeeeeeee-0000-0000-0000-00000000000a";
     private const string Conversation2Id   = "eeeeeeee-0000-0000-0000-00000000000b";
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private string _backups = null!;
     private string _fixture = null!;
@@ -43,10 +44,10 @@ public class SqliteQuoteServiceConversationTests
     [TestInitialize]
     public async Task TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_conversation_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
-        _backups = Path.Combine(_tempDir, "backups");
-        _fixture = Path.Combine(_tempDir, "conversation-fixture.json");
+        _tempDir = new TempDirectory("quotinator_conversation_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
+        _backups = Path.Combine(_tempDir.Path, "backups");
+        _fixture = Path.Combine(_tempDir.Path, "conversation-fixture.json");
 
         File.WriteAllText(_fixture, $$"""
             {
@@ -114,9 +115,7 @@ public class SqliteQuoteServiceConversationTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private SqliteQuoteService CreateService() => new(

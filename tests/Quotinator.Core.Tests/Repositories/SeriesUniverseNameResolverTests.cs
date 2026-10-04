@@ -9,6 +9,7 @@ using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Services;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Core.Tests.Repositories;
 
@@ -22,18 +23,18 @@ namespace Quotinator.Core.Tests.Repositories;
 [TestClass]
 public class SeriesUniverseNameResolverTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private SqliteConnectionFactory _factory = null!;
 
     [TestInitialize]
     public async Task TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_resolver_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_resolver_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
         _factory = new SqliteConnectionFactory(_dbPath);
 
-        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir, "backups") };
+        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir.Path, "backups") };
         SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         ImportActionReader actionReader  = new ImportActionReader(_factory);
         ImportActionWriter actionWriter  = new ImportActionWriter(_factory);
@@ -62,9 +63,7 @@ public class SeriesUniverseNameResolverTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private async Task SeedSeriesAsync(string name)

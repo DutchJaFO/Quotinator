@@ -4,6 +4,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Core.Queries;
 using Quotinator.Core.Repositories;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Core.Tests.Repositories;
 
@@ -23,7 +24,7 @@ namespace Quotinator.Core.Tests.Repositories;
 [TestClass]
 public class SourceSeasonReferenceReaderTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath = null!;
     private SqliteConnectionFactory _factory = null!;
     private SourceSeasonReferenceReader _reader = null!;
@@ -31,8 +32,8 @@ public class SourceSeasonReferenceReaderTests
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_ssnrr_test_").FullName;
-        _dbPath = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_ssnrr_test_");
+        _dbPath = Path.Combine(_tempDir.Path, "test.db");
         _factory = new SqliteConnectionFactory(_dbPath);
 
         using SqliteConnection conn = new($"Data Source={_dbPath}");
@@ -61,9 +62,7 @@ public class SourceSeasonReferenceReaderTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private void InsertSeason(Guid id, int number, string? title, string? subtitle, bool isDeleted = false) =>

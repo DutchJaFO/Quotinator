@@ -40,25 +40,22 @@ public class DatabaseInitializerTests
     private static string VilaboimFile      => Path.Combine(SourcesDir, "vilaboim_movie-quotes.json");
     private static string NikhilNamal17File => Path.Combine(SourcesDir, "NikhilNamal17_popular-movie-quotes.json");
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private string _backups = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
-        _backups = Path.Combine(_tempDir, "backups");
+        _tempDir = new TempDirectory("quotinator_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
+        _backups = Path.Combine(_tempDir.Path, "backups");
     }
 
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private QuotinatorDatabaseInitializer CreateInitializer(
@@ -1081,7 +1078,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Reseed_ReviewPolicyFileWithOneGenuineModify_ConfirmationCountsAddUpToIncoming()
     {
-        string quoteFile = Path.Combine(_tempDir, "review-policy-quote.json");
+        string quoteFile = Path.Combine(_tempDir.Path, "review-policy-quote.json");
         File.WriteAllText(quoteFile,
             """
             {"quotes":[{"id":"e6111111-1111-4111-8111-111111111111","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
@@ -1129,7 +1126,7 @@ public class DatabaseInitializerTests
     /// </summary>
     private async Task<QuotinatorDatabaseInitializer> SeedThenRestateWithoutGenresAsync(string quoteId, string fileName)
     {
-        string quoteFile = Path.Combine(_tempDir, fileName);
+        string quoteFile = Path.Combine(_tempDir.Path, fileName);
         File.WriteAllText(quoteFile,
             $$$"""
             {"quotes":[{"id":"{{{quoteId}}}","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":null,"author":null,"type":"movie","genres":["drama"],"translations":{}}]}
@@ -1185,8 +1182,8 @@ public class DatabaseInitializerTests
     private async Task<(QuotinatorDatabaseInitializer Db, string QuoteFile, string RuleFile, SourceFixtureIds Ids)>
         SeedSourceWithSeriesLinkAsync(string name, string quoteId)
     {
-        string quoteFile = Path.Combine(_tempDir, $"{name}.json");
-        string ruleFile  = Path.Combine(_tempDir, $"{name}-rules.json");
+        string quoteFile = Path.Combine(_tempDir.Path, $"{name}.json");
+        string ruleFile  = Path.Combine(_tempDir.Path, $"{name}-rules.json");
 
         // The rule file must exist before the cold start but resolve nothing yet: the ids it needs are
         // only knowable once the rows have been created.
@@ -1300,7 +1297,7 @@ public class DatabaseInitializerTests
     public async Task Reseed_GenuineModify_StillWritesItsChangeEntry()
     {
         string id = "77e22222-2222-4222-8222-222222222222";
-        string quoteFile = Path.Combine(_tempDir, "genuine-change-entry.json");
+        string quoteFile = Path.Combine(_tempDir.Path, "genuine-change-entry.json");
         File.WriteAllText(quoteFile,
             $$$"""
             {"quotes":[{"id":"{{{id}}}","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
@@ -1397,7 +1394,7 @@ public class DatabaseInitializerTests
     public async Task Reseed_GenuineModify_IsStillCountedInRecordCount()
     {
         string id = "77e66666-6666-4666-8666-666666666666";
-        string quoteFile = Path.Combine(_tempDir, "genuine-record-count.json");
+        string quoteFile = Path.Combine(_tempDir.Path, "genuine-record-count.json");
         File.WriteAllText(quoteFile,
             $$$"""
             {"quotes":[{"id":"{{{id}}}","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
@@ -1437,7 +1434,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Reseed_SkipPolicyFileWithADifferingRow_ReportsItAsSkippedRatherThanVanishing()
     {
-        string quoteFile = Path.Combine(_tempDir, "skip-policy-quote.json");
+        string quoteFile = Path.Combine(_tempDir.Path, "skip-policy-quote.json");
         File.WriteAllText(quoteFile,
             """
             {"quotes":[{"id":"e6222222-2222-4222-8222-222222222222","quote":"Another test line.","originalLanguage":"en","source":"Some Other Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
@@ -1728,7 +1725,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Reseed_Repeatedly_WithABlockedCollision_BlockedCountNeverGrows()
     {
-        string collisionFile = Path.Combine(_tempDir, "blocked-collision.json");
+        string collisionFile = Path.Combine(_tempDir.Path, "blocked-collision.json");
         File.WriteAllText(collisionFile,
             """
             {"quotes":[
@@ -1773,7 +1770,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Reseed_Repeatedly_WithACaseOnlyPendingModify_PendingCountNeverGrows()
     {
-        string caseOnlyFile = Path.Combine(_tempDir, "case-only-modify.json");
+        string caseOnlyFile = Path.Combine(_tempDir.Path, "case-only-modify.json");
         File.WriteAllText(caseOnlyFile,
             """
             {"quotes":[
@@ -1827,7 +1824,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Reseed_Repeatedly_WithAStaleRuleConflict_StaleCountNeverGrows()
     {
-        string staleFile = Path.Combine(_tempDir, "stale-rule-conflict.json");
+        string staleFile = Path.Combine(_tempDir.Path, "stale-rule-conflict.json");
         File.WriteAllText(staleFile,
             """
             {"quotes":[
@@ -1835,7 +1832,7 @@ public class DatabaseInitializerTests
                 {"id":"e6411111-1111-4111-8111-111111111111","quote":"Even the smallest person can change the course of the future.","originalLanguage":"en","source":"The Lord of the Rings: The Fellowship of the Ring","date":"1991","character":null,"author":null,"type":"movie","genres":[],"translations":{}}
             ],"sources":[]}
             """);
-        string ruleFile = Path.Combine(_tempDir, "stale-rule-conflict-rules.json");
+        string ruleFile = Path.Combine(_tempDir.Path, "stale-rule-conflict-rules.json");
         File.WriteAllText(ruleFile,
             """
             {"rules":[{
@@ -1914,15 +1911,15 @@ public class DatabaseInitializerTests
     private QuotinatorDatabaseInitializer TwoFileConflictInitializer(
         string name, string firstFileJson, string secondFileJson, string? secondRuleFileJson = null)
     {
-        string first  = Path.Combine(_tempDir, $"{name}-1.json");
-        string second = Path.Combine(_tempDir, $"{name}-2.json");
+        string first  = Path.Combine(_tempDir.Path, $"{name}-1.json");
+        string second = Path.Combine(_tempDir.Path, $"{name}-2.json");
         File.WriteAllText(first, firstFileJson);
         File.WriteAllText(second, secondFileJson);
 
         string? ruleFile = null;
         if (secondRuleFileJson is not null)
         {
-            ruleFile = Path.Combine(_tempDir, $"{name}-2-rules.json");
+            ruleFile = Path.Combine(_tempDir.Path, $"{name}-2-rules.json");
             File.WriteAllText(ruleFile, secondRuleFileJson);
         }
 
@@ -2046,7 +2043,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Reseed_Repeatedly_WithABlockedSourceDateBackfill_BlockedCountNeverGrows()
     {
-        string quoteFile = Path.Combine(_tempDir, "blocked-backfill.json");
+        string quoteFile = Path.Combine(_tempDir.Path, "blocked-backfill.json");
         File.WriteAllText(quoteFile,
             """
             {"quotes":[{"id":"37644444-4444-4444-8444-444444444444","quote":"An undated line.","originalLanguage":"en","source":"Backfill Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}
@@ -2222,8 +2219,8 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Reseed_WithANewSourceConflict_StillStagesIt()
     {
-        string quoteFile  = Path.Combine(_tempDir, "new-conflict-1.json");
-        string sourceFile = Path.Combine(_tempDir, "new-conflict-2.json");
+        string quoteFile  = Path.Combine(_tempDir.Path, "new-conflict-1.json");
+        string sourceFile = Path.Combine(_tempDir.Path, "new-conflict-2.json");
         File.WriteAllText(quoteFile,
             """
             {"quotes":[
@@ -2295,9 +2292,9 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Reseed_AfterARuleResolvesAKnownConflict_AppliesItInsteadOfSkipping()
     {
-        string quoteFile  = Path.Combine(_tempDir, "becomes-resolvable-1.json");
-        string sourceFile = Path.Combine(_tempDir, "becomes-resolvable-2.json");
-        string ruleFile   = Path.Combine(_tempDir, "becomes-resolvable-2-rules.json");
+        string quoteFile  = Path.Combine(_tempDir.Path, "becomes-resolvable-1.json");
+        string sourceFile = Path.Combine(_tempDir.Path, "becomes-resolvable-2.json");
+        string ruleFile   = Path.Combine(_tempDir.Path, "becomes-resolvable-2-rules.json");
         File.WriteAllText(quoteFile,
             """
             {"quotes":[{"id":"376fffff-ffff-4fff-8fff-ffffffffffff","quote":"A line.","originalLanguage":"en","source":"Resolvable Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}
@@ -2393,8 +2390,8 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Reseed_AnAlreadyReportedConflict_IsAppliedTerminalAndWritesNoChangeEntry()
     {
-        string quoteFile  = Path.Combine(_tempDir, "already-reported-inert-1.json");
-        string sourceFile = Path.Combine(_tempDir, "already-reported-inert-2.json");
+        string quoteFile  = Path.Combine(_tempDir.Path, "already-reported-inert-1.json");
+        string sourceFile = Path.Combine(_tempDir.Path, "already-reported-inert-2.json");
         File.WriteAllText(quoteFile,
             """
             {"quotes":[{"id":"37711111-1111-4111-8111-111111111111","quote":"A line.","originalLanguage":"en","source":"Inert Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}
@@ -2477,8 +2474,8 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Reseed_WithANewConflict_StillRaisesAReviewAlert()
     {
-        string quoteFile  = Path.Combine(_tempDir, "alert-new-1.json");
-        string sourceFile = Path.Combine(_tempDir, "alert-new-2.json");
+        string quoteFile  = Path.Combine(_tempDir.Path, "alert-new-1.json");
+        string sourceFile = Path.Combine(_tempDir.Path, "alert-new-2.json");
         File.WriteAllText(quoteFile,
             """
             {"quotes":[
@@ -2586,7 +2583,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Seed_WithADuplicateQuoteKeepRule_QuoteLinksToTheKeptDateNotTheLastOccurrences()
     {
-        string keepFile = Path.Combine(_tempDir, "keep-rule-source-link.json");
+        string keepFile = Path.Combine(_tempDir.Path, "keep-rule-source-link.json");
         File.WriteAllText(keepFile,
             """
             {"quotes":[
@@ -2594,7 +2591,7 @@ public class DatabaseInitializerTests
                 {"id":"e6511111-1111-4111-8111-111111111111","quote":"Life is a banquet, and most poor suckers are starving to death!","originalLanguage":"en","source":"Auntie Mame Test Fixture","date":"2005","character":null,"author":null,"type":"movie","genres":[],"translations":{}}
             ],"sources":[]}
             """);
-        string ruleFile = Path.Combine(_tempDir, "keep-rule-source-link-rules.json");
+        string ruleFile = Path.Combine(_tempDir.Path, "keep-rule-source-link-rules.json");
         File.WriteAllText(ruleFile,
             """
             {"rules":[{
@@ -2643,7 +2640,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Seed_WithAKeepRuleMatchingABrandNewQuote_StagesPendingForReviewRatherThanApplyingOrIgnoring()
     {
-        string keepFile = Path.Combine(_tempDir, "keep-rule-against-nothing.json");
+        string keepFile = Path.Combine(_tempDir.Path, "keep-rule-against-nothing.json");
         File.WriteAllText(keepFile,
             """
             {"quotes":[
@@ -2651,7 +2648,7 @@ public class DatabaseInitializerTests
                 {"id":"e6611111-1111-4111-8111-111111111111","quote":"A line worth keeping exactly as it already is.","originalLanguage":"en","source":"Keep Rule Test Fixture","date":"2020","character":null,"author":null,"type":"movie","genres":[],"translations":{}}
             ],"sources":[]}
             """);
-        string ruleFile = Path.Combine(_tempDir, "keep-rule-against-nothing-rules.json");
+        string ruleFile = Path.Combine(_tempDir.Path, "keep-rule-against-nothing-rules.json");
         File.WriteAllText(ruleFile,
             """
             {"rules":[{
@@ -3060,7 +3057,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_TvQuoteWithDisagreeingYear_StagesPendingButKeepsShowLevelSourceAndCharacter()
     {
-        string tvFile = Path.Combine(_tempDir, "tv-disagreeing-year.json");
+        string tvFile = Path.Combine(_tempDir.Path, "tv-disagreeing-year.json");
         File.WriteAllText(tvFile,
             """
             {"quotes":[
@@ -3386,8 +3383,8 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_DatelessSourcesEntryThenDatedQuoteInLaterFile_BackfillsSourceDate()
     {
-        string datelessEntryFile = Path.Combine(_tempDir, "dateless-entry.json");
-        string datedQuoteFile    = Path.Combine(_tempDir, "dated-quote.json");
+        string datelessEntryFile = Path.Combine(_tempDir.Path, "dateless-entry.json");
+        string datedQuoteFile    = Path.Combine(_tempDir.Path, "dated-quote.json");
 
         File.WriteAllText(datelessEntryFile,
             """{"quotes":[],"sources":[{"title":"Test Film","type":"movie"}]}""");
@@ -3423,7 +3420,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ColdStart_WithAFileThatContradictsItself_ReportsIt()
     {
-        string contradictingFile = Path.Combine(_tempDir, "self-contradicting.json");
+        string contradictingFile = Path.Combine(_tempDir.Path, "self-contradicting.json");
         File.WriteAllText(contradictingFile,
             """
             {"quotes":[
@@ -3455,7 +3452,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ColdStart_WithBothDatedVersionsDeclared_ReportsNoContradiction()
     {
-        string declaredFile = Path.Combine(_tempDir, "declared-two-versions.json");
+        string declaredFile = Path.Combine(_tempDir.Path, "declared-two-versions.json");
         File.WriteAllText(declaredFile,
             """
             {"quotes":[
@@ -3484,7 +3481,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ColdStart_WithOnlyOneOfTwoDatesDeclared_StillReportsTheContradiction()
     {
-        string partialFile = Path.Combine(_tempDir, "partly-declared.json");
+        string partialFile = Path.Combine(_tempDir.Path, "partly-declared.json");
         File.WriteAllText(partialFile,
             """
             {"quotes":[
@@ -3508,7 +3505,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ColdStart_WithNoSelfContradiction_ReportsNothing()
     {
-        string consistentFile = Path.Combine(_tempDir, "self-consistent.json");
+        string consistentFile = Path.Combine(_tempDir.Path, "self-consistent.json");
         File.WriteAllText(consistentFile,
             """
             {"quotes":[
@@ -3605,9 +3602,9 @@ public class DatabaseInitializerTests
     public async Task InitialiseAsync_SecondFileReviewPolicyMatchingRule_AutoResolvesNoPendingActionLeft()
     {
         const string quoteId = "d1111111-1111-4111-8111-111111111111";
-        string baselinePath = Path.Combine(_tempDir, "baseline.json");
-        string conflictPath = Path.Combine(_tempDir, "conflict.json");
-        string rulesPath    = Path.Combine(_tempDir, "conflict-rules.json");
+        string baselinePath = Path.Combine(_tempDir.Path, "baseline.json");
+        string conflictPath = Path.Combine(_tempDir.Path, "conflict.json");
+        string rulesPath    = Path.Combine(_tempDir.Path, "conflict-rules.json");
 
         File.WriteAllText(baselinePath,
             """[{"id":"QUOTE_ID","quote":"Original text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
@@ -3647,9 +3644,9 @@ public class DatabaseInitializerTests
     public async Task InitialiseAsync_RegisteredOverrideWithMatchingHash_IsPreferredOverBundledRuleFile()
     {
         const string quoteId = "d3111111-1111-4111-8111-111111111111";
-        string baselinePath = Path.Combine(_tempDir, "override-baseline.json");
-        string conflictPath = Path.Combine(_tempDir, "override-conflict.json");
-        string bundledRulesPath = Path.Combine(_tempDir, "override-conflict-rules.json");
+        string baselinePath = Path.Combine(_tempDir.Path, "override-baseline.json");
+        string conflictPath = Path.Combine(_tempDir.Path, "override-conflict.json");
+        string bundledRulesPath = Path.Combine(_tempDir.Path, "override-conflict-rules.json");
 
         File.WriteAllText(baselinePath,
             """[{"id":"QUOTE_ID","quote":"Original text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
@@ -3662,8 +3659,8 @@ public class DatabaseInitializerTests
             """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep"}]}]}"""
                 .Replace("QUOTE_ID", quoteId));
 
-        string internalDownloadDir = Path.Combine(_tempDir, "sources", "download");
-        RuleFileOverridePathResolver pathResolver = new(internalDownloadDir, Path.Combine(_tempDir, "imports", "download"));
+        string internalDownloadDir = Path.Combine(_tempDir.Path, "sources", "download");
+        RuleFileOverridePathResolver pathResolver = new(internalDownloadDir, Path.Combine(_tempDir.Path, "imports", "download"));
         string overridePath = pathResolver.Resolve(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled);
         Directory.CreateDirectory(Path.GetDirectoryName(overridePath)!);
         // Override says Replace: the applied text must come from here instead.
@@ -3706,9 +3703,9 @@ public class DatabaseInitializerTests
     public async Task InitialiseAsync_OverrideFileWithoutMatchingRegistration_FallsBackToBundledRuleFile()
     {
         const string quoteId = "d4111111-1111-4111-8111-111111111111";
-        string baselinePath = Path.Combine(_tempDir, "unregistered-baseline.json");
-        string conflictPath = Path.Combine(_tempDir, "unregistered-conflict.json");
-        string bundledRulesPath = Path.Combine(_tempDir, "unregistered-conflict-rules.json");
+        string baselinePath = Path.Combine(_tempDir.Path, "unregistered-baseline.json");
+        string conflictPath = Path.Combine(_tempDir.Path, "unregistered-conflict.json");
+        string bundledRulesPath = Path.Combine(_tempDir.Path, "unregistered-conflict-rules.json");
 
         File.WriteAllText(baselinePath,
             """[{"id":"QUOTE_ID","quote":"Original text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
@@ -3720,8 +3717,8 @@ public class DatabaseInitializerTests
             """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep"}]}]}"""
                 .Replace("QUOTE_ID", quoteId));
 
-        string internalDownloadDir = Path.Combine(_tempDir, "sources2", "download");
-        RuleFileOverridePathResolver pathResolver = new(internalDownloadDir, Path.Combine(_tempDir, "imports2", "download"));
+        string internalDownloadDir = Path.Combine(_tempDir.Path, "sources2", "download");
+        RuleFileOverridePathResolver pathResolver = new(internalDownloadDir, Path.Combine(_tempDir.Path, "imports2", "download"));
         string overridePath = pathResolver.Resolve(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled);
         Directory.CreateDirectory(Path.GetDirectoryName(overridePath)!);
         // An override file exists on disk, but is never registered below.
@@ -3752,8 +3749,8 @@ public class DatabaseInitializerTests
     public async Task InitialiseAsync_SecondFileReviewPolicyNoRuleFile_StagesPendingAsBefore()
     {
         const string quoteId = "d2111111-1111-4111-8111-111111111111";
-        string baselinePath = Path.Combine(_tempDir, "baseline2.json");
-        string conflictPath = Path.Combine(_tempDir, "conflict2.json");
+        string baselinePath = Path.Combine(_tempDir.Path, "baseline2.json");
+        string conflictPath = Path.Combine(_tempDir.Path, "conflict2.json");
 
         File.WriteAllText(baselinePath,
             """[{"id":"QUOTE_ID","quote":"Original text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
@@ -3784,9 +3781,9 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_SecondFileMisspelledSourceWithMatchingAlias_ResolvesToExistingSourceNoDuplicate()
     {
-        string canonicalPath = Path.Combine(_tempDir, "canonical.json");
-        string misspeltPath  = Path.Combine(_tempDir, "misspelt.json");
-        string aliasPath     = Path.Combine(_tempDir, "source-aliases.json");
+        string canonicalPath = Path.Combine(_tempDir.Path, "canonical.json");
+        string misspeltPath  = Path.Combine(_tempDir.Path, "misspelt.json");
+        string aliasPath     = Path.Combine(_tempDir.Path, "source-aliases.json");
 
         File.WriteAllText(canonicalPath,
             """[{"id":"e1111111-1111-4111-8111-111111111111","quote":"First quote.","originalLanguage":"en","source":"The Avengers","date":"2012","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]""");
@@ -4376,7 +4373,7 @@ public class DatabaseInitializerTests
 
     private (QuotinatorDatabaseInitializer Db, string DbPath) CreateForcedIncrementalInitializer()
     {
-        string dbPath        = Path.Combine(_tempDir, $"test_incremental_{Guid.NewGuid():N}.db");
+        string dbPath        = Path.Combine(_tempDir.Path, $"test_incremental_{Guid.NewGuid():N}.db");
         SqliteConnectionFactory factory       = new(dbPath);
         DatabaseOptions options       = new() { DbPath = dbPath, BackupsPath = _backups };
         SqliteImportBatchRepository importBatches = new(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
@@ -4438,7 +4435,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ImportingASourceWithASeasonNumber_LinksItToThatSeason()
     {
-        string file = Path.Combine(_tempDir, "seasons.json");
+        string file = Path.Combine(_tempDir.Path, "seasons.json");
         File.WriteAllText(file,
             """
             {"quotes":[],
@@ -4470,7 +4467,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ImportingASourceWithNoSeasonNumber_LinksItToNoSeason()
     {
-        string file = Path.Combine(_tempDir, "no-season.json");
+        string file = Path.Combine(_tempDir.Path, "no-season.json");
         File.WriteAllText(file,
             """
             {"quotes":[],
@@ -4498,7 +4495,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task TwoSeriesEachWithSeasonOne_AreDistinctSeasons()
     {
-        string file = Path.Combine(_tempDir, "two-series.json");
+        string file = Path.Combine(_tempDir.Path, "two-series.json");
         File.WriteAllText(file,
             """
             {"quotes":[],
@@ -4530,8 +4527,8 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task AQuoteBackfillingASourcesDate_KeepsItsSeasonLink()
     {
-        string referenceFile = Path.Combine(_tempDir, "reference.json");
-        string quoteFile     = Path.Combine(_tempDir, "later-quote.json");
+        string referenceFile = Path.Combine(_tempDir.Path, "reference.json");
+        string quoteFile     = Path.Combine(_tempDir.Path, "later-quote.json");
 
         File.WriteAllText(referenceFile,
             """
@@ -4664,7 +4661,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ImportingAMovieQuote_IsUnaffectedBySeasonSupport()
     {
-        string file = Path.Combine(_tempDir, "movie.json");
+        string file = Path.Combine(_tempDir.Path, "movie.json");
         File.WriteAllText(file,
             """
             {"quotes":[{"id":"e1111111-1111-4111-8111-111111111111","quote":"A test line.","originalLanguage":"en","source":"Casablanca","date":"1942","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}
@@ -5471,9 +5468,9 @@ public class DatabaseInitializerTests
     public async Task SeedSeriesUniverseOverlay_NoExistingSeriesId_StagesPendingUnderReviewPolicy()
     {
         string sourceId = Quotinator.Core.Import.EntityIdentity.SourceId("Test Movie", "Movie");
-        string quotesFile = Path.Combine(_tempDir, "quotes.json");
+        string quotesFile = Path.Combine(_tempDir.Path, "quotes.json");
         File.WriteAllText(quotesFile, """[{"id":"11111111-1111-1111-1111-111111111111","quote":"Hello there.","source":"Test Movie","type":"movie"}]""");
-        string overlayFile = Path.Combine(_tempDir, "overlay.json");
+        string overlayFile = Path.Combine(_tempDir.Path, "overlay.json");
         File.WriteAllText(overlayFile, $$"""
             {
               "quotes": [],
@@ -5504,9 +5501,9 @@ public class DatabaseInitializerTests
     public async Task SeedSeriesUniverseOverlay_AlreadyTagged_NoActionStaged()
     {
         string sourceId = Quotinator.Core.Import.EntityIdentity.SourceId("Test Movie", "Movie");
-        string quotesFile = Path.Combine(_tempDir, "quotes.json");
+        string quotesFile = Path.Combine(_tempDir.Path, "quotes.json");
         File.WriteAllText(quotesFile, """[{"id":"11111111-1111-1111-1111-111111111111","quote":"Hello there.","source":"Test Movie","type":"movie"}]""");
-        string overlayFile = Path.Combine(_tempDir, "overlay.json");
+        string overlayFile = Path.Combine(_tempDir.Path, "overlay.json");
         File.WriteAllText(overlayFile, $$"""
             {
               "quotes": [],
@@ -5549,7 +5546,7 @@ public class DatabaseInitializerTests
 
     private SeedBatch SimpleQuoteBatch()
     {
-        string quotesFile = Path.Combine(_tempDir, $"quotes-{Guid.NewGuid():N}.json");
+        string quotesFile = Path.Combine(_tempDir.Path, $"quotes-{Guid.NewGuid():N}.json");
         File.WriteAllText(quotesFile,
             $$"""[{"id":"{{Guid.NewGuid()}}","quote":"Hello there.","source":"Test Movie","type":"movie","genres":["drama"]}]""");
         return new SeedBatch([new SeedFile(quotesFile, null)], ManifestPolicy.HardcodedDefault, "simple-test-seed");

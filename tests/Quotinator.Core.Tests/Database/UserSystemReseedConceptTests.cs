@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Core.Tests.Database;
@@ -46,22 +47,20 @@ public class UserSystemReseedConceptTests
         }
     }
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
     }
 
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-
-        if (Directory.Exists(_tempDir)) Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private UserContentTestInitializer CreateInitializer()
@@ -70,7 +69,7 @@ public class UserSystemReseedConceptTests
         DatabaseOptions options = new DatabaseOptions
         {
             DbPath      = _dbPath,
-            BackupsPath = Path.Combine(_tempDir, "backups"),
+            BackupsPath = Path.Combine(_tempDir.Path, "backups"),
         };
         IReadOnlyList<SchemaMigration> migrations =
         [

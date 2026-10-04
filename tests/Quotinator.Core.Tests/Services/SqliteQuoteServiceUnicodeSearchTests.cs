@@ -11,6 +11,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Core.Tests.Services;
@@ -26,7 +27,7 @@ public class SqliteQuoteServiceUnicodeSearchTests
     private static readonly string[] DramaGenre   = ["drama"];
     private static readonly string[] FictionGenre = ["fiction"];
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private string _backups = null!;
     private string _fixture = null!;
@@ -36,10 +37,10 @@ public class SqliteQuoteServiceUnicodeSearchTests
     [TestInitialize]
     public async Task TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_unicode_search_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
-        _backups = Path.Combine(_tempDir, "backups");
-        _fixture = Path.Combine(_tempDir, "unicode-search-fixture.json");
+        _tempDir = new TempDirectory("quotinator_unicode_search_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
+        _backups = Path.Combine(_tempDir.Path, "backups");
+        _fixture = Path.Combine(_tempDir.Path, "unicode-search-fixture.json");
 
         // Two quotes chosen so every field=... variant and every fuzzy filter has a genuine
         // accented case-varying fixture to match against: "café"/"Café" (quote/source/character)
@@ -105,9 +106,7 @@ public class SqliteQuoteServiceUnicodeSearchTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private SqliteQuoteService CreateService(bool unicodeAwareSearch) => new(

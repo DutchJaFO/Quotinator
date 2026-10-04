@@ -15,6 +15,7 @@ using Quotinator.Core.Entities;
 using Quotinator.Core.Services;
 using Quotinator.Data.Entities;
 using Quotinator.Core.Models;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Core.Tests.Services;
 
@@ -30,7 +31,7 @@ public class QuoteImportServiceTests
 {
     private const string SharedId = "11111111-1111-1111-1111-111111111111";
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private string _backups = null!;
     private SqliteConnectionFactory _factory = null!;
@@ -40,9 +41,9 @@ public class QuoteImportServiceTests
     [TestInitialize]
     public async Task TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_import_svc_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
-        _backups = Path.Combine(_tempDir, "backups");
+        _tempDir = new TempDirectory("quotinator_import_svc_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
+        _backups = Path.Combine(_tempDir.Path, "backups");
         _factory = new SqliteConnectionFactory(_dbPath);
         _changeReader = new ChangeReader(_factory);
         _testActionReader = new ImportActionReader(_factory);
@@ -78,9 +79,7 @@ public class QuoteImportServiceTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private SqliteQuoteImportService CreateService(

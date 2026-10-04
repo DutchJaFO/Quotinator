@@ -10,6 +10,7 @@ using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Core.Tests.Database;
@@ -38,7 +39,7 @@ public class FileResourceCaptureTests
         ]
         """;
 
-    private string _tempDir    = null!;
+    private TempDirectory _tempDir  = null!;
     private string _sourcesDir = null!;
     private string _dbPath     = null!;
     private string _backups    = null!;
@@ -46,19 +47,17 @@ public class FileResourceCaptureTests
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir    = Directory.CreateTempSubdirectory("quotinator_fileresource_capture_test_").FullName;
-        _sourcesDir = Path.Combine(_tempDir, "sources");
+        _tempDir    = new TempDirectory("quotinator_fileresource_capture_test_");
+        _sourcesDir = Path.Combine(_tempDir.Path, "sources");
         Directory.CreateDirectory(_sourcesDir);
-        _dbPath  = Path.Combine(_tempDir, "test.db");
-        _backups = Path.Combine(_tempDir, "backups");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
+        _backups = Path.Combine(_tempDir.Path, "backups");
     }
 
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private async Task InitialiseAsync(IReadOnlyList<SeedBatch> batches, IFileResourceRepository fileResources)
@@ -132,7 +131,7 @@ public class FileResourceCaptureTests
         string manifestPath = Path.Combine(_sourcesDir, ManifestSeedPlanner.ManifestFileName);
         File.WriteAllText(manifestPath, """{ "files": [ { "file": "quotes.json", "name": "quotes" } ] }""");
 
-        string cacheDir = Path.Combine(_tempDir, "download-cache");
+        string cacheDir = Path.Combine(_tempDir.Path, "download-cache");
         Directory.CreateDirectory(cacheDir);
         string cachedQuotesPath = Path.Combine(cacheDir, "quotes.json");
         File.WriteAllText(cachedQuotesPath, MinimalQuoteJson);
