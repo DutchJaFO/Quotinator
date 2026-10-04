@@ -4,6 +4,7 @@ using Quotinator.Core.Enums;
 using Quotinator.Core.Import;
 using Quotinator.Core.Models;
 using Quotinator.Data.Import;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Converters.RegexArray.Tests;
 
@@ -12,18 +13,14 @@ public class RegexArrayConverterTests
 {
     private const string VilaboimPattern = """^"(.+?)"\s+(.+)$""";
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
 
     [TestInitialize]
     public void TestInitialize()
-        => _tempDir = Directory.CreateTempSubdirectory("quotinator_regexarray_test_").FullName;
+        => _tempDir = new TempDirectory("quotinator_regexarray_test_");
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
+    public void TestCleanup() => _tempDir.Dispose();
 
     // -------------------------------------------------------------------------
     #region Pattern + GroupMapping
@@ -32,7 +29,7 @@ public class RegexArrayConverterTests
     public async Task ConvertAsync_PatternAndGroupMapping_ProducesExpectedQuotes()
     {
         var inputPath  = WriteInput("[\"\\\"A quote.\\\" A Source\"]");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        var outputPath = Path.Combine(_tempDir.Path, "output.json");
         var options = VilaboimOptions();
 
         await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
@@ -48,7 +45,7 @@ public class RegexArrayConverterTests
         var inputPath  = WriteInput("""
             ["\"Quote one.\" Source One", "\"Quote two.\" Source Two"]
             """);
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        var outputPath = Path.Combine(_tempDir.Path, "output.json");
 
         await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions(), TestContext.CancellationToken);
 
@@ -61,7 +58,7 @@ public class RegexArrayConverterTests
     public async Task ConvertAsync_Defaults_PopulatesUnmappedField()
     {
         var inputPath  = WriteInput("[\"\\\"A quote.\\\" A Source\"]");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        var outputPath = Path.Combine(_tempDir.Path, "output.json");
         var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto
         {
             Pattern      = VilaboimPattern,
@@ -84,7 +81,7 @@ public class RegexArrayConverterTests
     public async Task ConvertAsync_NoPattern_ThrowsSourceConversionException()
     {
         var inputPath  = WriteInput("[\"\\\"A quote.\\\" A Source\"]");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        var outputPath = Path.Combine(_tempDir.Path, "output.json");
         var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto
         {
             GroupMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
@@ -98,7 +95,7 @@ public class RegexArrayConverterTests
     public async Task ConvertAsync_NoGroupMapping_ThrowsSourceConversionException()
     {
         var inputPath  = WriteInput("[\"\\\"A quote.\\\" A Source\"]");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        var outputPath = Path.Combine(_tempDir.Path, "output.json");
         var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto { Pattern = VilaboimPattern });
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
@@ -111,7 +108,7 @@ public class RegexArrayConverterTests
         var inputPath  = WriteInput("""
             ["this entry does not match the pattern at all", "\"A real quote.\" A Real Source"]
             """);
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        var outputPath = Path.Combine(_tempDir.Path, "output.json");
 
         await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions(), TestContext.CancellationToken);
 
@@ -125,7 +122,7 @@ public class RegexArrayConverterTests
     public async Task ConvertAsync_InvalidJson_ThrowsSourceConversionException()
     {
         var inputPath  = WriteInput("{ this is not an array");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        var outputPath = Path.Combine(_tempDir.Path, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
             () => new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions(), TestContext.CancellationToken));
@@ -135,7 +132,7 @@ public class RegexArrayConverterTests
     public async Task ConvertAsync_ZeroValidEntries_ThrowsSourceConversionException()
     {
         var inputPath  = WriteInput("[\"nothing here matches\"]");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        var outputPath = Path.Combine(_tempDir.Path, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
             () => new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions(), TestContext.CancellationToken));
@@ -176,7 +173,7 @@ public class RegexArrayConverterTests
     {
         const string expectedId = "1aa241c0-9a8f-e348-9d67-fdae91c0f33b";
         var inputPath  = WriteInput("[\"\\\"Frankly, my dear, I don't give a damn.\\\" Gone with the Wind\"]");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        var outputPath = Path.Combine(_tempDir.Path, "output.json");
 
         await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions(), TestContext.CancellationToken);
 
@@ -195,7 +192,7 @@ public class RegexArrayConverterTests
 
     private string WriteInput(string content)
     {
-        var path = Path.Combine(_tempDir, "input.json");
+        var path = Path.Combine(_tempDir.Path, "input.json");
         File.WriteAllText(path, content);
         return path;
     }

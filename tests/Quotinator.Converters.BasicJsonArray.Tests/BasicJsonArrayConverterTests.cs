@@ -4,6 +4,7 @@ using Quotinator.Core.Enums;
 using Quotinator.Core.Import;
 using Quotinator.Core.Models;
 using Quotinator.Data.Import;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Converters.BasicJsonArray.Tests;
 
@@ -13,18 +14,14 @@ public class BasicJsonArrayConverterTests
     private static readonly string[] DramaSciFiGenres = ["drama", "sci-fi"];
     private static readonly string[] DramaGenre        = ["drama"];
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
 
     [TestInitialize]
     public void TestInitialize()
-        => _tempDir = Directory.CreateTempSubdirectory("quotinator_basicjsonarray_test_").FullName;
+        => _tempDir = new TempDirectory("quotinator_basicjsonarray_test_");
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
+    public void TestCleanup() => _tempDir.Dispose();
 
     // -------------------------------------------------------------------------
     #region Zero-config (canonical property names)
@@ -33,7 +30,7 @@ public class BasicJsonArrayConverterTests
     public async Task ConvertAsync_CanonicalPropertyNames_NoOptionsNeeded()
     {
         string inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source","type":"book"}]""");
-        string outputPath = Path.Combine(_tempDir, "output.json");
+        string outputPath = Path.Combine(_tempDir.Path, "output.json");
 
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
@@ -52,7 +49,7 @@ public class BasicJsonArrayConverterTests
     public async Task ConvertAsync_PropertyMapping_RemapsField()
     {
         string inputPath  = WriteInput("""[{"quote":"A quote.","movie":"A Source"}]""");
-        string outputPath = Path.Combine(_tempDir, "output.json");
+        string outputPath = Path.Combine(_tempDir.Path, "output.json");
         JsonElement options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie" }
@@ -68,7 +65,7 @@ public class BasicJsonArrayConverterTests
     public async Task ConvertAsync_Defaults_PopulatesUnmappedField()
     {
         string inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source"}]""");
-        string outputPath = Path.Combine(_tempDir, "output.json");
+        string outputPath = Path.Combine(_tempDir.Path, "output.json");
         JsonElement options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             Defaults = new QuoteFieldDefaults { OriginalLanguage = "nl" }
@@ -89,7 +86,7 @@ public class BasicJsonArrayConverterTests
     public async Task ConvertAsync_GenresAsArray_ProducesMultipleGenres()
     {
         string inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source","genres":["drama","sci-fi"]}]""");
-        string outputPath = Path.Combine(_tempDir, "output.json");
+        string outputPath = Path.Combine(_tempDir.Path, "output.json");
 
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
@@ -101,7 +98,7 @@ public class BasicJsonArrayConverterTests
     public async Task ConvertAsync_GenresAsSingleString_ProducesOneGenre()
     {
         string inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source","genres":"drama"}]""");
-        string outputPath = Path.Combine(_tempDir, "output.json");
+        string outputPath = Path.Combine(_tempDir.Path, "output.json");
 
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
@@ -113,7 +110,7 @@ public class BasicJsonArrayConverterTests
     public async Task ConvertAsync_GenresAbsent_ProducesEmptyList()
     {
         string inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source"}]""");
-        string outputPath = Path.Combine(_tempDir, "output.json");
+        string outputPath = Path.Combine(_tempDir.Path, "output.json");
 
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
@@ -133,7 +130,7 @@ public class BasicJsonArrayConverterTests
             [{"quote":"","source":"A Source"},
              {"quote":"A real quote.","source":"A Real Source"}]
             """);
-        string outputPath = Path.Combine(_tempDir, "output.json");
+        string outputPath = Path.Combine(_tempDir.Path, "output.json");
 
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
@@ -147,7 +144,7 @@ public class BasicJsonArrayConverterTests
     public async Task ConvertAsync_InvalidJson_ThrowsSourceConversionException()
     {
         string inputPath  = WriteInput("{ this is not an array");
-        string outputPath = Path.Combine(_tempDir, "output.json");
+        string outputPath = Path.Combine(_tempDir.Path, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
             () => new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken));
@@ -157,7 +154,7 @@ public class BasicJsonArrayConverterTests
     public async Task ConvertAsync_ZeroValidEntries_ThrowsSourceConversionException()
     {
         string inputPath  = WriteInput("""[{"quote":"","source":""}]""");
-        string outputPath = Path.Combine(_tempDir, "output.json");
+        string outputPath = Path.Combine(_tempDir.Path, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
             () => new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken));
@@ -201,7 +198,7 @@ public class BasicJsonArrayConverterTests
         string inputPath  = WriteInput("""
             [{"quote":"Do, or do not. There is no try.","movie":"Star Wars: Episode V - The Empire Strikes Back","type":"movie","year":1980}]
             """);
-        string outputPath = Path.Combine(_tempDir, "output.json");
+        string outputPath = Path.Combine(_tempDir.Path, "output.json");
         JsonElement options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie", Date = "year" }
@@ -218,7 +215,7 @@ public class BasicJsonArrayConverterTests
     public async Task ConvertAsync_NumericYear_NormalisedToString()
     {
         string inputPath  = WriteInput("""[{"quote":"A quote.","movie":"A Movie","year":1994}]""");
-        string outputPath = Path.Combine(_tempDir, "output.json");
+        string outputPath = Path.Combine(_tempDir.Path, "output.json");
         JsonElement options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie", Date = "year" }
@@ -234,7 +231,7 @@ public class BasicJsonArrayConverterTests
 
     private string WriteInput(string content)
     {
-        string path = Path.Combine(_tempDir, "input.json");
+        string path = Path.Combine(_tempDir.Path, "input.json");
         File.WriteAllText(path, content);
         return path;
     }
