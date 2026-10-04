@@ -15,6 +15,7 @@ using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Api.Tests.Endpoints;
@@ -25,26 +26,22 @@ public class ImportRuleEndpointsTests
 {
     private const string TestKey = "test-admin-key";
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _bundledDir = null!;
     private string _overrideDir = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir     = Directory.CreateTempSubdirectory("quotinator_rule_endpoint_test_").FullName;
-        _bundledDir  = Path.Combine(_tempDir, "bundled");
-        _overrideDir = Path.Combine(_tempDir, "override");
+        _tempDir     = new TempDirectory("quotinator_rule_endpoint_test_");
+        _bundledDir  = Path.Combine(_tempDir.Path, "bundled");
+        _overrideDir = Path.Combine(_tempDir.Path, "override");
         Directory.CreateDirectory(_bundledDir);
         Directory.CreateDirectory(_overrideDir);
     }
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
+    public void TestCleanup() => _tempDir.Dispose();
 
     private WebApplicationFactory<Program> CreateFactory(
         FakeImportActionService? actionService = null,
@@ -52,7 +49,7 @@ public class ImportRuleEndpointsTests
         IEnumerable<SourceEntity>? sources = null,
         string? adminApiKey = TestKey)
     {
-        var pathResolver = new RuleFileOverridePathResolver(_overrideDir, Path.Combine(_tempDir, "override-external"), _bundledDir, Path.Combine(_tempDir, "bundled-external"));
+        var pathResolver = new RuleFileOverridePathResolver(_overrideDir, Path.Combine(_tempDir.Path, "override-external"), _bundledDir, Path.Combine(_tempDir.Path, "bundled-external"));
 
         return new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {

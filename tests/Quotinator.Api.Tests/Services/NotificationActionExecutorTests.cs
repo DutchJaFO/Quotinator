@@ -12,6 +12,7 @@ using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
 using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Api.Tests.Services;
@@ -467,32 +468,25 @@ public class NotificationActionExecutorTests
     [TestMethod]
     public async Task GetAvailabilityAsync_WeighsRemovingTheOldestBackup()
     {
-        string folder = Path.Combine(Path.GetTempPath(), "quotinator-348-oldest-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(folder);
-        try
+        using TempDirectory folder = new("quotinator_348_oldest_");
+
+        string oldest = Path.Combine(folder.Path, "quotinatordata_backup_v1_20260901T000000Z.db");
+        string newest = Path.Combine(folder.Path, "quotinatordata_backup_v1_20260902T000000Z.db");
+        File.WriteAllBytes(oldest, new byte[300]);
+        File.WriteAllBytes(newest, new byte[500]);
+        File.SetLastWriteTimeUtc(oldest, new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc));
+        File.SetLastWriteTimeUtc(newest, new DateTime(2026, 9, 2, 0, 0, 0, DateTimeKind.Utc));
+
+        SpyDatabaseInitializer dbInitializer = new()
         {
-            string oldest = Path.Combine(folder, "quotinatordata_backup_v1_20260901T000000Z.db");
-            string newest = Path.Combine(folder, "quotinatordata_backup_v1_20260902T000000Z.db");
-            File.WriteAllBytes(oldest, new byte[300]);
-            File.WriteAllBytes(newest, new byte[500]);
-            File.SetLastWriteTimeUtc(oldest, new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc));
-            File.SetLastWriteTimeUtc(newest, new DateTime(2026, 9, 2, 0, 0, 0, DateTimeKind.Utc));
+            Readiness          = BackupOutcome.BudgetExceeded,
+            ReadinessWhenFreed = freed => freed == 300 ? BackupOutcome.Succeeded : BackupOutcome.BudgetExceeded,
+        };
 
-            SpyDatabaseInitializer dbInitializer = new()
-            {
-                Readiness          = BackupOutcome.BudgetExceeded,
-                ReadinessWhenFreed = freed => freed == 300 ? BackupOutcome.Succeeded : BackupOutcome.BudgetExceeded,
-            };
+        NotificationActionAvailability availability =
+            await CreateExecutor(dbInitializer: dbInitializer, backupReader: BackupsIn(folder.Path)).GetAvailabilityAsync();
 
-            NotificationActionAvailability availability =
-                await CreateExecutor(dbInitializer: dbInitializer, backupReader: BackupsIn(folder)).GetAvailabilityAsync();
-
-            Assert.AreEqual(BackupOutcome.Succeeded, availability.BackupReadinessWithOldestRemoved);
-        }
-        finally
-        {
-            Directory.Delete(folder, recursive: true);
-        }
+        Assert.AreEqual(BackupOutcome.Succeeded, availability.BackupReadinessWithOldestRemoved);
     }
 
     /// <summary>
@@ -503,21 +497,14 @@ public class NotificationActionExecutorTests
     [TestMethod]
     public async Task GetAvailabilityAsync_AtTheQuota_CautionsTheBackup()
     {
-        string folder = Path.Combine(Path.GetTempPath(), "quotinator-348-caution-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(folder);
-        try
-        {
-            using (FileStream filler = new(Path.Combine(folder, "filler.db"), FileMode.Create, FileAccess.Write))
-                filler.SetLength(1_073_741_824L * 95 / 100);
+        using TempDirectory folder = new("quotinator_348_caution_");
 
-            NotificationActionAvailability availability = await CreateExecutor(backupReader: BackupsIn(folder)).GetAvailabilityAsync();
+        using (FileStream filler = new(Path.Combine(folder.Path, "filler.db"), FileMode.Create, FileAccess.Write))
+            filler.SetLength(1_073_741_824L * 95 / 100);
 
-            Assert.IsTrue(availability.BackupCaution);
-        }
-        finally
-        {
-            Directory.Delete(folder, recursive: true);
-        }
+        NotificationActionAvailability availability = await CreateExecutor(backupReader: BackupsIn(folder.Path)).GetAvailabilityAsync();
+
+        Assert.IsTrue(availability.BackupCaution);
     }
 
     [TestMethod]
@@ -540,18 +527,13 @@ public class NotificationActionExecutorTests
     public async Task Reseed_EveryOption_EvaluatesTheConditionsOnce(NotificationActionOption option)
     {
         RecordingConditionCheck check = new();
-        string folder = Path.Combine(Path.GetTempPath(), "quotinator-348-once-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(folder);
-        File.WriteAllText(Path.Combine(folder, "quotinatordata_v1_20260101T000000000Z.db"), "old");
+        using TempDirectory folder = new("quotinator_348_once_");
+        File.WriteAllText(Path.Combine(folder.Path, "quotinatordata_v1_20260101T000000000Z.db"), "old");
 
-        try
-        {
-            await CreateExecutor(backupsFolder: folder, conditionChecks: new NotificationConditionChecks([check], NullLogger<NotificationConditionChecks>.Instance))
-                .ExecuteAsync(NotificationDismissTrigger.Reseed, option: option);
+        await CreateExecutor(backupsFolder: folder.Path, conditionChecks: new NotificationConditionChecks([check], NullLogger<NotificationConditionChecks>.Instance))
+            .ExecuteAsync(NotificationDismissTrigger.Reseed, option: option);
 
-            Assert.AreEqual(1, check.Runs);
-        }
-        finally { Directory.Delete(folder, recursive: true); }
+        Assert.AreEqual(1, check.Runs);
     }
 
     /// <summary>Counts how often it ran; changes nothing.</summary>
@@ -642,56 +624,52 @@ public class NotificationActionExecutorTests
     [TestMethod]
     public async Task Reseed_RemoveOldestBackupThenReseed_RemovesTheOldestBackup()
     {
-        (string folder, string oldest, _) = TwoBackups();
-        try
+        (TempDirectory folder, string oldest, _) = TwoBackups();
+        using (folder)
         {
-            await CreateExecutor(backupsFolder: folder).ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.RemoveOldestBackupThenReseed);
+            await CreateExecutor(backupsFolder: folder.Path).ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.RemoveOldestBackupThenReseed);
 
             Assert.IsFalse(File.Exists(oldest));
         }
-        finally { Directory.Delete(folder, recursive: true); }
     }
 
     /// <summary>Only the one backup the option names goes: the rest are restore points the user did not agree to lose.</summary>
     [TestMethod]
     public async Task Reseed_RemoveOldestBackupThenReseed_KeepsTheNewerBackup()
     {
-        (string folder, _, string newest) = TwoBackups();
-        try
+        (TempDirectory folder, _, string newest) = TwoBackups();
+        using (folder)
         {
-            await CreateExecutor(backupsFolder: folder).ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.RemoveOldestBackupThenReseed);
+            await CreateExecutor(backupsFolder: folder.Path).ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.RemoveOldestBackupThenReseed);
 
             Assert.IsTrue(File.Exists(newest));
         }
-        finally { Directory.Delete(folder, recursive: true); }
     }
 
     [TestMethod]
     public async Task Reseed_RemoveOldestBackupThenReseed_RecordsTheRemovalInTheAuditTrail()
     {
-        (string folder, _, _) = TwoBackups();
+        (TempDirectory folder, _, _) = TwoBackups();
         RecordingAuditEntryWriter audit = new();
-        try
+        using (folder)
         {
-            await CreateExecutor(backupsFolder: folder, auditWriter: audit).ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.RemoveOldestBackupThenReseed);
+            await CreateExecutor(backupsFolder: folder.Path, auditWriter: audit).ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.RemoveOldestBackupThenReseed);
 
             Assert.Contains(AuditOperation.BackupDeleted, audit.Operations);
         }
-        finally { Directory.Delete(folder, recursive: true); }
     }
 
     [TestMethod]
     public async Task Reseed_RemoveOldestBackupThenReseed_TakesABackupBeforeReseeding()
     {
-        (string folder, _, _) = TwoBackups();
+        (TempDirectory folder, _, _) = TwoBackups();
         SpyDatabaseInitializer db = new();
-        try
+        using (folder)
         {
-            await CreateExecutor(dbInitializer: db, backupsFolder: folder).ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.RemoveOldestBackupThenReseed);
+            await CreateExecutor(dbInitializer: db, backupsFolder: folder.Path).ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.RemoveOldestBackupThenReseed);
 
             Assert.AreSequenceEqual(["backup", "reseed"], db.Calls);
         }
-        finally { Directory.Delete(folder, recursive: true); }
     }
 
     /// <summary>
@@ -701,16 +679,15 @@ public class NotificationActionExecutorTests
     [TestMethod]
     public async Task Reseed_RemoveOldestBackupThenReseed_WhenTheRemovalFails_DoesNotReseed()
     {
-        (string folder, _, _) = TwoBackups();
+        (TempDirectory folder, _, _) = TwoBackups();
         SpyDatabaseInitializer db = new();
-        try
+        using (folder)
         {
-            await CreateExecutor(dbInitializer: db, backupsFolder: folder, backupWriter: new RefusingBackupWriter())
+            await CreateExecutor(dbInitializer: db, backupsFolder: folder.Path, backupWriter: new RefusingBackupWriter())
                 .ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.RemoveOldestBackupThenReseed);
 
             Assert.IsFalse(db.ReseedCalled);
         }
-        finally { Directory.Delete(folder, recursive: true); }
     }
 
     /// <summary>Refuses every removal, as a read-only backups folder does.</summary>
@@ -799,13 +776,15 @@ public class NotificationActionExecutorTests
         Assert.AreEqual(BackupOutcome.BudgetExceeded, result.BackupObstacle);
     }
 
-    /// <summary>Two backups a day apart in a folder of their own: the older one is the one to remove.</summary>
-    private static (string Folder, string Oldest, string Newest) TwoBackups()
+    /// <summary>
+    /// Two backups a day apart in a folder of their own: the older one is the one to remove. The caller
+    /// owns the returned <see cref="TempDirectory"/> and disposes it.
+    /// </summary>
+    private static (TempDirectory Folder, string Oldest, string Newest) TwoBackups()
     {
-        string folder = Path.Combine(Path.GetTempPath(), "quotinator-348-two-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(folder);
-        string oldest = Path.Combine(folder, "quotinatordata_backup_v1_20260901T000000Z.db");
-        string newest = Path.Combine(folder, "quotinatordata_backup_v1_20260902T000000Z.db");
+        TempDirectory folder = new("quotinator_348_two_");
+        string oldest = Path.Combine(folder.Path, "quotinatordata_backup_v1_20260901T000000Z.db");
+        string newest = Path.Combine(folder.Path, "quotinatordata_backup_v1_20260902T000000Z.db");
         File.WriteAllBytes(oldest, new byte[300]);
         File.WriteAllBytes(newest, new byte[500]);
         File.SetLastWriteTimeUtc(oldest, new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc));

@@ -8,6 +8,7 @@ using Quotinator.Converters.BasicJsonArray;
 using Quotinator.Converters.RegexArray;
 using Quotinator.Core.Import;
 using Quotinator.Data.Import;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Api.Tests.Solution;
 
@@ -152,29 +153,23 @@ public partial class RepositoryStructureTests
     [TestMethod]
     public void ProjectReferenceWalk_FindsAnIndirectReference_AndNotAnUnreferencedProject()
     {
-        string fixtureDir = Directory.CreateTempSubdirectory("quotinator_projref_walk_").FullName;
-        try
-        {
-            WriteProject(fixtureDir, "Alpha", "Beta");
-            WriteProject(fixtureDir, "Beta", "Gamma");
-            WriteProject(fixtureDir, "Gamma");
-            WriteProject(fixtureDir, "Delta");
+        using TempDirectory fixture = new("quotinator_projref_walk_");
 
-            string alpha = Path.Combine(fixtureDir, "Alpha.csproj");
+        WriteProject(fixture.Path, "Alpha", "Beta");
+        WriteProject(fixture.Path, "Beta", "Gamma");
+        WriteProject(fixture.Path, "Gamma");
+        WriteProject(fixture.Path, "Delta");
 
-            List<string> chain = [];
-            Assert.IsTrue(ReferencesProject(alpha, "Gamma", chain),
-                "The walk must follow Alpha → Beta → Gamma. A non-recursive walk fails here.");
-            Assert.AreEqual("Alpha → Beta → Gamma", string.Join(" → ", chain),
-                "The reported chain must name the actual path, so a real failure says how the reference is reached.");
+        string alpha = Path.Combine(fixture.Path, "Alpha.csproj");
 
-            Assert.IsFalse(ReferencesProject(alpha, "Delta", []),
-                "Delta is referenced by nothing. A walk that reports every project as reachable fails here.");
-        }
-        finally
-        {
-            Directory.Delete(fixtureDir, recursive: true);
-        }
+        List<string> chain = [];
+        Assert.IsTrue(ReferencesProject(alpha, "Gamma", chain),
+            "The walk must follow Alpha → Beta → Gamma. A non-recursive walk fails here.");
+        Assert.AreEqual("Alpha → Beta → Gamma", string.Join(" → ", chain),
+            "The reported chain must name the actual path, so a real failure says how the reference is reached.");
+
+        Assert.IsFalse(ReferencesProject(alpha, "Delta", []),
+            "Delta is referenced by nothing. A walk that reports every project as reachable fails here.");
     }
 
     private static void WriteProject(string dir, string name, params string[] references)
@@ -959,63 +954,56 @@ public partial class RepositoryStructureTests
             (new BasicJsonArrayConverter(), "nikhilnamal17_raw.json", "NikhilNamal17_popular-movie-quotes.json", nikhilNamal17Options),
         ];
 
-        string tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(tempDir);
-        try
+        using TempDirectory temp = new("quotinator_converter_baseline_");
+
+        List<string> failures = [];
+
+        foreach ((IQuoteSourceConverter? converter, string? rawFixtureFile, string? baselineFile, JsonElement? convOptions) in cases)
         {
-            List<string> failures = [];
+            string rawPath      = Path.Combine(RepoRoot, "tests", "Quotinator.Api.Tests", "Solution", "Fixtures", rawFixtureFile);
+            string outputPath   = Path.Combine(temp.Path, baselineFile);
+            string baselinePath = Path.Combine(RepoRoot, "data", "sources", baselineFile);
 
-            foreach ((IQuoteSourceConverter? converter, string? rawFixtureFile, string? baselineFile, JsonElement? convOptions) in cases)
+            await converter.ConvertAsync(rawPath, outputPath, convOptions, TestContext.CancellationToken);
+
+            if (!File.Exists(outputPath))
             {
-                string rawPath      = Path.Combine(RepoRoot, "tests", "Quotinator.Api.Tests", "Solution", "Fixtures", rawFixtureFile);
-                string outputPath   = Path.Combine(tempDir, baselineFile);
-                string baselinePath = Path.Combine(RepoRoot, "data", "sources", baselineFile);
-
-                await converter.ConvertAsync(rawPath, outputPath, convOptions, TestContext.CancellationToken);
-
-                if (!File.Exists(outputPath))
-                {
-                    failures.Add($"{baselineFile}: output file not found");
-                    continue;
-                }
-
-                // Schema validation
-                using JsonDocument outputDoc = JsonDocument.Parse(File.ReadAllText(outputPath));
-                EvaluationResults result = schema.Evaluate(outputDoc.RootElement,
-                    new EvaluationOptions { OutputFormat = OutputFormat.List });
-
-                if (!result.IsValid)
-                {
-                    IEnumerable<string> errors = (result.Details ?? [])
-                        .Where(d => !d.IsValid && d.Errors is not null)
-                        .SelectMany(d => d.Errors!.Select(e => $"  {d.InstanceLocation}: {e.Value}"));
-                    failures.Add($"{baselineFile}: schema validation failed:\n{string.Join("\n", errors)}");
-                }
-
-                // ID set must exactly match baseline
-                static HashSet<string> LoadIds(JsonElement root) =>
-                    [.. root.EnumerateArray().Select(e => e.GetProperty("id").GetString()!)];
-
-                HashSet<string> outputIds   = LoadIds(outputDoc.RootElement);
-                using JsonDocument baselineDoc = JsonDocument.Parse(File.ReadAllText(baselinePath));
-                HashSet<string> baselineIds = LoadIds(baselineDoc.RootElement);
-
-                List<string> missing = [.. baselineIds.Except(outputIds)];
-                List<string> extra   = [.. outputIds.Except(baselineIds)];
-
-                if (missing.Count > 0)
-                    failures.Add($"{baselineFile}: {missing.Count} IDs present in baseline are missing from output");
-                if (extra.Count > 0)
-                    failures.Add($"{baselineFile}: {extra.Count} IDs in output are not in baseline");
+                failures.Add($"{baselineFile}: output file not found");
+                continue;
             }
 
-            Assert.IsEmpty(failures,
-                $"Converter plugin output does not match baseline:\n{string.Join("\n", failures)}");
+            // Schema validation
+            using JsonDocument outputDoc = JsonDocument.Parse(File.ReadAllText(outputPath));
+            EvaluationResults result = schema.Evaluate(outputDoc.RootElement,
+                new EvaluationOptions { OutputFormat = OutputFormat.List });
+
+            if (!result.IsValid)
+            {
+                IEnumerable<string> errors = (result.Details ?? [])
+                    .Where(d => !d.IsValid && d.Errors is not null)
+                    .SelectMany(d => d.Errors!.Select(e => $"  {d.InstanceLocation}: {e.Value}"));
+                failures.Add($"{baselineFile}: schema validation failed:\n{string.Join("\n", errors)}");
+            }
+
+            // ID set must exactly match baseline
+            static HashSet<string> LoadIds(JsonElement root) =>
+                [.. root.EnumerateArray().Select(e => e.GetProperty("id").GetString()!)];
+
+            HashSet<string> outputIds   = LoadIds(outputDoc.RootElement);
+            using JsonDocument baselineDoc = JsonDocument.Parse(File.ReadAllText(baselinePath));
+            HashSet<string> baselineIds = LoadIds(baselineDoc.RootElement);
+
+            List<string> missing = [.. baselineIds.Except(outputIds)];
+            List<string> extra   = [.. outputIds.Except(baselineIds)];
+
+            if (missing.Count > 0)
+                failures.Add($"{baselineFile}: {missing.Count} IDs present in baseline are missing from output");
+            if (extra.Count > 0)
+                failures.Add($"{baselineFile}: {extra.Count} IDs in output are not in baseline");
         }
-        finally
-        {
-            Directory.Delete(tempDir, recursive: true);
-        }
+
+        Assert.IsEmpty(failures,
+            $"Converter plugin output does not match baseline:\n{string.Join("\n", failures)}");
     }
 
     /// <summary>

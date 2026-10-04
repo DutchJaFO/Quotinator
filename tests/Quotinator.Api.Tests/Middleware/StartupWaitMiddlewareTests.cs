@@ -3,13 +3,14 @@ using Microsoft.AspNetCore.Http;
 using Quotinator.Api.Middleware;
 using Quotinator.Api.Startup;
 using Quotinator.Core.Services;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Api.Tests.Middleware;
 
 [TestClass]
 public class StartupWaitMiddlewareTests
 {
-    private string _i18nDir = string.Empty;
+    private TempDirectory _i18nDir = null!;
     private CultureInfo _savedCulture = CultureInfo.CurrentUICulture;
 
     public TestContext TestContext { get; set; } = null!;
@@ -20,9 +21,8 @@ public class StartupWaitMiddlewareTests
         _savedCulture = CultureInfo.CurrentUICulture;
         CultureInfo.CurrentUICulture = new CultureInfo("en-GB");
 
-        _i18nDir = Path.Combine(Path.GetTempPath(), $"quotinator-startupwait-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_i18nDir);
-        File.WriteAllText(Path.Combine(_i18nDir, "UI.en-GB.json"),
+        _i18nDir = new TempDirectory("quotinator_startupwait_test_");
+        File.WriteAllText(Path.Combine(_i18nDir.Path, "UI.en-GB.json"),
             """{"StartupWaitHeading": "Quotinator is starting up", "StartupWaitBody": "Please wait."}""");
     }
 
@@ -30,7 +30,7 @@ public class StartupWaitMiddlewareTests
     public void Cleanup()
     {
         CultureInfo.CurrentUICulture = _savedCulture;
-        Directory.Delete(_i18nDir, recursive: true);
+        _i18nDir.Dispose();
     }
 
     // -------------------------------------------------------------------------
@@ -63,7 +63,7 @@ public class StartupWaitMiddlewareTests
     {
         StartupPhaseState phase = new();
         if (isComplete) phase.MarkComplete();
-        return new StartupWaitMiddleware(phase, new ApiLocalizer(_i18nDir));
+        return new StartupWaitMiddleware(phase, new ApiLocalizer(_i18nDir.Path));
     }
 
     private async Task<string> BodyOf(DefaultHttpContext context)
