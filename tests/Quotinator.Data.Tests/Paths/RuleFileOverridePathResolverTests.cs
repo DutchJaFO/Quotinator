@@ -1,12 +1,14 @@
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Data.Tests.Paths;
 
 [TestClass]
 public class RuleFileOverridePathResolverTests
 {
+    private TempDirectory _root = null!;
     private string _internalDir = null!;
     private string _externalDir = null!;
     private RuleFileOverridePathResolver _resolver = null!;
@@ -14,19 +16,14 @@ public class RuleFileOverridePathResolverTests
     [TestInitialize]
     public void TestInitialize()
     {
-        var root = Directory.CreateTempSubdirectory("quotinator_ruleoverride_test_").FullName;
-        _internalDir = Path.Combine(root, "sources", "download");
-        _externalDir = Path.Combine(root, "imports", "download");
+        _root = new TempDirectory("quotinator_ruleoverride_test_");
+        _internalDir = Path.Combine(_root.Path, "sources", "download");
+        _externalDir = Path.Combine(_root.Path, "imports", "download");
         _resolver = new RuleFileOverridePathResolver(_internalDir, _externalDir);
     }
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        var root = Path.GetDirectoryName(Path.GetDirectoryName(_internalDir))!;
-        if (Directory.Exists(root))
-            Directory.Delete(root, recursive: true);
-    }
+    public void TestCleanup() => _root.Dispose();
 
     [TestMethod]
     public void Resolve_Bundled_ResolvesUnderInternalDownloadDir()

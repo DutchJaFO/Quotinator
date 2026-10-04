@@ -4,21 +4,22 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Data.Tests.Repositories;
 
 [TestClass]
 public class SourceFileOverrideRegistryTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private SourceFileOverrideRegistry _registry = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_sourcefileoverride_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_sourcefileoverride_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -45,9 +46,7 @@ public class SourceFileOverrideRegistryTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     [TestMethod]

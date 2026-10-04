@@ -4,6 +4,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Example.Common;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Data.Tests.Repositories;
@@ -11,15 +12,15 @@ namespace Quotinator.Data.Tests.Repositories;
 [TestClass]
 public class SqliteRestorableRepositoryTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private SqliteRestorableRepository<Widget> _repository = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_data_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_data_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -40,9 +41,7 @@ public class SqliteRestorableRepositoryTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     // ── Contract ──────────────────────────────────────────────────────────────

@@ -22,7 +22,7 @@ public class ReseedRecommendedMetadataTests
 {
     public TestContext TestContext { get; set; } = null!;
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath = null!;
     private NotificationWriter _writer = null!;
     private NotificationReader _reader = null!;
@@ -30,8 +30,8 @@ public class ReseedRecommendedMetadataTests
     [TestInitialize]
     public async Task TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_reseed_metadata_test_").FullName;
-        _dbPath = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_reseed_metadata_test_");
+        _dbPath = Path.Combine(_tempDir.Path, "test.db");
 
         // The schema the application actually creates, not a hand-listed replay of the migrations that
         // produce it — see CurrentSchema for why a listed sequence drifts.
@@ -45,9 +45,7 @@ public class ReseedRecommendedMetadataTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     /// <summary>

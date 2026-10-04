@@ -4,6 +4,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Data.Tests.Repositories;
 
@@ -15,7 +16,7 @@ namespace Quotinator.Data.Tests.Repositories;
 [TestClass]
 public class AuditEntryReaderTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private AuditEntryReader _reader = null!;
     private AuditEntryWriter _writer = null!;
@@ -23,8 +24,8 @@ public class AuditEntryReaderTests
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_audit_reader_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_audit_reader_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -51,9 +52,7 @@ public class AuditEntryReaderTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     [TestMethod]

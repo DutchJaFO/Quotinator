@@ -3,6 +3,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Quotinator.Data.Import;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Data.Tests.Import;
 
@@ -13,24 +14,20 @@ namespace Quotinator.Data.Tests.Import;
 [TestClass]
 public class SourceCacheUpdaterTests
 {
-    private string _tempDir     = null!;
+    private TempDirectory _tempDir   = null!;
     private string _internalDir = null!;
     private string _externalDir = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir     = Directory.CreateTempSubdirectory("quotinator_sourcecache_").FullName;
-        _internalDir = Path.Combine(_tempDir, "sources", "download");
-        _externalDir = Path.Combine(_tempDir, "imports", "download");
+        _tempDir     = new TempDirectory("quotinator_sourcecache_");
+        _internalDir = Path.Combine(_tempDir.Path, "sources", "download");
+        _externalDir = Path.Combine(_tempDir.Path, "imports", "download");
     }
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
+    public void TestCleanup() => _tempDir.Dispose();
 
     // Row 1: AutoUpdateSources=false skips all network checks; seeds from cached-if-present else the original file.
     [TestMethod]

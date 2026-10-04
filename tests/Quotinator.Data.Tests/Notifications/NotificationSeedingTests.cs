@@ -35,7 +35,7 @@ public class NotificationSeedingTests
         "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources. " +
         "This only affects a generated API client keyed by operation ID — routes and behaviour are unchanged.";
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath = null!;
     private NotificationWriter _writer = null!;
     private NotificationReader _reader = null!;
@@ -43,8 +43,8 @@ public class NotificationSeedingTests
     [TestInitialize]
     public async Task TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_notification_seeding_test_").FullName;
-        _dbPath = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_notification_seeding_test_");
+        _dbPath = Path.Combine(_tempDir.Path, "test.db");
 
         // The schema the application actually creates; see CurrentSchema for why the hand-listed
         // replay this used to do drifts every time a migration touches System_Notification.
@@ -56,12 +56,7 @@ public class NotificationSeedingTests
     }
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
+    public void TestCleanup() => _tempDir.Dispose();
 
     /// <summary>An empty history writes, and returns the entity it wrote.</summary>
     [TestMethod]

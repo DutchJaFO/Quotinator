@@ -15,7 +15,7 @@ namespace Quotinator.Data.Tests.Repositories;
 [TestClass]
 public class NotificationReaderTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private NotificationReader _reader = null!;
     private NotificationWriter _writer = null!;
@@ -23,8 +23,8 @@ public class NotificationReaderTests
     [TestInitialize]
     public async Task TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_notification_reader_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_notification_reader_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
 
         // The schema the application actually creates. This used to replay a hand-listed sequence,
         // which reads as honest but is a maintained copy that drifts — see CurrentSchema.
@@ -38,9 +38,7 @@ public class NotificationReaderTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     [TestMethod]
@@ -143,55 +141,41 @@ public class NotificationReaderTests
     [TestMethod]
     public async Task GetActiveNotificationsAsync_TableDoesNotExist_ReturnsEmptyInsteadOfThrowing()
     {
-        string tempDir = Directory.CreateTempSubdirectory("quotinator_notification_reader_missing_table_test_").FullName;
-        try
+        using TempDirectory tempDir = new("quotinator_notification_reader_missing_table_test_");
+
+        string dbPath = Path.Combine(tempDir.Path, "no-notification-table.db");
+        using (SqliteConnection conn = new($"Data Source={dbPath}"))
         {
-            string dbPath = Path.Combine(tempDir, "no-notification-table.db");
-            using (SqliteConnection conn = new($"Data Source={dbPath}"))
-            {
-                conn.Open();
-                conn.Execute("CREATE TABLE Placeholder (Id TEXT PRIMARY KEY);");
-            }
-
-            NotificationReader reader = TestNotificationReader.Create(dbPath);
-
-            IReadOnlyList<NotificationEntity> result = await reader.GetActiveNotificationsAsync();
-
-            Assert.IsEmpty(result);
+            conn.Open();
+            conn.Execute("CREATE TABLE Placeholder (Id TEXT PRIMARY KEY);");
         }
-        finally
-        {
-            SqliteConnection.ClearAllPools();
-            Directory.Delete(tempDir, recursive: true);
-        }
+
+        NotificationReader reader = TestNotificationReader.Create(dbPath);
+
+        IReadOnlyList<NotificationEntity> result = await reader.GetActiveNotificationsAsync();
+
+        Assert.IsEmpty(result);
     }
 
     /// <summary>See <see cref="GetActiveNotificationsAsync_TableDoesNotExist_ReturnsEmptyInsteadOfThrowing"/> — same gap, the paged endpoint.</summary>
     [TestMethod]
     public async Task GetPagedAsync_TableDoesNotExist_ReturnsEmptyInsteadOfThrowing()
     {
-        string tempDir = Directory.CreateTempSubdirectory("quotinator_notification_reader_missing_table_test_").FullName;
-        try
+        using TempDirectory tempDir = new("quotinator_notification_reader_missing_table_test_");
+
+        string dbPath = Path.Combine(tempDir.Path, "no-notification-table.db");
+        using (SqliteConnection conn = new($"Data Source={dbPath}"))
         {
-            string dbPath = Path.Combine(tempDir, "no-notification-table.db");
-            using (SqliteConnection conn = new($"Data Source={dbPath}"))
-            {
-                conn.Open();
-                conn.Execute("CREATE TABLE Placeholder (Id TEXT PRIMARY KEY);");
-            }
-
-            NotificationReader reader = TestNotificationReader.Create(dbPath);
-
-            PagedItems<NotificationEntity> result = await reader.GetPagedAsync(1, 20);
-
-            Assert.IsEmpty(result.Items);
-            Assert.AreEqual(0, result.TotalCount);
+            conn.Open();
+            conn.Execute("CREATE TABLE Placeholder (Id TEXT PRIMARY KEY);");
         }
-        finally
-        {
-            SqliteConnection.ClearAllPools();
-            Directory.Delete(tempDir, recursive: true);
-        }
+
+        NotificationReader reader = TestNotificationReader.Create(dbPath);
+
+        PagedItems<NotificationEntity> result = await reader.GetPagedAsync(1, 20);
+
+        Assert.IsEmpty(result.Items);
+        Assert.AreEqual(0, result.TotalCount);
     }
 
     public TestContext TestContext { get; set; }

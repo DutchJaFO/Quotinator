@@ -19,7 +19,7 @@ namespace Quotinator.Data.Tests.Import;
 [TestClass]
 public class ImportActionResolutionCoordinatorTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private IDbConnectionFactory _factory = null!;
     private ImportActionWriter _writer = null!;
@@ -29,8 +29,8 @@ public class ImportActionResolutionCoordinatorTests
     [TestInitialize]
     public async Task TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_action_coordinator_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_action_coordinator_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
 
         // #389: the schema the application actually creates, not a hand-written copy of Import_Action.
         // The copy this replaced still allowed only Add/Modify and no Stale — it had drifted three
@@ -44,12 +44,7 @@ public class ImportActionResolutionCoordinatorTests
     }
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
+    public void TestCleanup() => _tempDir.Dispose();
 
     private static ImportActionEntity BuildPendingModify(string batchId) => new()
     {

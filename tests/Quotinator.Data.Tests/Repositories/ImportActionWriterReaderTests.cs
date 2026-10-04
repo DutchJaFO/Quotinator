@@ -5,13 +5,14 @@ using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Data.Tests.Repositories;
 
 [TestClass]
 public class ImportActionWriterReaderTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private IDbConnectionFactory _factory = null!;
     private ImportActionWriter _writer = null!;
@@ -20,8 +21,8 @@ public class ImportActionWriterReaderTests
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_action_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_action_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -61,9 +62,7 @@ public class ImportActionWriterReaderTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private static ImportActionEntity BuildPendingModify(string batchId, string? existingBatchId = null) => new()

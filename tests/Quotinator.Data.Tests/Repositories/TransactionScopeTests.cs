@@ -4,6 +4,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Example.Common;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Data.Tests.Repositories;
@@ -11,7 +12,7 @@ namespace Quotinator.Data.Tests.Repositories;
 [TestClass]
 public class TransactionScopeTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private IDbConnectionFactory _factory = null!;
     private SqliteRepository<Widget> _repository = null!;
@@ -19,8 +20,8 @@ public class TransactionScopeTests
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_scope_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_scope_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -42,9 +43,7 @@ public class TransactionScopeTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private int CountWidgets()

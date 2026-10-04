@@ -1,32 +1,29 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Data.Import;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Data.Tests.Import;
 
 [TestClass]
 public class SeedBatchesBuilderTests
 {
+    private TempDirectory _root = null!;
     private string _bundledDir = null!;
     private string _importsDir = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        var root = Directory.CreateTempSubdirectory("quotinator_seedbatchesbuilder_").FullName;
-        _bundledDir = Path.Combine(root, "bundled");
-        _importsDir = Path.Combine(root, "imports");
+        _root = new TempDirectory("quotinator_seedbatchesbuilder_");
+        _bundledDir = Path.Combine(_root.Path, "bundled");
+        _importsDir = Path.Combine(_root.Path, "imports");
         Directory.CreateDirectory(_bundledDir);
         Directory.CreateDirectory(_importsDir);
     }
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        var root = Path.GetDirectoryName(_bundledDir)!;
-        if (Directory.Exists(root))
-            Directory.Delete(root, recursive: true);
-    }
+    public void TestCleanup() => _root.Dispose();
 
     private static StubManifestSeedPlanner FakePlanner() => new();
 

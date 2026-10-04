@@ -3,21 +3,22 @@ using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Data.Tests.Repositories;
 
 [TestClass]
 public class SqliteFileResourceRepositoryTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
     private SqliteFileResourceRepository _repository = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_fileresource_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_fileresource_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -80,9 +81,7 @@ public class SqliteFileResourceRepositoryTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     /// <summary>Inserts a real Import_Batch row and returns its id — Microsoft.Data.Sqlite enforces foreign keys by default, so every WriteAsync call needs a real batch to link to.</summary>

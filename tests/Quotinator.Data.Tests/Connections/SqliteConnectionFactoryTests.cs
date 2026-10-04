@@ -1,6 +1,7 @@
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Data.Tests.Connections;
 
@@ -8,23 +9,18 @@ namespace Quotinator.Data.Tests.Connections;
 [TestClass]
 public class SqliteConnectionFactoryTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath  = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_connection_factory_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_connection_factory_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
     }
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
+    public void TestCleanup() => _tempDir.Dispose();
 
     /// <summary>
     /// #294: root cause of a live HA v1.8.2 → v1.8.3-beta migration failure — see the factory's own
@@ -69,7 +65,7 @@ public class SqliteConnectionFactoryTests
             Assert.AreEqual(0, tempStore, "temp_store must stay at the SQLite default (0) when useMemoryTempStore is not passed");
         }
 
-        var explicitFalsePath = Path.Combine(_tempDir, "explicit-false.db");
+        var explicitFalsePath = Path.Combine(_tempDir.Path, "explicit-false.db");
         var explicitFalseFactory = new SqliteConnectionFactory(explicitFalsePath, useMemoryTempStore: false);
         using var explicitConnection = (SqliteConnection)explicitFalseFactory.CreateConnection();
         explicitConnection.Open();

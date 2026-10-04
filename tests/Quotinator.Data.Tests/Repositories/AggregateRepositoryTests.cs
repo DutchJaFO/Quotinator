@@ -7,6 +7,7 @@ using Quotinator.Data.Example.Common;
 using Quotinator.Data.Example.MasterDetail;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Data.Tests.Repositories;
 
@@ -31,7 +32,7 @@ public class AggregateRepositoryTests
 
     // ── Setup / teardown ──────────────────────────────────────────────────────
 
-    private string _tempDir       = null!;
+    private TempDirectory _tempDir     = null!;
     private string _dbPath        = null!;
     private IDbConnectionFactory _factory = null!;
     private AuditEntryWriter _auditWriter = null!;
@@ -42,8 +43,8 @@ public class AggregateRepositoryTests
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_agg_test_").FullName;
-        _dbPath  = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_agg_test_");
+        _dbPath  = Path.Combine(_tempDir.Path, "test.db");
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -89,9 +90,7 @@ public class AggregateRepositoryTests
     [TestCleanup]
     public void TestCleanup()
     {
-        SqliteConnection.ClearAllPools();
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
+        _tempDir.Dispose();
     }
 
     private WidgetWithLinesRepository MakeRepo(
