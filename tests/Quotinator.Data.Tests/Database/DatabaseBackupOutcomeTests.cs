@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Data.Tests.Database;
@@ -26,27 +27,20 @@ namespace Quotinator.Data.Tests.Database;
 [TestClass]
 public class DatabaseBackupOutcomeTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath = null!;
     private string _backups = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), "quotinator-348-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_tempDir);
-        _dbPath = Path.Combine(_tempDir, "test.db");
-        _backups = Path.Combine(_tempDir, "backups");
+        _tempDir = new TempDirectory("quotinator_348_outcome_");
+        _dbPath = Path.Combine(_tempDir.Path, "test.db");
+        _backups = Path.Combine(_tempDir.Path, "backups");
     }
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        SqliteConnection.ClearAllPools();
-        try { Directory.Delete(_tempDir, recursive: true); }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-    }
+    public void TestCleanup() => _tempDir.Dispose();
 
     /// <summary>
     /// A budget of 0 GB cannot hold any backup, so the check rejects before anything is written:
@@ -177,7 +171,7 @@ public class DatabaseBackupOutcomeTests
 
     private SqliteConnection CorruptDatabase(out string corruptPath)
     {
-        corruptPath = Path.Combine(_tempDir, "corrupt.db");
+        corruptPath = Path.Combine(_tempDir.Path, "corrupt.db");
         File.WriteAllText(corruptPath, "this file is not a SQLite database");
 
         SqliteConnection connection = new($"Data Source={corruptPath}");

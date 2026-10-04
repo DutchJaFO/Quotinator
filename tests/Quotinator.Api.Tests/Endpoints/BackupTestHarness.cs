@@ -11,6 +11,7 @@ using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Api.Tests.Endpoints;
@@ -32,7 +33,7 @@ internal sealed class BackupTestHarness : IDisposable
     internal const string TestKey = "test-admin-key";
 
     /// <summary>The disposable folder standing in for <c>{dataDir}/backups/</c>.</summary>
-    internal string BackupsPath { get; }
+    internal string BackupsPath => _backups.Path;
 
     /// <summary>The options the reader and writer were built with.</summary>
     internal DatabaseOptions Options { get; }
@@ -47,6 +48,7 @@ internal sealed class BackupTestHarness : IDisposable
     /// </summary>
     internal BackupStubInitializer Db { get; }
 
+    private readonly TempDirectory _backups = new("quotinator_349_harness_");
     private readonly WebApplicationFactory<Program> _factory;
 
     internal BackupTestHarness(
@@ -56,9 +58,6 @@ internal sealed class BackupTestHarness : IDisposable
         IDiskSpaceProvider? diskSpace  = null,
         INotificationConditionCheck? conditionCheck = null)
     {
-        BackupsPath = Path.Combine(Path.GetTempPath(), $"quotinator-349-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(BackupsPath);
-
         Options = new DatabaseOptions
         {
             DbPath             = Path.Combine(BackupsPath, "quotinatordata.db"),
@@ -148,14 +147,11 @@ internal sealed class BackupTestHarness : IDisposable
     internal IReadOnlyList<string> FilesOnDisk() =>
         [.. Directory.EnumerateFiles(BackupsPath).Select(Path.GetFileName).Where(n => n is not null).Select(n => n!).Order()];
 
+    /// <summary>Factory first: a running host holds the database open, and the folder cannot go while it does.</summary>
     public void Dispose()
     {
         _factory.Dispose();
-
-        // Best-effort: a leaked temp folder is untidy, a test failing in teardown is worse.
-        try { Directory.Delete(BackupsPath, recursive: true); }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
+        _backups.Dispose();
     }
 
     /// <summary>

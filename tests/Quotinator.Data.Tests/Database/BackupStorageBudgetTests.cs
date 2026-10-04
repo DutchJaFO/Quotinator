@@ -1,4 +1,5 @@
 using Quotinator.Data.Database;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Data.Tests.Database;
 
@@ -19,17 +20,13 @@ namespace Quotinator.Data.Tests.Database;
 [TestClass]
 public class BackupStorageBudgetTests
 {
-    private string _backups = null!;
+    private TempDirectory _backups = null!;
 
     [TestInitialize]
-    public void TestInitialize() => _backups = Directory.CreateTempSubdirectory("quotinator_349_budget_").FullName;
+    public void TestInitialize() => _backups = new TempDirectory("quotinator_349_budget_");
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        try { Directory.Delete(_backups, recursive: true); }
-        catch (IOException) { }
-    }
+    public void TestCleanup() => _backups.Dispose();
 
     // ── Ceiling ──────────────────────────────────────────────────────────────
 
@@ -124,12 +121,12 @@ public class BackupStorageBudgetTests
         WriteFile("one.db", 100);
         WriteFile("two.db", 250);
 
-        Assert.AreEqual(350L, BackupStorageBudget.UsedBytes(_backups));
+        Assert.AreEqual(350L, BackupStorageBudget.UsedBytes(_backups.Path));
     }
 
     /// <summary>An empty folder is zero used, not an error.</summary>
     [TestMethod]
-    public void UsedBytes_EmptyFolder_IsZero() => Assert.AreEqual(0L, BackupStorageBudget.UsedBytes(_backups));
+    public void UsedBytes_EmptyFolder_IsZero() => Assert.AreEqual(0L, BackupStorageBudget.UsedBytes(_backups.Path));
 
     /// <summary>
     /// A folder that does not exist yet is zero used, not an exception: this runs before the first
@@ -138,7 +135,7 @@ public class BackupStorageBudgetTests
     [TestMethod]
     public void UsedBytes_MissingFolder_IsZero_NotAnError()
     {
-        string missing = Path.Combine(_backups, "does-not-exist");
+        string missing = Path.Combine(_backups.Path, "does-not-exist");
 
         Assert.AreEqual(0L, BackupStorageBudget.UsedBytes(missing));
     }
@@ -152,11 +149,11 @@ public class BackupStorageBudgetTests
     public void UsedBytes_IgnoresFilesInSubdirectories()
     {
         WriteFile("one.db", 100);
-        string nested = Directory.CreateDirectory(Path.Combine(_backups, "nested")).FullName;
+        string nested = Directory.CreateDirectory(Path.Combine(_backups.Path, "nested")).FullName;
         using (FileStream stream = File.Create(Path.Combine(nested, "deep.db")))
             stream.SetLength(500);
 
-        Assert.AreEqual(100L, BackupStorageBudget.UsedBytes(_backups));
+        Assert.AreEqual(100L, BackupStorageBudget.UsedBytes(_backups.Path));
     }
 
     private static DatabaseOptions Options(int maxGb = 1, int quotaPercent = DatabaseOptions.DefaultBackupQuotaPercent) =>
@@ -170,7 +167,7 @@ public class BackupStorageBudgetTests
 
     private void WriteFile(string name, long bytes)
     {
-        using FileStream stream = File.Create(Path.Combine(_backups, name));
+        using FileStream stream = File.Create(Path.Combine(_backups.Path, name));
         stream.SetLength(bytes);
     }
 }

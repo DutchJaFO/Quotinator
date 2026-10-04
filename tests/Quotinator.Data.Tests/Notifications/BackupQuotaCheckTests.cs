@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Data.Connections;
@@ -29,7 +28,7 @@ public class BackupQuotaCheckTests
 
     public TestContext TestContext { get; set; } = null!;
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath = null!;
     private string _backups = null!;
     private NotificationWriter _writer = null!;
@@ -38,11 +37,11 @@ public class BackupQuotaCheckTests
     [TestInitialize]
     public async Task TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_backup_quota_check_").FullName;
-        _dbPath = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_backup_quota_check_");
+        _dbPath = Path.Combine(_tempDir.Path, "test.db");
         // Not "backups": CurrentSchema writes its own backups there while building the schema, and this
         // folder must hold exactly what each test puts in it.
-        _backups = Path.Combine(_tempDir, "quota-backups");
+        _backups = Path.Combine(_tempDir.Path, "quota-backups");
         Directory.CreateDirectory(_backups);
 
         await CurrentSchema.ApplyDataSchemaAsync(_dbPath);
@@ -53,13 +52,7 @@ public class BackupQuotaCheckTests
     }
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        SqliteConnection.ClearAllPools();
-        try { Directory.Delete(_tempDir, recursive: true); }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-    }
+    public void TestCleanup() => _tempDir.Dispose();
 
     [TestMethod]
     public async Task AboveTheQuota_RaisesTheWarning()

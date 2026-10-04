@@ -8,6 +8,7 @@ using Quotinator.Api.Startup;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Paths;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Api.Tests.Startup;
 
@@ -32,17 +33,13 @@ namespace Quotinator.Api.Tests.Startup;
 [TestClass]
 public class StartupResilienceTests
 {
-    private readonly List<string> _temporaryDirectories = [];
+    private readonly List<TempDirectory> _temporaryDirectories = [];
 
     [TestCleanup]
     public void RemoveTemporaryDirectories()
     {
-        foreach (string directory in _temporaryDirectories)
-        {
-            try { Directory.Delete(directory, recursive: true); }
-            catch (IOException) { /* a still-open SQLite handle is not this test's concern */ }
-            catch (UnauthorizedAccessException) { }
-        }
+        foreach (TempDirectory directory in _temporaryDirectories)
+            directory.Dispose();
     }
 
     [TestMethod]
@@ -261,10 +258,9 @@ public class StartupResilienceTests
 
     private string NewDataDirectory()
     {
-        string directory = Path.Combine(Path.GetTempPath(), "quotinator-326-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
+        TempDirectory directory = new("quotinator_326_resilience_");
         _temporaryDirectories.Add(directory);
-        return directory;
+        return directory.Path;
     }
 
     public TestContext TestContext { get; set; }

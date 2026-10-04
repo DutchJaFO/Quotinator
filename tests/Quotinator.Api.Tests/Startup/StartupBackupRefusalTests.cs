@@ -7,6 +7,7 @@ using Quotinator.Constants.Api;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Paths;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Api.Tests.Startup;
 
@@ -21,7 +22,7 @@ public class StartupBackupRefusalTests
 {
     private const string HealthRoute = "/api/v1/health";
 
-    private readonly List<string> _temporaryDirectories = [];
+    private readonly List<TempDirectory> _temporaryDirectories = [];
     private readonly List<WebApplicationFactory<Program>> _factories = [];
 
     /// <summary>Factories first: a running host holds the database open, and the directory cannot go while it does.</summary>
@@ -31,12 +32,8 @@ public class StartupBackupRefusalTests
         foreach (WebApplicationFactory<Program> factory in _factories)
             factory.Dispose();
 
-        foreach (string directory in _temporaryDirectories)
-        {
-            try { Directory.Delete(directory, recursive: true); }
-            catch (IOException) { /* a still-open SQLite handle is not this test's concern */ }
-            catch (UnauthorizedAccessException) { }
-        }
+        foreach (TempDirectory directory in _temporaryDirectories)
+            directory.Dispose();
     }
 
     /// <summary>The schema is behind the build, so serving from it is not safe: the application degrades.</summary>
@@ -113,10 +110,9 @@ public class StartupBackupRefusalTests
 
     private string NewDataDirectory()
     {
-        string directory = Path.Combine(Path.GetTempPath(), "quotinator-348s-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
+        TempDirectory directory = new("quotinator_348_refusal_");
         _temporaryDirectories.Add(directory);
-        return directory;
+        return directory.Path;
     }
 
     public TestContext TestContext { get; set; }

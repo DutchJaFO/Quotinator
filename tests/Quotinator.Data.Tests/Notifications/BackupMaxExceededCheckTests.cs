@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
@@ -27,7 +26,7 @@ public class BackupMaxExceededCheckTests
 
     public TestContext TestContext { get; set; } = null!;
 
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath = null!;
     private string _backups = null!;
     private NotificationWriter _writer = null!;
@@ -36,11 +35,11 @@ public class BackupMaxExceededCheckTests
     [TestInitialize]
     public async Task TestInitialize()
     {
-        _tempDir = Directory.CreateTempSubdirectory("quotinator_backup_max_check_").FullName;
-        _dbPath = Path.Combine(_tempDir, "test.db");
+        _tempDir = new TempDirectory("quotinator_backup_max_check_");
+        _dbPath = Path.Combine(_tempDir.Path, "test.db");
         // Not "backups": CurrentSchema writes its own backups there while building the schema, and this
         // folder must hold exactly what each test puts in it.
-        _backups = Path.Combine(_tempDir, "max-backups");
+        _backups = Path.Combine(_tempDir.Path, "max-backups");
         Directory.CreateDirectory(_backups);
 
         await CurrentSchema.ApplyDataSchemaAsync(_dbPath);
@@ -51,13 +50,7 @@ public class BackupMaxExceededCheckTests
     }
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        SqliteConnection.ClearAllPools();
-        try { Directory.Delete(_tempDir, recursive: true); }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-    }
+    public void TestCleanup() => _tempDir.Dispose();
 
     /// <summary>Exactly at the maximum every backup is already refused, so the band starts here.</summary>
     [TestMethod]

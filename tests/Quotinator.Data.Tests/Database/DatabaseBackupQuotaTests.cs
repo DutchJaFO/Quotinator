@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.Fakes;
 using Quotinator.Data.Testing.NoOps;
 
@@ -23,17 +24,16 @@ namespace Quotinator.Data.Tests.Database;
 [TestClass]
 public class DatabaseBackupQuotaTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath = null!;
     private string _backups = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), "quotinator-348q-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_tempDir);
-        _dbPath = Path.Combine(_tempDir, "test.db");
-        _backups = Path.Combine(_tempDir, "backups");
+        _tempDir = new TempDirectory("quotinator_348_quota_");
+        _dbPath = Path.Combine(_tempDir.Path, "test.db");
+        _backups = Path.Combine(_tempDir.Path, "backups");
         Directory.CreateDirectory(_backups);
 
         // A real database, so every check weighs a backup of real size: whether a backup would pass the
@@ -42,13 +42,7 @@ public class DatabaseBackupQuotaTests
     }
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        SqliteConnection.ClearAllPools();
-        try { Directory.Delete(_tempDir, recursive: true); }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-    }
+    public void TestCleanup() => _tempDir.Dispose();
 
     /// <summary>
     /// Above 90% but below 100%: inside the reserve, where a backup the user asks for is still taken. The

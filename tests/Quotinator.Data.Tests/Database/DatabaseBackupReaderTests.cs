@@ -1,6 +1,7 @@
 using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Data.Tests.Database;
@@ -17,17 +18,13 @@ namespace Quotinator.Data.Tests.Database;
 [TestClass]
 public class DatabaseBackupReaderTests
 {
-    private string _backups = null!;
+    private TempDirectory _backups = null!;
 
     [TestInitialize]
-    public void TestInitialize() => _backups = Directory.CreateTempSubdirectory("quotinator_349_reader_").FullName;
+    public void TestInitialize() => _backups = new TempDirectory("quotinator_349_reader_");
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        try { Directory.Delete(_backups, recursive: true); }
-        catch (IOException) { }
-    }
+    public void TestCleanup() => _backups.Dispose();
 
     // ── List ─────────────────────────────────────────────────────────────────
 
@@ -50,9 +47,9 @@ public class DatabaseBackupReaderTests
     public void List_ReturnsNewestFirst()
     {
         WriteBackup("older.db", 16);
-        File.SetLastWriteTimeUtc(Path.Combine(_backups, "older.db"), new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        File.SetLastWriteTimeUtc(Path.Combine(_backups.Path, "older.db"), new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         WriteBackup("newer.db", 16);
-        File.SetLastWriteTimeUtc(Path.Combine(_backups, "newer.db"), new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+        File.SetLastWriteTimeUtc(Path.Combine(_backups.Path, "newer.db"), new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 
         Assert.AreEqual("newer.db", CreateReader().List()[0].Name);
     }
@@ -65,8 +62,8 @@ public class DatabaseBackupReaderTests
     [TestMethod]
     public void List_MissingFolder_IsEmpty_NotAnError()
     {
-        DatabaseBackupReader reader = new DatabaseBackupReader(
-            Options(Path.Combine(_backups, "not-created-yet")), NoOpDiskSpaceProvider.Instance);
+        DatabaseBackupReader reader = new(
+            Options(Path.Combine(_backups.Path, "not-created-yet")), NoOpDiskSpaceProvider.Instance);
 
         Assert.IsEmpty(reader.List());
     }
@@ -84,7 +81,7 @@ public class DatabaseBackupReaderTests
     public void List_ExcludesTheWritabilityProbeArtefact()
     {
         WriteBackup("real-backup.db", 64);
-        File.WriteAllBytes(Path.Combine(_backups, BackupFileNames.ProbeFileName), []);
+        File.WriteAllBytes(Path.Combine(_backups.Path, BackupFileNames.ProbeFileName), []);
 
         DatabaseBackupReader reader = CreateReader();
         IReadOnlyList<BackupFileInfo> listed = reader.List();
@@ -96,8 +93,8 @@ public class DatabaseBackupReaderTests
         // but downloadable by name would be a worse answer than either alone.
         Assert.IsFalse(reader.Exists(BackupFileNames.ProbeFileName));
         Assert.AreEqual(BackupReadOutcome.InvalidName, reader.TryOpenRead(BackupFileNames.ProbeFileName, out _));
-        Assert.AreEqual(BackupDeleteOutcome.InvalidName, new DatabaseBackupWriter(Options(_backups)).Delete(BackupFileNames.ProbeFileName));
-        Assert.IsTrue(File.Exists(Path.Combine(_backups, BackupFileNames.ProbeFileName)),
+        Assert.AreEqual(BackupDeleteOutcome.InvalidName, new DatabaseBackupWriter(Options(_backups.Path)).Delete(BackupFileNames.ProbeFileName));
+        Assert.IsTrue(File.Exists(Path.Combine(_backups.Path, BackupFileNames.ProbeFileName)),
             "refusing to treat it as a backup must not mean deleting it either");
     }
 
@@ -114,8 +111,8 @@ public class DatabaseBackupReaderTests
 
         Assert.AreEqual(3000L, usage.UsedBytes);
         Assert.AreEqual(2, usage.FileCount);
-        Assert.AreEqual(BackupStorageBudget.CeilingBytes(Options(_backups)), usage.CeilingBytes);
-        Assert.AreEqual(BackupStorageBudget.QuotaBytes(Options(_backups)), usage.QuotaBytes);
+        Assert.AreEqual(BackupStorageBudget.CeilingBytes(Options(_backups.Path)), usage.CeilingBytes);
+        Assert.AreEqual(BackupStorageBudget.QuotaBytes(Options(_backups.Path)), usage.QuotaBytes);
         Assert.IsFalse(usage.ReserveInUse, "3 KB is nowhere near the quota");
     }
 
@@ -124,7 +121,7 @@ public class DatabaseBackupReaderTests
     public void GetUsage_ReportsFreeDiskSpaceFromTheProvider()
     {
         const long FreeBytes = 987_654_321L;
-        DatabaseBackupReader reader = new DatabaseBackupReader(Options(_backups), new FixedDiskSpace(FreeBytes));
+        DatabaseBackupReader reader = new(Options(_backups.Path), new FixedDiskSpace(FreeBytes));
 
         Assert.AreEqual(FreeBytes, reader.GetUsage().FreeDiskBytes);
     }
@@ -135,7 +132,7 @@ public class DatabaseBackupReaderTests
     {
         // 1% of a 1 GB ceiling is ~10.7 MB, so 11 MB crosses it without writing most of a gigabyte.
         WriteBackup("large.db", 11L * 1024 * 1024);
-        DatabaseBackupReader reader = new DatabaseBackupReader(Options(_backups, quotaPercent: 1), NoOpDiskSpaceProvider.Instance);
+        DatabaseBackupReader reader = new(Options(_backups.Path, quotaPercent: 1), NoOpDiskSpaceProvider.Instance);
 
         BackupStorageUsage usage = reader.GetUsage();
 
@@ -162,13 +159,13 @@ public class DatabaseBackupReaderTests
     public void OpenRead_ExistingBackup_ReturnsItsBytes()
     {
         byte[] written = [1, 2, 3, 4, 5];
-        File.WriteAllBytes(Path.Combine(_backups, "present.db"), written);
+        File.WriteAllBytes(Path.Combine(_backups.Path, "present.db"), written);
 
         Assert.AreEqual(BackupReadOutcome.Opened, CreateReader().TryOpenRead("present.db", out Stream? stream));
 
         Assert.IsNotNull(stream);
         using Stream owned = stream!;
-        using MemoryStream buffer = new MemoryStream();
+        using MemoryStream buffer = new();
         stream!.CopyTo(buffer);
         Assert.AreSequenceEqual(written, buffer.ToArray());
     }
@@ -197,8 +194,8 @@ public class DatabaseBackupReaderTests
     public void OpenRead_FileHeldOpenForWriting_StillReads()
     {
         WriteBackup("busy.db", 64);
-        using FileStream holder = new FileStream(
-            Path.Combine(_backups, "busy.db"), FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
+        using FileStream holder = new(
+            Path.Combine(_backups.Path, "busy.db"), FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
 
         Assert.AreEqual(BackupReadOutcome.Opened, CreateReader().TryOpenRead("busy.db", out Stream? stream));
         stream?.Dispose();
@@ -217,8 +214,8 @@ public class DatabaseBackupReaderTests
     public void OpenRead_FileCannotBeOpened_IsReported_NotThrown()
     {
         WriteBackup("locked.db", 64);
-        using FileStream exclusive = new FileStream(
-            Path.Combine(_backups, "locked.db"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        using FileStream exclusive = new(
+            Path.Combine(_backups.Path, "locked.db"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
 
         Assert.AreEqual(BackupReadOutcome.NotReadable, CreateReader().TryOpenRead("locked.db", out Stream? stream));
         Assert.IsNull(stream);
@@ -258,12 +255,12 @@ public class DatabaseBackupReaderTests
     public void Delete_FileCannotBeRemoved_IsReported_NotThrown()
     {
         WriteBackup("locked.db", 32);
-        string path = Path.Combine(_backups, "locked.db");
+        string path = Path.Combine(_backups.Path, "locked.db");
         File.SetAttributes(path, FileAttributes.ReadOnly);
 
         try
         {
-            BackupDeleteOutcome outcome = new DatabaseBackupWriter(Options(_backups)).Delete("locked.db");
+            BackupDeleteOutcome outcome = new DatabaseBackupWriter(Options(_backups.Path)).Delete("locked.db");
 
             Assert.AreEqual(BackupDeleteOutcome.NotRemovable, outcome);
             Assert.IsTrue(File.Exists(path), "reporting the failure must not mean the file went anyway");
@@ -280,29 +277,29 @@ public class DatabaseBackupReaderTests
     {
         WriteBackup("removable.db", 32);
 
-        BackupDeleteOutcome outcome = new DatabaseBackupWriter(Options(_backups)).Delete("removable.db");
+        BackupDeleteOutcome outcome = new DatabaseBackupWriter(Options(_backups.Path)).Delete("removable.db");
 
         Assert.AreEqual(BackupDeleteOutcome.Deleted, outcome);
-        Assert.IsFalse(File.Exists(Path.Combine(_backups, "removable.db")));
+        Assert.IsFalse(File.Exists(Path.Combine(_backups.Path, "removable.db")));
     }
 
     /// <summary>A name with nothing behind it is distinguishable from one that could not be removed.</summary>
     [TestMethod]
     public void Delete_UnknownName_IsNotFound_NotAFailure()
     {
-        Assert.AreEqual(BackupDeleteOutcome.NotFound, new DatabaseBackupWriter(Options(_backups)).Delete("absent.db"));
+        Assert.AreEqual(BackupDeleteOutcome.NotFound, new DatabaseBackupWriter(Options(_backups.Path)).Delete("absent.db"));
     }
 
     /// <summary>An unsafe name is refused before the filesystem is touched.</summary>
     [TestMethod]
     public void Delete_UnsafeName_IsRefused() =>
-        Assert.AreEqual(BackupDeleteOutcome.InvalidName, new DatabaseBackupWriter(Options(_backups)).Delete("../escape.db"));
+        Assert.AreEqual(BackupDeleteOutcome.InvalidName, new DatabaseBackupWriter(Options(_backups.Path)).Delete("../escape.db"));
 
     private DatabaseBackupReader CreateReader() =>
-        new DatabaseBackupReader(Options(_backups), NoOpDiskSpaceProvider.Instance);
+        new(Options(_backups.Path), NoOpDiskSpaceProvider.Instance);
 
     private static DatabaseOptions Options(string backupsPath, int quotaPercent = DatabaseOptions.DefaultBackupQuotaPercent) =>
-        new DatabaseOptions
+        new()
         {
             DbPath             = Path.Combine(backupsPath, "quotinatordata.db"),
             BackupsPath        = backupsPath,
@@ -312,7 +309,7 @@ public class DatabaseBackupReaderTests
 
     private void WriteBackup(string name, long bytes)
     {
-        using FileStream stream = File.Create(Path.Combine(_backups, name));
+        using FileStream stream = File.Create(Path.Combine(_backups.Path, name));
         stream.SetLength(bytes);
     }
 

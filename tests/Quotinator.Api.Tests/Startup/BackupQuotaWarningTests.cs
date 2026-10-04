@@ -1,7 +1,6 @@
 using System.Net;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Data.Connections;
@@ -9,6 +8,7 @@ using Quotinator.Data.Enums;
 using Quotinator.Data.Notifications;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Api.Tests.Startup;
 
@@ -31,20 +31,13 @@ public class BackupQuotaWarningTests
 
     public TestContext TestContext { get; set; } = null!;
 
-    private string _dataDir = null!;
+    private TempDirectory _dataDir = null!;
 
     [TestInitialize]
-    public void TestInitialize() =>
-        _dataDir = Directory.CreateTempSubdirectory("quotinator_backup_quota_warning_").FullName;
+    public void TestInitialize() => _dataDir = new TempDirectory("quotinator_backup_quota_warning_");
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        SqliteConnection.ClearAllPools();
-        try { Directory.Delete(_dataDir, recursive: true); }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-    }
+    public void TestCleanup() => _dataDir.Dispose();
 
     [TestMethod]
     public async Task Startup_InsideTheReserve_RaisesTheWarning()
@@ -174,7 +167,7 @@ public class BackupQuotaWarningTests
         Assert.IsTrue(recording.Ran);
     }
 
-    private string FillerPath => Path.Combine(_dataDir, DataPaths.BackupsFolder, "filler.db");
+    private string FillerPath => Path.Combine(_dataDir.Path, DataPaths.BackupsFolder, "filler.db");
 
     private void FillTo(int percentOfCeiling)
     {
@@ -186,7 +179,7 @@ public class BackupQuotaWarningTests
     private WebApplicationFactory<Program> FactoryFor(int quotaPercent = 90) =>
         new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
-            builder.UseSetting("Quotinator:DataDir", _dataDir);
+            builder.UseSetting("Quotinator:DataDir", _dataDir.Path);
             builder.UseSetting("Quotinator:MaxBackupStorageGb", "1");
             builder.UseSetting("Quotinator:BackupQuotaPercent", quotaPercent.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
@@ -212,7 +205,7 @@ public class BackupQuotaWarningTests
 
     private async Task SeedWarningIntoTheDatabaseFileAsync()
     {
-        SqliteConnectionFactory connections = new(Path.Combine(_dataDir, DataPaths.DatabaseFile));
+        SqliteConnectionFactory connections = new(Path.Combine(_dataDir.Path, DataPaths.DatabaseFile));
         await SeedWarningAsync(Quotinator.Data.Testing.Database.TestNotificationReader.Create(connections), new NotificationWriter(connections));
     }
 

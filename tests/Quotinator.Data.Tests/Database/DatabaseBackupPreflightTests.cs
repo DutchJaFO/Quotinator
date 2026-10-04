@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Data.Tests.Database;
@@ -20,17 +21,16 @@ namespace Quotinator.Data.Tests.Database;
 [TestClass]
 public class DatabaseBackupPreflightTests
 {
-    private string _tempDir = null!;
+    private TempDirectory _tempDir = null!;
     private string _dbPath = null!;
     private string _backups = null!;
 
     [TestInitialize]
     public void TestInitialize()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), "quotinator-348p-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_tempDir);
-        _dbPath = Path.Combine(_tempDir, "test.db");
-        _backups = Path.Combine(_tempDir, "backups");
+        _tempDir = new TempDirectory("quotinator_348_preflight_");
+        _dbPath = Path.Combine(_tempDir.Path, "test.db");
+        _backups = Path.Combine(_tempDir.Path, "backups");
 
         // A real database, so every check weighs a backup of real size: whether a backup would pass the
         // ceiling depends on what it adds, and an absent file adds nothing.
@@ -38,13 +38,7 @@ public class DatabaseBackupPreflightTests
     }
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        SqliteConnection.ClearAllPools();
-        try { Directory.Delete(_tempDir, recursive: true); }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-    }
+    public void TestCleanup() => _tempDir.Dispose();
 
     [TestMethod]
     public void CheckBackupReadiness_WhenTheBudgetIsExhausted_ReportsBudgetExceeded()

@@ -1,4 +1,5 @@
 using Quotinator.Data.Database;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Data.Tests.Database;
 
@@ -14,24 +15,20 @@ namespace Quotinator.Data.Tests.Database;
 [TestClass]
 public class BackupFileNamesTests
 {
-    private string _backups = null!;
+    private TempDirectory _backups = null!;
 
     [TestInitialize]
-    public void TestInitialize() => _backups = Directory.CreateTempSubdirectory("quotinator_349_names_").FullName;
+    public void TestInitialize() => _backups = new TempDirectory("quotinator_349_names_");
 
     [TestCleanup]
-    public void TestCleanup()
-    {
-        try { Directory.Delete(_backups, recursive: true); }
-        catch (IOException) { }
-    }
+    public void TestCleanup() => _backups.Dispose();
 
     /// <summary>An ordinary backup file name resolves inside the folder — the positive control.</summary>
     [TestMethod]
     public void PlainFileName_Resolves_InsideTheBackupsFolder()
     {
-        Assert.IsTrue(BackupFileNames.TryResolve(_backups, "quotinatordata_v5_20260101T101010101Z.db", out string resolved));
-        Assert.AreEqual(Path.Combine(_backups, "quotinatordata_v5_20260101T101010101Z.db"), resolved);
+        Assert.IsTrue(BackupFileNames.TryResolve(_backups.Path, "quotinatordata_v5_20260101T101010101Z.db", out string resolved));
+        Assert.AreEqual(Path.Combine(_backups.Path, "quotinatordata_v5_20260101T101010101Z.db"), resolved);
     }
 
     /// <summary>Every shape that is a path rather than a name is refused.</summary>
@@ -48,7 +45,7 @@ public class BackupFileNamesTests
     [DataRow("   ",                    DisplayName = "whitespace")]
     public void PathsAndTraversals_AreRefused(string name)
     {
-        Assert.IsFalse(BackupFileNames.TryResolve(_backups, name, out string resolved));
+        Assert.IsFalse(BackupFileNames.TryResolve(_backups.Path, name, out string resolved));
         Assert.AreEqual(string.Empty, resolved);
     }
 
@@ -56,7 +53,7 @@ public class BackupFileNamesTests
     [TestMethod]
     public void NullName_IsRefused_WithoutThrowing()
     {
-        Assert.IsFalse(BackupFileNames.TryResolve(_backups, null, out string resolved));
+        Assert.IsFalse(BackupFileNames.TryResolve(_backups.Path, null, out string resolved));
         Assert.AreEqual(string.Empty, resolved);
     }
 
@@ -67,12 +64,12 @@ public class BackupFileNamesTests
     [TestMethod]
     public void SiblingFolderSharingAPrefix_IsNotInsideTheBackupsFolder()
     {
-        string sibling = _backups + "-other";
+        string sibling = _backups.Path + "-other";
         Directory.CreateDirectory(sibling);
 
         try
         {
-            Assert.IsFalse(BackupFileNames.TryResolve(_backups, $"..{Path.DirectorySeparatorChar}{Path.GetFileName(sibling)}{Path.DirectorySeparatorChar}x.db", out _));
+            Assert.IsFalse(BackupFileNames.TryResolve(_backups.Path, $"..{Path.DirectorySeparatorChar}{Path.GetFileName(sibling)}{Path.DirectorySeparatorChar}x.db", out _));
         }
         finally
         {
