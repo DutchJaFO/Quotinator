@@ -9,7 +9,7 @@
   "properties": {
     "rules": {
       "type": "array",
-      "description": "Every entity this file declares a rule for. Empty for a source with no known recurring conflicts. Grouped by entity (one entry per entity), not flattened to one entry per field — a single entity can have more than one field in conflict at once. A single rules array can mix ids from more than one entity type (e.g. a Quote id alongside a Series id).",
+      "description": "Every entity this file declares a rule for. Empty for a source with no known recurring conflicts. Grouped by entity (one entry per entity), not flattened to one entry per field — a single entity can have more than one field in conflict at once. An entity must be named at most once (ADR 023); JSON Schema cannot express uniqueness by a property, so that half is enforced by SourceDataIntegrityTests.RuleFiles_NameEachEntityAtMostOnce rather than here. A single rules array can mix ids from more than one entity type (e.g. a Quote id alongside a Series id).",
       "items": {
         "type": "object",
         "required": ["entityId", "existingRecord", "incomingRecord", "fields"],
@@ -26,7 +26,7 @@
           },
           "incomingRecord": {
             "type": "object",
-            "description": "The incoming (this source file's own) side's complete field set, recorded at the time this rule was authored. Unlike existingRecord, this one IS read by the matching logic (#374): a governed field's current value here is compared against the live import's own incoming value to detect a stale rule (the underlying source moved since authoring) or a retirable one (the incoming side has moved into agreement, making the rule a candidate for deletion)."
+            "description": "The incoming (this source file's own) side's complete field set, recorded at the time this rule was authored — same shape and same human-review purpose as existingRecord. Purely documentation, never read by the matching logic: staleness is judged per field, against that field's own recordedIncomingValue (ADR 023). Before ADR 023 this record was what the matching logic read, which is why one entity could need two entries and no single snapshot was correct for every field."
           },
           "fields": {
             "type": "array",
@@ -34,13 +34,16 @@
             "description": "Every field of this entity that this rule file resolves. Not limited to fields that actually disagree between the two sides — a Custom rule can also correct a field that's simply wrong or missing on both.",
             "items": {
               "type": "object",
-              "required": ["field", "resolution"],
+              "required": ["field", "resolution", "recordedIncomingValue"],
               "additionalProperties": false,
               "properties": {
                 "field": {
                   "type": "string",
                   "minLength": 1,
                   "description": "The field name this rule governs (e.g. 'date', 'type', 'source', 'quoteText', 'character', 'author', 'originalLanguage', 'genres') — a key present in both existingRecord and incomingRecord."
+                },
+                "recordedIncomingValue": {
+                  "description": "This field's own incoming value, as it stood when this rule was authored — the value the matching logic compares against the live import's incoming value to detect a stale rule (the source moved since authoring) or a retirable one (the two sides have moved into agreement). Deliberately carries no type constraint: a recorded value is legitimately a string, null, or an array (genres), and null is a real recorded value rather than an absence. Recorded per field, not per entry, so one entity never needs two entries to carry two snapshots — see ADR 023. Required here, but a hand-written file that omits it degrades to Stale rather than silently reapplying."
                 },
                 "resolution": {
                   "type": "string",

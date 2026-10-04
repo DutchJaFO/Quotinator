@@ -40,12 +40,12 @@ public sealed class ConflictResolutionRule
 
     /// <summary>
     /// The incoming (this source file's own) side's complete field set, recorded at the time this rule
-    /// was authored — same shape and same human-review purpose as <see cref="ExistingRecord"/>, but
-    /// unlike it, **this one is read by the matching logic** (#374): <see cref="ConflictRuleLookup.TryResolve"/>
-    /// compares each governed field's currently-recorded value here against the live import's own
-    /// incoming value to decide whether the rule has gone stale, or is a candidate for retirement. It is
-    /// the only signal that can tell a curator a rule has become redundant — see
-    /// <see cref="ConflictRuleOutcome"/>.
+    /// was authored — same shape and same human-review purpose as <see cref="ExistingRecord"/>. Purely
+    /// documentation; never read by the matching logic. Staleness is judged per field, against that
+    /// field's own <see cref="ConflictResolutionFieldRule.RecordedIncomingValue"/> (ADR 023). Until
+    /// ADR 023 this record was what <see cref="ConflictRuleLookup.TryResolve"/> read, which is why one
+    /// entity could need two entries: a snapshot recorded per entry but read per field cannot be correct
+    /// for every field once an earlier rule has already enriched the incoming side.
     /// </summary>
     [JsonPropertyName("incomingRecord")]
     public required JsonElement IncomingRecord { get; init; }
@@ -75,4 +75,38 @@ public sealed class ConflictResolutionFieldRule
     /// <summary>The value to use when <see cref="Resolution"/> is <see cref="FieldResolutionChoice.Custom"/>. Ignored (and should be omitted) otherwise.</summary>
     [JsonPropertyName("customValue")]
     public string? CustomValue { get; init; }
+
+    /// <summary>
+    /// This field's own incoming value, as it stood when this rule was authored —
+    /// <see cref="ConflictRuleLookup.TryResolve"/> compares it against the live import's own incoming
+    /// value to decide whether the rule has gone stale, or is a candidate for retirement. Recorded per
+    /// field rather than per entry (ADR 023), so one entity never needs two entries to carry two
+    /// snapshots.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Three states are distinct and all three are load-bearing: a recorded value (a string, or a list
+    /// for <c>genres</c>), an explicit <see langword="null"/> (a real recorded value — it is what the
+    /// NikhilNamal17 source holds for one quote's <c>character</c>), and no recorded value at all, which
+    /// resolves <see cref="ConflictRuleOutcome.Stale"/>.
+    /// </para>
+    /// <para>
+    /// <strong>This is why the type is a non-nullable <see cref="JsonElement"/> and not a
+    /// <c>JsonElement?</c></strong>, which would look like the natural choice for an optional value and
+    /// is wrong: <c>System.Text.Json</c> resolves a nullable value type through its
+    /// <c>NullableConverter</c>, which never calls the inner converter for a <c>null</c> token, so an
+    /// explicit <c>null</c> and an absent property both deserialize to <c>HasValue == false</c> —
+    /// collapsing two of the three states. The non-nullable form keeps them apart as
+    /// <see cref="JsonValueKind.Null"/> and <see cref="JsonValueKind.Undefined"/>.
+    /// </para>
+    /// <para>
+    /// <see cref="JsonIgnoreCondition.WhenWritingDefault"/> is required, not cosmetic: serializing an
+    /// <see cref="JsonValueKind.Undefined"/> element throws <see cref="InvalidOperationException"/>, and
+    /// <c>POST /import/rules/conflict/generate</c> writes its merged result straight back to the override
+    /// file — so without it a file that legitimately omits a recorded value would fail on write.
+    /// </para>
+    /// </remarks>
+    [JsonPropertyName("recordedIncomingValue")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public JsonElement RecordedIncomingValue { get; init; }
 }

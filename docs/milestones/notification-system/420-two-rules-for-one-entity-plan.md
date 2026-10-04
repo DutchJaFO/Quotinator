@@ -67,7 +67,14 @@ This and the plan doc land in their own commit, separate from code, per `process
 
 ### 2. Extend the schema and the model with the per-field recorded value
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-04 — `recordedIncomingValue` on `fields[]` (required, no `type` constraint)
+and `ConflictResolutionFieldRule.RecordedIncomingValue` as a non-nullable `JsonElement` carrying
+`[JsonIgnore(WhenWritingDefault)]`. Build clean: 0 warnings, 0 errors. `RuleFiles_ConformToSchema` is red
+exactly as designed — every `fields[]` item across the four files reports
+*Required properties ["recordedIncomingValue"] are not present*, and nothing else. Confirmed by reverting
+the schema alone and re-running: green before, red after, so the validator's additional
+`resolution`/`customValue` lines are its own subschema-evaluation verbosity on an
+already-invalid document, not a second violation. Turns green in step 9.
 
 `schemas/conflict-resolution-rules.schema.json`: each `fields[]` item gains a required recorded incoming
 value, and `incomingRecord`'s description is reworded to documentation only, the standing

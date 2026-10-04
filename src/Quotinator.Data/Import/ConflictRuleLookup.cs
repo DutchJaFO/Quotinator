@@ -16,7 +16,14 @@ public sealed class ConflictRuleLookup
 
     private readonly Dictionary<string, RuleEntry> _rules;
 
-    /// <summary>Builds a lookup from every entity entry in <paramref name="rules"/>, flattening each entry's <see cref="ConflictResolutionRule.Fields"/> into the per-field index. A later duplicate (same entity id + field) overwrites an earlier one.</summary>
+    /// <summary>
+    /// Builds a lookup from every entity entry in <paramref name="rules"/>, flattening each entry's
+    /// <see cref="ConflictResolutionRule.Fields"/> into the per-field index. A later duplicate (same
+    /// entity id + field) overwrites an earlier one — a tolerance this lookup retains while
+    /// <em>a rule file</em> may name an entity only once (ADR 023, enforced by
+    /// <c>SourceDataIntegrityTests.RuleFiles_NameEachEntityAtMostOnce</c> and reported as a <c>422</c> by
+    /// the generate endpoint, so a duplicate never reaches here from a bundled or generated file).
+    /// </summary>
     public ConflictRuleLookup(IEnumerable<ConflictResolutionRule> rules)
     {
         _rules = new Dictionary<string, RuleEntry>(StringComparer.OrdinalIgnoreCase);
@@ -38,7 +45,10 @@ public sealed class ConflictRuleLookup
     /// <remarks>
     /// #374: staleness is judged on the incoming side alone — <see cref="ConflictResolutionRule.ExistingRecord"/>
     /// is never read here (a stored value is expected to drift from what was recorded at authoring time;
-    /// that is the rule doing its job, not a reason to distrust it). A field's <em>wanted</em> value is
+    /// that is the rule doing its job, not a reason to distrust it). ADR 023: the incoming side it is
+    /// judged against is the governed field's own <see cref="ConflictResolutionFieldRule.RecordedIncomingValue"/>,
+    /// not <see cref="ConflictResolutionRule.IncomingRecord"/>, which is now documentation only. A field
+    /// with no recorded value resolves <see cref="ConflictRuleOutcome.Stale"/>. A field's <em>wanted</em> value is
     /// computed from <paramref name="decision"/> against the current sides (never against the recorded
     /// snapshot) and compared against <paramref name="currentExistingValue"/> — the value actually
     /// stored — to tell <see cref="ConflictRuleOutcome.Apply"/> from <see cref="ConflictRuleOutcome.AlreadyApplied"/>.
