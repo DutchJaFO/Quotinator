@@ -30,17 +30,17 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Generate_OneDecidedField_ProducesSingleFieldRule()
     {
-        var rows = new[]
-        {
+        ImportActionFieldRowResponse[] rows =
+        [
             Row("quoteText", "Original text", "A changed line.", null),
             Row("date", "1939", null, FieldResolutionChoice.Keep),
-        };
+        ];
 
-        var rules = ConflictRuleGenerator.Generate(rows);
+        IReadOnlyList<ConflictResolutionRule> rules = ConflictRuleGenerator.Generate(rows);
 
-        var rule = rules.Single();
+        ConflictResolutionRule rule = rules.Single();
         Assert.AreEqual(EntityId, rule.EntityId);
-        var field = rule.Fields.Single();
+        ConflictResolutionFieldRule field = rule.Fields.Single();
         Assert.AreEqual("date", field.Field);
         Assert.AreEqual(FieldResolutionChoice.Keep, field.Resolution);
     }
@@ -48,13 +48,13 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Generate_MultipleDecidedFieldsSameEntity_CollapseIntoOneRule()
     {
-        var rows = new[]
-        {
+        ImportActionFieldRowResponse[] rows =
+        [
             Row("date", "1939", null, FieldResolutionChoice.Keep),
             Row("character", null, "Rick Blaine", FieldResolutionChoice.Replace),
-        };
+        ];
 
-        var rules = ConflictRuleGenerator.Generate(rows);
+        IReadOnlyList<ConflictResolutionRule> rules = ConflictRuleGenerator.Generate(rows);
 
         Assert.HasCount(1, rules, "Both decided fields for the same entity must collapse into a single rule, per #153's Step 10 finding");
         Assert.HasCount(2, rules[0].Fields);
@@ -63,13 +63,13 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Generate_NoDecidedFieldsForEntity_ProducesNoRule()
     {
-        var rows = new[]
-        {
+        ImportActionFieldRowResponse[] rows =
+        [
             Row("quoteText", "Original text", "A changed line.", null),
             Row("date", "1939", null, null),
-        };
+        ];
 
-        var rules = ConflictRuleGenerator.Generate(rows);
+        IReadOnlyList<ConflictResolutionRule> rules = ConflictRuleGenerator.Generate(rows);
 
         Assert.IsEmpty(rules, "An entity with every field still undecided (Pending/Stale/Blocked) has nothing to generate a rule from yet");
     }
@@ -77,11 +77,11 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Generate_CustomResolution_CarriesCustomValue()
     {
-        var rows = new[] { Row("character", null, null, FieldResolutionChoice.Custom, "Rick Blaine") };
+        ImportActionFieldRowResponse[] rows = [Row("character", null, null, FieldResolutionChoice.Custom, "Rick Blaine")];
 
-        var rule = ConflictRuleGenerator.Generate(rows).Single();
+        ConflictResolutionRule rule = ConflictRuleGenerator.Generate(rows).Single();
 
-        var field = rule.Fields.Single();
+        ConflictResolutionFieldRule field = rule.Fields.Single();
         Assert.AreEqual(FieldResolutionChoice.Custom, field.Resolution);
         Assert.AreEqual("Rick Blaine", field.CustomValue);
     }
@@ -89,13 +89,13 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Generate_ExistingAndIncomingRecords_ReflectEveryRowRegardlessOfDecision()
     {
-        var rows = new[]
-        {
+        ImportActionFieldRowResponse[] rows =
+        [
             Row("quoteText", "Original text", "A changed line.", null),
             Row("date", "1939", null, FieldResolutionChoice.Keep),
-        };
+        ];
 
-        var rule = ConflictRuleGenerator.Generate(rows).Single();
+        ConflictResolutionRule rule = ConflictRuleGenerator.Generate(rows).Single();
 
         Assert.AreEqual("Original text", rule.ExistingRecord.GetProperty("quoteText").GetString());
         Assert.AreEqual("A changed line.", rule.IncomingRecord.GetProperty("quoteText").GetString());
@@ -106,24 +106,24 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Generate_GenresField_DecodedFromDelimitedStringIntoArray()
     {
-        var rows = new[] { Row("genres", "drama;sci-fi", "", FieldResolutionChoice.Keep) };
+        ImportActionFieldRowResponse[] rows = [Row("genres", "drama;sci-fi", "", FieldResolutionChoice.Keep)];
 
-        var rule = ConflictRuleGenerator.Generate(rows).Single();
+        ConflictResolutionRule rule = ConflictRuleGenerator.Generate(rows).Single();
 
-        var genres = rule.ExistingRecord.GetProperty("genres").EnumerateArray().Select(e => e.GetString()).ToArray();
+        string?[] genres = [.. rule.ExistingRecord.GetProperty("genres").EnumerateArray().Select(e => e.GetString())];
         Assert.AreSequenceEqual(["drama", "sci-fi"], genres);
     }
 
     [TestMethod]
     public void Generate_MultipleEntities_EachGetsItsOwnRule()
     {
-        var rows = new[]
-        {
+        ImportActionFieldRowResponse[] rows =
+        [
             Row("date", "1939", null, FieldResolutionChoice.Keep, entityId: "e0000001-0000-4000-8000-000000000001"),
             Row("date", "1994", null, FieldResolutionChoice.Keep, entityId: "e0000002-0000-4000-8000-000000000002"),
-        };
+        ];
 
-        var rules = ConflictRuleGenerator.Generate(rows);
+        IReadOnlyList<ConflictResolutionRule> rules = ConflictRuleGenerator.Generate(rows);
 
         Assert.HasCount(2, rules);
     }
@@ -133,7 +133,7 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Merge_NoExistingFile_ReturnsGeneratedRulesAsIs()
     {
-        var generated = ConflictRuleGenerator.Generate([Row("date", "1939", null, FieldResolutionChoice.Keep)]);
+        IReadOnlyList<ConflictResolutionRule> generated = ConflictRuleGenerator.Generate([Row("date", "1939", null, FieldResolutionChoice.Keep)]);
 
         ConflictResolutionRuleFileDto merged = ConflictRuleGenerator.Merge(null, generated).File!;
 
@@ -143,11 +143,11 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Merge_NewEntityId_IsAppended()
     {
-        var existingFile = new ConflictResolutionRuleFileDto
+        ConflictResolutionRuleFileDto existingFile = new()
         {
             Rules = [BuildRule("e0000001-0000-4000-8000-000000000001", "date", FieldResolutionChoice.Keep)],
         };
-        var generated = ConflictRuleGenerator.Generate([Row("date", "1994", null, FieldResolutionChoice.Keep, entityId: "e0000002-0000-4000-8000-000000000002")]);
+        IReadOnlyList<ConflictResolutionRule> generated = ConflictRuleGenerator.Generate([Row("date", "1994", null, FieldResolutionChoice.Keep, entityId: "e0000002-0000-4000-8000-000000000002")]);
 
         ConflictResolutionRuleFileDto merged = ConflictRuleGenerator.Merge(existingFile, generated).File!;
 
@@ -157,17 +157,17 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Merge_EntityAlreadyCoversField_ManualEditIsNeverOverwritten()
     {
-        var existingFile = new ConflictResolutionRuleFileDto
+        ConflictResolutionRuleFileDto existingFile = new()
         {
             Rules = [BuildRule(EntityId, "date", FieldResolutionChoice.Custom, "1942")],
         };
         // A generated rule for the SAME field, with a DIFFERENT resolution — must never win.
-        var generated = ConflictRuleGenerator.Generate([Row("date", "1939", null, FieldResolutionChoice.Keep)]);
+        IReadOnlyList<ConflictResolutionRule> generated = ConflictRuleGenerator.Generate([Row("date", "1939", null, FieldResolutionChoice.Keep)]);
 
         ConflictResolutionRuleFileDto merged = ConflictRuleGenerator.Merge(existingFile, generated).File!;
 
-        var rule = merged.Rules.Single(r => r.EntityId == EntityId);
-        var field = rule.Fields.Single(f => f.Field == "date");
+        ConflictResolutionRule rule = merged.Rules.Single(r => r.EntityId == EntityId);
+        ConflictResolutionFieldRule field = rule.Fields.Single(f => f.Field == "date");
         Assert.AreEqual(FieldResolutionChoice.Custom, field.Resolution, "The file's own hand-authored resolution must survive a generation run untouched");
         Assert.AreEqual("1942", field.CustomValue);
     }
@@ -175,15 +175,15 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Merge_EntityCoversDifferentField_NewFieldIsAdded()
     {
-        var existingFile = new ConflictResolutionRuleFileDto
+        ConflictResolutionRuleFileDto existingFile = new()
         {
             Rules = [BuildRule(EntityId, "date", FieldResolutionChoice.Keep)],
         };
-        var generated = ConflictRuleGenerator.Generate([Row("character", null, "Rick Blaine", FieldResolutionChoice.Replace)]);
+        IReadOnlyList<ConflictResolutionRule> generated = ConflictRuleGenerator.Generate([Row("character", null, "Rick Blaine", FieldResolutionChoice.Replace)]);
 
         ConflictResolutionRuleFileDto merged = ConflictRuleGenerator.Merge(existingFile, generated).File!;
 
-        var rule = merged.Rules.Single(r => r.EntityId == EntityId);
+        ConflictResolutionRule rule = merged.Rules.Single(r => r.EntityId == EntityId);
         Assert.HasCount(2, rule.Fields, "A genuinely new field for an already-covered entity must be added alongside the existing one");
         Assert.Contains(f => f.Field == "date", rule.Fields);
         Assert.Contains(f => f.Field == "character", rule.Fields);
@@ -197,17 +197,17 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Generate_RecordsEachFieldsOwnIncomingValue()
     {
-        var rows = new[]
-        {
+        ImportActionFieldRowResponse[] rows =
+        [
             Row("date", "1939", "2017", FieldResolutionChoice.Keep),
             Row("character", null, null, FieldResolutionChoice.Custom, "Fernando Vera"),
-        };
+        ];
 
-        var rule = ConflictRuleGenerator.Generate(rows).Single();
+        ConflictResolutionRule rule = ConflictRuleGenerator.Generate(rows).Single();
 
-        var date = rule.Fields.Single(f => f.Field == "date");
+        ConflictResolutionFieldRule date = rule.Fields.Single(f => f.Field == "date");
         Assert.AreEqual("2017", date.RecordedIncomingValue.GetString(), "The date field must record its own incoming value");
-        var character = rule.Fields.Single(f => f.Field == "character");
+        ConflictResolutionFieldRule character = rule.Fields.Single(f => f.Field == "character");
         Assert.AreEqual(JsonValueKind.Null, character.RecordedIncomingValue.ValueKind,
             "A null incoming value is recorded as an explicit JSON null, never left Undefined — Undefined means 'not recorded'");
     }
@@ -217,11 +217,11 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Generate_RecordedIncomingValueForGenres_IsAnArray()
     {
-        var rows = new[] { Row("genres", "drama", "drama;sci-fi", FieldResolutionChoice.Replace) };
+        ImportActionFieldRowResponse[] rows = [Row("genres", "drama", "drama;sci-fi", FieldResolutionChoice.Replace)];
 
-        var rule = ConflictRuleGenerator.Generate(rows).Single();
+        ConflictResolutionRule rule = ConflictRuleGenerator.Generate(rows).Single();
 
-        var recorded = rule.Fields.Single().RecordedIncomingValue;
+        JsonElement recorded = rule.Fields.Single().RecordedIncomingValue;
         Assert.AreEqual(JsonValueKind.Array, recorded.ValueKind);
         Assert.AreSequenceEqual(["drama", "sci-fi"], recorded.EnumerateArray().Select(e => e.GetString()).ToArray());
     }
@@ -232,15 +232,15 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Merge_NewFieldCarriesItsOwnRecordedIncomingValue()
     {
-        var existingFile = new ConflictResolutionRuleFileDto
+        ConflictResolutionRuleFileDto existingFile = new()
         {
             Rules = [BuildRule(EntityId, "date", FieldResolutionChoice.Keep)],
         };
-        var generated = ConflictRuleGenerator.Generate([Row("character", null, "Rick Blaine", FieldResolutionChoice.Replace)]);
+        IReadOnlyList<ConflictResolutionRule> generated = ConflictRuleGenerator.Generate([Row("character", null, "Rick Blaine", FieldResolutionChoice.Replace)]);
 
         ConflictResolutionRuleFileDto merged = ConflictRuleGenerator.Merge(existingFile, generated).File!;
 
-        var added = merged.Rules.Single(r => r.EntityId == EntityId).Fields.Single(f => f.Field == "character");
+        ConflictResolutionFieldRule added = merged.Rules.Single(r => r.EntityId == EntityId).Fields.Single(f => f.Field == "character");
         Assert.AreEqual("Rick Blaine", added.RecordedIncomingValue.GetString());
     }
 
@@ -250,7 +250,7 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Merge_ExistingFileNamesOneEntityTwice_ReportsTheDuplicateInsteadOfThrowing()
     {
-        var existingFile = new ConflictResolutionRuleFileDto
+        ConflictResolutionRuleFileDto existingFile = new()
         {
             Rules =
             [
@@ -258,7 +258,7 @@ public class ConflictRuleGeneratorTests
                 BuildRule(EntityId, "character", FieldResolutionChoice.Custom, "Fernando Vera"),
             ],
         };
-        var generated = ConflictRuleGenerator.Generate([Row("type", "tv", "tv", FieldResolutionChoice.Keep)]);
+        IReadOnlyList<ConflictResolutionRule> generated = ConflictRuleGenerator.Generate([Row("type", "tv", "tv", FieldResolutionChoice.Keep)]);
 
         ConflictRuleMergeResult result = ConflictRuleGenerator.Merge(existingFile, generated);
 
@@ -274,7 +274,7 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Merge_ExistingFileNamesOneEntityTwiceDifferingOnlyByCase_IsStillADuplicate()
     {
-        var existingFile = new ConflictResolutionRuleFileDto
+        ConflictResolutionRuleFileDto existingFile = new()
         {
             Rules =
             [
@@ -293,7 +293,7 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Merge_ExistingFileNamesEachEntityOnce_IsMerged()
     {
-        var existingFile = new ConflictResolutionRuleFileDto
+        ConflictResolutionRuleFileDto existingFile = new()
         {
             Rules =
             [

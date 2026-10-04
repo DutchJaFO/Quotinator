@@ -17,6 +17,7 @@ using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
+using Quotinator.Data.Entities;
 
 namespace Quotinator.Api.Tests.Endpoints;
 
@@ -49,7 +50,7 @@ public class ImportRuleEndpointsTests
         IEnumerable<SourceEntity>? sources = null,
         string? adminApiKey = TestKey)
     {
-        var pathResolver = new RuleFileOverridePathResolver(_overrideDir, Path.Combine(_tempDir.Path, "override-external"), _bundledDir, Path.Combine(_tempDir.Path, "bundled-external"));
+        RuleFileOverridePathResolver pathResolver = new(_overrideDir, Path.Combine(_tempDir.Path, "override-external"), _bundledDir, Path.Combine(_tempDir.Path, "bundled-external"));
 
         return new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
@@ -75,7 +76,7 @@ public class ImportRuleEndpointsTests
 
     private static HttpClient CreateAuthorizedClient(WebApplicationFactory<Program> factory)
     {
-        var client = factory.CreateClient();
+        HttpClient client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
         return client;
     }
@@ -99,10 +100,10 @@ public class ImportRuleEndpointsTests
     [TestMethod]
     public async Task GetConflictRuleFile_MissingFileName_Returns422()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/rules/conflict?origin=Bundled", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/rules/conflict?origin=Bundled", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -110,10 +111,10 @@ public class ImportRuleEndpointsTests
     [TestMethod]
     public async Task GetConflictRuleFile_InvalidOrigin_Returns422()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/rules/conflict?fileName=rules.json&origin=NotARealOrigin", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/rules/conflict?fileName=rules.json&origin=NotARealOrigin", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -121,10 +122,10 @@ public class ImportRuleEndpointsTests
     [TestMethod]
     public async Task GetConflictRuleFile_NeitherBundledNorOverrideExists_Returns404()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/rules/conflict?fileName=does-not-exist.json&origin=Bundled", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/rules/conflict?fileName=does-not-exist.json&origin=Bundled", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -133,11 +134,11 @@ public class ImportRuleEndpointsTests
     public async Task GetConflictRuleFile_BundledFileExists_ReturnsRulesWithOverrideFalse()
     {
         WriteBundledRuleFile("rules.json", SampleRuleFile);
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/rules/conflict?fileName=rules.json&origin=Bundled", TestContext.CancellationToken);
-        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/rules/conflict?fileName=rules.json&origin=Bundled", TestContext.CancellationToken);
+        JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.IsFalse(doc.RootElement.GetProperty("isOverrideActive").GetBoolean());
@@ -153,14 +154,14 @@ public class ImportRuleEndpointsTests
             """{"rules":[{"entityId":"22222222-2222-2222-2222-222222222222","existingRecord":{"date":"2000"},"incomingRecord":{"date":"2001"},"fields":[{"field":"date","resolution":"Replace"}]}]}""";
         File.WriteAllText(Path.Combine(_overrideDir, "rules.json"), overrideContent);
 
-        var registry = new FakeSourceFileOverrideRegistry();
+        FakeSourceFileOverrideRegistry registry = new();
         await registry.RegisterAsync("rules.json", SeedBatchOrigin.Bundled, EffectiveRuleFileResolver.ComputeContentHash(overrideContent), sourceBatchId: null, TestContext.CancellationToken);
 
-        using var factory = CreateFactory(registry: registry);
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory(registry: registry);
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/rules/conflict?fileName=rules.json&origin=Bundled", TestContext.CancellationToken);
-        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/rules/conflict?fileName=rules.json&origin=Bundled", TestContext.CancellationToken);
+        JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.IsTrue(doc.RootElement.GetProperty("isOverrideActive").GetBoolean());
@@ -172,10 +173,10 @@ public class ImportRuleEndpointsTests
     [TestMethod]
     public async Task GenerateConflictRuleFile_NoApiKey_Returns401()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.PostAsync("/api/v1/import/rules/conflict/generate?fileName=rules.json&origin=Bundled&batchId=b1", content: null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/rules/conflict/generate?fileName=rules.json&origin=Bundled&batchId=b1", content: null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -183,10 +184,10 @@ public class ImportRuleEndpointsTests
     [TestMethod]
     public async Task GenerateConflictRuleFile_MissingBatchId_Returns422()
     {
-        using var factory = CreateFactory();
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/rules/conflict/generate?fileName=rules.json&origin=Bundled", content: null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/rules/conflict/generate?fileName=rules.json&origin=Bundled", content: null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -194,7 +195,7 @@ public class ImportRuleEndpointsTests
     [TestMethod]
     public async Task GenerateConflictRuleFile_ValidBatch_WritesRegisteredOverrideWithNewRule()
     {
-        var fakeService = new FakeImportActionService
+        FakeImportActionService fakeService = new()
         {
             ReturnExportRows =
             [
@@ -210,23 +211,23 @@ public class ImportRuleEndpointsTests
                 },
             ],
         };
-        var registry = new FakeSourceFileOverrideRegistry();
-        using var factory = CreateFactory(fakeService, registry);
-        using var client  = CreateAuthorizedClient(factory);
+        FakeSourceFileOverrideRegistry registry = new();
+        using WebApplicationFactory<Program> factory = CreateFactory(fakeService, registry);
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/rules/conflict/generate?fileName=rules.json&origin=Bundled&batchId=my-batch", content: null, TestContext.CancellationToken);
-        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/rules/conflict/generate?fileName=rules.json&origin=Bundled&batchId=my-batch", content: null, TestContext.CancellationToken);
+        JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.IsTrue(doc.RootElement.GetProperty("isOverrideActive").GetBoolean());
         Assert.AreEqual(1, doc.RootElement.GetProperty("rulesAdded").GetInt32());
         Assert.AreEqual(1, doc.RootElement.GetProperty("rules").GetArrayLength());
 
-        var registered = await registry.FindAsync("rules.json", SeedBatchOrigin.Bundled, TestContext.CancellationToken);
+        SourceFileOverrideEntity? registered = await registry.FindAsync("rules.json", SeedBatchOrigin.Bundled, TestContext.CancellationToken);
         Assert.IsNotNull(registered, "the generate call must register the new override");
         Assert.AreEqual("my-batch", registered.SourceBatchId);
 
-        var writtenPath = Path.Combine(_overrideDir, "rules.json");
+        string writtenPath = Path.Combine(_overrideDir, "rules.json");
         Assert.IsTrue(File.Exists(writtenPath), "the generate call must write the override file to disk");
     }
 
@@ -238,7 +239,7 @@ public class ImportRuleEndpointsTests
         // the exact correctness gap EffectiveRuleFileResolver exists to close (see its own doc comment).
         WriteBundledRuleFile("rules.json", SampleRuleFile);
 
-        var fakeService = new FakeImportActionService
+        FakeImportActionService fakeService = new()
         {
             ReturnExportRows =
             [
@@ -254,16 +255,14 @@ public class ImportRuleEndpointsTests
                 },
             ],
         };
-        using var factory = CreateFactory(fakeService);
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory(fakeService);
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/rules/conflict/generate?fileName=rules.json&origin=Bundled&batchId=my-batch", content: null, TestContext.CancellationToken);
-        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/rules/conflict/generate?fileName=rules.json&origin=Bundled&batchId=my-batch", content: null, TestContext.CancellationToken);
+        JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var entityIds = doc.RootElement.GetProperty("rules").EnumerateArray()
-            .Select(r => r.GetProperty("entityId").GetString() ?? string.Empty)
-            .ToList();
+        List<string> entityIds = [.. doc.RootElement.GetProperty("rules").EnumerateArray().Select(r => r.GetProperty("entityId").GetString() ?? string.Empty)];
         Assert.Contains("11111111-1111-1111-1111-111111111111", entityIds, "the pre-existing bundled rule must survive the merge");
         Assert.Contains("44444444-4444-4444-4444-444444444444", entityIds, "the newly generated rule must be included");
     }
@@ -277,7 +276,7 @@ public class ImportRuleEndpointsTests
     {
         WriteBundledRuleFile("rules.json", DuplicateEntityRuleFile);
 
-        var fakeService = new FakeImportActionService
+        FakeImportActionService fakeService = new()
         {
             ReturnExportRows =
             [
@@ -293,11 +292,11 @@ public class ImportRuleEndpointsTests
                 },
             ],
         };
-        using var factory = CreateFactory(fakeService);
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory(fakeService);
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/rules/conflict/generate?fileName=rules.json&origin=Bundled&batchId=my-batch", content: null, TestContext.CancellationToken);
-        string body   = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/rules/conflict/generate?fileName=rules.json&origin=Bundled&batchId=my-batch", content: null, TestContext.CancellationToken);
+        string body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "A duplicate entity id is a stated outcome, never an unhandled 500");
         Assert.Contains("rules.json", body, "The response names the file so the operator knows which one to fix");
@@ -317,7 +316,7 @@ public class ImportRuleEndpointsTests
 
         // A batch adding a second field to the SAME entity, so the entry whose field has no recorded
         // value is rewritten rather than merely copied.
-        var fakeService = new FakeImportActionService
+        FakeImportActionService fakeService = new()
         {
             ReturnExportRows =
             [
@@ -333,10 +332,10 @@ public class ImportRuleEndpointsTests
                 },
             ],
         };
-        using var factory = CreateFactory(fakeService);
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory(fakeService);
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/rules/conflict/generate?fileName=rules.json&origin=Bundled&batchId=my-batch", content: null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/rules/conflict/generate?fileName=rules.json&origin=Bundled&batchId=my-batch", content: null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "A field with no recorded value is permitted and must not fail the write");
 
@@ -359,10 +358,10 @@ public class ImportRuleEndpointsTests
     [TestMethod]
     public async Task RemoveOverride_NoApiKey_Returns401()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.DeleteAsync("/api/v1/import/rules/conflict?fileName=rules.json&origin=Bundled", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.DeleteAsync("/api/v1/import/rules/conflict?fileName=rules.json&origin=Bundled", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -370,10 +369,10 @@ public class ImportRuleEndpointsTests
     [TestMethod]
     public async Task RemoveOverride_NotRegistered_Returns404()
     {
-        using var factory = CreateFactory();
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var response = await client.DeleteAsync("/api/v1/import/rules/conflict?fileName=rules.json&origin=Bundled", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.DeleteAsync("/api/v1/import/rules/conflict?fileName=rules.json&origin=Bundled", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -386,17 +385,17 @@ public class ImportRuleEndpointsTests
             """{"rules":[{"entityId":"55555555-5555-5555-5555-555555555555","existingRecord":{},"incomingRecord":{},"fields":[{"field":"date","resolution":"Replace"}]}]}""";
         File.WriteAllText(Path.Combine(_overrideDir, "rules.json"), overrideContent);
 
-        var registry = new FakeSourceFileOverrideRegistry();
+        FakeSourceFileOverrideRegistry registry = new();
         await registry.RegisterAsync("rules.json", SeedBatchOrigin.Bundled, EffectiveRuleFileResolver.ComputeContentHash(overrideContent), sourceBatchId: null, TestContext.CancellationToken);
 
-        using var factory = CreateFactory(registry: registry);
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory(registry: registry);
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var deleteResponse = await client.DeleteAsync("/api/v1/import/rules/conflict?fileName=rules.json&origin=Bundled", TestContext.CancellationToken);
+        HttpResponseMessage deleteResponse = await client.DeleteAsync("/api/v1/import/rules/conflict?fileName=rules.json&origin=Bundled", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 
-        var getResponse = await client.GetAsync("/api/v1/import/rules/conflict?fileName=rules.json&origin=Bundled", TestContext.CancellationToken);
-        var doc         = JsonDocument.Parse(await getResponse.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        HttpResponseMessage getResponse = await client.GetAsync("/api/v1/import/rules/conflict?fileName=rules.json&origin=Bundled", TestContext.CancellationToken);
+        JsonDocument doc = JsonDocument.Parse(await getResponse.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.IsFalse(doc.RootElement.GetProperty("isOverrideActive").GetBoolean(), "removing the registration must fall back to the bundled copy");
         Assert.AreEqual("11111111-1111-1111-1111-111111111111", doc.RootElement.GetProperty("rules")[0].GetProperty("entityId").GetString());
@@ -407,10 +406,10 @@ public class ImportRuleEndpointsTests
     [TestMethod]
     public async Task GetSourceAliasCandidates_MissingFileName_Returns422()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/rules/alias?origin=Bundled", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/rules/alias?origin=Bundled", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -418,10 +417,10 @@ public class ImportRuleEndpointsTests
     [TestMethod]
     public async Task GetSourceAliasCandidates_NoApiKeyRequired_Returns200()
     {
-        using var factory = CreateFactory(sources: [NewSource("Casablanca")]);
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory(sources: [NewSource("Casablanca")]);
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/rules/alias?fileName=aliases.json&origin=Bundled", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/rules/alias?fileName=aliases.json&origin=Bundled", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
@@ -429,15 +428,15 @@ public class ImportRuleEndpointsTests
     [TestMethod]
     public async Task GetSourceAliasCandidates_NearDuplicateTitles_SurfacedAsCandidate()
     {
-        using var factory = CreateFactory(sources:
+        using WebApplicationFactory<Program> factory = CreateFactory(sources:
         [
             NewSource("Airplane!"),
             NewSource("Airplane"),
         ]);
-        using var client = factory.CreateClient();
+        using HttpClient client = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/rules/alias?fileName=aliases.json&origin=Bundled", TestContext.CancellationToken);
-        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/rules/alias?fileName=aliases.json&origin=Bundled", TestContext.CancellationToken);
+        JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual(1, doc.RootElement.GetProperty("candidates").GetArrayLength());
@@ -446,15 +445,15 @@ public class ImportRuleEndpointsTests
     [TestMethod]
     public async Task GetSourceAliasCandidates_NoDuplicates_ReturnsEmptyCandidates()
     {
-        using var factory = CreateFactory(sources:
+        using WebApplicationFactory<Program> factory = CreateFactory(sources:
         [
             NewSource("Jurassic Park"),
             NewSource("Casablanca"),
         ]);
-        using var client = factory.CreateClient();
+        using HttpClient client = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/rules/alias?fileName=aliases.json&origin=Bundled", TestContext.CancellationToken);
-        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/rules/alias?fileName=aliases.json&origin=Bundled", TestContext.CancellationToken);
+        JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.AreEqual(0, doc.RootElement.GetProperty("candidates").GetArrayLength());
     }
@@ -465,15 +464,15 @@ public class ImportRuleEndpointsTests
         WriteBundledRuleFile("aliases.json",
             """{"aliases":[{"title":"Airplane","type":"Movie","canonicalTitle":"Airplane!","canonicalType":"Movie"}]}""");
 
-        using var factory = CreateFactory(sources:
+        using WebApplicationFactory<Program> factory = CreateFactory(sources:
         [
             NewSource("Airplane!"),
             NewSource("Airplane"),
         ]);
-        using var client = factory.CreateClient();
+        using HttpClient client = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/rules/alias?fileName=aliases.json&origin=Bundled", TestContext.CancellationToken);
-        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/rules/alias?fileName=aliases.json&origin=Bundled", TestContext.CancellationToken);
+        JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.AreEqual(0, doc.RootElement.GetProperty("candidates").GetArrayLength(), "an already-aliased pair must not be re-suggested");
     }
@@ -481,16 +480,16 @@ public class ImportRuleEndpointsTests
     [TestMethod]
     public async Task GetSourceAliasCandidates_NeverWritesToAliasFile()
     {
-        var bundledPath = Path.Combine(_bundledDir, "aliases.json");
+        string bundledPath = Path.Combine(_bundledDir, "aliases.json");
         WriteBundledRuleFile("aliases.json", """{"aliases":[]}""");
-        var beforeContent = await File.ReadAllTextAsync(bundledPath, TestContext.CancellationToken);
+        string beforeContent = await File.ReadAllTextAsync(bundledPath, TestContext.CancellationToken);
 
-        using var factory = CreateFactory(sources:
+        using WebApplicationFactory<Program> factory = CreateFactory(sources:
         [
             NewSource("Airplane!"),
             NewSource("Airplane"),
         ]);
-        using var client = factory.CreateClient();
+        using HttpClient client = factory.CreateClient();
 
         await client.GetAsync("/api/v1/import/rules/alias?fileName=aliases.json&origin=Bundled", TestContext.CancellationToken);
 

@@ -30,15 +30,15 @@ public static class ConflictRuleGenerator
     /// </summary>
     public static IReadOnlyList<ConflictResolutionRule> Generate(IReadOnlyList<ImportActionFieldRowResponse> rows)
     {
-        var result = new List<ConflictResolutionRule>();
+        List<ConflictResolutionRule> result = [];
 
-        foreach (var group in rows.GroupBy(r => r.EntityId, StringComparer.OrdinalIgnoreCase))
+        foreach (IGrouping<string, ImportActionFieldRowResponse> group in rows.GroupBy(r => r.EntityId, StringComparer.OrdinalIgnoreCase))
         {
-            var existingRecord = new Dictionary<string, object?>();
-            var incomingRecord = new Dictionary<string, object?>();
-            var fieldRules      = new List<ConflictResolutionFieldRule>();
+            Dictionary<string, object?> existingRecord = [];
+            Dictionary<string, object?> incomingRecord = [];
+            List<ConflictResolutionFieldRule> fieldRules = [];
 
-            foreach (var row in group)
+            foreach (ImportActionFieldRowResponse row in group)
             {
                 existingRecord[row.Field] = DecodeFieldValue(row.Field, row.ExistingValue);
                 incomingRecord[row.Field] = DecodeFieldValue(row.Field, row.IncomingValue);
@@ -78,23 +78,23 @@ public static class ConflictRuleGenerator
     /// </summary>
     public static ConflictRuleMergeResult Merge(ConflictResolutionRuleFileDto? existing, IReadOnlyList<ConflictResolutionRule> generated)
     {
-        var merged = existing?.Rules.ToList() ?? [];
-        var byEntityId = merged.ToDictionary(r => r.EntityId, StringComparer.OrdinalIgnoreCase);
+        List<ConflictResolutionRule> merged = existing?.Rules.ToList() ?? [];
+        Dictionary<string, ConflictResolutionRule> byEntityId = merged.ToDictionary(r => r.EntityId, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var candidate in generated)
+        foreach (ConflictResolutionRule candidate in generated)
         {
-            if (!byEntityId.TryGetValue(candidate.EntityId, out var existingRule))
+            if (!byEntityId.TryGetValue(candidate.EntityId, out ConflictResolutionRule? existingRule))
             {
                 merged.Add(candidate);
                 byEntityId[candidate.EntityId] = candidate;
                 continue;
             }
 
-            var coveredFields = new HashSet<string>(existingRule.Fields.Select(f => f.Field), StringComparer.OrdinalIgnoreCase);
-            var newFields     = candidate.Fields.Where(f => !coveredFields.Contains(f.Field)).ToList();
+            HashSet<string> coveredFields = new(existingRule.Fields.Select(f => f.Field), StringComparer.OrdinalIgnoreCase);
+            List<ConflictResolutionFieldRule> newFields = [.. candidate.Fields.Where(f => !coveredFields.Contains(f.Field))];
             if (newFields.Count == 0) continue;
 
-            var index = merged.IndexOf(existingRule);
+            int index = merged.IndexOf(existingRule);
             merged[index] = new ConflictResolutionRule
             {
                 EntityId       = existingRule.EntityId,
