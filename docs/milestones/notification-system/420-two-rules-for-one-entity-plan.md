@@ -13,15 +13,31 @@
 developer's own Visual Studio action, which an assistant never performs (`CLAUDE.md`). T2 needs Docker:
 the smoke set plus documents 14, 15, 16 and 18.
 
-Build is clean (0 warnings, 0 errors) and every unit test that this issue governs is green, including
-the full `Quotinator.Core.Tests` suite at 1737/1737.
+Build is clean (0 warnings, 0 errors), `Quotinator.Core.Tests` is 1737/1737, and **the full-solution
+`-m:1` run completed with 0 warnings, 0 errors and no failure beyond the eight pre-existing ones below**
+— so the cross-project reproducibility measure `-m:1` exists for surfaced nothing new here.
 
-**Four `Quotinator.Data.Tests` and three `Quotinator.Api.Tests` failures are pre-existing and not this
-issue's** — Windows path-separator and backslash-traversal tests, and two "file cannot be removed" tests
-that cannot establish their precondition as root on Linux. Verified rather than assumed: all seven fail
-identically at this branch's own base commit (`aae9ded`) in a clean worktree. They are an artifact of
-running the suite in this Linux container; T1/T2 run on the developer's own machine. Surfaced per
-`CLAUDE.md`'s rule on a finding in a file the current issue did not touch, and not fixed here.
+**Eight failures in this container are pre-existing and not this issue's**, verified rather than assumed
+— each fails identically at this branch's own base commit (`aae9ded`) in a clean worktree:
+
+| Project | Tests |
+|---|---|
+| `Quotinator.Data.Tests` | 3 Windows path-separator `DataRow`s, plus `Delete_FileCannotBeRemoved_IsReported_NotThrown` |
+| `Quotinator.Api.Tests` | 2 backslash-traversal tests, plus `DeleteBackup_FileCannotBeRemoved_Returns409NotAnUnhandled500` |
+| `Quotinator.Data.Testing.Tests` | `Dispose_WhenTheDirectoryIsHeldOpen_ReportsTheFailure` |
+
+All eight are artifacts of running the suite as root on Linux: Windows path semantics, and three tests
+whose precondition (a file or directory that cannot be removed) cannot be established as root. T1/T2 run
+on the developer's own machine. Surfaced per `CLAUDE.md`'s rule on a finding in a file the current issue
+did not touch, and not fixed here.
+
+**Two accounting errors of this session's own, corrected here rather than left standing.** The count was
+reported as seven until the `-m:1` run found an eighth: `Dispose_WhenTheDirectoryIsHeldOpen_ReportsTheFailure`
+lives in `Quotinator.Data.Testing.Tests`, a project the per-project runs never covered — those runs were
+`Core`, `Data` and `Api` only, three of eleven, so "every unit test is green" was overstated on the
+strength of a partial sweep. Separately, the three Windows `DataRow`s are absent from the `-m:1` output
+above because the filter used to read it required an uppercase letter after `Failed `, and a `DataRow`'s
+`DisplayName` is lowercase; they did fail, and the counts reconcile once that is accounted for.
 
 **Four `Quotinator.Data.Tests` failures are pre-existing and not this issue's** — three Windows
 path-separator tests and `Delete_FileCannotBeRemoved_IsReported_NotThrown`, which cannot establish its
