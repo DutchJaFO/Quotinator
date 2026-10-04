@@ -89,7 +89,7 @@ public sealed class ConflictRuleLookup
 
     /// <summary>
     /// Decodes a field rule's own recorded incoming value into the shape
-    /// <see cref="FieldMergeResolver.ValuesEqual"/> compares. Returns <see langword="false"/> only for
+    /// <see cref="FieldMergeResolver.ValuesEqual(object?, object?)"/> compares. Returns <see langword="false"/> only for
     /// <see cref="JsonValueKind.Undefined"/> — nothing was recorded for this field, which can never be
     /// confirmed fresh. <see cref="JsonValueKind.Null"/> is a recorded value of <see langword="null"/>
     /// and returns <see langword="true"/>: ADR 023 keeps those two states distinct, which is why the

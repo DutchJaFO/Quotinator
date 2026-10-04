@@ -8,9 +8,14 @@ evaluation line does not exist until then, so that reading is inconclusive; ever
 
 ## Preconditions
 
-A `ConflictResolutionRule` records an `existingRecord`/`incomingRecord` snapshot. When those no longer
-match the current staging run's real field values, the rule is never silently reapplied — the action
-stages `Stale`.
+Each field a `ConflictResolutionRule` governs records its own `recordedIncomingValue`: the value that
+field's incoming side held when the rule was authored (ADR 023). When that no longer matches the current
+staging run's real incoming value, the rule is never silently reapplied — the action stages `Stale`. A
+field with no recorded value at all stages `Stale` too, since it can never be confirmed fresh.
+
+The entry-level `existingRecord`/`incomingRecord` snapshots are documentation only and are not read by
+the matching logic — `existingRecord` has never been (#374), and `incomingRecord` stopped being read
+when #420 moved the value onto the field it governs.
 
 Beyond the Fresh profile: **a reseed is required; the profile's own first boot cannot exercise this.**
 A brand-new database only ever stages `Add` actions, because nothing exists yet to conflict with.
@@ -25,8 +30,12 @@ a container still working through its multi-file seed reads a partially-seeded, 
 profile's own readiness poll is what gates that.
 
 **The shipped rule file is already corrected**, so a run against current `main` returns an empty list.
-To see the "before" state, use `scripts/testing/conflict-rule.csx` to change the rule's recorded
-snapshot and rebuild the image — do not treat the empty result as a failure.
+To see the "before" state, use `scripts/testing/conflict-rule.csx --field <name> --recorded-incoming
+<json>` to change that field's own recorded value, then rebuild the image — do not treat the empty
+result as a failure. Pass raw JSON (`'"1999"'` for a string, `null` for an explicit null) or the word
+`absent` to remove the property, which is the distinct "nothing was recorded" case. Until #420 the
+script could only change a `resolution` or remove a rule, so this document named a "before" state its
+own tool could not reach.
 
 **The audit trail records `Purged`, not `Purge`.** This document counted the latter until #339's full
 run, so it read `0` against 8 real traces and the whole "rules out an empty list" table below was

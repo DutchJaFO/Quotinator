@@ -3,9 +3,6 @@
 **Smoke:** no
 **Environment:** Fresh
 **Traces to:** #153
-**Fully green after:** [#420](https://github.com/DutchJaFO/Quotinator/issues/420) — step 4's `generate`
-answers an unhandled `500`, because `nikhilnamal17-conflict-rules.json` holds two rules for one entity;
-every step before it passes
 
 ## Preconditions
 
@@ -53,15 +50,16 @@ $idsBefore = @($before.rules.entityId)
 "isOverrideActive=$($before.isOverrideActive) rules=$($idsBefore.Count)"
 ```
 
-**Expected:** `200` with `isOverrideActive=False`, and a non-zero rule count — 13 at the time of
+**Expected:** `200` with `isOverrideActive=False`, and a non-zero rule count — 22 at the time of
 writing, but the assertion is "not zero", not the figure.
 
 **The file has to be one that ships with rules, which is why it is `nikhilnamal17-conflict-rules.json`.**
 This document named `quotinator-curated-conflict-rules.json` until #339's full run, and that file ships
 `"rules": []` — so the before-capture was empty and step 5's "every rule present before is still present
 after" could not fail. The document already warned that zero rules would make the assertion vacuous, and
-then named the one bundled file that has zero. Counts as shipped today: nikhilnamal17 13, vilaboim 36,
-series-universe 1, curated 0.
+then named the one bundled file that has zero. Counts as shipped today: nikhilnamal17 22, vilaboim 36,
+series-universe 1, curated 0. (nikhilnamal17 shipped 23 rules over 22 entity ids until #420 collapsed
+its one duplicated entity into a single entry, which is what made `generate` answer a `500` here.)
 
 **On failure:** a zero count means whichever file is named here has no rules, and step 5 then proves
 nothing regardless of what the merge does. Stop and pick a file that has some.

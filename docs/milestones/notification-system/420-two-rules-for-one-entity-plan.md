@@ -9,11 +9,19 @@
 
 ## Next action
 
-**Execute step 6** — record the value on generation and report a duplicate instead of throwing. Steps 1
-to 5 are done, and step 8 needs no separate code change (see step 3). Every remaining failure is
-accounted for and expected: 5 `ConflictRuleGeneratorTests` await step 6; `RuleFiles_ConformToSchema`,
-`RuleFiles_NameEachEntityAtMostOnce` and 4 real-corpus tests that read the bundled rule files await
-steps 9 and 10; `ConflictRuleDocuments_StateTheOneEntryPerEntityContract` awaits step 12.
+**Steps 1 to 14 are done; only T1 (step 15) and T2 (step 16) remain**, and both are live runs. T1 is the
+developer's own Visual Studio action, which an assistant never performs (`CLAUDE.md`). T2 needs Docker:
+the smoke set plus documents 14, 15, 16 and 18.
+
+Build is clean (0 warnings, 0 errors) and every unit test that this issue governs is green, including
+the full `Quotinator.Core.Tests` suite at 1737/1737.
+
+**Four `Quotinator.Data.Tests` and three `Quotinator.Api.Tests` failures are pre-existing and not this
+issue's** — Windows path-separator and backslash-traversal tests, and two "file cannot be removed" tests
+that cannot establish their precondition as root on Linux. Verified rather than assumed: all seven fail
+identically at this branch's own base commit (`aae9ded`) in a clean worktree. They are an artifact of
+running the suite in this Linux container; T1/T2 run on the developer's own machine. Surfaced per
+`CLAUDE.md`'s rule on a finding in a file the current issue did not touch, and not fixed here.
 
 **Four `Quotinator.Data.Tests` failures are pre-existing and not this issue's** — three Windows
 path-separator tests and `Delete_FileCannotBeRemoved_IsReported_NotThrown`, which cannot establish its
@@ -272,7 +280,10 @@ and which step 4's migration must not alter the meaning of.
 
 ### 6. Record the value on generation, and report a duplicate instead of throwing
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-04 — all 17 `ConflictRuleGeneratorTests` green. `Generate` records
+`SerializeToElement(incomingRecord[row.Field])` per field; `Merge` groups by entity id
+case-insensitively and returns `DuplicateEntity` before `ToDictionary` is reached, so the throw site is
+gone rather than guarded.
 
 `ConflictRuleGenerator.Generate` records each field's own incoming value, which it already holds as
 `row.IncomingValue`, decoded through the existing `DecodeFieldValue` and serialized with
@@ -286,7 +297,11 @@ ADR 022: the condition is checkable before the dictionary is built.
 
 ### 7. Answer the duplicate as a stated 422
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-04 — `ApiMessages.RuleFileNamesEntityTwice`, substituted through
+`IApiLocalizer.Format` (never `string.Format`), translated in all three locales, and asserted by
+`GenerateConflictRuleFile_ExistingFileNamesOneEntityTwice_Returns422` plus
+`TranslationCompletenessTests`. The endpoint already declared a `422`, so this was the message and the
+mapping; its `[Description]` gained the outcome.
 
 The `generate` endpoint maps `Merge`'s outcome to a `422` naming the file and the repeated id, and
 declares it with `.Produces<ProblemDetails>` (the endpoint already declares a `422`, so this is the
@@ -296,7 +311,10 @@ substituted through `IApiLocalizer.Format`, never `string.Format`, and translate
 
 ### 8. Round-trip a field with no recorded value without throwing
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — satisfied by step 2, which shipped `[JsonIgnore(WhenWritingDefault)]` together with
+the property, so no separate code change was needed. Its test was green on arrival rather than red, and
+was proven failable instead of assumed sound: removing the attribute turns it red on the status-code
+assertion (the endpoint answering a 500 from `InvalidOperationException`), then restored. See step 3.
 
 **A second unhandled `500` on this same endpoint, of the same class as the one this issue exists to
 remove, and reachable only once step 2 lands** — found by cross-checking the write path, not reported in
@@ -331,7 +349,27 @@ not ask for is worse than the throw, and it is the same collapse step 2 rejects 
 
 ### 9. Migrate the four bundled rule files and collapse the duplicate
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-04 — 65 fields given their own recorded value, no field left without one,
+and **the full `Quotinator.Core.Tests` suite is green: 1737/1737**, which includes
+`RuleFiles_ConformToSchema`, the uniqueness guard, and the four real-corpus tests that read these files.
+
+Done with a second throwaway `.csx`: values come from parsing the JSON properly, the injection is
+textual, so all three hand-maintained layouts survive (records on one line in vilaboim, multi-line in
+the other two) instead of being reflowed by a serializer round-trip — the diff is 65 changed lines, each
+only a `fields[]` line. It re-parses its own output before leaving it on disk, and reports rather than
+guesses where a field is absent from its own `incomingRecord`; it reported nothing.
+
+Mr. Robot's two entries collapsed by hand into one carrying both fields: `date` records `"2017"`,
+`character` records `null`. **The surviving entry keeps the pre-rule records** (`character: null`) rather
+than the later entry's, because that is what `NikhilNamal17_popular-movie-quotes.json` actually holds and
+so is the truthful documentation of both sides at authoring time. nikhilnamal17 is now 22 rules over 22
+distinct ids, down from 23 over 22.
+
+### 10. Guard the contract where the schema cannot see it
+
+**Status:** ✅ Done — `RuleFiles_NameEachEntityAtMostOnce` was written red in step 3 and turned green by
+step 9. It groups case-insensitively, matching `Merge`'s own comparison, and its failure message names
+each offender and says how to fix it.
 
 Every `fields[]` entry in the four files gains its recorded value, taken from that entry's own
 `incomingRecord` for the same field. Mr. Robot's two entries collapse into one in which `date` records
@@ -344,17 +382,25 @@ row proves on a real reseed rather than by inspection.
 Counts to migrate, measured: nikhilnamal17 23 rules / 22 ids (the one duplicate), vilaboim 36 / 36,
 series-universe 1 / 1, curated 0.
 
-### 10. Guard the contract where the schema cannot see it
-
-**Status:** ⬜ Not started
-
 JSON Schema cannot express uniqueness by a property, so `RuleFiles_ConformToSchema` passes a file with a
 repeated entity id and always will. `SourceDataIntegrityTests.RuleFiles_NameEachEntityAtMostOnce` is the
 guard, in the class that already reads those files.
 
 ### 11. Let the test script edit a recorded value, and correct document 16's wording
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-04 — `conflict-rule.csx` gained `--recorded-incoming <json>`, which takes
+raw JSON so a string, an explicit `null` and a list are all expressible, plus the literal word `absent`
+to remove the property. Those last two are deliberately distinct: `absent` resolves `Stale`, a recorded
+`null` is a real value that can still match. Bad input is refused with a message saying how to quote it,
+rather than silently recording the characters `null`.
+
+Exercised against a real copy of the bundled file in all four modes before being committed — string,
+explicit null, absent, and bad input refused — and the pre-existing `--resolution` mode re-checked
+unaffected.
+
+Document 16's Preconditions now describe the per-field value and say plainly that both entry-level
+snapshots are documentation only; its Determinism section names the new flag instead of a capability the
+script did not have.
 
 `scripts/testing/conflict-rule.csx` gains a recorded-value edit. *A rule whose recorded snapshot no
 longer matches reality stages Stale, not Decided* names that script as the way to reach its own "before"
@@ -364,7 +410,15 @@ snapshot") is corrected in the same pass. See *Scope changes* for the pre-existi
 
 ### 12. Update the two affected documents and the endpoint reference
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-04 — `ConflictRuleDocuments_StateTheOneEntryPerEntityContract` green.
+Document 18 lost its "Fully green after #420" block, and its counts went from 13 to 22, with a note
+saying it shipped 23 rules over 22 ids until the collapse — the figure a reader would otherwise find
+inexplicable.
+
+`docs/api-endpoints.md` gained the `422` on the generate row **and a prose paragraph stating the
+contract**: the table row alone did not satisfy the guard, and a one-line table cell was the wrong place
+for it anyway. The paragraph states the at-most-once rule, the per-field recorded value, why it is
+per-field, that an unrecorded field resolves `Stale`, and links ADR 023.
 
 *Rule-file override endpoints* drops its "**Fully green after:** #420" header block, and its rule counts
 are corrected: step 2 says "13 at the time of writing" and "Counts as shipped today: nikhilnamal17 13,
@@ -375,7 +429,15 @@ commit, per `CLAUDE.md`'s *Keeping API documentation in sync*.
 
 ### 13. Changelog
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-04 — two `fixed` entries in `unreleased`, `420` added to
+`unreleased.issues`, matching translated entries in `nl` and `de` in the same commit, and `CHANGELOG.md`
+regenerated (only — not the add-on copies, per the Pre-Push Checklist). `Quotinator.Changelog.Tests`
+42/42 green.
+
+No `highlights` entry: both entries describe an endpoint and a rule-file format that only an operator
+maintaining their own rule files touches, which is `fixed` territory rather than user-facing impact. The
+wording deliberately names no class, endpoint path or property — "one quote twice", "what that field
+looked like when the rule was written" — per the plain-English rule for changelog text.
 
 Entries in `changelog.en.json`'s `unreleased` section with `420` in `unreleased.issues`, and matching
 translated entries in `changelog.nl.json` and `changelog.de.json` in the same commit. Regenerate
@@ -383,7 +445,23 @@ translated entries in `changelog.nl.json` and `changelog.de.json` in the same co
 
 ### 14. Review the knowledgebase
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-04 — **deleted**, with its row removed from `docs/knowledgebase/README.md`
+and its entry from `Quotinator.slnx`.
+
+`docs/knowledgebase.md`'s retention test is *did this entry ship*, not *is the condition fixed*. It did
+not: its Affected versions read `1.9.0-alpha onwards`, the newest released version is 1.8.3, and its
+Entry code was `—`, so no published code needs protecting from reuse. Written 2026-09-22 and resolved
+here, inside one development cycle, which the retention table sends to **Deleted** — the commits are its
+history, and keeping it retired would leave an operator reading about something no released version can
+produce.
+
+**No replacement entry, and that is a decision rather than an omission.** The two conditions a user can
+still reach are both stated behaviour, not diagnostics: the `422` names the file, the repeated id and
+the remedy in its own message, and a field with no recorded value resolving `Stale` is documented in
+`api-endpoints.md` and visible in the import review. Neither is the kind of unexplained symptom someone
+searches the knowledgebase for. When #386 lands ADR 021's runtime validation, such a file will instead
+be rejected whole — that *is* worth an entry, and it belongs to #386, which the plan's *Scope changes*
+already assigns.
 
 `docs/knowledgebase/generating-conflict-rules-answers-500.md` is reviewed here, at the end, and its
 disposition decided then, weighing all three `docs/knowledgebase.md` allows. What the review weighs: the
@@ -437,6 +515,22 @@ expansion: it exists only because step 2 introduces the property, it lands on th
 the same unhandled-`500`-from-`generate` shape #420 is defined by, and shipping step 2 without step 8
 would trade the reported `500` for an unreported one. ADR 022 governs it the same way it governs
 `Merge`'s own throw.
+
+**Surfaced, not fixed: `ConflictRuleLookup` may be a fifth caller of the class #409 closed.** Found
+incidentally — an ambiguous-`cref` warning in this issue's own XML doc revealed that
+`FieldMergeResolver.ValuesEqual` has two overloads, and `ConflictRuleLookup` uses the two-argument,
+always-case-insensitive one for all three of its comparisons (staleness, `AlreadyApplied` vs `Apply`,
+and `Retirable`). `CLAUDE.md` states that a quote's `quoteText` and `character` are compared
+case-sensitively (#374), that **every** comparison of a quote's fields goes through `QuoteFieldMerge`,
+and that `FieldMergeResolver` is never to be called directly on quote fields — #409 found four callers
+that did. So a rule governing `quoteText` whose incoming side changes by casing alone appears to be
+judged "not stale" and reapplied, which is exactly the reading #374 says a person must make.
+
+**Pre-existing and untouched by this issue** — the old per-entry code used the same overload — and
+fixing it would change staleness behaviour for quote text, which is a decision, not a cleanup. Not in
+#420's scope and deliberately not fixed here; raised for the developer to decide whether it is a real
+defect and whether it belongs to #409's family. Recorded rather than filed, since filing an issue needs
+its own draft and approval.
 
 **ADR 010 was breached during this issue's own execution, and the breach is recorded rather than
 quietly dropped.** ADR 010 forbids Python, Node, and Unix text-processing one-liners (`sed`, `awk`)

@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-10-03 23:01 UTC]: do not edit by hand.*
+##### *GENERATED FILE [2026-10-04 16:13 UTC]: do not edit by hand.*
 
 # Changelog
 
@@ -75,6 +75,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Every automated test host now starts with the source refresh and the bundled sources off and a data directory of its own, removed when the host stops, and a test that needs a schema is given a prepared database: test maintenance with no effect on the application (issue #424)
 
 ### Fixed
+- Generating a conflict-resolution rule file from a reviewed batch no longer fails outright when the existing file lists one quote twice. It now reports which file and which entry are at fault, and the file that comes with Quotinator has been corrected (issue #420)
+- A rule that corrects a quote now remembers, for each field it corrects, what that field looked like when the rule was written. A rule covering two fields written at different times could not record both correctly before, which is what caused the duplicate entry (issue #420)
 - While Quotinator is still starting up, it now refuses anything that would change data, instead of accepting it and reporting success: a reset sent during startup used to answer "OK" and a web page while nothing had actually been reset (issue #419)
 - Startup now finishes its own work before the application reports itself ready, so an action taken the moment it becomes available can no longer interrupt it (issue #419)
 - The notice about two renamed API operation IDs showed as expired on databases created with version 1.8.3 or earlier, although the change it describes still applies. It is now shown as current, and stays dismissed if you had already dismissed it (issue #413)

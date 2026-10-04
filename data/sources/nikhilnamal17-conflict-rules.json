@@ -21,8 +21,8 @@
         "genres": []
       },
       "fields": [
-        { "field": "source", "resolution": "Custom", "customValue": "Star Wars: Episode II - Attack of the Clones" },
-        { "field": "character", "resolution": "Custom", "customValue": "Anakin Skywalker" }
+        { "field": "source", "resolution": "Custom", "customValue": "Star Wars: Episode II - Attack of the Clones", "recordedIncomingValue": "The Lord of the Rings: The Two Towers" },
+        { "field": "character", "resolution": "Custom", "customValue": "Anakin Skywalker", "recordedIncomingValue": null }
       ]
     },
     {
@@ -46,7 +46,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Keep" }
+        { "field": "date", "resolution": "Keep", "recordedIncomingValue": "2005" }
       ]
     },
     {
@@ -70,7 +70,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Custom", "customValue": "2005" }
+        { "field": "date", "resolution": "Custom", "customValue": "2005", "recordedIncomingValue": "2006" }
       ]
     },
     {
@@ -94,7 +94,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Custom", "customValue": "2019" }
+        { "field": "date", "resolution": "Custom", "customValue": "2019", "recordedIncomingValue": "2014" }
       ]
     },
     {
@@ -118,7 +118,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Custom", "customValue": "2007" }
+        { "field": "date", "resolution": "Custom", "customValue": "2007", "recordedIncomingValue": "2006" }
       ]
     },
     {
@@ -142,7 +142,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Custom", "customValue": "2014" }
+        { "field": "date", "resolution": "Custom", "customValue": "2014", "recordedIncomingValue": "2015" }
       ]
     },
     {
@@ -166,8 +166,8 @@
         "genres": []
       },
       "fields": [
-        { "field": "character", "resolution": "Custom", "customValue": "Galadriel" },
-        { "field": "date", "resolution": "Custom", "customValue": "2001" }
+        { "field": "character", "resolution": "Custom", "customValue": "Galadriel", "recordedIncomingValue": null },
+        { "field": "date", "resolution": "Custom", "customValue": "2001", "recordedIncomingValue": "2002" }
       ]
     },
     {
@@ -191,7 +191,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Custom", "customValue": "2007" }
+        { "field": "date", "resolution": "Custom", "customValue": "2007", "recordedIncomingValue": "2019" }
       ]
     },
     {
@@ -215,7 +215,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Custom", "customValue": "2012" }
+        { "field": "date", "resolution": "Custom", "customValue": "2012", "recordedIncomingValue": "2019" }
       ]
     },
     {
@@ -239,7 +239,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Custom", "customValue": "2019" }
+        { "field": "date", "resolution": "Custom", "customValue": "2019", "recordedIncomingValue": "2013" }
       ]
     },
     {
@@ -263,7 +263,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Custom", "customValue": "1991" }
+        { "field": "date", "resolution": "Custom", "customValue": "1991", "recordedIncomingValue": "1998" }
       ]
     },
     {
@@ -287,7 +287,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Custom", "customValue": "2015" }
+        { "field": "date", "resolution": "Custom", "customValue": "2015", "recordedIncomingValue": "2017" }
       ]
     },
     {
@@ -296,7 +296,7 @@
         "quoteText": "People walk around, act like they know what hate means. Nah, no one does, until you hate yourself. I mean truly hate yourself. That’s power.",
         "source": "Mr. Robot",
         "date": "2017",
-        "character": "Fernando Vera",
+        "character": null,
         "author": null,
         "type": "tv",
         "genres": []
@@ -305,13 +305,14 @@
         "quoteText": "People walk around, act like they know what hate means. Nah, no one does, until you hate yourself. I mean truly hate yourself. That’s power.",
         "source": "Mr. Robot",
         "date": "2017",
-        "character": "Fernando Vera",
+        "character": null,
         "author": null,
         "type": "tv",
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Custom", "customValue": "2015" }
+        { "field": "date", "resolution": "Custom", "customValue": "2015", "recordedIncomingValue": "2017" },
+        { "field": "character", "resolution": "Custom", "customValue": "Fernando Vera", "recordedIncomingValue": null }
       ]
     },
     {
@@ -335,7 +336,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Custom", "customValue": "2015" }
+        { "field": "date", "resolution": "Custom", "customValue": "2015", "recordedIncomingValue": "2017" }
       ]
     },
     {
@@ -359,7 +360,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "character", "resolution": "Custom", "customValue": "Captain Oveur" }
+        { "field": "character", "resolution": "Custom", "customValue": "Captain Oveur", "recordedIncomingValue": null }
       ]
     },
     {
@@ -383,7 +384,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "character", "resolution": "Custom", "customValue": "Steve McCroskey" }
+        { "field": "character", "resolution": "Custom", "customValue": "Steve McCroskey", "recordedIncomingValue": null }
       ]
     },
     {
@@ -407,7 +408,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "character", "resolution": "Custom", "customValue": "Harry Burns" }
+        { "field": "character", "resolution": "Custom", "customValue": "Harry Burns", "recordedIncomingValue": null }
       ]
     },
     {
@@ -431,7 +432,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "character", "resolution": "Custom", "customValue": "Tony Stark" }
+        { "field": "character", "resolution": "Custom", "customValue": "Tony Stark", "recordedIncomingValue": null }
       ]
     },
     {
@@ -455,8 +456,8 @@
         "genres": []
       },
       "fields": [
-        { "field": "source", "resolution": "Custom", "customValue": "Home" },
-        { "field": "date", "resolution": "Custom", "customValue": "2016-05-01" }
+        { "field": "source", "resolution": "Custom", "customValue": "Home", "recordedIncomingValue": "Game of Thrones" },
+        { "field": "date", "resolution": "Custom", "customValue": "2016-05-01", "recordedIncomingValue": "2012" }
       ]
     },
     {
@@ -480,8 +481,8 @@
         "genres": []
       },
       "fields": [
-        { "field": "source", "resolution": "Custom", "customValue": "eps2.1_k3rnel-pan1c.ksd" },
-        { "field": "date", "resolution": "Custom", "customValue": "2016" }
+        { "field": "source", "resolution": "Custom", "customValue": "eps2.1_k3rnel-pan1c.ksd", "recordedIncomingValue": "Mr. Robot" },
+        { "field": "date", "resolution": "Custom", "customValue": "2016", "recordedIncomingValue": "2017" }
       ]
     },
     {
@@ -505,8 +506,8 @@
         "genres": []
       },
       "fields": [
-        { "field": "source", "resolution": "Custom", "customValue": "eps1.4_3xpl0its.wmv" },
-        { "field": "date", "resolution": "Custom", "customValue": "2015" }
+        { "field": "source", "resolution": "Custom", "customValue": "eps1.4_3xpl0its.wmv", "recordedIncomingValue": "Mr. Robot" },
+        { "field": "date", "resolution": "Custom", "customValue": "2015", "recordedIncomingValue": "2017" }
       ]
     },
     {
@@ -530,31 +531,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "source", "resolution": "Custom", "customValue": "Pandemonium" }
-      ]
-    },
-    {
-      "entityId": "e69951f1-4d01-964d-86d5-13f80f5bfd8a",
-      "existingRecord": {
-        "quoteText": "People walk around, act like they know what hate means. Nah, no one does, until you hate yourself. I mean truly hate yourself. That’s power.",
-        "source": "Mr. Robot",
-        "date": "2017",
-        "character": null,
-        "author": null,
-        "type": "tv",
-        "genres": []
-      },
-      "incomingRecord": {
-        "quoteText": "People walk around, act like they know what hate means. Nah, no one does, until you hate yourself. I mean truly hate yourself. That’s power.",
-        "source": "Mr. Robot",
-        "date": "2017",
-        "character": null,
-        "author": null,
-        "type": "tv",
-        "genres": []
-      },
-      "fields": [
-        { "field": "character", "resolution": "Custom", "customValue": "Fernando Vera" }
+        { "field": "source", "resolution": "Custom", "customValue": "Pandemonium", "recordedIncomingValue": "The Good Place" }
       ]
     }
   ]

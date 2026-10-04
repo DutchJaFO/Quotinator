@@ -17,34 +17,48 @@
 // Usage (run from repo root):
 //   dotnet-script scripts/testing/conflict-rule.csx -- --file <path> --entity-id <id> --remove
 //   dotnet-script scripts/testing/conflict-rule.csx -- --file <path> --entity-id <id> --field <name> --resolution <value>
+//   dotnet-script scripts/testing/conflict-rule.csx -- --file <path> --entity-id <id> --field <name> --recorded-incoming <json>
 //
 // Options:
-//   --file       <path>   The *-conflict-rules.json file to edit (required)
-//   --entity-id  <id>     Which rule to act on, matched case-insensitively (required)
-//   --remove              Delete that rule entirely
-//   --field      <name>   With --resolution: which field entry to change (e.g. date)
-//   --resolution <value>  The new resolution for that field (e.g. Keep, Replace)
+//   --file              <path>  The *-conflict-rules.json file to edit (required)
+//   --entity-id         <id>    Which rule to act on, matched case-insensitively (required)
+//   --remove                    Delete that rule entirely
+//   --field             <name>  With --resolution or --recorded-incoming: which field entry to change
+//   --resolution        <value> The new resolution for that field (e.g. Keep, Replace)
+//   --recorded-incoming <json>  The field's new recordedIncomingValue, as raw JSON: "1999" (with the
+//                               quotes) for a string, null to record an explicit null, ["drama"] for a
+//                               list, or the literal word absent to remove the property entirely
 //
-// Exactly one of --remove and --resolution is given. The file is rewritten as UTF-8 without a BOM and
-// re-indented by the serializer; the content is what matters here, not the formatting, and git restores
-// the original either way.
+// Exactly one of --remove, --resolution and --recorded-incoming is given. The file is rewritten as UTF-8
+// without a BOM and re-indented by the serializer; the content is what matters here, not the formatting,
+// and git restores the original either way.
+//
+// --recorded-incoming exists for #420/ADR 023: staleness is judged per field, against that field's own
+// recordedIncomingValue, so changing that value is how a test reaches a Stale reading. Document 16
+// (conflict-rule-staleness) names this script as the way to reach its own "before" state; until #420 it
+// could only change a resolution or remove a rule, so that stated "before" was unreachable with the tool
+// the document named. Note `absent` is a distinct outcome from `null`: no recorded value resolves Stale,
+// while a recorded explicit null is a real value that can still match.
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 string? Value(string flag) => Args.SkipWhile(a => a != flag).Skip(1).FirstOrDefault();
 
-string? file       = Value("--file");
-string? entityId   = Value("--entity-id");
-string? field      = Value("--field");
-string? resolution = Value("--resolution");
-bool remove        = Args.Contains("--remove");
+string? file             = Value("--file");
+string? entityId         = Value("--entity-id");
+string? field            = Value("--field");
+string? resolution       = Value("--resolution");
+string? recordedIncoming = Value("--recorded-incoming");
+bool remove              = Args.Contains("--remove");
 
-if (string.IsNullOrEmpty(file) || string.IsNullOrEmpty(entityId) || remove == (resolution is not null))
+int modeCount = (remove ? 1 : 0) + (resolution is not null ? 1 : 0) + (recordedIncoming is not null ? 1 : 0);
+
+if (string.IsNullOrEmpty(file) || string.IsNullOrEmpty(entityId) || modeCount != 1)
 {
     Console.Error.WriteLine(
         "Usage: dotnet-script scripts/testing/conflict-rule.csx -- --file <path> --entity-id <id> "
-        + "(--remove | --field <name> --resolution <value>)");
+        + "(--remove | --field <name> --resolution <value> | --field <name> --recorded-incoming <json>)");
     Environment.Exit(1);
     return;
 }
@@ -93,7 +107,7 @@ else
 {
     if (string.IsNullOrEmpty(field))
     {
-        Console.Error.WriteLine("--resolution needs --field to say which field entry to change.");
+        Console.Error.WriteLine("--resolution and --recorded-incoming each need --field to say which field entry to change.");
         Environment.Exit(1);
         return;
     }
@@ -108,10 +122,46 @@ else
         return;
     }
 
-    string previous = target["resolution"]?.GetValue<string>() ?? "(none)";
-    target["resolution"] = resolution;
+    if (resolution is not null)
+    {
+        string previous = target["resolution"]?.GetValue<string>() ?? "(none)";
+        target["resolution"] = resolution;
 
-    Console.WriteLine($"{file}: {entityId} field '{field}' resolution {previous} -> {resolution}.");
+        Console.WriteLine($"{file}: {entityId} field '{field}' resolution {previous} -> {resolution}.");
+    }
+    else
+    {
+        JsonObject targetObject = target.AsObject();
+        string previous = targetObject.TryGetPropertyValue("recordedIncomingValue", out JsonNode? existingValue)
+            ? existingValue?.ToJsonString() ?? "null"
+            : "(absent)";
+
+        if (string.Equals(recordedIncoming, "absent", StringComparison.OrdinalIgnoreCase))
+        {
+            targetObject.Remove("recordedIncomingValue");
+            Console.WriteLine($"{file}: {entityId} field '{field}' recordedIncomingValue {previous} -> (absent). That field now resolves Stale.");
+        }
+        else
+        {
+            try
+            {
+                // Parsed as JSON, not assigned as a string: the point is to be able to record a string,
+                // an explicit null or a list, and "null" typed as a C# string would record the four
+                // characters rather than a JSON null.
+                targetObject["recordedIncomingValue"] = JsonNode.Parse(recordedIncoming!);
+            }
+            catch (JsonException ex)
+            {
+                Console.Error.WriteLine(
+                    $"--recorded-incoming must be raw JSON, not bare text: {ex.Message} "
+                    + "Quote a string value (\"1999\"), or pass null, a JSON list, or the word absent.");
+                Environment.Exit(1);
+                return;
+            }
+
+            Console.WriteLine($"{file}: {entityId} field '{field}' recordedIncomingValue {previous} -> {recordedIncoming}.");
+        }
+    }
 }
 
 File.WriteAllText(

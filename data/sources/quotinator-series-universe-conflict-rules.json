@@ -15,7 +15,7 @@
         "seriesId": "2b66f560-983d-5c41-8b21-1a94909ab456"
       },
       "fields": [
-        { "field": "seriesId", "resolution": "Replace" }
+        { "field": "seriesId", "resolution": "Replace", "recordedIncomingValue": "2b66f560-983d-5c41-8b21-1a94909ab456" }
       ]
     }
   ]
