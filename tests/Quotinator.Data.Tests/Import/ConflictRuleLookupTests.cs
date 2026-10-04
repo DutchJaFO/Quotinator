@@ -98,7 +98,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"date":"1980"}"""),
             IncomingRecord = Record("""{"date":null}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Record("null") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -120,7 +120,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"date":"1980"}"""),
             IncomingRecord = Record("""{"date":null}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Record("null") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -141,7 +141,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"date":"1980"}"""),
             IncomingRecord = Record("""{"date":null}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Record("null") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -164,7 +164,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"date":"1980"}"""),
             IncomingRecord = Record("""{"date":null}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Record("null") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -191,6 +191,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"date":"1980"}"""),
             IncomingRecord = Record("""{"date":"1975"}"""),
+            // Deliberately NO RecordedIncomingValue — that absence is this test's whole subject.
             Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
@@ -289,7 +290,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = EmptyRecord,
             IncomingRecord = Record("""{"date":null}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Record("null") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -308,7 +309,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"source":"Star Wars"}"""),
             IncomingRecord = Record("""{"source":"Star Wars"}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "source", Resolution = FieldResolutionChoice.Keep }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "source", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Record("\"Star Wars\"") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -327,7 +328,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"genres":["drama","sci-fi"]}"""),
             IncomingRecord = Record("""{"genres":[]}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "genres", Resolution = FieldResolutionChoice.Keep }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "genres", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Record("[]") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -349,7 +350,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"genres":["drama"]}"""),
             IncomingRecord = Record("""{"genres":[]}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "genres", Resolution = FieldResolutionChoice.Keep }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "genres", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Record("[]") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -372,7 +373,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"character":"Frodo"}"""),
             IncomingRecord = Record("""{"character":"Merry"}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = "Galadriel" }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = "Galadriel", RecordedIncomingValue = Record("\"Merry\"") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -392,7 +393,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"character":"Galadriel"}"""),
             IncomingRecord = Record("""{"character":"Frodo"}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = "Galadriel" }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = "Galadriel", RecordedIncomingValue = Record("\"Frodo\"") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -413,7 +414,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = EmptyRecord,
             IncomingRecord = Record("""{"character":"Frodo"}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = "Galadriel" }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = "Galadriel", RecordedIncomingValue = Record("\"Frodo\"") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -434,14 +435,14 @@ public class ConflictRuleLookupTests
             EntityId       = "keep-entity",
             ExistingRecord = Record("""{"date":"1980"}"""),
             IncomingRecord = Record("""{"date":"1975"}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Record("\"1975\"") }],
         };
         ConflictResolutionRule replaceRule = new ConflictResolutionRule
         {
             EntityId       = "replace-entity",
             ExistingRecord = Record("""{"date":"1980"}"""),
             IncomingRecord = Record("""{"date":"1975"}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Replace }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Replace, RecordedIncomingValue = Record("\"1975\"") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([keepRule, replaceRule]);
 
@@ -467,7 +468,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"date":"1980"}"""),
             IncomingRecord = Record("""{"date":"1975"}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Record("\"1975\"") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -490,7 +491,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"character":"Frodo"}"""),
             IncomingRecord = Record("""{"character":"Frodo"}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = "Galadriel" }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = "Galadriel", RecordedIncomingValue = Record("\"Frodo\"") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -515,7 +516,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"character":"Galadriel"}"""),
             IncomingRecord = Record("""{"character":"Frodo"}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = "Galadriel" }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = "Galadriel", RecordedIncomingValue = Record("\"Frodo\"") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -537,7 +538,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"source":"Star Wars"}"""),
             IncomingRecord = Record("""{"source":"star wras"}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "source", Resolution = FieldResolutionChoice.Custom, CustomValue = "Star Wars" }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "source", Resolution = FieldResolutionChoice.Custom, CustomValue = "Star Wars", RecordedIncomingValue = Record("\"star wras\"") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 
@@ -563,7 +564,7 @@ public class ConflictRuleLookupTests
             EntityId       = "abc123",
             ExistingRecord = Record("""{"genres":["drama"]}"""),
             IncomingRecord = Record("""{"genres":["sci-fi"]}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "genres", Resolution = FieldResolutionChoice.Keep }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "genres", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Record("[\"sci-fi\"]") }],
         };
         ConflictRuleLookup lookup = new ConflictRuleLookup([rule]);
 

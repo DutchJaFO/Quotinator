@@ -227,6 +227,7 @@
   "ErrorRuleFileOriginInvalid": "'origin' moet 'Bundled' of 'UserImports' zijn.",
   "ErrorRuleFileNotFound": "Er bestaat nog geen conflictresolutiebestand voor die fileName/origin.",
   "ErrorRuleFileOverrideNotFound": "Er bestaat geen geregistreerde override voor die fileName/origin.",
+  "ErrorRuleFileNamesEntityTwice": "Het regelbestand {0} noemt entiteit {1} meer dan één keer. Een regelbestand mag elke entiteit maximaal één keer noemen; voeg de vermeldingen samen tot één, waarbij elk veld zijn eigen recordedIncomingValue bevat.",
   "ErrorFileResourceNotFound": "Er bestaat geen vastgelegd importbestand met dat ID.",
   "ErrorNotificationNotFound": "Er bestaat geen melding met dat ID.",
   "ErrorBackupNameInvalid": "'name' moet een bestandsnaam van een back-up zijn, geen pad.",

@@ -103,8 +103,11 @@ internal static class ImportRuleEndpoints
                 ConflictResolutionRuleFileDto? existingFile = existingContent is null ? null : ParseConflictRuleFile(existingContent);
 
                 ConflictRuleMergeResult mergeResult = ConflictRuleGenerator.Merge(existingFile, generated);
-                // Step 7 of #420 replaces this with the stated 422; until then a duplicate still throws
-                // inside Merge, so File is always populated by the time control reaches here.
+                if (mergeResult.DuplicateEntityId is { } duplicateEntityId)
+                    return Results.Problem(
+                        detail: localizer.Format(ApiMessages.RuleFileNamesEntityTwice, fileName!, duplicateEntityId),
+                        statusCode: StatusCodes.Status422UnprocessableEntity);
+
                 ConflictResolutionRuleFileDto merged = mergeResult.File!;
                 int rulesAdded = merged.Rules.Count - (existingFile?.Rules.Count ?? 0);
 
@@ -140,6 +143,9 @@ internal static class ImportRuleEndpoints
                 "registers its content hash so the seeding pipeline trusts it on the next reseed (see " +
                 "`GET /import/actions/apply` for actually applying `batchId` itself; generating an override does not " +
                 "require the batch to be applied). Returns the merged rule file and `rulesAdded`. " +
+                "Returns `422` naming the file and the repeated id if the currently effective rule file names one " +
+                "entity more than once — a rule file may name each entity at most once, with every field carrying " +
+                "its own `recordedIncomingValue`. " +
                 "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
 
         adminGroup.MapDelete("/conflict", async (

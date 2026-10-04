@@ -1176,7 +1176,7 @@ public class DatabaseInitializerTests
             {"rules":[{"entityId":"{{{ids.SourceId}}}",
                        "existingRecord":{"seriesId":"{{{ids.StoredSeriesId}}}"},
                        "incomingRecord":{"seriesId":"{{{ids.IncomingSeriesId}}}"},
-                       "fields":[{"field":"seriesId","resolution":"{{{resolution}}}"}]}]}
+                       "fields":[{"field":"seriesId","resolution":"{{{resolution}}}","recordedIncomingValue":"{{{ids.IncomingSeriesId}}}"}]}]}
             """);
 
     private async Task<(QuotinatorDatabaseInitializer Db, string QuoteFile, string RuleFile, SourceFixtureIds Ids)>
@@ -1839,7 +1839,7 @@ public class DatabaseInitializerTests
                 "entityId":"e6411111-1111-4111-8111-111111111111",
                 "existingRecord":{"date":"1990"},
                 "incomingRecord":{"date":"9999"},
-                "fields":[{"field":"date","resolution":"keep"}]
+                "fields":[{"field":"date","resolution":"keep","recordedIncomingValue":"9999"}]
             }]}
             """);
         SeedBatch batch = new(
@@ -2021,7 +2021,7 @@ public class DatabaseInitializerTests
                 "entityId":"37633333-3333-4333-8333-333333333333",
                 "existingRecord":{"date":"1990"},
                 "incomingRecord":{"date":"9999"},
-                "fields":[{"field":"date","resolution":"keep"}]
+                "fields":[{"field":"date","resolution":"keep","recordedIncomingValue":"9999"}]
             }]}
             """);
 
@@ -2327,7 +2327,7 @@ public class DatabaseInitializerTests
                 "entityId":"{{sourceId}}",
                 "existingRecord":{"date":null},
                 "incomingRecord":{"date":"1999"},
-                "fields":[{"field":"date","resolution":"replace"}]
+                "fields":[{"field":"date","resolution":"replace","recordedIncomingValue":"1999"}]
             }]}
             """);
         await db.ReseedAsync();
@@ -2598,7 +2598,7 @@ public class DatabaseInitializerTests
                 "entityId":"e6511111-1111-4111-8111-111111111111",
                 "existingRecord":{"date":"1958"},
                 "incomingRecord":{"date":"2005"},
-                "fields":[{"field":"date","resolution":"keep"}]
+                "fields":[{"field":"date","resolution":"keep","recordedIncomingValue":"2005"}]
             }]}
             """);
         SeedBatch batch = new(
@@ -2655,7 +2655,7 @@ public class DatabaseInitializerTests
                 "entityId":"e6611111-1111-4111-8111-111111111111",
                 "existingRecord":{"quoteText":"A line worth keeping exactly as it already is."},
                 "incomingRecord":{"quoteText":"A line worth keeping exactly as it already is."},
-                "fields":[{"field":"quoteText","resolution":"keep"}]
+                "fields":[{"field":"quoteText","resolution":"keep","recordedIncomingValue":"A line worth keeping exactly as it already is."}]
             }]}
             """);
         SeedBatch batch = new(
@@ -3613,7 +3613,7 @@ public class DatabaseInitializerTests
             """[{"id":"QUOTE_ID","quote":"Changed text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
                 .Replace("QUOTE_ID", quoteId));
         File.WriteAllText(rulesPath,
-            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep"}]}]}"""
+            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep","recordedIncomingValue":"Changed text."}]}]}"""
                 .Replace("QUOTE_ID", quoteId));
 
         SeedBatch batch = new(
@@ -3656,7 +3656,7 @@ public class DatabaseInitializerTests
                 .Replace("QUOTE_ID", quoteId));
         // Bundled copy says Keep: if this were used, the applied text would stay "Original text.".
         File.WriteAllText(bundledRulesPath,
-            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep"}]}]}"""
+            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep","recordedIncomingValue":"Changed text."}]}]}"""
                 .Replace("QUOTE_ID", quoteId));
 
         string internalDownloadDir = Path.Combine(_tempDir.Path, "sources", "download");
@@ -3665,7 +3665,7 @@ public class DatabaseInitializerTests
         Directory.CreateDirectory(Path.GetDirectoryName(overridePath)!);
         // Override says Replace: the applied text must come from here instead.
         string overrideContent =
-            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Replace"}]}]}"""
+            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Replace","recordedIncomingValue":"Changed text."}]}]}"""
                 .Replace("QUOTE_ID", quoteId);
         File.WriteAllText(overridePath, overrideContent);
 
@@ -3714,7 +3714,7 @@ public class DatabaseInitializerTests
             """[{"id":"QUOTE_ID","quote":"Changed text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
                 .Replace("QUOTE_ID", quoteId));
         File.WriteAllText(bundledRulesPath,
-            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep"}]}]}"""
+            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep","recordedIncomingValue":"Changed text."}]}]}"""
                 .Replace("QUOTE_ID", quoteId));
 
         string internalDownloadDir = Path.Combine(_tempDir.Path, "sources2", "download");
@@ -3723,7 +3723,7 @@ public class DatabaseInitializerTests
         Directory.CreateDirectory(Path.GetDirectoryName(overridePath)!);
         // An override file exists on disk, but is never registered below.
         File.WriteAllText(overridePath,
-            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Replace"}]}]}"""
+            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Replace","recordedIncomingValue":"Changed text."}]}]}"""
                 .Replace("QUOTE_ID", quoteId));
 
         SourceFileOverrideRegistry registry = new(new SqliteConnectionFactory(_dbPath));

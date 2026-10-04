@@ -59,6 +59,7 @@ public static class ApiMessages
     public const string RuleFileOriginInvalid            = "ErrorRuleFileOriginInvalid";
     public const string RuleFileNotFound                 = "ErrorRuleFileNotFound";
     public const string RuleFileOverrideNotFound         = "ErrorRuleFileOverrideNotFound";
+    public const string RuleFileNamesEntityTwice         = "ErrorRuleFileNamesEntityTwice";
     public const string FileResourceNotFound             = "ErrorFileResourceNotFound";
     public const string LineEndingInvalid                = "ErrorLineEndingInvalid";
     public const string KeepPerFileInvalid               = "ErrorKeepPerFileInvalid";

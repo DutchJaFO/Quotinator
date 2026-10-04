@@ -230,6 +230,7 @@
   "ErrorRuleFileOriginInvalid": "'origin' must be either 'Bundled' or 'UserImports'.",
   "ErrorRuleFileNotFound": "No conflict-resolution rule file exists yet for that fileName/origin.",
   "ErrorRuleFileOverrideNotFound": "No registered override exists for that fileName/origin.",
+  "ErrorRuleFileNamesEntityTwice": "The rule file {0} names entity {1} more than once. A rule file may name each entity at most once; collapse the entries into one, with each field carrying its own recordedIncomingValue.",
   "ErrorFileResourceNotFound": "No captured import file exists with that ID.",
   "ErrorNotificationNotFound": "No notification exists with that ID.",
   "ErrorBackupNameInvalid": "'name' must be a backup file name, not a path.",

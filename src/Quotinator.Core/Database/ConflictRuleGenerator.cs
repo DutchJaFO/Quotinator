@@ -50,6 +50,10 @@ public static class ConflictRuleGenerator
                         Field       = row.Field,
                         Resolution  = decision,
                         CustomValue = decision == FieldResolutionChoice.Custom ? row.CustomValue : null,
+                        // Per field, not per entry (ADR 023). SerializeToElement never yields Undefined —
+                        // a null value becomes JsonValueKind.Null — so a generated file always records a
+                        // real value, which is what lets the schema require the property.
+                        RecordedIncomingValue = JsonSerializer.SerializeToElement(incomingRecord[row.Field]),
                     });
                 }
             }
@@ -74,11 +78,27 @@ public static class ConflictRuleGenerator
     /// appended whole; an entity id already present has only its genuinely new fields (not already
     /// covered by that entry's own <see cref="ConflictResolutionRule.Fields"/>) added — an already
     /// hand-authored field's resolution, and the entry's own recorded <c>ExistingRecord</c>/
-    /// <c>IncomingRecord</c> snapshot, are left exactly as the file already has them.
+    /// <c>IncomingRecord</c> snapshot, are left exactly as the file already has them. A newly added
+    /// field brings its own <see cref="ConflictResolutionFieldRule.RecordedIncomingValue"/> with it, so
+    /// there is no entry-level snapshot to choose for it (ADR 023).
+    /// <para>
+    /// Returns <see cref="ConflictRuleMergeResult.DuplicateEntity"/> when <paramref name="existing"/>
+    /// names one entity more than once, which ADR 023 forbids. The check runs before the per-entity
+    /// dictionary is built: that dictionary used to throw <see cref="ArgumentException"/> on such a file
+    /// and surface as an unhandled 500 (#420), and per ADR 022 a condition the code can check is
+    /// returned, not thrown.
+    /// </para>
     /// </summary>
     public static ConflictRuleMergeResult Merge(ConflictResolutionRuleFileDto? existing, IReadOnlyList<ConflictResolutionRule> generated)
     {
         List<ConflictResolutionRule> merged = existing?.Rules.ToList() ?? [];
+
+        string? duplicateEntityId = merged
+            .GroupBy(r => r.EntityId, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1)?.Key;
+        if (duplicateEntityId is not null)
+            return ConflictRuleMergeResult.DuplicateEntity(duplicateEntityId);
+
         Dictionary<string, ConflictResolutionRule> byEntityId = merged.ToDictionary(r => r.EntityId, StringComparer.OrdinalIgnoreCase);
 
         foreach (ConflictResolutionRule candidate in generated)

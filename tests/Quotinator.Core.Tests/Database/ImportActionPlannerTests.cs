@@ -399,6 +399,16 @@ public class ImportActionPlannerTests
 
     private static readonly System.Text.Json.JsonElement EmptyConflictRuleRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("{}");
 
+    /// <summary>
+    /// A field rule's own recorded incoming value (ADR 023), from its raw JSON. Every rule fixture below
+    /// records, per governed field, the value the staging run will actually see on the incoming side —
+    /// which is what keeps these rules applying instead of reporting Stale, exactly as the note on
+    /// <see cref="BuildQuoteTextKeepRule"/> describes. Before ADR 023 that value lived once per entry,
+    /// in <c>IncomingRecord</c>, which those fixtures still carry as documentation.
+    /// </summary>
+    private static System.Text.Json.JsonElement Recorded(string json) =>
+        System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+
     // #153: every call site below pairs this rule with existing quoteText "Original text" (from
     // SeedExistingQuoteAsync/SeedExistingQuoteWithCharacterAsync) and incoming "A changed line." — the
     // recorded snapshot must match both real values, or the new staleness check (comparing this
@@ -409,7 +419,7 @@ public class ImportActionPlannerTests
         EntityId = quoteId,
         ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"quoteText":"Original text"}"""),
         IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"quoteText":"A changed line."}"""),
-        Fields = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Keep }],
+        Fields = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"A changed line.\"") }],
     };
 
     [TestMethod]
@@ -483,7 +493,7 @@ public class ImportActionPlannerTests
                 EntityId       = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1942"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1943"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"1943\"") }],
             },
         ]);
 
@@ -514,7 +524,7 @@ public class ImportActionPlannerTests
                 EntityId       = sourceId,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{storedSeriesId}}"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{incomingSeriesId}}"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded($"\"{incomingSeriesId}\"") }],
             },
         ]);
 
@@ -545,7 +555,7 @@ public class ImportActionPlannerTests
                 EntityId       = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"The Lord of the Rings"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Lord of the Rings"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"Lord of the Rings\"") }],
             },
         ]);
 
@@ -571,7 +581,7 @@ public class ImportActionPlannerTests
                 EntityId       = seasonId,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book One"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book 1"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"Book 1\"") }],
             },
         ]);
 
@@ -808,7 +818,7 @@ public class ImportActionPlannerTests
                 EntityId       = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1942"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1943"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"1943\"") }],
             },
         ]);
 
@@ -841,7 +851,7 @@ public class ImportActionPlannerTests
                 EntityId       = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1942"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1943"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Replace }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Replace, RecordedIncomingValue = Recorded("\"1943\"") }],
             },
         ]);
 
@@ -870,7 +880,7 @@ public class ImportActionPlannerTests
                 EntityId       = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle-earth"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"Middle-earth\"") }],
             },
         ]);
 
@@ -897,7 +907,7 @@ public class ImportActionPlannerTests
                 EntityId       = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle-earth"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Replace }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Replace, RecordedIncomingValue = Recorded("\"Middle-earth\"") }],
             },
         ]);
 
@@ -968,7 +978,7 @@ public class ImportActionPlannerTests
                 EntityId       = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"The Lord of the Rings"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Lord of the Rings"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"Lord of the Rings\"") }],
             },
         ]);
 
@@ -995,7 +1005,7 @@ public class ImportActionPlannerTests
                 EntityId       = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"The Lord of the Rings"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Lord of the Rings"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Replace }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Replace, RecordedIncomingValue = Recorded("\"Lord of the Rings\"") }],
             },
         ]);
 
@@ -1026,7 +1036,7 @@ public class ImportActionPlannerTests
                 EntityId       = seasonId,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book One"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book 1"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"Book 1\"") }],
             },
         ]);
 
@@ -1055,7 +1065,7 @@ public class ImportActionPlannerTests
                 EntityId       = seasonId,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book One"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book 1"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Replace }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Replace, RecordedIncomingValue = Recorded("\"Book 1\"") }],
             },
         ]);
 
@@ -1091,7 +1101,7 @@ public class ImportActionPlannerTests
                 EntityId       = sourceId,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{storedSeriesId}}"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{incomingSeriesId}}"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded($"\"{incomingSeriesId}\"") }],
             },
         ]);
 
@@ -1121,7 +1131,7 @@ public class ImportActionPlannerTests
                 EntityId       = sourceId,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{storedSeriesId}}"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{incomingSeriesId}}"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Replace }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Replace, RecordedIncomingValue = Recorded($"\"{incomingSeriesId}\"") }],
             },
         ]);
 
@@ -1154,7 +1164,7 @@ public class ImportActionPlannerTests
         EntityId = quoteId,
         ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"quoteText":"Original text"}"""),
         IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"quoteText":"A changed line."}"""),
-        Fields = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Replace }],
+        Fields = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Replace, RecordedIncomingValue = Recorded("\"A changed line.\"") }],
     };
 
     /// <summary>
@@ -1242,7 +1252,7 @@ public class ImportActionPlannerTests
                 EntityId       = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1942"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1943"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"1943\"") }],
             },
         ]);
 
@@ -1270,7 +1280,7 @@ public class ImportActionPlannerTests
                 EntityId       = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1942"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1943"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Replace }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Replace, RecordedIncomingValue = Recorded("\"1943\"") }],
             },
         ]);
 
@@ -1302,7 +1312,7 @@ public class ImportActionPlannerTests
                 EntityId       = sourceId,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{storedSeriesId}}"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{incomingSeriesId}}"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded($"\"{incomingSeriesId}\"") }],
             },
         ]);
 
@@ -1332,7 +1342,7 @@ public class ImportActionPlannerTests
                 EntityId       = sourceId,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{storedSeriesId}}"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{incomingSeriesId}}"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Replace }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Replace, RecordedIncomingValue = Recorded($"\"{incomingSeriesId}\"") }],
             },
         ]);
 
@@ -1357,7 +1367,7 @@ public class ImportActionPlannerTests
                 EntityId       = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle-earth"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"Middle-earth\"") }],
             },
         ]);
 
@@ -1384,7 +1394,7 @@ public class ImportActionPlannerTests
                 EntityId       = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle-earth"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Replace }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Replace, RecordedIncomingValue = Recorded("\"Middle-earth\"") }],
             },
         ]);
 
@@ -1409,7 +1419,7 @@ public class ImportActionPlannerTests
                 EntityId       = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"The Lord of the Rings"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Lord of the Rings"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"Lord of the Rings\"") }],
             },
         ]);
 
@@ -1436,7 +1446,7 @@ public class ImportActionPlannerTests
                 EntityId       = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"The Lord of the Rings"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Lord of the Rings"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Replace }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Replace, RecordedIncomingValue = Recorded("\"Lord of the Rings\"") }],
             },
         ]);
 
@@ -1467,7 +1477,7 @@ public class ImportActionPlannerTests
                 EntityId       = seasonId,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book One"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book 1"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"Book 1\"") }],
             },
         ]);
 
@@ -1496,7 +1506,7 @@ public class ImportActionPlannerTests
                 EntityId       = seasonId,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book One"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book 1"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Replace }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Replace, RecordedIncomingValue = Recorded("\"Book 1\"") }],
             },
         ]);
 
@@ -1516,7 +1526,7 @@ public class ImportActionPlannerTests
         EntityId = quoteId,
         ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"character":null}"""),
         IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"character":null}"""),
-        Fields = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = customValue }],
+        Fields = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = customValue, RecordedIncomingValue = Recorded("null") }],
     };
 
     [TestMethod]
@@ -1567,7 +1577,7 @@ public class ImportActionPlannerTests
             EntityId = id,
             ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"character":null}"""),
             IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"character":null}"""),
-            Fields = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = "Steve McCroskey" }],
+            Fields = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = "Steve McCroskey", RecordedIncomingValue = Recorded("null") }],
         };
         SourceQuoteDto quote = BuildQuote(id, source: "Airplane!", character: "Some Newly-Added Value");
         ConflictRuleLookup rules = new([staleRule]);
@@ -1634,7 +1644,7 @@ public class ImportActionPlannerTests
             EntityId       = id,
             ExistingRecord = EmptyConflictRuleRecord,
             IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"quoteText":"A changed line."}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Custom, CustomValue = "Original text" }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Custom, CustomValue = "Original text", RecordedIncomingValue = Recorded("\"A changed line.\"") }],
         };
         ConflictRuleLookup rules = new([rule]);
 
@@ -1664,7 +1674,7 @@ public class ImportActionPlannerTests
             // Recorded incoming ("A changed line.") no longer matches this run's real incoming
             // ("A different changed line.") — the rule's own recorded snapshot has moved.
             IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"quoteText":"A changed line."}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Custom, CustomValue = "Original text" }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Custom, CustomValue = "Original text", RecordedIncomingValue = Recorded("\"A changed line.\"") }],
         };
         ConflictRuleLookup rules = new([rule]);
 
@@ -1851,7 +1861,7 @@ public class ImportActionPlannerTests
             EntityId = quoteId,
             ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"character":"Rhett Butler"}"""),
             IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"character":"rhett butler"}"""),
-            Fields = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Replace }],
+            Fields = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Replace, RecordedIncomingValue = Recorded("\"rhett butler\"") }],
         }]);
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
@@ -3032,7 +3042,7 @@ public class ImportActionPlannerTests
                 EntityId       = seasonId,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book One"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book One (corrected)"}"""),
-                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Keep }],
+                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"Book One (corrected)\"") }],
             },
         ]);
 
@@ -3060,7 +3070,7 @@ public class ImportActionPlannerTests
                 EntityId = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle-earth (corrected)"}"""),
-                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"Middle-earth (corrected)\"") }],
             },
         ]);
 
@@ -3097,7 +3107,7 @@ public class ImportActionPlannerTests
                 EntityId = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
-                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Custom, CustomValue = "Middle-earth" }],
+                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Custom, CustomValue = "Middle-earth", RecordedIncomingValue = Recorded("\"Middle Earth\"") }],
             },
         ]);
 
@@ -3132,7 +3142,7 @@ public class ImportActionPlannerTests
                 // Recorded incoming ("Middle-earth (corrected)") disagreed with existing at authoring
                 // time; the current incoming ("Middle Earth") has since moved back into agreement.
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle-earth (corrected)"}"""),
-                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"Middle-earth (corrected)\"") }],
             },
         ]);
         List<RetirableRuleFinding> findings = [];
@@ -3161,7 +3171,7 @@ public class ImportActionPlannerTests
                 EntityId = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"A name that no longer matches anything"}"""),
-                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"A name that no longer matches anything\"") }],
             },
         ]);
         List<RetirableRuleFinding> findings = [];
@@ -3248,7 +3258,7 @@ public class ImportActionPlannerTests
                 EntityId = id,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"The Hobbit"}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"The Hobbit Trilogy"}"""),
-                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = Recorded("\"The Hobbit Trilogy\"") }],
             },
         ]);
 
@@ -3374,7 +3384,7 @@ public class ImportActionPlannerTests
                 EntityId = sourceId,
                 ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"seriesId":null}"""),
                 IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{hobbitSeriesId}}"}"""),
-                Fields = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Replace }],
+                Fields = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Replace, RecordedIncomingValue = Recorded($"\"{hobbitSeriesId}\"") }],
             },
         ]);
 

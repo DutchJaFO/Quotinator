@@ -31,7 +31,7 @@ public sealed class ConflictRuleLookup
             foreach (ConflictResolutionFieldRule field in rule.Fields)
             {
                 FieldMergeDecision decision = new(field.Resolution, field.CustomValue);
-                _rules[Key(rule.EntityId, field.Field)] = new RuleEntry(decision, rule.IncomingRecord);
+                _rules[Key(rule.EntityId, field.Field)] = new RuleEntry(decision, field.RecordedIncomingValue);
             }
     }
 
@@ -64,7 +64,7 @@ public sealed class ConflictRuleLookup
 
         decision = entry.Decision;
 
-        bool incomingMoved = !TryExtractFieldValue(entry.RecordedIncoming, field, out object? recordedIncoming)
+        bool incomingMoved = !TryDecodeRecordedValue(entry.RecordedIncoming, out object? recordedIncoming)
             || !FieldMergeResolver.ValuesEqual(recordedIncoming, currentIncomingValue);
         if (incomingMoved)
         {
@@ -87,20 +87,28 @@ public sealed class ConflictRuleLookup
         return true;
     }
 
-    private static bool TryExtractFieldValue(JsonElement record, string field, out object? value)
+    /// <summary>
+    /// Decodes a field rule's own recorded incoming value into the shape
+    /// <see cref="FieldMergeResolver.ValuesEqual"/> compares. Returns <see langword="false"/> only for
+    /// <see cref="JsonValueKind.Undefined"/> — nothing was recorded for this field, which can never be
+    /// confirmed fresh. <see cref="JsonValueKind.Null"/> is a recorded value of <see langword="null"/>
+    /// and returns <see langword="true"/>: ADR 023 keeps those two states distinct, which is why the
+    /// property is a non-nullable <see cref="JsonElement"/> rather than a <c>JsonElement?</c>.
+    /// </summary>
+    private static bool TryDecodeRecordedValue(JsonElement recorded, out object? value)
     {
-        if (record.ValueKind != JsonValueKind.Object || !record.TryGetProperty(field, out JsonElement prop))
+        if (recorded.ValueKind == JsonValueKind.Undefined)
         {
             value = null;
             return false;
         }
 
-        value = prop.ValueKind switch
+        value = recorded.ValueKind switch
         {
             JsonValueKind.Null   => null,
-            JsonValueKind.String => prop.GetString(),
-            JsonValueKind.Array  => prop.EnumerateArray().Select(e => e.ValueKind == JsonValueKind.String ? e.GetString() : e.GetRawText()).ToList(),
-            _                    => prop.GetRawText(),
+            JsonValueKind.String => recorded.GetString(),
+            JsonValueKind.Array  => recorded.EnumerateArray().Select(e => e.ValueKind == JsonValueKind.String ? e.GetString() : e.GetRawText()).ToList(),
+            _                    => recorded.GetRawText(),
         };
         return true;
     }

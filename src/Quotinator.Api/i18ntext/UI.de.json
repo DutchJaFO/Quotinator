@@ -227,6 +227,7 @@
   "ErrorRuleFileOriginInvalid": "'origin' muss entweder 'Bundled' oder 'UserImports' sein.",
   "ErrorRuleFileNotFound": "Für diesen fileName/origin existiert noch keine Konfliktlösungsdatei.",
   "ErrorRuleFileOverrideNotFound": "Für diesen fileName/origin existiert keine registrierte Override.",
+  "ErrorRuleFileNamesEntityTwice": "Die Regeldatei {0} nennt die Entität {1} mehr als einmal. Eine Regeldatei darf jede Entität höchstens einmal nennen; fassen Sie die Einträge zu einem zusammen, wobei jedes Feld seinen eigenen recordedIncomingValue trägt.",
   "ErrorFileResourceNotFound": "Es existiert keine erfasste Importdatei mit dieser ID.",
   "ErrorNotificationNotFound": "Es existiert keine Benachrichtigung mit dieser ID.",
   "ErrorBackupNameInvalid": "'name' muss ein Dateiname einer Sicherung sein, kein Pfad.",

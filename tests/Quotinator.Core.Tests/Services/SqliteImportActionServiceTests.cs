@@ -292,7 +292,7 @@ public class SqliteImportActionServiceTests
             EntityId       = id,
             ExistingRecord = JsonSerializer.Deserialize<JsonElement>($$"""{"quoteText":"{{text}}"}"""),
             IncomingRecord = JsonSerializer.Deserialize<JsonElement>($$"""{"quoteText":"{{text}}"}"""),
-            Fields         = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Keep }],
+            Fields         = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Keep, RecordedIncomingValue = JsonSerializer.Deserialize<JsonElement>($"\"{text}\"") }],
         }]);
 
         IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([BuildQuote(id, quoteText: text)], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
