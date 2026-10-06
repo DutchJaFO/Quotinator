@@ -52,6 +52,13 @@ never do, which is why each row links its document rather than naming it.
 
 ## Rules every test here follows
 
+**A document exists here because a unit test cannot establish the behaviour.** The coverage a feature
+owes, both outcomes, both extremes of every limit, and a canary proving the tests could have failed,
+is stated once in [`testing-policy.md`](../testing-policy.md)'s *A feature is covered when both
+outcomes, both extremes, and a canary exist*, and it is not satisfied differently here. What differs
+is only placement: a behaviour a unit test can reach is proven there, and a behaviour needing a real
+container, database, process boundary or HTTP round trip is proven in a document here.
+
 **A test must reproduce its condition reliably. An intermittent result is not a result.** If a test
 passes or fails depending on something it does not pin, it is not testing what it claims to. This is
 what the `Determinism` field exists for: name every variable the outcome depends on, and pin it.

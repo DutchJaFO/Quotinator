@@ -101,6 +101,35 @@ This is not the same as showing an assertion *can* fail (the mutation step under
 neither substitutes for the other: mutation proves the test is wired to the behaviour, a positive
 control proves the behaviour is not simply failing everywhere.
 
+## A feature is covered when both outcomes, both extremes, and a canary exist
+
+Positive and negative are the floor, not the whole requirement. A feature's tests establish four
+things, and a feature missing any of them is not covered (developer, 2026-10-06):
+
+1. **The positive outcome**, the feature doing its job.
+2. **The negative outcome**, the feature correctly declining, refusing or reporting nothing.
+3. **Both extremes of every limit it states.** The boundary on each side, not one of them: zero and
+   one, the maximum and one past it, empty and absent, the shortest and the longest. A limit tested on
+   one side has been demonstrated, not tested. `/quotes`, `/admin/audit` and `/import/actions` already
+   carry the worked example, the eight-case pagination matrix in `CLAUDE.md`'s *Standard pagination
+   contract*.
+4. **A canary, proving the tests could have failed.** The mechanics are the ones under *Bug fixes*
+   below, mutation for a unit test and a pre-fix build for a live one, but the requirement is not
+   confined to bug fixes: any test whose subject can report "nothing happened" needs something in the
+   same run that makes it report *something*, produced by the test itself.
+
+**Where each test goes: a unit test when one can establish the behaviour, a T2 document when it
+cannot.** `process.md`'s verification checklist states the preference, and it is a preference, not a
+permission to stop at the unit test. Ask on every feature what a real container, a real database, a
+real process boundary or a real HTTP round trip would prove that a mock or a `WebApplicationFactory`
+stub cannot reach, and when the answer is anything, that part belongs in `docs/automated-testing/`.
+Unit tests can only do so much.
+
+**A T2 document reaching its negative or extreme case never does so by editing shipped data.** See the
+suite index's *A test that needs a defective input must own that input*, which names driving the
+application through its own mechanisms as the first and best route, and names mutating a bundled file
+and rebuilding the image as the anti-pattern.
+
 ## Red first means signatures first: a test that cannot compile is not a red test
 
 **Always test red first.** In a compiled language that has a consequence worth stating, because it is
