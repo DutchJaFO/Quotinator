@@ -137,6 +137,7 @@
     <File Path="docs/architecture-decisions/021-file-inputs-are-schema-validated.md" />
     <File Path="docs/architecture-decisions/022-exceptions-only-for-undetectable-conditions.md" />
     <File Path="docs/architecture-decisions/023-one-conflict-rule-entry-per-entity.md" />
+    <File Path="docs/architecture-decisions/024-case-insensitivity-serves-identity-not-content-equality.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />
@@ -359,6 +360,7 @@
     <File Path="docs/knowledgebase/entry-template.md" />
     <File Path="docs/knowledgebase/repeated-suitable-constructor-exceptions-at-startup.md" />
     <File Path="docs/knowledgebase/transport-connection-cancelled-during-a-request.md" />
+    <File Path="docs/knowledgebase/a-casing-correction-cannot-be-made.md" />
     <File Path="docs/knowledgebase/two-backups-of-one-database-show-different-versions.md" />
     <File Path="docs/knowledgebase/uploaded-file-is-rejected-as-invalid-json.md" />
   </Folder>

@@ -21,3 +21,4 @@ per `knowledgebase.md`'s bootstrapping rule, entries come first and codes are as
 | [Backups have reached their quota](backups-have-reached-their-quota.md) | No | 1.9.0-alpha onwards |
 | [Every database count reads 0 after a startup problem](degraded-startup-shows-every-count-as-zero.md) | No | 1.9.0-alpha onwards |
 | [Two backups of the same database show different version numbers](two-backups-of-one-database-show-different-versions.md) | No | v1.8.0 through 1.9.0-alpha |
+| [A correction that only changes capitalisation does not take effect](a-casing-correction-cannot-be-made.md) | No | 1.8.0 onwards |

@@ -36,12 +36,11 @@ real correctness problem with that speculation — see Decision 5.
 Two Characters — or an existing Character and an incoming (Source, Name) pair being resolved during
 import — are the **same identity** if and only if all of:
 
-- **(a) Name matches case-insensitively.** Unlike `Sources.Title` (deliberately case-sensitive —
-  `Sql.Sources.SelectIdByTitleAndType`'s remark), Character storage always preserves the exact casing
-  a Name was originally written with (display is never normalised), but the merge-candidate
-  *comparison* itself folds case — confirmed directly by the developer during this ADR's authoring,
-  correcting an initial draft that (wrongly) extended `Sources.Title`'s case-sensitive precedent to
-  Character as well. `EntityIdentity.CharacterId`'s stable-id hash was already case-insensitive by
+- **(a) Name matches case-insensitively.** Character storage always preserves the exact casing a Name
+  was originally written with (display is never normalised), while the merge-candidate *comparison*
+  itself folds case. Per ADR 024's Decision 1 this is an identity comparison, not a content-equality
+  one, and `Sources.Title`'s own natural-key lookup folds case for the same reason
+  (`Sql.Sources.SelectIdByTitleAndType`). `EntityIdentity.CharacterId`'s stable-id hash was already case-insensitive by
   construction (`QuoteIdentity.Normalise` lowercases every hashed part), so no change was needed there
   — only the SQL lookup (Decision 7) and the migration's own grouping (Decision 3) needed an explicit
   `LOWER()` wrap, since SQLite's default `TEXT` comparison is case-sensitive.
