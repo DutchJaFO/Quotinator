@@ -77,7 +77,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#413](https://github.com/DutchJaFO/Quotinator/issues/413) | The operation-ID announcement expires while it still applies, and its text is one unbroken paragraph | Waiting for release | T1 ✅ T2 ✅ | [413-announcement-expiry-and-layout-plan.md](413-announcement-expiry-and-layout-plan.md) |
 | [#416](https://github.com/DutchJaFO/Quotinator/issues/416) | Resolving a held import item always creates a rule, and every held item says why it was held | Planning | T1 ⬜ T2 ⬜ | none |
 | [#419](https://github.com/DutchJaFO/Quotinator/issues/419) | A reset in the first moments after startup races the what's-new notification's write | Waiting for release | T1 ✅ T2 ✅ | [419-startup-gate-blocks-writes-plan.md](419-startup-gate-blocks-writes-plan.md) |
-| [#420](https://github.com/DutchJaFO/Quotinator/issues/420) | Generating conflict rules answers an unhandled 500 when a rule file holds two rules for one entity | In progress | T1 ⬜ T2 ⬜ | [420-two-rules-for-one-entity-plan.md](420-two-rules-for-one-entity-plan.md) |
+| [#420](https://github.com/DutchJaFO/Quotinator/issues/420) | Generating conflict rules answers an unhandled 500 when a rule file holds two rules for one entity | Waiting for release | T1 ✅ T2 ✅ | [420-two-rules-for-one-entity-plan.md](420-two-rules-for-one-entity-plan.md) |
 | [#421](https://github.com/DutchJaFO/Quotinator/issues/421) | A quote's id depends on whether the install was upgraded or fresh, after Migration009's dedupe | Planning | T1 ⬜ T2 ⬜ | none |
 | [#422](https://github.com/DutchJaFO/Quotinator/issues/422) | A modal's 95vh height cap never applies; Bootstrap's centred min-height overrides it | Planning | T1 ⬜ T2 ⬜ | none |
 | [#423](https://github.com/DutchJaFO/Quotinator/issues/423) | Seeding fills any empty database, so a reset is undone by the next restart | Planning | T1 ⬜ T2 ⬜ | none |
@@ -142,7 +142,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #413 ─── depends on #312, #319: Waiting for release
 #416 ─── (none); filed 2026-09-19, unsequenced: Planning
 #419 ─── (none); found in #411's T2, in #81's producer: Waiting for release
-#420 ─── (none); found in #411's T2; blocks one #411 document: In progress
+#420 ─── (none); found in #411's T2; blocks one #411 document: Waiting for release
 #421 ─── (none); found in #411's T2, in #374's migration: Planning
 #422 ─── (none); found in #411's T2, in #308's modal: Planning
 #423 ─── (none); found in #308's T2; #156 decided it, #277 pinned the opposite, #304 depends on it: Planning
@@ -211,7 +211,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 34 | **#411** ✅ | Waiting for release |
 | 35 | **#413** ✅ | Waiting for release |
 | 36 | **#419** ✅ | Waiting for release |
-| 37 | **#420** | In progress; found in #411's T2; one #411 document waits on it |
+| 37 | **#420** ✅ | Waiting for release; found in #411's T2; one #411 document waits on it |
 | 38 | **#421** | Planning; found in #411's T2; before #371/#360 add migrations |
 | 39 | **#422** | Planning; found in #411's T2; code accuracy only, nothing unreachable |
 | 40 | **#423** | Planning; found in #308's T2; a reset is undone by the next restart, and #304's recommendation resolves itself because of it |

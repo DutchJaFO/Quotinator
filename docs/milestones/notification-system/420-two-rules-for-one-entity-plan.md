@@ -1,6 +1,6 @@
 # #420: Generating conflict rules answers an unhandled 500 when a rule file holds two rules for one entity
 
-**Status:** In progress (step 15)
+**Status:** Waiting for release
 **GitHub issue:** #420
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,9 +9,10 @@
 
 ## Next action
 
-**Steps 1 to 14 are done; only T1 (step 15) and T2 (step 16) remain**, and both are live runs. T1 is the
-developer's own Visual Studio action, which an assistant never performs (`CLAUDE.md`). T2 needs Docker:
-the smoke set plus documents 14, 15, 16 and 18.
+**All 16 steps are done and all 20 verification rows are ✅.** T1 passed on both the upgraded and the
+fresh path, T2's scope passed with three steps blocked on other issues and recorded as such, and the
+changelog entries are in `unreleased`. What remains is the release itself: this issue closes once the
+version carrying it ships, per `issue-closure.md`'s two-gate rule.
 
 **Build and the full-solution `-m:1` run are clean on the developer's own machine**, 2026-10-06:
 `0 Warning(s)  0 Error(s)` from both, and **4517 tests across all 11 projects passed, with none failed
@@ -126,6 +127,11 @@ hand-written file that omits it still degrades to `Stale`, which is the behaviou
 
 **Status:** ✅ Done, 2026-10-04 — **11 red, each on its own assertion or its own exception**, with the
 rest of every touched suite still green. Build clean, 0 warnings.
+
+**Independently re-verified 2026-10-06**, by running these eleven against a worktree at `634ce30a`,
+the commit that added them before any fix: all eleven fail there, on the causes named below. The
+worktree was removed afterwards. This is what the Definition of done's *red before the fix* box rests
+on, rather than on the recollection of the session that wrote them.
 
 | Test | Red because |
 |---|---|
@@ -468,17 +474,40 @@ first.
 
 ### 15. T1
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-06 — run on both paths, each reaching the ready banner. On an upgraded
+database, applying 24 Data and 4 App migrations (v3 → v27, v5 → v9); on no database at all, creating
+the schema directly at baseline (data v27, app v9). Nothing beyond startup is T1's question.
 
-The application still starts. Nothing beyond startup.
+Two things those runs establish beyond that, both recorded here rather than claimed as T1's own:
+
+**The fresh path seeds every bundled file with `pending=0 stale=0`**, the migrated rule files and the
+collapsed entry included. That is the same result *A fresh seed resolves every bundled file with
+nothing left pending* produces in Docker, now also on the developer's own machine.
+
+**The upgraded path reproduced [#412](https://github.com/DutchJaFO/Quotinator/issues/412) exactly**, 15
+Pending and 3 Stale Quote actions, matching the counts in its own body, and none after a reset. Useful
+as a negative result: this issue's change to where the recorded value is stored did not alter it.
 
 ### 16. T2
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-06 — the smoke set plus the three rule-file documents, every step passing
+except three blocked elsewhere and recorded as such.
 
-The smoke set, plus the four documents this issue touches or whose mechanism it changes: *Fresh seed
-produces zero pending actions*, *Rule-file live read proof*, *A rule whose recorded snapshot no longer
-matches reality stages Stale, not Decided*, and *Rule-file override endpoints*.
+*Rule-file override endpoints, and the alias-candidate suggestion endpoint* is the headline: its step 4,
+the call this issue exists for, returns `200` with `rulesAdded=1`, and the merge preserves all 22
+bundled rules while adding exactly one.
+
+**Two findings came out of the run, neither this issue's own.** The wait-page document cannot pass as
+written and was filed as #438, with the product itself correct. And *A rule whose recorded snapshot no
+longer matches reality stages Stale, not Decided* could only ever assert an absence, so it could not
+show staleness firing at all; it was given a positive case that owns its input, per
+`testing-policy.md`'s *A feature is covered when both outcomes, both extremes, and a canary exist*.
+
+**One assertion is recorded as unverified rather than passed.** *Startup notification system*'s closing
+`thrown=0` is incremental across a `docker stop`, and each shell invocation here is its own session, so
+the baseline could not be carried and the whole-run count was read instead. The two exceptions seen are
+`SocketException` at the moment of shutdown, the framework-internal class ADR 022 names, and every
+assertion in that document's eight steps passed.
 
 ---
 
@@ -574,16 +603,16 @@ stated "before" state is unreachable with the tool it names, today, before any o
 | 5 | ✅ | A field recording an explicit `null` is judged against `null`, not treated as unrecorded | Unit test | `ConflictRuleLookupTests.TryResolve_FieldRecordingExplicitNull_IsJudgedAgainstNull` — the three-state requirement, and the one assertion `JsonElement?` cannot satisfy |
 | 6 | ✅ | Generation records each field's own incoming value | Unit test | `ConflictRuleGeneratorTests.Generate_RecordsEachFieldsOwnIncomingValue` |
 | 7 | ✅ | A field newly added by a merge carries its own recorded incoming value | Unit test | `ConflictRuleGeneratorTests.Merge_NewFieldCarriesItsOwnRecordedIncomingValue` |
-| 8 | ✅ | `generate` against a file omitting a recorded value writes it back without throwing, and does not invent a `null` | Unit test | `ImportRuleEndpointsTests.GenerateConflictRuleFile_ExistingFieldHasNoRecordedValue_RoundTripsWithoutInventingNull` — red as an unhandled `InvalidOperationException` before step 8 |
+| 8 | ✅ | `generate` against a file omitting a recorded value writes it back without throwing, and does not invent a `null` | Unit test | `ImportRuleEndpointsTests.GenerateConflictRuleFile_ExistingFieldHasNoRecordedValue_RoundTripsWithoutInventingNull`. **Never red in history**, unlike the other eleven: step 2's `[JsonIgnore(WhenWritingDefault)]` landed one commit before the test, so it passed on arrival. Proven wired to the behaviour by mutation instead (2026-10-06), per `testing-policy.md`'s canary: removing that attribute fails it on its own `AreEqual(OK, response.StatusCode)`, and restoring it returns it to green |
 | 9 | ✅ | Every migrated fixture still auto-resolves; no rule becomes `Stale` through the migration alone | Unit test | The full `ImportActionPlannerTests`, `ConflictRuleLookupTests`, `SqliteImportActionServiceTests` and `DatabaseInitializerTests` suites, green after step 4 |
 | 10 | ✅ | The four bundled rule files conform to the extended schema | Unit test | `SourceDataIntegrityTests.RuleFiles_ConformToSchema` |
 | 11 | ✅ | No bundled rule file names an entity more than once | Unit test | `SourceDataIntegrityTests.RuleFiles_NameEachEntityAtMostOnce` |
 | 12 | ✅ | The new `422` message exists and is non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
 | 13 | ✅ | `docs/api-endpoints.md` states the `422` and the one-entry-per-entity contract | Unit test | `RepositoryStructureTests.ConflictRuleDocuments_StateTheOneEntryPerEntityContract`, following `RepositoryStructureTests.SourceRefreshDocuments_SayTheRefreshIsOffByDefault`'s precedent |
 | 14 | ✅ | Build and full test run are clean | Live | `dotnet build --configuration Release` then `dotnet test --configuration Release --verbosity normal -m:1`, 2026-10-06 on the developer's own machine: both `0 Warning(s)  0 Error(s)`, 4517 passed, 0 failed, 0 skipped |
-| 15 | ❌ | The collapsed Mr. Robot entry applies both of its fields against a real seeded database | Live | *Fresh seed produces zero pending actions*, which cannot pass while either rule is `Stale` or `Pending` |
-| 16 | ❌ | The rule file is still read live and its rules still take effect | Live | *Rule-file live read proof* |
-| 17 | ❌ | Staleness still stages `Stale` after the recorded value moves, and document 16 runs as written | Live | *A rule whose recorded snapshot no longer matches reality stages Stale, not Decided*, for the readings it can make before #347 |
-| 18 | ❌ | `generate` runs green end to end, and the merge still drops no existing rule | Live | *Rule-file override endpoints*, all 7 steps, `dropped=0` at step 5 |
-| 19 | ❌ | The application still starts | Live | T1, Visual Studio, developer's own action |
-| 20 | ❌ | T2 scope passes | Live | The smoke set plus documents 14, 15, 16 and 18 |
+| 15 | ✅ | The collapsed Mr. Robot entry applies both of its fields against a real seeded database | Live | *A fresh seed resolves every bundled file with nothing left pending*, 2026-10-06: `pending=0`, `stale=0`, `blocked=0`, and the quote reads `date 2015` with `character Fernando Vera` under its single collapsed entry |
+| 16 | ✅ | The rule file is still read live and its rules still take effect | Live | *Rule-file live read proof*, 2026-10-06: all 3 steps. Removing the rule returns the conflict as `Pending` with `ambiguousFields` of `date`; restoring it as `Replace` records `"date":"2005"` |
+| 17 | ✅ | Staleness still stages `Stale` after the recorded value moves onto the field | Live | *A rule whose recorded snapshot no longer matches reality stages Stale, not Decided*, 2026-10-06: its new step 4 drives the condition through a registered override and reports `stale=1`, a `Modify` on the curated quote. Step 3's `stale=0` alone could not establish this |
+| 18 | ✅ | `generate` runs green end to end, and the merge still drops no existing rule | Live | *Rule-file override endpoints, and the alias-candidate suggestion endpoint*, 2026-10-06: all 7 steps. Step 4 returns `200` with `rulesAdded=1` where it previously answered an unhandled `500`; 22 bundled ids in, 23 out, `dropped=0` |
+| 19 | ✅ | The application still starts | Live | T1, Visual Studio, developer's own action, 2026-10-06, on both paths: an upgraded database applying 24 Data and 4 App migrations (v3 → v27, v5 → v9), and no database at all creating the schema at baseline. Both reached the ready banner |
+| 20 | ✅ | T2 scope passes | Live | The smoke set plus the three rule-file documents, 2026-10-06. Every step passes except three blocked on other issues and recorded as such: the wait page's step 1 (#438), the bundled-converter step (#400), and the staleness evaluation line (#347) |
