@@ -1,6 +1,6 @@
 # #420: Generating conflict rules answers an unhandled 500 when a rule file holds two rules for one entity
 
-**Status:** Planning
+**Status:** In progress (step 15)
 **GitHub issue:** #420
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -13,38 +13,17 @@
 developer's own Visual Studio action, which an assistant never performs (`CLAUDE.md`). T2 needs Docker:
 the smoke set plus documents 14, 15, 16 and 18.
 
-Build is clean (0 warnings, 0 errors), `Quotinator.Core.Tests` is 1737/1737, and **the full-solution
-`-m:1` run completed with 0 warnings, 0 errors and no failure beyond the eight pre-existing ones below**
-— so the cross-project reproducibility measure `-m:1` exists for surfaced nothing new here.
+**Build and the full-solution `-m:1` run are clean on the developer's own machine**, 2026-10-06:
+`0 Warning(s)  0 Error(s)` from both, and **4517 tests across all 11 projects passed, with none failed
+and none skipped** (`Quotinator.Core.Tests` 1737, `Quotinator.Api.Tests` 1474, `Quotinator.Data.Tests`
+1193, the remaining eight 113 between them). Every unit test named in the Verification table was
+confirmed by its own `Passed <name>` line in that run, not inferred from the absence of a failure.
 
-**Eight failures in this container are pre-existing and not this issue's**, verified rather than assumed
-— each fails identically at this branch's own base commit (`aae9ded`) in a clean worktree:
-
-| Project | Tests |
-|---|---|
-| `Quotinator.Data.Tests` | 3 Windows path-separator `DataRow`s, plus `Delete_FileCannotBeRemoved_IsReported_NotThrown` |
-| `Quotinator.Api.Tests` | 2 backslash-traversal tests, plus `DeleteBackup_FileCannotBeRemoved_Returns409NotAnUnhandled500` |
-| `Quotinator.Data.Testing.Tests` | `Dispose_WhenTheDirectoryIsHeldOpen_ReportsTheFailure` |
-
-All eight are artifacts of running the suite as root on Linux: Windows path semantics, and three tests
-whose precondition (a file or directory that cannot be removed) cannot be established as root. T1/T2 run
-on the developer's own machine. Surfaced per `CLAUDE.md`'s rule on a finding in a file the current issue
-did not touch, and not fixed here.
-
-**Two accounting errors of this session's own, corrected here rather than left standing.** The count was
-reported as seven until the `-m:1` run found an eighth: `Dispose_WhenTheDirectoryIsHeldOpen_ReportsTheFailure`
-lives in `Quotinator.Data.Testing.Tests`, a project the per-project runs never covered — those runs were
-`Core`, `Data` and `Api` only, three of eleven, so "every unit test is green" was overstated on the
-strength of a partial sweep. Separately, the three Windows `DataRow`s are absent from the `-m:1` output
-above because the filter used to read it required an uppercase letter after `Failed `, and a `DataRow`'s
-`DisplayName` is lowercase; they did fail, and the counts reconcile once that is accounted for.
-
-**Four `Quotinator.Data.Tests` failures are pre-existing and not this issue's** — three Windows
-path-separator tests and `Delete_FileCannotBeRemoved_IsReported_NotThrown`, which cannot establish its
-precondition as root on Linux. Verified rather than assumed: the identical four fail at this branch's
-own base commit (`aae9ded`) in a clean worktree. They are an artifact of running the suite in this Linux
-container; T1/T2 run on the developer's own machine. Surfaced per `CLAUDE.md`'s rule on a warning in a
-file the current issue did not touch, and not fixed here.
+**The eight failures recorded earlier were environmental and do not reproduce here.** They came from a
+cloud run, not this repository's own machine: Windows path-separator expectations, and three tests whose
+precondition is a file or directory that cannot be removed, which cannot be established as root. All
+eight pass on Windows. Nothing about them was ever a finding about this issue's code, and the cloud
+environment cannot verify this suite.
 
 Nothing else is outstanding: shape A is decided (developer, 2026-10-04, recorded in ADR 023), the
 cross-check against the authoritative sources is done, and every finding it produced is settled in
@@ -588,20 +567,20 @@ stated "before" state is unreachable with the tool it names, today, before any o
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | A rule file naming one entity twice is reported as an outcome, not thrown | Unit test | `ConflictRuleGeneratorTests.Merge_ExistingFileNamesOneEntityTwice_ReportsTheDuplicateInsteadOfThrowing` |
-| 2 | ❌ | `generate` answers a stated `422` for such a file, naming the file and the repeated id | Unit test | `ImportRuleEndpointsTests.GenerateConflictRuleFile_ExistingFileNamesOneEntityTwice_Returns422` |
-| 3 | ❌ | Two fields of one entity whose recorded incoming values differ are each judged against their own | Unit test | `ConflictRuleLookupTests.TryResolve_TwoFieldsWithDifferentRecordedIncomingValues_EachJudgedAgainstItsOwn` |
-| 4 | ❌ | A field with no recorded incoming value still resolves `Stale` | Unit test | `ConflictRuleLookupTests.TryResolve_FieldWithNoRecordedIncomingValue_ReportsStale` |
-| 5 | ❌ | A field recording an explicit `null` is judged against `null`, not treated as unrecorded | Unit test | `ConflictRuleLookupTests.TryResolve_FieldRecordingExplicitNull_IsJudgedAgainstNull` — the three-state requirement, and the one assertion `JsonElement?` cannot satisfy |
-| 6 | ❌ | Generation records each field's own incoming value | Unit test | `ConflictRuleGeneratorTests.Generate_RecordsEachFieldsOwnIncomingValue` |
-| 7 | ❌ | A field newly added by a merge carries its own recorded incoming value | Unit test | `ConflictRuleGeneratorTests.Merge_NewFieldCarriesItsOwnRecordedIncomingValue` |
-| 8 | ❌ | `generate` against a file omitting a recorded value writes it back without throwing, and does not invent a `null` | Unit test | `ImportRuleEndpointsTests.GenerateConflictRuleFile_ExistingFieldHasNoRecordedValue_RoundTripsWithoutInventingNull` — red as an unhandled `InvalidOperationException` before step 8 |
-| 9 | ❌ | Every migrated fixture still auto-resolves; no rule becomes `Stale` through the migration alone | Unit test | The full `ImportActionPlannerTests`, `ConflictRuleLookupTests`, `SqliteImportActionServiceTests` and `DatabaseInitializerTests` suites, green after step 4 |
-| 10 | ❌ | The four bundled rule files conform to the extended schema | Unit test | `SourceDataIntegrityTests.RuleFiles_ConformToSchema` |
-| 11 | ❌ | No bundled rule file names an entity more than once | Unit test | `SourceDataIntegrityTests.RuleFiles_NameEachEntityAtMostOnce` |
-| 12 | ❌ | The new `422` message exists and is non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
-| 13 | ❌ | `docs/api-endpoints.md` states the `422` and the one-entry-per-entity contract | Unit test | `RepositoryStructureTests.ConflictRuleDocuments_StateTheOneEntryPerEntityContract`, following `RepositoryStructureTests.SourceRefreshDocuments_SayTheRefreshIsOffByDefault`'s precedent |
-| 14 | ❌ | Build and full test run are clean | Live | `dotnet build --configuration Release` then `dotnet test --configuration Release --verbosity normal -m:1`, both `0 Warning(s)  0 Error(s)` |
+| 1 | ✅ | A rule file naming one entity twice is reported as an outcome, not thrown | Unit test | `ConflictRuleGeneratorTests.Merge_ExistingFileNamesOneEntityTwice_ReportsTheDuplicateInsteadOfThrowing` |
+| 2 | ✅ | `generate` answers a stated `422` for such a file, naming the file and the repeated id | Unit test | `ImportRuleEndpointsTests.GenerateConflictRuleFile_ExistingFileNamesOneEntityTwice_Returns422` |
+| 3 | ✅ | Two fields of one entity whose recorded incoming values differ are each judged against their own | Unit test | `ConflictRuleLookupTests.TryResolve_TwoFieldsWithDifferentRecordedIncomingValues_EachJudgedAgainstItsOwn` |
+| 4 | ✅ | A field with no recorded incoming value still resolves `Stale` | Unit test | `ConflictRuleLookupTests.TryResolve_FieldWithNoRecordedIncomingValue_ReportsStale` |
+| 5 | ✅ | A field recording an explicit `null` is judged against `null`, not treated as unrecorded | Unit test | `ConflictRuleLookupTests.TryResolve_FieldRecordingExplicitNull_IsJudgedAgainstNull` — the three-state requirement, and the one assertion `JsonElement?` cannot satisfy |
+| 6 | ✅ | Generation records each field's own incoming value | Unit test | `ConflictRuleGeneratorTests.Generate_RecordsEachFieldsOwnIncomingValue` |
+| 7 | ✅ | A field newly added by a merge carries its own recorded incoming value | Unit test | `ConflictRuleGeneratorTests.Merge_NewFieldCarriesItsOwnRecordedIncomingValue` |
+| 8 | ✅ | `generate` against a file omitting a recorded value writes it back without throwing, and does not invent a `null` | Unit test | `ImportRuleEndpointsTests.GenerateConflictRuleFile_ExistingFieldHasNoRecordedValue_RoundTripsWithoutInventingNull` — red as an unhandled `InvalidOperationException` before step 8 |
+| 9 | ✅ | Every migrated fixture still auto-resolves; no rule becomes `Stale` through the migration alone | Unit test | The full `ImportActionPlannerTests`, `ConflictRuleLookupTests`, `SqliteImportActionServiceTests` and `DatabaseInitializerTests` suites, green after step 4 |
+| 10 | ✅ | The four bundled rule files conform to the extended schema | Unit test | `SourceDataIntegrityTests.RuleFiles_ConformToSchema` |
+| 11 | ✅ | No bundled rule file names an entity more than once | Unit test | `SourceDataIntegrityTests.RuleFiles_NameEachEntityAtMostOnce` |
+| 12 | ✅ | The new `422` message exists and is non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
+| 13 | ✅ | `docs/api-endpoints.md` states the `422` and the one-entry-per-entity contract | Unit test | `RepositoryStructureTests.ConflictRuleDocuments_StateTheOneEntryPerEntityContract`, following `RepositoryStructureTests.SourceRefreshDocuments_SayTheRefreshIsOffByDefault`'s precedent |
+| 14 | ✅ | Build and full test run are clean | Live | `dotnet build --configuration Release` then `dotnet test --configuration Release --verbosity normal -m:1`, 2026-10-06 on the developer's own machine: both `0 Warning(s)  0 Error(s)`, 4517 passed, 0 failed, 0 skipped |
 | 15 | ❌ | The collapsed Mr. Robot entry applies both of its fields against a real seeded database | Live | *Fresh seed produces zero pending actions*, which cannot pass while either rule is `Stale` or `Pending` |
 | 16 | ❌ | The rule file is still read live and its rules still take effect | Live | *Rule-file live read proof* |
 | 17 | ❌ | Staleness still stages `Stale` after the recorded value moves, and document 16 runs as written | Live | *A rule whose recorded snapshot no longer matches reality stages Stale, not Decided*, for the readings it can make before #347 |
