@@ -185,13 +185,20 @@ public static class FieldMergeResolver
     /// legitimately occur and nothing here needs to count occurrences. <see cref="List{T}"/> doesn't
     /// override <see cref="object.Equals(object)"/> either, so two equal-content-but-different-instance
     /// lists would otherwise compare unequal on identity alone. String values (scalar or within a
-    /// collection) compare case-insensitively, matching this project's case-insensitive-by-default
-    /// convention already applied to id/enum comparisons — a value arriving from an outside source (an
-    /// import file, in this case) must never be treated as a "conflict" purely because of letter casing
-    /// (e.g. "star wars" vs "Star Wars"), the same reasoning <c>QuoteIdentity.StableId</c> already
-    /// applies when generating a quote's own id. Applied uniformly to every field, including free-text
-    /// ones — a casing-only correction to a field's own content is treated the same as any other
-    /// non-conflict. Used both for merge resolution and for any changed-field diff a caller computes
+    /// collection) compare case-insensitively.
+    /// <para>
+    /// <b>This overload is non-compliant with ADR 024 for a display-bearing field, tracked as #437.</b>
+    /// It cannot see which field it is comparing, so it cannot apply the case-sensitive set, and it
+    /// folds case for every field including free-text ones — meaning a casing-only correction to a
+    /// field's own content is currently treated as a non-conflict and silently discarded. The
+    /// justification it carried, that <c>QuoteIdentity.StableId</c> already normalises casing away when
+    /// generating a quote's id, reasons from identity to content, which is the conflation ADR 024
+    /// exists to end: the id deliberately does not move when casing changes, which is what makes such a
+    /// change correctable rather than destructive. Prefer the four-argument overload, which takes the
+    /// case-sensitive field set, for any content-equality comparison; this one is correct only for a
+    /// value drawn from a closed set.
+    /// </para>
+    /// Used both for merge resolution and for any changed-field diff a caller computes
     /// outside this class (e.g. <c>ImportActionPlanner</c>'s completeness-blocking check, #168).
     /// <para>
     /// Found live (2026-09-04): the previous <c>SequenceEqual</c> implementation made an unchanged
