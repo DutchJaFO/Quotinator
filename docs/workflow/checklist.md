@@ -89,7 +89,7 @@ A short flat per-issue index list of plan-doc links at the end is optional but e
   ```
   Never create a new branch until you have confirmed no matching branch already exists on the remote.
 - [ ] Check for new issues: `gh issue list --milestone "<Name>" --state open --json number,title`
-- [ ] Add any issues filed since last session to `overview.md`, with `none` in the Plan doc column; no plan doc until the issue starts
+- [ ] Add any issues filed since last session to `overview.md` where that milestone has one, with `none` in the Plan doc column; no plan doc until the issue starts. A milestone that has not started has no overview and needs no entry, see `issues.md` → *Mid-milestone issue discovery* step 3
 - [ ] Review plan docs for issues being worked on today
 
 ---

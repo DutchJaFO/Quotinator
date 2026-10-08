@@ -191,7 +191,7 @@ The comment must directly answer the question and state a recommendation if appl
 
 Research issues may conclude with any of the following, record which applies in the closing comment:
 
-- **New issues in the current milestone**: if the findings reveal work that fits the current milestone scope, file the issues and update `overview.md`
+- **New issues in the current milestone**: if the findings reveal work that fits the current milestone scope, file the issues and update `overview.md` where that milestone has one, per *Mid-milestone issue discovery* step 3 below
 - **New milestone**: if the findings reveal a body of work that is out of scope for the current milestone, propose a new milestone and file its issues
 - **Not feasible / rejected**: if the research concludes the approach is impossible or not worth pursuing, document why and close without further action
 - **Architecture decision required**: if the findings lead to a significant technical decision, write an ADR in `docs/architecture-decisions/` and link it in the closing comment (see Architecture decisions below)
@@ -233,7 +233,9 @@ When a gap, risk, or dependency is identified while working on a milestone issue
 
 1. **File the issue immediately** using the appropriate template above. Assign it to the current milestone.
 2. **Map its dependencies**: determine which open issues it blocks and which block it.
-3. **Update `overview.md`**: add the new issue to the issue list and dependency graph; insert it in the correct position in the order of operations table.
+3. **Update `overview.md`, where the milestone has one**: add the new issue to the issue list and dependency graph; insert it in the correct position in the order of operations table.
+
+   **An overview exists only for a milestone that has started.** It is created by `checklist.md`'s *Milestone start* step and by nothing else, so a milestone nobody has started yet has none, which is usually the case for the maintenance milestone. Filing into one of those is **complete without this step**: it is not a gap, no overview is created to hold the issue, and it is not worth raising. This paragraph exists because the instruction above reads as unconditional and the omission has been rediscovered as a defect more than once.
 4. **Do not create a plan doc yet**: it is written when the issue starts (`process.md` → "Working on an issue" → Planning). Its Plan doc column in `overview.md` reads `none` until then.
 5. **Do not start work on the new issue** in the same session unless it is a hard blocker for the current issue. Note it and continue with the current issue.
 
