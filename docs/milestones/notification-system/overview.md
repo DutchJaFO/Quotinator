@@ -142,12 +142,12 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #413 ─── depends on #312, #319: Waiting for release
 #416 ─── (none); filed 2026-09-19, unsequenced: Planning
 #419 ─── (none); found in #411's T2, in #81's producer: Waiting for release
-#420 ─── (none); found in #411's T2; blocks one #411 document: Waiting for release
+#420 ─── (none): Waiting for release
 #421 ─── (none); found in #411's T2, in #374's migration: Planning
 #422 ─── (none); found in #411's T2, in #308's modal: Planning
 #423 ─── (none); found in #308's T2; #156 decided it, #277 pinned the opposite, #304 depends on it: Planning
 #424 ─── (none); moved from v1.9.0, found in #348's verification: Waiting for release
-#438 ─── (none); found in #420's T2; one smoke document cannot be confirmed until it lands: Planning
+#438 ─── (none): Planning
 #430 ─── (none); found in #348's T1: Planning
 #431 ─── (none); shares a sanitiser with #353: Planning
 #397 ─── (none); blocks #370: Waiting for release
@@ -211,7 +211,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 34 | **#411** ✅ | Waiting for release |
 | 35 | **#413** ✅ | Waiting for release |
 | 36 | **#419** ✅ | Waiting for release |
-| 37 | **#420** ✅ | Waiting for release; found in #411's T2; one #411 document waits on it |
+| 37 | **#420** ✅ | Waiting for release |
 | 38 | **#421** | Planning; found in #411's T2; before #371/#360 add migrations |
 | 39 | **#422** | Planning; found in #411's T2; code accuracy only, nothing unreachable |
 | 40 | **#423** | Planning; found in #308's T2; a reset is undone by the next restart, and #304's recommendation resolves itself because of it |
@@ -236,7 +236,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 59 | **#416** | Planning; filed 2026-09-19 during #411 and not yet sequenced; placed last until it is |
 | 60 | **#430** | Planning; filed 2026-10-01, unsequenced; before #352 and #353, which cite the convention |
 | 61 | **#431** | Planning; filed 2026-10-01, unsequenced; after #353, which builds the shared sanitiser |
-| 62 | **#438** | Planning; filed 2026-10-06 during #420's T2; early, since a smoke document cannot be confirmed until it lands |
+| 62 | **#438** | Planning; early, a smoke document cannot be confirmed until it lands |
 
 ---
 
