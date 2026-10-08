@@ -1,6 +1,6 @@
 # ADR 024 — Case-insensitivity serves identity and lookup, never content equality
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-06
 **GitHub issues:** #420, #437
 

@@ -48,7 +48,7 @@
 | [021](architecture-decisions/021-file-inputs-are-schema-validated.md) | Every file used as input is validated against the schema that defines it | Accepted |
 | [022](architecture-decisions/022-exceptions-only-for-undetectable-conditions.md) | An exception is thrown only when nothing else can detect the condition, and every exception is logged | Accepted |
 | [023](architecture-decisions/023-one-conflict-rule-entry-per-entity.md) | One conflict-rule entry per entity, and the recorded incoming value belongs to the field it governs | Accepted |
-| [024](architecture-decisions/024-case-insensitivity-serves-identity-not-content-equality.md) | Case-insensitivity serves identity and lookup, never content equality | Proposed |
+| [024](architecture-decisions/024-case-insensitivity-serves-identity-not-content-equality.md) | Case-insensitivity serves identity and lookup, never content equality | Accepted |
 
 ## Architecture Decision Record format
 

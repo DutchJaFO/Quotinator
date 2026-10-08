@@ -14,6 +14,17 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 
 ## Rules
 
+- **An ADR is binding, not advisory. It dictates what gets built and how, and is obeyed when planning
+  and fixing issues.** `CLAUDE.md`'s *Authoritative sources* ranks ADRs first among the sources to
+  check; this is the stronger statement that consulting one is not where it ends. An ADR is not
+  weighed against the surrounding code, the convenience of the change in hand, or what an issue's own
+  body happens to say: where it governs, it decides, and a deviation is agreed with the developer
+  before the code rather than explained afterwards. The `SystemAuditEntry` incident recorded in
+  [ADR 002](002-recordbase-on-all-tables.md) is what this exists to prevent, three entities copying
+  each other's shape while an ADR mandating otherwise sat unread.
+- **A codebase that does not yet comply does not soften the ADR.** An `Accepted` ADR states what is
+  true even while an issue tracks the code catching up, as ADRs 021, 022 and 024 each do today. Never
+  extend a non-compliant pattern to something new on the strength of the existing code.
 - ADRs are never deleted. If a decision is reversed, the original ADR is marked **Superseded** and a new ADR is written.
 - Number sequentially from `001`. Do not reuse numbers.
 - Link related GitHub issues in the header.
