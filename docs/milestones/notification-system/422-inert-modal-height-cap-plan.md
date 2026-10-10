@@ -104,7 +104,8 @@ Four screenshots taken: the detail dialog at `420` and at `1274`, the resolved r
 modal with every detail expanded.
 
 **Six defects in other documents were found while running them, none of them this issue's and none
-fixed here** — recorded in *Found while running T2* below, for the developer to place.
+fixed here** — recorded in *Found while running T2* below and filed as
+[#441](https://github.com/DutchJaFO/Quotinator/issues/441).
 
 ---
 
@@ -156,8 +157,9 @@ row 2 follows the narrower scope.
 
 ## Found while running T2
 
-Six defects in documents this issue did not touch, left for the developer to place. Each was worked
-around to get the step's real answer; none was fixed.
+Six defects in documents this issue did not touch, filed as
+[#441](https://github.com/DutchJaFO/Quotinator/issues/441) against v1.9.0. Each was worked around to
+get the step's real answer; none was fixed.
 
 **The shell is the common cause of four of them.** Several steps are written for PowerShell 7, and the
 only PowerShell on this machine is Windows PowerShell 5.1, which parses none of it.
