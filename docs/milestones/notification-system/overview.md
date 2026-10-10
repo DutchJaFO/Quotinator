@@ -107,22 +107,22 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #312 ─── depends on #278; blocks #81, #302, #303, #304, #308: Waiting for release
 #83  ─── (none): Waiting for release
 #81  ─── depends on #278, #80, #309, #307, #312; soft-depends on #308: Waiting for release
-#304 ─── depends on #278, #156, #312, #319: Waiting for release
-#302 ─── depends on #278, #312, #372: Waiting for release
-#303 ─── depends on #278, #312: Waiting for release
+#304 ─── depends on #278, #312, #319: Waiting for release
+#302 ─── depends on #278, #304, #312, #319, #372: Waiting for release
+#303 ─── depends on #278, #302, #304, #312, #319: Waiting for release
 #307 ─── depends on #80; soft-depends on #309: Waiting for release
-#308 ─── depends on #278, #312; soft-depends on #302, #303, #304: Waiting for release
-#309 ─── (none): Waiting for release
+#308 ─── depends on #302, #303, #304, #312, #367: Waiting for release
+#309 ─── depends on #80: Waiting for release
 #305 ─── (none): Planning
 #306 ─── (none): Planning
-#319 ─── depends on #312; blocks #304, #302, #303, #308: Waiting for release
-#323 ─── (none): Waiting for release
+#319 ─── depends on #278, #312; blocks #304, #302, #303, #308: Waiting for release
+#323 ─── (none); blocks #325, #329: Waiting for release
 #324 ─── depends on #278, #312, #319; soft-consumes #329: Planning
-#325 ─── (none): Closed as not planned
+#325 ─── depends on #323: Closed as not planned
 #326 ─── (none); blocks #327: Waiting for release
-#327 ─── depends on #326, #348: In progress
-#328 ─── (none): Planning
-#329 ─── blocks #324: Planning
+#327 ─── depends on #326, #339, #348: In progress
+#328 ─── depends on #339: Planning
+#329 ─── depends on #323, #325; blocks #324: Planning
 #330 ─── (none); blocks #331: Planning
 #331 ─── depends on #330: Planning
 #339 ─── depends on #347 (v1.9.0); blocks #327, #328: In progress
@@ -133,9 +133,9 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #360 ─── (none): Planning
 #353 ─── (none): Planning
 #351 ─── (none): Planning
-#313 ─── (none): Waiting for release
-#370 ─── depends on #397: Waiting for release
-#409 ─── (none): Waiting for release
+#313 ─── depends on #280: Waiting for release
+#370 ─── depends on #397; blocks #409, #410: Waiting for release
+#409 ─── depends on #370: Waiting for release
 #410 ─── depends on #370: Waiting for release
 #411 ─── (none): Waiting for release
 #413 ─── depends on #312, #319: Waiting for release
@@ -152,8 +152,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #369 ─── depends on #303, #372, #389: Waiting for release
 #389 ─── depends on #373, #376, #377: Waiting for release
 #390 ─── (none); blocks #368: Planning
-#372 ─── (none); blocks #302: Waiting for release
-#373 ─── depends on #372; blocks #302 (via #372): Waiting for release
+#372 ─── depends on #373 for its step 6; blocks #302, #373: Waiting for release
+#373 ─── depends on #372 for reproduction, #374 for its T2 runs; blocks #372's step 6: Waiting for release
 #375 ─── (none); blocks #374: Waiting for release
 #374 ─── depends on #375: Waiting for release
 #376 ─── (none): Waiting for release
@@ -162,7 +162,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #381 ─── (none): Planning
 #382 ─── depends on #377: Waiting for release
 #383 ─── depends on #377: Waiting for release
-#367 ─── depends on #278, #312; blocks #308: Waiting for release
+#367 ─── depends on #278, #304; blocks #308: Waiting for release
 #371 ─── (none): Planning
 #368 ─── depends on #303, #304, #390: Planning
 ```
@@ -214,9 +214,9 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 39 | **#423** | Planning |
 | 40 | **#371** | Planning; before #351/#360, which each add migrations |
 | 41 | **#350** | Planning |
-| 42 | **#327** 🚧 | In progress |
-| 43 | **#328** | Planning |
-| 44 | **#339** 🚧 | In progress; blocked on #347 (v1.9.0) |
+| 42 | **#339** 🚧 | In progress; blocked on #347 (v1.9.0); before #327 and #328 |
+| 43 | **#327** 🚧 | In progress; after #339 |
+| 44 | **#328** | Planning; after #339 |
 | 45 | **#329** | Planning; before #324, which consumes its statistics |
 | 46 | **#330** | Planning; before #331 |
 | 47 | **#331** | Planning; after #330 |
