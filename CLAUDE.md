@@ -278,6 +278,14 @@ every time they reset. Reset's one job is rebuilding the schema; any table needi
 gets it from the fresh-database baseline script itself (see "Baseline schema for fresh databases"
 above), never from a reseed step bolted onto Reset afterward.
 
+**Taking a backup is one of these second decisions, and [ADR 025](docs/architecture-decisions/025-a-backup-belongs-to-the-composer-not-the-operation.md)
+places it.** An endpoint never backs up; a UX flow composes the backup as one of its own steps, offered
+as a choice and recorded when declined; startup takes its own for the unattended work it performs
+(a pending migration, a content load into a database it just created), as Reset does for its own wipe.
+A function that performs one operation, `ReseedAsync` being the canonical one, takes none. The same
+operation therefore backs up on one path and not another, and that asymmetry is the rule working: do
+not resolve it by pushing the backup down into the shared operation.
+
 ### JSON parsing policy
 
 **Always deserialize JSON into POCOs via `JsonSerializer.Deserialize<T>` — never walk a parsed document by hand (`JsonNode`/`JsonDocument` indexers, `["field"]`, `GetValue<T>()`) to extract data.** Define a DTO class per JSON shape (e.g. `SourceQuote` for quote files, `ChangelogRoot` for the changelog, `ManifestDto`/`ManifestFileEntryDto`/`ManifestGithubDto`/`ManifestPolicyDto` for `manifest.json`), with `[JsonPropertyName("...")]` on each property mapping the wire name to a PascalCase C# name. If a schema exists (`schemas/*.json`), every field it defines must be representable as a DTO property — a schema field with no corresponding POCO property is a policy violation. The same applies to writing JSON: build a DTO and call `JsonSerializer.Serialize`, never hand-assemble a `JsonObject`/`JsonArray`.

@@ -138,6 +138,7 @@
     <File Path="docs/architecture-decisions/022-exceptions-only-for-undetectable-conditions.md" />
     <File Path="docs/architecture-decisions/023-one-conflict-rule-entry-per-entity.md" />
     <File Path="docs/architecture-decisions/024-case-insensitivity-serves-identity-not-content-equality.md" />
+    <File Path="docs/architecture-decisions/025-a-backup-belongs-to-the-composer-not-the-operation.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />
