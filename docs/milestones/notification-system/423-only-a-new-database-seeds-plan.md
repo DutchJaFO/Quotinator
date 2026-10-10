@@ -125,18 +125,22 @@ That is not a test artefact. It is the empty-quotes trigger of #348's `BackupGua
 What is left of the guard on startup is `ReSeedGenresIfEmptyAsync`, the genres-empty-with-quotes-present
 case, which is where these 14 tests belong.
 
-**`ReseedAsync` not backing up is #348's own deliberate decision, not a gap this opens.** The reseed
-reached through a notification action is fully guarded by `NotificationActionExecutor.PrepareReseedAsync`:
-it offers back-up-then-reseed, remove-oldest-then-reseed and reseed-without-backup, writes an
-`AuditOperation.BackupSkipped` entry when the operator declines one, and refuses before anything is
-written. The call site states the principle, that `ReseedAsync` does one thing and the caller composing
-the reseed composes the backup with it. Moving a backup into `ReseedAsync` would contradict that and
-double the backup on the notification path.
+**Nothing about backups is missing here. A backup is a secondary action, and the project places it by
+who is composing the work** (developer direction, 2026-10-10):
 
-The one place that composition is missing is `POST /admin/database/reseed`
-(`AdminEndpoints.cs:187`), which calls `ReseedAsync` with no backup and no refusal. That is one
-endpoint's missing composition, not a hole in the guard, and it is not this issue's subject. Filed
-separately rather than fixed here.
+- **An endpoint does not take one.** A backup is unrelated to the endpoint's own job, and bundling it
+  would be the same second decision CLAUDE.md's endpoint side-effect policy already forbids. So
+  `POST /admin/database/reseed` (`AdminEndpoints.cs:187`) calling `ReseedAsync` with no backup is the
+  design, not an omission, and it is the same reason `ReseedAsync` itself takes none.
+- **A UX action composes one**, at each step it completes. `NotificationActionExecutor.PrepareReseedAsync`
+  is the worked example: back-up-then-reseed, remove-oldest-then-reseed, or reseed-without-backup with
+  an `AuditOperation.BackupSkipped` entry recording what the operator agreed to go without, and a
+  refusal before anything is written.
+- **Startup takes its own**, for the work it performs unattended: a pending migration, and the content
+  load into a database it just created. Nobody else is there to compose it.
+
+This is why moving a backup into `ReseedAsync` was the wrong answer when it was considered above: it
+would double the backup on the notification path and put a secondary action inside a primitive.
 
 **What the 15 re-based tests needed.** One shared fixture, `ContentSeedPendingDatabaseAsync`, which
 seeds a database and then deletes its genre rows: quotes present with genres empty is the single state
