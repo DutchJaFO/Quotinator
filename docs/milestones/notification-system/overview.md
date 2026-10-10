@@ -78,7 +78,6 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#416](https://github.com/DutchJaFO/Quotinator/issues/416) | Resolving a held import item always creates a rule, and every held item says why it was held | Planning | T1 ⬜ T2 ⬜ | none |
 | [#419](https://github.com/DutchJaFO/Quotinator/issues/419) | A reset in the first moments after startup races the what's-new notification's write | Waiting for release | T1 ✅ T2 ✅ | [419-startup-gate-blocks-writes-plan.md](419-startup-gate-blocks-writes-plan.md) |
 | [#420](https://github.com/DutchJaFO/Quotinator/issues/420) | Generating conflict rules answers an unhandled 500 when a rule file holds two rules for one entity | Waiting for release | T1 ✅ T2 ✅ | [420-two-rules-for-one-entity-plan.md](420-two-rules-for-one-entity-plan.md) |
-| [#421](https://github.com/DutchJaFO/Quotinator/issues/421) | A quote's id depends on whether the install was upgraded or fresh, after Migration009's dedupe | Planning | T1 ⬜ T2 ⬜ | none |
 | [#422](https://github.com/DutchJaFO/Quotinator/issues/422) | A modal's 95vh height cap never applies; Bootstrap's centred min-height overrides it | Planning | T1 ⬜ T2 ⬜ | none |
 | [#423](https://github.com/DutchJaFO/Quotinator/issues/423) | Seeding fills any empty database, so a reset is undone by the next restart | Planning | T1 ⬜ T2 ⬜ | none |
 | [#424](https://github.com/DutchJaFO/Quotinator/issues/424) | Bundled sources are not auto-downloaded by default, and are refreshed by hand instead | Waiting for release | T1 ✅ T2 ✅ | [424-sources-not-auto-downloaded-by-default-plan.md](424-sources-not-auto-downloaded-by-default-plan.md) |
@@ -126,7 +125,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #329 ─── blocks #324: Planning
 #330 ─── (none); blocks #331: Planning
 #331 ─── depends on #330: Planning
-#339 ─── depends on #347 (v1.9.0 milestone); blocks #327, #328: In progress
+#339 ─── depends on #347 (v1.9.0); blocks #327, #328: In progress
 #348 ─── depends on #349; blocks #327: Waiting for release
 #349 ─── (none); soft-relates to #348: Waiting for release
 #350 ─── (none): Planning
@@ -136,34 +135,33 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #351 ─── (none): Planning
 #313 ─── (none): Waiting for release
 #370 ─── depends on #397: Waiting for release
-#409 ─── (none); touches the same two calls as #370: Waiting for release
-#410 ─── depends on #370, whose decide outcomes it extends: Waiting for release
+#409 ─── (none): Waiting for release
+#410 ─── depends on #370: Waiting for release
 #411 ─── (none): Waiting for release
 #413 ─── depends on #312, #319: Waiting for release
-#416 ─── (none); filed 2026-09-19, unsequenced: Planning
-#419 ─── (none); found in #411's T2, in #81's producer: Waiting for release
+#416 ─── (none): Planning
+#419 ─── (none): Waiting for release
 #420 ─── (none): Waiting for release
-#421 ─── (none); found in #411's T2, in #374's migration: Planning
-#422 ─── (none); found in #411's T2, in #308's modal: Planning
-#423 ─── (none); found in #308's T2; #156 decided it, #277 pinned the opposite, #304 depends on it: Planning
-#424 ─── (none); moved from v1.9.0, found in #348's verification: Waiting for release
+#422 ─── (none): Planning
+#423 ─── (none): Planning
+#424 ─── (none): Waiting for release
 #438 ─── (none): Planning
-#430 ─── (none); found in #348's T1: Planning
-#431 ─── (none); shares a sanitiser with #353: Planning
+#430 ─── (none): Planning
+#431 ─── (none): Planning
 #397 ─── (none); blocks #370: Waiting for release
 #369 ─── depends on #303, #372, #389: Waiting for release
 #389 ─── depends on #373, #376, #377: Waiting for release
-#390 ─── (none); found in T1 while verifying #369; blocks #368: Planning
+#390 ─── (none); blocks #368: Planning
 #372 ─── (none); blocks #302: Waiting for release
-#373 ─── depends on #372; blocks #302 (via #372), #372's row 21: Waiting for release
-#375 ─── (none); blocks #374; its import-report half landed with #373's step 10: Waiting for release
+#373 ─── depends on #372; blocks #302 (via #372): Waiting for release
+#375 ─── (none); blocks #374: Waiting for release
 #374 ─── depends on #375: Waiting for release
-#376 ─── (none); found live while verifying #374: Waiting for release
-#377 ─── (none); found live while verifying #374; blocks #372's row 21: Waiting for release
-#378 ─── (none); found live while verifying #374: Waiting for release
-#381 ─── (none); found live while verifying #374/#378: Planning, deliberately deferred
-#382 ─── depends on #377; found while planning it, kept out of its scope: Waiting for release
-#383 ─── depends on #377, whose invariant the totals line makes checkable: Waiting for release
+#376 ─── (none): Waiting for release
+#377 ─── (none); blocks #372: Waiting for release
+#378 ─── (none): Waiting for release
+#381 ─── (none): Planning
+#382 ─── depends on #377: Waiting for release
+#383 ─── depends on #377: Waiting for release
 #367 ─── depends on #278, #312; blocks #308: Waiting for release
 #371 ─── (none): Planning
 #368 ─── depends on #303, #304, #390: Planning
@@ -178,7 +176,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 1 | **#313** ✅ | Waiting for release; test-harness reliability |
 | 2 | **#323** ✅ | Waiting for release; independent |
 | 3 | **#325** ⛔ | Closed as not planned |
-| 4 | **#312** ✅ | Waiting for release; foundation for #81, #302, #303, #304, #308 |
+| 4 | **#312** ✅ | Waiting for release; foundation for the producers below |
 | 5 | **#81** ✅ | Waiting for release |
 | 6 | **#83** ✅ | Waiting for release |
 | 7 | **#309** ✅ | Waiting for release |
@@ -190,21 +188,21 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 13 | **#319** ✅ | Waiting for release; gateway for the producers below |
 | 14 | **#304** ✅ | Waiting for release |
 | 15 | **#302** ✅ | Waiting for release |
-| 16 | **#303** ✅ | Waiting for release; T1 outstanding |
+| 16 | **#303** ✅ | Waiting for release |
 | 17 | **#367** ✅ | Waiting for release; moved up so #308 designs against the finished status set |
-| 18 | **#308** ✅ | Waiting for release; reopened 2026-09-22, closed 2026-09-24: every kind through its own trigger on both surfaces, the unread map deleted, fifteen captured images. Finishes before #413, which no longer carries any rendering change |
-| 19 | **#375** ✅ | Waiting for release; T1 green after three rounds |
+| 18 | **#308** ✅ | Waiting for release; before #413 |
+| 19 | **#375** ✅ | Waiting for release |
 | 20 | **#374** ✅ | Waiting for release |
-| 21 | **#378** ✅ | Waiting for release; found live while verifying #374, fixed same session |
-| 22 | **#373** ✅ | Waiting for release; T1 green after the natural-key fix |
-| 23 | **#372** ✅ | Waiting for release; T1 green; a reseed leaves zero pending items |
+| 21 | **#378** ✅ | Waiting for release |
+| 22 | **#373** ✅ | Waiting for release |
+| 23 | **#372** ✅ | Waiting for release |
 | 24 | **#377** ✅ | Waiting for release |
 | 25 | **#382** ✅ | Waiting for release |
 | 26 | **#383** ✅ | Waiting for release |
 | 27 | **#376** ✅ | Waiting for release |
-| 28 | **#389** ✅ | Waiting for release; found by #369's T2 |
+| 28 | **#389** ✅ | Waiting for release |
 | 29 | **#369** ✅ | Waiting for release |
-| 30 | **#397** ✅ | Waiting for release; unblocks #370 |
+| 30 | **#397** ✅ | Waiting for release; before #370 |
 | 31 | **#370** ✅ | Waiting for release |
 | 32 | **#409** ✅ | Waiting for release |
 | 33 | **#410** ✅ | Waiting for release |
@@ -212,31 +210,30 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 35 | **#413** ✅ | Waiting for release |
 | 36 | **#419** ✅ | Waiting for release |
 | 37 | **#420** ✅ | Waiting for release |
-| 38 | **#421** | Planning; found in #411's T2; before #371/#360 add migrations |
-| 39 | **#422** | Planning; found in #411's T2; code accuracy only, nothing unreachable |
-| 40 | **#423** | Planning; found in #308's T2; a reset is undone by the next restart, and #304's recommendation resolves itself because of it |
-| 41 | **#371** | Planning; before #351/#360, which each add migrations |
-| 42 | **#350** | Planning |
-| 43 | **#327** 🚧 | In progress; depends on #326 (done), #348 |
-| 44 | **#328** | Planning |
-| 45 | **#339** 🚧 | In progress; blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone |
-| 46 | **#329** | Planning; before #324, which consumes its statistics |
-| 47 | **#330** | Planning; #331 depends on it |
-| 48 | **#331** | Planning; depends on #330 |
-| 49 | **#324** | Planning; after #329/#330/#331 |
-| 50 | **#305** | Planning; independent |
-| 51 | **#306** | Planning; independent |
-| 52 | **#351** | Planning; independent, placed late |
-| 53 | **#381** | Planning; independent, deliberately deferred (found live while verifying #374/#378) |
-| 54 | **#352** | Planning; after #349 |
-| 55 | **#353** | Planning; after #352 |
-| 56 | **#360** | Planning; before end-of-milestone migration consolidation |
-| 57 | **#390** | Planning; before #368, which depends on it |
-| 58 | **#368** | Planning; depends on #303, #304, #390 |
-| 59 | **#416** | Planning; filed 2026-09-19 during #411 and not yet sequenced; placed last until it is |
-| 60 | **#430** | Planning; filed 2026-10-01, unsequenced; before #352 and #353, which cite the convention |
-| 61 | **#431** | Planning; filed 2026-10-01, unsequenced; after #353, which builds the shared sanitiser |
-| 62 | **#438** | Planning; early, a smoke document cannot be confirmed until it lands |
+| 38 | **#422** | Planning |
+| 39 | **#423** | Planning |
+| 40 | **#371** | Planning; before #351/#360, which each add migrations |
+| 41 | **#350** | Planning |
+| 42 | **#327** 🚧 | In progress |
+| 43 | **#328** | Planning |
+| 44 | **#339** 🚧 | In progress; blocked on #347 (v1.9.0) |
+| 45 | **#329** | Planning; before #324, which consumes its statistics |
+| 46 | **#330** | Planning; before #331 |
+| 47 | **#331** | Planning; after #330 |
+| 48 | **#324** | Planning; after #329/#330/#331 |
+| 49 | **#305** | Planning; independent |
+| 50 | **#306** | Planning; independent |
+| 51 | **#351** | Planning; independent, placed late |
+| 52 | **#381** | Planning; independent, deliberately deferred |
+| 53 | **#352** | Planning; after #349 |
+| 54 | **#353** | Planning; after #352 |
+| 55 | **#360** | Planning; before end-of-milestone migration consolidation |
+| 56 | **#390** | Planning; before #368 |
+| 57 | **#368** | Planning; after #390 |
+| 58 | **#416** | Planning; unsequenced, placed last until it is |
+| 59 | **#430** | Planning; before #352 and #353, which cite the convention |
+| 60 | **#431** | Planning; after #353, which builds the shared sanitiser |
+| 61 | **#438** | Planning; early, a smoke document cannot be confirmed until it lands |
 
 ---
 
