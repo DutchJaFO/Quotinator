@@ -718,11 +718,11 @@ Series, Universe, StageDirection, SoundCue, Conversation). Its two-argument over
 cannot see which field it is comparing; its four-argument overload takes the case-sensitive field set.
 Per ADR 024 the four-argument form is the only correct one for a content comparison.
 
-`QuoteFieldMerge.CaseSensitiveContentFields` (#374) is that set for Quote, currently holding
-`quoteText` and `character`. Every comparison of a quote's fields, staging, listing, deciding and the
-import response, goes through `QuoteFieldMerge`, which applies the set; never call
-`FieldMergeResolver` directly on quote fields. #409 found four callers that did, each treating as
-equal what staging had held for review.
+`QuoteFieldMerge.CaseSensitiveContentFields` (#374) is that set for Quote: `quoteText` and
+`character` are the only fields of a quote compared case-sensitively today. Every comparison of a
+quote's fields, staging, listing, deciding and the import response, goes through `QuoteFieldMerge`,
+which applies the set; never call `FieldMergeResolver` directly on quote fields. #409 found four
+callers that did, each treating as equal what staging had held for review.
 
 **The codebase is knowingly non-compliant with ADR 024 and the gap is tracked** in that ADR's *Known
 non-compliance* section: every display-bearing field other than a quote's `quoteText` and `character`
