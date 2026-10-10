@@ -78,7 +78,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#416](https://github.com/DutchJaFO/Quotinator/issues/416) | Resolving a held import item always creates a rule, and every held item says why it was held | Planning | T1 ⬜ T2 ⬜ | none |
 | [#419](https://github.com/DutchJaFO/Quotinator/issues/419) | A reset in the first moments after startup races the what's-new notification's write | Waiting for release | T1 ✅ T2 ✅ | [419-startup-gate-blocks-writes-plan.md](419-startup-gate-blocks-writes-plan.md) |
 | [#420](https://github.com/DutchJaFO/Quotinator/issues/420) | Generating conflict rules answers an unhandled 500 when a rule file holds two rules for one entity | Waiting for release | T1 ✅ T2 ✅ | [420-two-rules-for-one-entity-plan.md](420-two-rules-for-one-entity-plan.md) |
-| [#422](https://github.com/DutchJaFO/Quotinator/issues/422) | A modal's 95vh height cap never applies; Bootstrap's centred min-height overrides it | In progress | T1 ⬜ T2 ⬜ | [422-inert-modal-height-cap-plan.md](422-inert-modal-height-cap-plan.md) |
+| [#422](https://github.com/DutchJaFO/Quotinator/issues/422) | A modal's 95vh height cap never applies; Bootstrap's centred min-height overrides it | Waiting for release | T1 ✅ T2 ✅ | [422-inert-modal-height-cap-plan.md](422-inert-modal-height-cap-plan.md) |
 | [#423](https://github.com/DutchJaFO/Quotinator/issues/423) | Seeding fills any empty database, so a reset is undone by the next restart | Planning | T1 ⬜ T2 ⬜ | none |
 | [#424](https://github.com/DutchJaFO/Quotinator/issues/424) | Bundled sources are not auto-downloaded by default, and are refreshed by hand instead | Waiting for release | T1 ✅ T2 ✅ | [424-sources-not-auto-downloaded-by-default-plan.md](424-sources-not-auto-downloaded-by-default-plan.md) |
 | [#430](https://github.com/DutchJaFO/Quotinator/issues/430) | A backup's filename version is inconsistent across call sites and cannot identify the schema state it came from | Planning | T1 ⬜ T2 ⬜ | none |
@@ -142,7 +142,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #416 ─── (none): Planning
 #419 ─── (none): Waiting for release
 #420 ─── (none): Waiting for release
-#422 ─── (none): In progress
+#422 ─── (none): Waiting for release
 #423 ─── (none): Planning
 #424 ─── (none): Waiting for release
 #438 ─── (none): Planning
@@ -210,7 +210,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 35 | **#413** ✅ | Waiting for release |
 | 36 | **#419** ✅ | Waiting for release |
 | 37 | **#420** ✅ | Waiting for release |
-| 38 | **#422** 🚧 | In progress |
+| 38 | **#422** ✅ | Waiting for release |
 | 39 | **#423** | Planning |
 | 40 | **#371** | Planning; before #351/#360, which each add migrations |
 | 41 | **#350** | Planning |
