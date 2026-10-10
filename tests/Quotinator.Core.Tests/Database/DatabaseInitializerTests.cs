@@ -433,14 +433,16 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// "Empty" means no seedable content, not that no table has rows (developer, 2026-09-02). Nothing
-    /// exercises the distinction today, because Quotinator has no baseline-seeded reference table:
-    /// genres are still a closed enum. It arrives with #310/#268, and a gate broadened to "any row
-    /// anywhere" would then read a brand-new database as already seeded and skip the seed silently.
+    /// "Empty" means no seedable content, not that no table has rows (developer, 2026-09-02). The
+    /// concern is that a gate broadened to "any row anywhere" would read a brand-new database as already
+    /// seeded and skip the seed in silence, once a baseline-seeded reference table exists (#310/#268;
+    /// genres are still a closed enum today).
     /// <para>
-    /// `Universe` stands in for that future table here (it is the near-miss the rule names, generic
-    /// in shape but the operator's to edit), so this asserts the gate ignores rows that are not
-    /// content, using the only table available to say it with.
+    /// #423 re-based this. The gate counts no rows at all now, it asks whether this run created the
+    /// database, so the failure mode above is unreachable through it. What is asserted is the property
+    /// that still matters: the baseline path seeds whatever else the baseline itself put there. The
+    /// previous construction applied the Data schema out of band and expected a later start to seed,
+    /// which is the database-exists-but-holds-no-content case #423 assigns to an explicit reseed.
     /// </para>
     /// </summary>
     [TestMethod]
@@ -448,16 +450,19 @@ public class DatabaseInitializerTests
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
 
+        await db.InitialiseAsync();
+
+        int nonContentRows;
         using (SqliteConnection connection = new($"Data Source={_dbPath}"))
         {
             await connection.OpenAsync(TestContext.CancellationToken);
-            await CurrentSchema.ApplyDataSchemaAsync(_dbPath);
+            nonContentRows = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ConsumerSchemaVersion;");
         }
 
-        await db.InitialiseAsync();
-
+        Assert.IsGreaterThan(0, nonContentRows,
+            "Precondition: the baseline populated non-content rows of its own, which is what the gate must not read as 'already seeded'.");
         Assert.IsGreaterThan(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
-            "A database holding no content is empty for seeding purposes, whatever else it holds.");
+            "A database this run created seeds, whatever else the baseline put in it.");
     }
 
     /// <summary>
@@ -477,6 +482,107 @@ public class DatabaseInitializerTests
         await db.ReseedAsync();
         Assert.IsGreaterThan(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
             "And the reseed fills it. Two explicit actions, which is why Reset exists separately.");
+    }
+
+    // ── #423: only a database this run created seeds ──────────────────────────────────────────────
+
+    /// <summary>
+    /// The defect itself. #156 decided standard seeding is fresh-install-only or explicit-call-only, but
+    /// the gate counts quotes, so a reset moved the forbidden reimport one restart later rather than
+    /// removing it. In the Home Assistant add-on a restart is routine.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_AfterReset_SeedsNothing()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([SimpleQuoteBatch()]);
+        await db.InitialiseAsync();
+        Assert.IsGreaterThan(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
+            "Precondition: the first start seeds, or the reset below proves nothing.");
+
+        await db.ResetAsync();
+        Assert.AreEqual(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
+            "Precondition: the reset empties the quote table.");
+
+        await db.InitialiseAsync();
+
+        Assert.AreEqual(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
+            "A restart must leave the database as the reset left it: the operator reset in order to decide what goes back in.");
+    }
+
+    /// <summary>
+    /// The property that must not regress, and what makes the test above a fix rather than the removal
+    /// of seeding. A database this run created is the one case that still seeds by itself.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_FreshDatabase_StillSeeds()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([SimpleQuoteBatch()]);
+
+        await db.InitialiseAsync();
+
+        Assert.IsGreaterThan(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
+            "A genuinely fresh database still seeds on its first start.");
+    }
+
+    /// <summary>
+    /// The operator's route back, asserted from the state a restart now leaves rather than from the
+    /// reset itself: <see cref="ResetThenReseed_ProducesAFromScratchDatabase"/> covers the reset-then-reseed
+    /// composition, this covers reset, restart, then reseed, which is the sequence a real operator performs.
+    /// </summary>
+    [TestMethod]
+    public async Task ReseedAsync_AfterReset_SeedsOnDemand()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([SimpleQuoteBatch()]);
+        await db.InitialiseAsync();
+        await db.ResetAsync();
+        await db.InitialiseAsync();
+        Assert.AreEqual(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
+            "Precondition: the restart left it empty.");
+
+        await db.ReseedAsync();
+
+        Assert.IsGreaterThan(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
+            "An explicit reseed still fills it: what the fix removes is the automatic one, not the operator's own.");
+    }
+
+    /// <summary>
+    /// The consequence for #304. The recommendation exists so the operator chooses whether to reload
+    /// content; a restart that seeds chooses for them and records it as <c>resolved</c> / <c>reseeded</c>,
+    /// indistinguishable from the operator having pressed the button. The notification is written here as
+    /// the reset endpoint writes it, after <c>ResetAsync</c>, which rebuilds the notification table with
+    /// every other one.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_AfterReset_LeavesTheReseedRecommendationActive()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([SimpleQuoteBatch()]);
+        await db.InitialiseAsync();
+        await db.ResetAsync();
+
+        await NotificationSeeding.SeedWhileUnresolvedAsync(
+            TestNotificationReader.Create(_dbPath), new NotificationWriter(new SqliteConnectionFactory(_dbPath)),
+            NotificationType.ActionRequired,
+            new ReseedRecommendedMetadataDto
+            {
+                Reason       = ReseedReason.AfterReset,
+                ReleaseState = NotificationReleaseState.NotApplicable,
+            },
+            body: "The database was reset and holds no content.", appVersionId: null,
+            dismissTrigger: NotificationDismissTrigger.Reseed);
+
+        Assert.IsFalse((await NotificationsAsync())
+                .Single(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedRecommended).IsDismissed,
+            "Precondition: the recommendation is active before the restart.");
+
+        await db.InitialiseAsync();
+
+        NotificationEntity recommendation = (await NotificationsAsync())
+            .Single(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedRecommended);
+
+        Assert.IsFalse(recommendation.IsDismissed,
+            "The condition the recommendation describes is still true, so nothing has resolved it.");
+        Assert.IsNull(recommendation.DismissReason.Parsed,
+            "And nothing has recorded a reason for resolving it.");
     }
 
     // ── #373: a reseed accounts for every incoming item, of every type ────────────────────────────
@@ -5581,19 +5687,39 @@ public class DatabaseInitializerTests
         Assert.AreEqual(before, BackupFileCount(), "A restart against an already-seeded database must take no backup");
     }
 
+    /// <summary>
+    /// #277's own subject, that a start with genuine content-seed work ahead of it backs up first,
+    /// rebuilt by #423 on the one case that still qualifies. An empty quote table used to be that case;
+    /// it no longer is, because a start that did not create the database no longer seeds. What remains
+    /// is <c>ReSeedGenresIfEmptyAsync</c>, which acts when genres are empty and quotes are not, so the
+    /// genres are deleted here to produce exactly that state.
+    /// </summary>
     [TestMethod]
     public async Task InitialiseAsync_ContentSeedNeeded_TakesBackup()
     {
-        QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
+        SeedBatch batch = SimpleQuoteBatch();
+        QuotinatorDatabaseInitializer db1 = CreateInitializer([batch], useBaseline: true);
         await db1.InitialiseAsync();
         Assert.AreEqual(0, BackupFileCount(), "Sanity check: the baseline path itself never backs up");
 
-        QuotinatorDatabaseInitializer db2 = CreateInitializer([], useBaseline: true);
+        using (SqliteConnection connection = new($"Data Source={_dbPath}"))
+        {
+            await connection.OpenAsync(TestContext.CancellationToken);
+            await connection.ExecuteAsync("DELETE FROM Quotinator_QuoteGenre;");
+        }
+
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true);
         await db2.InitialiseAsync();
 
         Assert.AreEqual(1, BackupFileCount(), "A database still needing content-seed work must take a backup");
     }
 
+    /// <summary>
+    /// #423 inverted this. #277 asserted that the start immediately after a Reset backs up, because
+    /// content-seed had real work to do there. That work is exactly what #423 removes, so the backup has
+    /// nothing left to protect. The assertion is kept rather than deleted because it is the one that
+    /// would catch the seed creeping back in: a backup here means something is about to write content.
+    /// </summary>
     [TestMethod]
     public async Task InitialiseAsync_AfterReset_ContentSeedNeeded_TakesBackup()
     {
@@ -5603,13 +5729,14 @@ public class DatabaseInitializerTests
         Assert.AreEqual(0, BackupFileCount(), "Sanity check: the baseline path itself never backs up");
 
         await db.ResetAsync();
-        Assert.IsNull(db.MigrationApplied, "Reset sets schema-version counters directly via the baseline path: MigrationApplied stays null even though content-seed has real work to do next");
+        Assert.IsNull(db.MigrationApplied, "Reset sets schema-version counters directly via the baseline path: MigrationApplied stays null");
         int afterReset = BackupFileCount();
         Assert.AreEqual(1, afterReset, "Reset's own backup must still fire");
 
         await db.InitialiseAsync();
 
-        Assert.AreEqual(afterReset + 1, BackupFileCount(), "The startup immediately after a Reset must still take a backup: this is the exact case a MigrationApplied-based gate was found to miss");
+        Assert.AreEqual(afterReset, BackupFileCount(),
+            "The startup after a Reset seeds nothing (#423), so there is no content-seed work for a backup to protect.");
     }
 
     [TestMethod]
@@ -5729,16 +5856,17 @@ public class DatabaseInitializerTests
         Assert.AreEqual(BackupOutcome.InsufficientDiskSpace, result.BackupObstacle);
     }
 
-    /// <summary>The database is left untouched rather than half-loaded with no restore point.</summary>
+    /// <summary>
+    /// The database is left untouched rather than half-loaded with no restore point. The pending load is
+    /// the genre re-seed since #423, so the genres are what must still be absent.
+    /// </summary>
     [TestMethod]
     public async Task InitialiseAsync_ContentLoadWithNoBackupPossible_LoadsNothing()
     {
         await InitialiseWithContentPendingAndNoDiskSpaceAsync();
 
-        using SqliteConnection conn = new($"Data Source={_dbPath}");
-        await conn.OpenAsync(TestContext.CancellationToken);
-        int quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote WHERE IsDeleted = 0;");
-        Assert.AreEqual(0, quoteCount);
+        Assert.AreEqual(0, await GenreCountAsync(),
+            "The refused load is the genre re-seed, so no genre row may have been written.");
     }
 
     /// <summary>
@@ -5792,7 +5920,7 @@ public class DatabaseInitializerTests
     public async Task InitialiseAsync_ContentLoadRefusedOnTwoStarts_RaisesOneNotification()
     {
         await InitialiseWithContentPendingAndNoDiskSpaceAsync();
-        await CreateInitializer([SimpleQuoteBatch()], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0)).InitialiseAsync();
+        await CreateInitializer([_pendingContentBatch], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0)).InitialiseAsync();
 
         Assert.HasCount(1, await BackupRefusedNotificationsAsync());
     }
@@ -5806,7 +5934,7 @@ public class DatabaseInitializerTests
     {
         await InitialiseWithContentPendingAndNoDiskSpaceAsync();
 
-        await CreateInitializer([SimpleQuoteBatch()], useBaseline: true).ReseedAsync();
+        await CreateInitializer([_pendingContentBatch], useBaseline: true).ReseedAsync();
 
         Assert.Contains(n => !n.IsDismissed, await BackupRefusedNotificationsAsync());
     }
@@ -5817,7 +5945,7 @@ public class DatabaseInitializerTests
     {
         await InitialiseWithContentPendingAndNoDiskSpaceAsync();
 
-        await CreateInitializer([SimpleQuoteBatch()], useBaseline: true).InitialiseAsync();
+        await CreateInitializer([_pendingContentBatch], useBaseline: true).InitialiseAsync();
 
         Assert.Contains(n => n.IsDismissed && n.Resolution.Parsed == NotificationResolution.Reseeded, await BackupRefusedNotificationsAsync());
     }
@@ -5834,22 +5962,53 @@ public class DatabaseInitializerTests
             .Select(n => NotificationMetadataKinds.TryDeserialize(n.MetadataKind.Parsed, n.Metadata))
             .OfType<BackupRefusedMetadataDto>()];
 
+    /// <summary>
+    /// The batch <see cref="ContentSeedPendingDatabaseAsync"/> seeded, so a follow-up start loads the
+    /// same file rather than a fresh one: <see cref="SimpleQuoteBatch"/> writes a new file with a new
+    /// quote id on every call, and the genre re-seed only has work to do for quotes already stored.
+    /// </summary>
+    private SeedBatch _pendingContentBatch = null!;
+
+    /// <summary>
+    /// A database whose content-seed step genuinely has work left to do on a start that did not create
+    /// it. Since #423 that is one state, not two: quotes present and genres empty, which is what
+    /// <c>ReSeedGenresIfEmptyAsync</c> acts on. An empty quote table used to produce it and no longer
+    /// does, because a start that did not create the database no longer loads the configured files.
+    /// </summary>
+    private async Task<SeedBatch> ContentSeedPendingDatabaseAsync()
+    {
+        SeedBatch batch = SimpleQuoteBatch();
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], useBaseline: true);
+        await db.InitialiseAsync();
+
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        await connection.ExecuteAsync("DELETE FROM Quotinator_QuoteGenre;");
+
+        return batch;
+    }
+
     private async Task<DatabaseOperationResult> InitialiseWithContentPendingAndNoDiskSpaceAsync()
     {
-        QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
-        await db1.InitialiseAsync();
+        _pendingContentBatch = await ContentSeedPendingDatabaseAsync();
 
-        QuotinatorDatabaseInitializer db2 = CreateInitializer([SimpleQuoteBatch()], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0));
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([_pendingContentBatch], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0));
         return await db2.InitialiseAsync();
+    }
+
+    private async Task<int> GenreCountAsync()
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        return await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_QuoteGenre;");
     }
 
     [TestMethod]
     public async Task CreateBackup_SufficientStorageSpace_ProceedsNormally()
     {
-        QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
-        await db1.InitialiseAsync();
+        SeedBatch batch = await ContentSeedPendingDatabaseAsync();
+        Assert.AreEqual(0, BackupFileCount(), "Sanity check: the baseline path itself never backs up");
 
-        SeedBatch batch = SimpleQuoteBatch();
         QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true, diskSpaceProvider: NoOpDiskSpaceProvider.Instance);
         await db2.InitialiseAsync();
 
@@ -5863,29 +6022,45 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_ContentLoadWithAnUnwritableBackupDestination_NamesTheObstacle()
     {
-        QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
-        await db1.InitialiseAsync();
+        SeedBatch batch = await ContentSeedPendingDatabaseAsync();
 
         // A file where the backups directory belongs, so creating it as a directory throws IOException.
         File.WriteAllText(_backups, "blocker");
 
-        QuotinatorDatabaseInitializer db2 = CreateInitializer([SimpleQuoteBatch()], useBaseline: true);
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true);
         DatabaseOperationResult result = await db2.InitialiseAsync();
 
         Assert.AreEqual(BackupOutcome.DestinationDirectoryNotWritable, result.BackupObstacle);
     }
 
+    /// <summary>
+    /// #423 re-based the injection, not the subject. A throwing audit writer used to fail the quote
+    /// import that an empty quote table triggered; that start no longer imports, and the genre re-seed
+    /// which replaced it writes no audit entry, so nothing threw. It also cannot be failed through its
+    /// files, since <c>LoadSourceFileAsync</c> treats a missing file and invalid JSON as outcomes rather
+    /// than exceptions. A dropped genre table is the remaining way in, and it is a real condition: the
+    /// step fails on its own insert, after a backup that succeeded.
+    /// <para>
+    /// This also covers <c>SafeHasPendingContentSeedAsync</c>'s documented fail-safe, since the counting
+    /// query throws first and must be read as "assume pending, take the backup" rather than as "nothing
+    /// to do".
+    /// </para>
+    /// </summary>
     [TestMethod]
     public async Task InitialiseAsync_ExecuteStepFails_SurfacesDistinctFailureReason()
     {
-        QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
-        await db1.InitialiseAsync();
+        SeedBatch batch = await ContentSeedPendingDatabaseAsync();
         Assert.AreEqual(0, BackupFileCount(), "Sanity check: the baseline path itself never backs up");
 
-        SeedBatch batch = SimpleQuoteBatch();
-        QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true, auditWriter: new ThrowingAuditEntryWriter());
+        using (SqliteConnection connection = new($"Data Source={_dbPath}"))
+        {
+            await connection.OpenAsync(TestContext.CancellationToken);
+            await connection.ExecuteAsync("DROP TABLE Quotinator_QuoteGenre;");
+        }
 
-        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => db2.InitialiseAsync());
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true);
+
+        await Assert.ThrowsExactlyAsync<SqliteException>(() => db2.InitialiseAsync());
 
         Assert.AreEqual(1, BackupFileCount(), "The backup must have succeeded before the execute step failed: distinguishing this from a backup-write failure");
     }
