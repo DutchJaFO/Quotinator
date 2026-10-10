@@ -93,8 +93,8 @@
 }
 
 /* #308: the detail popup's own backdrop, dialog, title and scroll region all lived here until the
-   third modal made the duplication obvious. `ModalDialog` owns that shell now — including the 95vh cap
-   these rules had to be given separately, one message after the startup modals got theirs. */
+   third modal made the duplication obvious. `ModalDialog` owns that shell now — including the height,
+   which these rules had to be given separately, one message after the startup modals got theirs. */
 
 .notification-detail-open {
     padding: 0;

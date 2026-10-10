@@ -185,16 +185,36 @@ screenshot, then close the dialog and restore the viewport.
 **The loop looks for a breakdown long enough to overflow.** The first detail button may belong to a file
 touching two types, which fits in any viewport and tests nothing about the cap.
 
+**Then re-measure at a tall viewport, and assert the dialog declares no height it does not have.** A
+short viewport cannot catch this: at `420` the dialog is `364` and any declared cap is larger, so the
+two never disagree. Resize to `1274` high with the dialog open and read both numbers together:
+
+```js
+const dlg = document.querySelector('.modal-dialog');
+const box = dlg.getBoundingClientRect();
+const declared = getComputedStyle(dlg).maxHeight;
+({ viewportHeight: window.innerHeight, dialogHeight: Math.round(box.height), declaredMaxHeight: declared,
+   contradicts: declared !== 'none' && box.height > parseFloat(declared) + 1 })
+```
+
+**Expected:** `contradicts: false`. Either the dialog declares no maximum, or it is no taller than the
+one it declares. A component may not state a limit it does not keep, which is what #422 removed: before
+it, `1274` high read `dialogHeight: 1218` against a `declaredMaxHeight` of `1210.3px`.
+
 **Headings read eight columns, not three.** This step expected `Entity / Added / Updated` until the
 import work added the incoming, unchanged, resolved-to-existing and already-reported counts; the table
 renders every count the payload carries.
 
-**Assert fit to the viewport, not a `95vh` figure.** `ModalDialog` sets `max-height: 95vh` inline, but
-Bootstrap's `.modal-dialog-centered` also sets `min-height: calc(100% - 3.5rem)`, and a larger
-`min-height` overrides `max-height`, so the dialog is `viewport − 56px` tall whenever it overflows, and
-`95vh` never binds. Measured 2026-09-22: `1218` in a `1274` viewport against a `95vh` of `1210.3`; `364`
-in `420`; `664` in `720`. The `95vh` form held below about `1120px` and failed above it. What the step
-exists for (the header and footer reachable, the body scrolling) is what it now asserts.
+**Assert fit to the viewport, not a fixed figure.** The dialog's height is Bootstrap's:
+`.modal-dialog-centered` sets `min-height: calc(100% - 3.5rem)` and `.modal-dialog-scrollable` fixes
+the height to match, so the dialog is `viewport − 56px` whenever it overflows and the body scrolls
+within it. Measured: `364` in `420`, `664` in `720`, `1218` in `1274`.
+
+This step asserted a `95vh` figure until #422. That form held below about `1120px` and failed above it,
+because `ModalDialog` declared `max-height: 95vh` that a larger `min-height` always overrode: at `1274`
+the dialog read `1218` against a declared `1210.3`. #422 removed the declaration rather than making it
+bind, since what the step exists for, the header and footer reachable and the body scrolling, was
+already true.
 
 **A table, not a list** (developer, 2026-09-02): every entry has the same shape, so columns line the
 numbers up where a bulleted sentence per row does not. `listsAnywhere` guards the regression.

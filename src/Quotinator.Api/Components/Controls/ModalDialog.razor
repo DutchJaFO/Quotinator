@@ -1,14 +1,17 @@
-@* The one modal-dialog shell (#308). Backdrop, centred dialog, 95vh cap, scrollable body, and a
+@* The one modal-dialog shell (#308). Backdrop, centred dialog, scrollable body, and a
    header/body/footer layout that keeps the title and the buttons in place while only the body scrolls.
 
+   The height is Bootstrap's, not ours (#422): `modal-dialog-centered` and `modal-dialog-scrollable`
+   size the dialog to the viewport less its margin and scroll `.modal-body` within it. Declaring a
+   `max-height` here does nothing, because the centred class also sets a larger `min-height`.
+
    Extracted after building the same thing three times: two startup modals and the notification detail
-   popup. The cost was already visible — the startup modals gained the 95vh cap in one commit, and the
-   detail popup needed the identical fix separately a message later, because they were separate copies.
-   Anything needing a modal uses this; nothing hand-rolls a backdrop again. *@
+   popup. The cost was already visible — the same height fix had to be found and applied to each copy
+   on its own. Anything needing a modal uses this; nothing hand-rolls a backdrop again. *@
 <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);"
      @onclick="HandleBackdropClick">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"
-         style="max-width: @MaxWidth; max-height: 95vh;@(FitContent ? " width: fit-content;" : null)"
+         style="max-width: @MaxWidth;@(FitContent ? " width: fit-content;" : null)"
          @onclick:stopPropagation="true">
         <div class="modal-content @ContentClass">
             <div class="modal-header @HeaderClass">

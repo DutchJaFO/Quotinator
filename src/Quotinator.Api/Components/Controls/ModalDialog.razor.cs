@@ -3,19 +3,21 @@ using Microsoft.AspNetCore.Components;
 namespace Quotinator.Api.Components.Controls;
 
 /// <summary>
-/// The shared modal-dialog shell (#308) — backdrop, centred dialog, a 95vh cap, and a header/body/footer
-/// layout whose body is the only part that scrolls.
+/// The shared modal-dialog shell (#308) — backdrop, centred dialog, and a header/body/footer layout
+/// whose body is the only part that scrolls.
 /// </summary>
 /// <remarks>
 /// Extracted once the same shell existed three times: <see cref="StartupSuccessModal"/>,
 /// <see cref="StartupErrorModal"/>, and the notification detail popup inside
-/// <see cref="NotificationTable"/>. The duplication had already cost something measurable — the two
-/// startup modals were given the 95vh cap in one change, and the detail popup turned out to need the
-/// identical fix a message later, because each copy had to be found and corrected on its own.
+/// <see cref="NotificationTable"/>. The duplication had already cost something measurable — the same
+/// height fix had to be found and applied to each copy on its own.
 /// <para>
-/// **The cap is not optional and is deliberately not a parameter.** A dialog taller than the viewport
-/// puts its own footer off-screen, which on the startup modal means the Continue button cannot be
-/// reached at all. Every caller wants that prevented; none has a reason to opt out.
+/// **The height is Bootstrap's and is deliberately not a parameter** (#422).
+/// <c>modal-dialog-centered</c> and <c>modal-dialog-scrollable</c> size the dialog to the viewport less
+/// its margin and scroll the body within it, so the footer stays reachable, which on the startup modal
+/// is what keeps the Continue button clickable. Every caller wants that; none has a reason to opt out.
+/// This component declares no <c>max-height</c> of its own: the centred class sets a larger
+/// <c>min-height</c>, so one could never bind.
 /// </para>
 /// </remarks>
 public partial class ModalDialog
@@ -29,7 +31,7 @@ public partial class ModalDialog
     /// <summary>Footer content, usually the action buttons. Omitted entirely when <see langword="null"/>.</summary>
     [Parameter] public RenderFragment? Footer { get; set; }
 
-    /// <summary>Maximum dialog width, as a CSS length. Height is fixed at 95vh for every caller.</summary>
+    /// <summary>Maximum dialog width, as a CSS length. Height is Bootstrap's for every caller, and is not settable.</summary>
     [Parameter] public string MaxWidth { get; set; } = "80vw";
 
     /// <summary>

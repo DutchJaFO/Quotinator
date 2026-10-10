@@ -216,7 +216,7 @@ run, against `import-and-staged-actions/12`'s `AIRPLANE!` fixture. Where casing 
 `Select-String -CaseSensitive` or `-ceq`, and say at the command that the casing is the point.
 
 **Does the browser actually have a viewport?** Any assertion of the form *"this fits on screen"*,
-`getBoundingClientRect()` against `window.innerHeight`, a `95vh` cap, a visible footer, is measured
+`getBoundingClientRect()` against `window.innerHeight`, a height cap, a visible footer, is measured
 against a viewport the pane can report as **zero**. Every element is then off-screen, every cap is
 `0px`, and a layout that is perfectly fine reads as broken. Found 2026-09-23 while re-running
 `notifications-and-changelog/13` after a component change: the startup popup reported its footer
