@@ -8,8 +8,8 @@
 
 **Beyond the profile.** One container of this test's own, `qt-notif-14`, publishing `19514`, created
 with `--env Quotinator__AdminApiKey=t2-308` and a bind directory holding the shared conflict fixture in
-its `imports/` folder. It is restarted three times and reset once; each of those is a trigger, not
-scaffolding.
+its `imports/` folder. It is restarted three times and reset once, then restarted a fourth time to read
+the reset's own recommendation in the popup; each of those is a trigger, not scaffolding.
 
 #308 defines a per-type layout across both surfaces. Two kinds, `ReseedRecommended` and
 `SchemaVersionOvershoot`, had never been rendered under assertion at all, and the per-type decision
@@ -410,59 +410,60 @@ rather than this issue's rendering.
 
 ### 8. Render that last kind in the popup too, where nothing can reseed it away
 
-The popup renders once per process run, so this kind needs a restart to reach it, and on the container
-above that restart re-seeds the database, which **resolves the recommendation before it can be read**:
-measured 2026-09-23, the row came back `isDismissed=True`, `dismissReason=resolved`,
-`resolution=reseeded`. That re-seed is
-[#423](https://github.com/DutchJaFO/Quotinator/issues/423): a reset is undone by the next restart,
-because startup loads the configured files whenever the quote table is empty rather than only on a
-fresh install. #304's producer is behaving correctly on top of it: the load really did happen, so it
-records the action as carried out.
+The popup renders once per process run, so this kind needs a restart to reach it, and it is read on the
+container step 7 already reset.
 
-A container with nothing to seed is the only place this kind survives a restart today. **When #423 is
-fixed this step can drop its second container** and read the recommendation on the first one's popup,
-since the restart will then leave the database as the reset left it.
+**This step used to need a second container, and no longer does.** The restart re-seeded the database
+and **resolved the recommendation before it could be read**: measured 2026-09-23, the row came back
+`isDismissed=True`, `dismissReason=resolved`, `resolution=reseeded`, so the only place the kind survived
+a restart was a container with nothing to seed.
+[#423](https://github.com/DutchJaFO/Quotinator/issues/423) was that re-seed, and it is fixed: a start
+only loads the configured files into a database it created itself, so the restart now leaves the
+database as the reset left it and the recommendation stays active. #304's producer was behaving
+correctly on top of the defect throughout: the load really did happen, so it recorded the action as
+carried out.
 
 ```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-notif-14b --port 19515 `
-  --image quotinator:local --env Quotinator__AdminApiKey=t2-308 --env Quotinator__IncludeDefaultSources=false
-Invoke-RestMethod -Method Post -Headers @{ 'X-Api-Key' = 't2-308' } `
-  "http://localhost:19515/api/v1/admin/database/reset?allowNoBackup=true" | Out-Null
-docker restart qt-notif-14b
-dotnet script scripts/testing/http.csx -- --url "http://localhost:19515/api/v1/health" --wait-for 200 --status
-function Get-Items14b { (Invoke-RestMethod "http://localhost:19515/api/v1/notifications?pageSize=0").items }
+Read-Thrown
+docker restart qt-notif-14
+dotnet script scripts/testing/http.csx -- --url "http://localhost:19514/api/v1/health" --wait-for 200 --status
+function Get-Items14 { (Invoke-RestMethod "http://localhost:19514/api/v1/notifications?pageSize=0").items }
 $deadline = (Get-Date).AddSeconds(30)
-$items14b = Get-Items14b
-while (-not @($items14b | Where-Object { $_.metadataKind -eq 'whatsnew' }).Count -and (Get-Date) -lt $deadline) {
+$items14 = Get-Items14
+while (-not @($items14 | Where-Object { $_.metadataKind -eq 'whatsnew' }).Count -and (Get-Date) -lt $deadline) {
   Start-Sleep -Seconds 1
-  $items14b = Get-Items14b
+  $items14 = Get-Items14
 }
-$items14b | ForEach-Object { "$($_.metadataKind) dismissed=$($_.isDismissed)" }
+$items14 | ForEach-Object { "$($_.metadataKind) dismissed=$($_.isDismissed)" }
+"quotes=$((Invoke-RestMethod "http://localhost:19514/api/v1/quotes?pageSize=1").totalCount)"
 ```
 
 **Expected:** `reseedrecommended dismissed=False`, alongside the announcement and what's-new rows this
-boot wrote. A reset on an empty container is the only trigger for this kind; measured: a cold start
-with no sources writes none.
+boot wrote, and `quotes=0`.
+
+**`quotes=0` is the assertion that makes the rest of this step mean anything.** A restart that re-seeded
+would both refill the database and resolve the row, so a `reseedrecommended` read as active alongside a
+non-zero quote count would mean the listing was taken before the producer dismissed it, not that the
+reset survived.
 
 **Poll for the what's-new row; do not read once.** Its producer runs detached after startup, so a
 listing taken the moment health answers `200` can precede it. Measured 2026-09-26: one run listed it,
 the next listed only `announcement` and `reseedrecommended`, and the popup read seconds later showed all
 three.
 
-Open `http://localhost:19515/` and read the popup with step 5's snippet.
+Open `http://localhost:19514/` and read the popup with step 5's snippet.
 
 **Expected:** the recommendation renders its title and body, `expandsInPlace: false` (its payload
 carries no counts), and **no buttons at all**, per the read-only popup above.
 
 ```powershell
-Capture-Row -Surface popup -Match "no quotes" -Name reseedrecommended-popup -Port 19515
+Capture-Row -Surface popup -Match "no quotes" -Name reseedrecommended-popup
 ```
 
 That completes the set: six kinds, both surfaces, fifteen images.
 
 ```powershell
-docker logs qt-notif-14b 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-14b
+Read-Thrown
 ```
 
 **Expected:** only the restart's own two shutdown lines.

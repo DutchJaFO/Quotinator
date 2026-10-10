@@ -7,16 +7,16 @@
 ## Preconditions
 
 **Beyond the profile.** One container of this test's own, `qt-backup-06`, publishing `18386`, on a bind
-directory so the test can place a file in `backups/` from the host. The database is emptied by a Reset
-and the backup quota filled, so the next start has content to load and no room for the backup that must
-come first.
+directory so the test can place a file in `backups/` from the host. The database has its genre rows
+removed and the backup quota filled, so the next start has content to load and no room for the backup
+that must come first.
 
-A startup loads content into an empty database, and a backup is taken first because that load writes
-what nothing else could restore. Until #348 a startup with no room for that backup loaded nothing and
-said nothing: the application reported healthy, empty, with no explanation and no way forward. This
-proves the refusal is reported as a notification, that it offers exactly the options that can run, that
-each option works through the page, and that resolving the obstacle by hand brings back the one option
-that keeps a restore point.
+A startup loads content into a database that is missing some, and a backup is taken first because that
+load writes what nothing else could restore. Until #348 a startup with no room for that backup loaded
+nothing and said nothing: the application reported healthy, incomplete, with no explanation and no way
+forward. This proves the refusal is reported as a notification, that it offers exactly the options that
+can run, that each option works through the page, and that resolving the obstacle by hand brings back
+the one option that keeps a restore point.
 
 ## Determinism
 
@@ -25,17 +25,24 @@ that keeps a restore point.
   operating quota: filling to 95% leaves it room in the reserve, and the content loads (measured). At the
   ceiling it refuses with `BudgetExceeded`, and the notification's own check, which does use the
   operating quota, agrees. `SetLength` allocates without writing a gigabyte.
-- **The filler is made the oldest backup.** Its write time is set to 2020, before the backup the Reset
-  takes. That makes removing the oldest backup enough to clear the quota, so *Remove the oldest backup,
-  then back up and reseed* is offered; left newest, removing the oldest would free only the Reset's few
+- **The filler is made the oldest backup.** Its write time is set to 2020, before any backup a cycle
+  leaves behind. That makes removing the oldest backup enough to clear the quota, so *Remove the oldest
+  backup, then back up and reseed* is offered; left newest, removing the oldest would free only a few
   megabytes and the option would rightly be withheld.
-- **The empty database comes from a Reset, and the content load from a restart.** A Reset leaves the
-  quote table empty, and a startup loads content whenever it is
-  ([#423](https://github.com/DutchJaFO/Quotinator/issues/423)). The refusal is therefore reached through
-  the application's own two operations, with nothing edited in the database.
+- **The pending load is the genre re-seed, and it is produced by removing the genre rows.** Since
+  [#423](https://github.com/DutchJaFO/Quotinator/issues/423) a start only loads the configured files into
+  a database it created itself, so an emptied quote table no longer gives a restart anything to load and
+  a Reset no longer reaches this refusal at all. Quotes present with genres absent is the one state in
+  which a start that did not create the database still loads content, which is `ReSeedGenresIfEmptyAsync`.
+  It is reached by editing the database, which this document could previously avoid: the application has
+  no operation that produces it, and that is the point of #423 rather than a gap in it.
+- **The edit is made while the container is stopped.** `test-env.csx reenter` stops cleanly (`docker stop
+  -t 15`) precisely so SQLite checkpoints and leaves no `-wal`/`-shm` sidecar behind; writing to the file
+  underneath a running container would be writing to a database mid-checkpoint. So each cycle stops,
+  edits, then re-enters.
 - **Each option is proven in its own cycle.** An option that succeeds loads content and resolves the
-  notification, so each of the three is reached by repeating Reset, fill and restart. `Refuse-ContentLoad`
-  below is that cycle, so every option starts from the same state.
+  notification, so each of the three is reached by repeating the wipe, fill and restart.
+  `Refuse-ContentLoad` below is that cycle, so every option starts from the same state.
 - **Count this notification by its kind, never the total.** How many notifications exist depends on
   producers this test is not about.
 - **The page is driven through the DOM, and a click is retried until Confirm appears.** Controls need
@@ -72,10 +79,18 @@ function Quote-Count { (Invoke-RestMethod "$base/quotes?pageSize=1").totalCount 
 function Refused-Notifications {
   @((Invoke-RestMethod "$base/notifications?pageSize=0").items | Where-Object { $_.metadataKind -eq 'backuprefused' -and -not $_.isDismissed })
 }
-"quotes=$(Quote-Count)"
+# The pending load is the genre re-seed, so the genre table is this document's evidence of a load
+# having run or having been refused. No endpoint reports it, so it is read from the file with
+# DbInspector, read-only: execute-sql.csx runs ExecuteNonQuery and cannot return a count.
+function Genre-Count {
+  @(dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
+      --sql "SELECT COUNT(*) AS Genres FROM Quotinator_QuoteGenre") -join "`n"
+}
+"quotes=$(Quote-Count) genres=$(Genre-Count)"
 ```
 
-**Expected:** the environment reports healthy and `quotes` is above `0`.
+**Expected:** the environment reports healthy, `quotes` above `0`, and `Genre-Count` printing DbInspector's
+own `Genres` header above a count above `0`.
 
 **This is the positive control for the whole document.** With room for a backup, a startup loads content;
 everything below asserts what happens without that room.
@@ -84,17 +99,22 @@ everything below asserts what happens without that room.
 
 ```powershell
 function Refuse-ContentLoad {
-  # A filler left by an earlier cycle would make the Reset itself refuse, for want of the same backup.
   $filler = Join-Path $dataDir "backups\filler.db"
   Remove-Item $filler -ErrorAction SilentlyContinue
-  Invoke-RestMethod -Method Post -Headers $key "$base/admin/database/reset" | Out-Null
+
+  docker logs qt-backup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
+
+  # Stopped first, and cleanly, so SQLite checkpoints and the edit is not made underneath a running
+  # container. reenter would stop it too, but only after this edit had already been written.
+  docker stop -t 15 qt-backup-06
+  dotnet script scripts/testing/execute-sql.csx -- --db "$dataDir\quotinatordata.db" `
+    --sql "DELETE FROM Quotinator_QuoteGenre;"
 
   $stream = [System.IO.File]::Create($filler)
   $stream.SetLength([int64]1073741824)
   $stream.Close()
   (Get-Item $filler).LastWriteTimeUtc = [datetime]'2020-01-01'
 
-  docker logs qt-backup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
   dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-06 --port 18386 `
     --image quotinator:local --bind $dataDir
 }
@@ -102,15 +122,17 @@ function Refuse-ContentLoad {
 Refuse-ContentLoad
 "health=$(dotnet script scripts/testing/http.csx -- --url "$base/health" --status)"
 "quotes=$(Quote-Count)"
+Genre-Count
 "refusalLogged=$([bool](docker logs qt-backup-06 2>&1 | Select-String -SimpleMatch 'seeding refused: no backup could be taken (BudgetExceeded)'))"
 ```
 
 **Expected:** the log read before the stop finds nothing, the restart reports healthy, then `health=200`,
-`quotes=0` and `refusalLogged=True`.
+`quotes` still above `0`, `Genres` `0` and `refusalLogged=True`.
 
-**On failure:** `quotes` above `0` means the content loaded without its backup: the refusal this whole
+**On failure:** `Genres` above `0` means the content loaded without its backup: the refusal this whole
 document is about did not happen. A health other than `200` means the refusal degraded the application,
-which a content-load refusal must not do; the schema is intact.
+which a content-load refusal must not do; the schema is intact. `quotes=0` means the wipe removed more
+than the genre rows, and every assertion below reads a state this document never set up.
 
 ### 3. Confirm the refusal is a notification offering exactly the options that can run
 
@@ -189,14 +211,15 @@ $result = $without | dotnet script scripts/testing/capture-page.csx -- --url "ht
   --out "$out\without-backup.png" --script-stdin | ConvertFrom-Json
 "asked=$($result.asked -join ' / ')"
 "askedLinks=$($result.askedLinks.Count) sawRunning=$($result.sawRunning) finished=$($result.finished)"
-"quotes=$(Quote-Count) stillRefused=$(@(Refused-Notifications).Count) backupsAdded=$(@(Get-ChildItem "$dataDir\backups").Count - $backupsBefore)"
+Genre-Count
+"stillRefused=$(@(Refused-Notifications).Count) backupsAdded=$(@(Get-ChildItem "$dataDir\backups").Count - $backupsBefore)"
 "skipLogged=$([bool](docker logs qt-backup-06 2>&1 | Select-String -SimpleMatch 'reseed proceeding WITHOUT a backup (BudgetExceeded)'))"
 "skipAudited=$(@((Invoke-RestMethod "$base/admin/audit?table=Database&pageSize=0").items | Where-Object { $_.operation -eq 'BackupSkipped' }).Count)"
 ```
 
 **Expected:** `asked` names the obstacle (`BudgetExceeded`) before anything ran, with the Knowledgebase
-link beside it (`askedLinks` at least `1`), then `sawRunning=True`, `finished=True`, `quotes` above `0`, `stillRefused=0`,
-`backupsAdded=0`, `skipLogged=True` and `skipAudited=1`.
+link beside it (`askedLinks` at least `1`), then `sawRunning=True`, `finished=True`, `Genres` back above
+`0`, `stillRefused=0`, `backupsAdded=0`, `skipLogged=True` and `skipAudited=1`.
 
 **On failure:** a reseed that ran without `asked` naming the obstacle took the user's permission without
 telling them what they were agreeing to.
@@ -205,7 +228,8 @@ telling them what they were agreeing to.
 
 ```powershell
 Refuse-ContentLoad
-"refused=$(@(Refused-Notifications).Count) quotes=$(Quote-Count)"
+"refused=$(@(Refused-Notifications).Count)"
+Genre-Count
 
 $remove = @'
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -226,16 +250,17 @@ return { sawRunning, finished };
 '@
 $result = $remove | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications" `
   --out "$out\remove-oldest.png" --script-stdin | ConvertFrom-Json
-"sawRunning=$($result.sawRunning) finished=$($result.finished) quotes=$(Quote-Count) fillerGone=$(-not (Test-Path "$dataDir\backups\filler.db"))"
+"sawRunning=$($result.sawRunning) finished=$($result.finished) fillerGone=$(-not (Test-Path "$dataDir\backups\filler.db"))"
+Genre-Count
 $ops = (Invoke-RestMethod "$base/admin/audit?table=Database&pageSize=0").items.operation
 "removalAudited=$(@($ops | Where-Object { $_ -eq 'BackupDeleted' }).Count) backupAudited=$(@($ops | Where-Object { $_ -eq 'BackedUp' }).Count)"
 ```
 
-**Expected:** `refused=1 quotes=0` after the cycle, then `sawRunning=True`, `finished=True`, `quotes` above `0`,
-`fillerGone=True`, `removalAudited=1` and `backupAudited=1`.
+**Expected:** `refused=1` with `Genres` `0` after the cycle, then `sawRunning=True`, `finished=True`,
+`Genres` back above `0`, `fillerGone=True`, `removalAudited=1` and `backupAudited=1`.
 
-**On failure:** `fillerGone=True` with `quotes=0` means the backup was removed and nothing was loaded: a
-restore point given up for nothing.
+**On failure:** `fillerGone=True` with `Genres` still `0` means the backup was removed and nothing was
+loaded: a restore point given up for nothing.
 
 ### 7. Resolve the obstacle by hand, and confirm backing up first is offered and works
 
@@ -264,11 +289,12 @@ return { sawRunning, finished };
 $backupsBefore = @(Get-ChildItem "$dataDir\backups").Count
 $result = $backup | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications" `
   --out "$out\back-up-first.png" --script-stdin | ConvertFrom-Json
-"sawRunning=$($result.sawRunning) finished=$($result.finished) quotes=$(Quote-Count) backupsAdded=$(@(Get-ChildItem "$dataDir\backups").Count - $backupsBefore)"
+"sawRunning=$($result.sawRunning) finished=$($result.finished) backupsAdded=$(@(Get-ChildItem "$dataDir\backups").Count - $backupsBefore)"
+Genre-Count
 ```
 
 **Expected:** `offered=backupthenreseed`, the only option once a backup can be taken, then `sawRunning=True`, `finished=True`,
-`quotes` above `0` and `backupsAdded=1`.
+`Genres` back above `0` and `backupsAdded=1`.
 
 **This step is the remedy proven.** The Knowledgebase entry tells an operator with a full quota to remove
 old backups; done by hand here, it brings back the option that keeps a restore point, and that option
@@ -277,11 +303,16 @@ loads the content.
 ## Canary: run red against the build before #348's startup reporting
 
 Run 2026-09-26 against `4cfe1006`, the commit before step 8 of #348's plan, as `quotinator:canary348`,
-through steps 4 (steps 5 to 7 click controls that build does not have):
+through steps 4 (steps 5 to 7 click controls that build does not have).
+
+**This canary ran the Reset-based setup this document no longer uses** (#423). Its three substantive
+reds are about reporting, not about how the refusal was reached, so they hold as written; the row below
+that reads `quotes=0` is the one whose evidence the re-base changes. Re-running the canary needs an
+image built from `4cfe1006` and has not been done since.
 
 | Step | Assertion | Canary |
 |---|---|---|
-| 2 | the content load is refused | passes: `quotes=0` |
+| 2 | the content load is refused | passes, on that build's own Reset-based setup: `quotes=0` |
 | 2 | the refusal is logged | **fails**: that build words the line `seeding refused — no backup could be taken`, since reworded |
 | 3 | one `backuprefused` notification | **fails**: `found=0` |
 | 3 | it offers exactly the options that can run | **fails**: nothing to offer them |
@@ -292,21 +323,28 @@ exists to catch. Step 2's log line fails there on wording alone.
 
 ## Observed effect
 
-**Measured 2026-09-26** against `quotinator:local`.
+**Re-measured 2026-10-10** against `quotinator:local`, on the genre re-seed setup #423 moved this
+document to. Every step passes as written.
 
-After a Reset and a full budget, the next start loads nothing and stays healthy (`health=200`,
-`quotes=0`), and logs `seeding refused: no backup could be taken (BudgetExceeded)`. One `actionrequired`
-notification, *Content was not loaded: no backup could be taken*, offers
+The seeded container reports `quotes=795` and `Genres` `25`. With the genre rows removed and the budget
+full, the next start loads nothing and stays healthy (`health=200`, `quotes=795` unchanged, `Genres` `0`),
+and logs `seeding refused: no backup could be taken (BudgetExceeded)`. One `actionrequired` notification,
+*Content was not loaded: no backup could be taken*, offers
 `removeoldestbackupthenreseed,reseedwithoutbackup` over REST, and the page renders exactly those two as
-buttons with the Knowledgebase link beside them; the read-only startup popup renders the row and the link
-with no buttons.
+buttons, plus `Dismiss`, with the Knowledgebase link beside them; the read-only startup popup renders the
+row and the link with `buttons=0`.
 
 *Reseed without a backup* first shows *No backup can be taken right now (BudgetExceeded), so this reseed
-will leave no restore point…* with the link, then reseeds to `795` quotes, writes no backup, logs
-`reseed proceeding WITHOUT a backup (BudgetExceeded)` and records one `BackupSkipped` audit entry. *Remove
-the oldest backup, then back up and reseed* removes the filler, takes one backup, and reseeds; both are
-audited. With the filler removed by hand, only *Back up, then reseed* is offered, and it writes one backup
-and reseeds. No `[Runtime - Exception]` line at any stop.
+will leave no restore point…* with the link, then reseeds `Genres` back to `25`, writes no backup
+(`backupsAdded=0`), logs `reseed proceeding WITHOUT a backup (BudgetExceeded)` and records one
+`BackupSkipped` audit entry. *Remove the oldest backup, then back up and reseed* removes the filler
+(`fillerGone=True`), takes one backup and reseeds to `25`; both are audited (`removalAudited=1
+backupAudited=1`). With the filler removed by hand, only *Back up, then reseed* is offered, and it writes
+one backup (`backupsAdded=1`) and reseeds to `25`. No `[Runtime - Exception]` line at any stop.
+
+**The earlier run, 2026-09-26**, measured the same behaviour through the Reset-based setup, reading
+`quotes=0` where this one reads `Genres` `0` and `795` quotes where this one reads `Genres` `25`. What
+follows was found on those first runs and is kept because each item is still held by a test.
 
 **The first runs found two application defects and three in this document.**
 
