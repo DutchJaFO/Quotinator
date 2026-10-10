@@ -494,7 +494,7 @@ public class DatabaseInitializer(
         if (migrations.Obstacle is BackupOutcome migrationObstacle)
             return DatabaseOperationResult.RefusedForBackup(migrationObstacle, BackupGuardedStep.Migration);
 
-        BackupOutcome? obstacle = await RunInitialisedHookAsync(connection, migrations.TookBaselinePath);
+        BackupOutcome? obstacle = await RunInitialisedHookAsync(connection, migrations.TookBaselinePath, migrations.DatabaseWasCreated);
 
         return obstacle is null
             ? DatabaseOperationResult.Success()
@@ -515,14 +515,21 @@ public class DatabaseInitializer(
 
         EnableWal(connection);
         MigrationsResult migrations = await ApplyMigrationsAsync(connection, forceIncremental);
-        await RunInitialisedHookAsync(connection, migrations.TookBaselinePath);
+        await RunInitialisedHookAsync(connection, migrations.TookBaselinePath, migrations.DatabaseWasCreated);
     }
 
     /// <summary>
     /// Called after migrations are applied. Override to perform domain-specific seeding and
     /// statistics collection. The base implementation is a no-op.
     /// </summary>
-    protected virtual Task OnInitialisedAsync(SqliteConnection connection) => Task.CompletedTask;
+    /// <param name="connection">The open connection migrations were applied on.</param>
+    /// <param name="databaseWasCreated">
+    /// Whether this run created the database, i.e. it took the baseline path because no table existed
+    /// yet. #423: this is what separates a fresh install from a database an operator deliberately
+    /// emptied, which a row count cannot tell apart. A subclass seeding optional content on its own
+    /// initiative gates on this, never on a table being empty.
+    /// </param>
+    protected virtual Task OnInitialisedAsync(SqliteConnection connection, bool databaseWasCreated) => Task.CompletedTask;
 
     /// <summary>
     /// Called when <see cref="OnInitialisedAsync"/> did not run because no backup could be taken first
@@ -565,16 +572,19 @@ public class DatabaseInitializer(
     // action within them reduces to the same shape: can we perform it → back up → execute. The
     // migration phase already gates its own backup on dataPending/consumerPending (see
     // ApplyMigrationsAsync); this mirrors that for the content-seed step via HasPendingContentSeedAsync
-    // instead of inferring readiness from a different step's own flag (tookBaselinePath/
-    // MigrationApplied): a flag-based gate was tried first and found to miss the startup immediately
-    // following a Reset, where MigrationApplied stays null (Reset sets schema-version counters
-    // directly via the baseline path) even though content-seed genuinely has real work to do. A
-    // genuinely fresh (baseline) database has nothing to lose and is still skipped outright.
-    private async Task<BackupOutcome?> RunInitialisedHookAsync(SqliteConnection connection, bool tookBaselinePath)
+    // rather than inferring readiness from MigrationApplied, which stays null after a Reset (Reset sets
+    // schema-version counters directly via the baseline path) and so says nothing about what the
+    // content-seed step is about to do. A genuinely fresh (baseline) database has nothing to lose and is
+    // still skipped outright.
+    //
+    // #423 narrowed what "pending" can mean: the startup after a Reset no longer seeds, so it no longer
+    // has work to protect and no longer backs up. tookBaselinePath now also reaches OnInitialisedAsync
+    // as the seed's own gate, which is a separate use from this backup decision.
+    private async Task<BackupOutcome?> RunInitialisedHookAsync(SqliteConnection connection, bool tookBaselinePath, bool databaseWasCreated)
     {
         if (tookBaselinePath || !await SafeHasPendingContentSeedAsync(connection))
         {
-            await OnInitialisedAsync(connection);
+            await OnInitialisedAsync(connection, databaseWasCreated);
             return null;
         }
 
@@ -593,7 +603,7 @@ public class DatabaseInitializer(
 
         try
         {
-            await OnInitialisedAsync(connection);
+            await OnInitialisedAsync(connection, databaseWasCreated);
         }
         catch (Exception ex)
         {
@@ -1058,9 +1068,22 @@ public class DatabaseInitializer(
     /// <summary>
     /// What <see cref="ApplyMigrationsAsync"/> did: whether it took the baseline path, which the caller uses
     /// to decide whether a pre-seed backup is worth taking (a freshly created database has nothing to lose),
-    /// and the obstacle when pending migrations were refused because no backup could be taken.
+    /// whether this run created the database at all, and the obstacle when pending migrations were refused
+    /// because no backup could be taken.
     /// </summary>
-    private readonly record struct MigrationsResult(bool TookBaselinePath, BackupOutcome? Obstacle);
+    /// <param name="TookBaselinePath">
+    /// Whether the one-step baseline was applied instead of replaying migrations. Narrower than
+    /// <paramref name="DatabaseWasCreated"/>: it also requires that a baseline is configured and that the
+    /// incremental path was not forced, so a fresh database without a configured baseline is
+    /// <c>false</c> here and <c>true</c> there.
+    /// </param>
+    /// <param name="DatabaseWasCreated">
+    /// Whether no table existed when this run opened the database, i.e. this run created it. #423: the
+    /// seed gate asks this, never a row count, so that a database an operator deliberately emptied is
+    /// not refilled behind their back.
+    /// </param>
+    /// <param name="Obstacle">What stopped a backup, when pending migrations were refused for want of one.</param>
+    private readonly record struct MigrationsResult(bool TookBaselinePath, bool DatabaseWasCreated, BackupOutcome? Obstacle);
 
     /// <summary>Applies pending migrations, or the baseline for a genuinely fresh database, unless no backup can be taken first.</summary>
     private async Task<MigrationsResult> ApplyMigrationsAsync(SqliteConnection connection, bool forceIncremental = false, bool skipOwnBackup = false)
@@ -1078,7 +1101,7 @@ public class DatabaseInitializer(
         if (isEmptyDatabase && !forceIncremental && _consumerBaseline is not null)
         {
             await ApplyBaselineAsync(connection);
-            return new MigrationsResult(TookBaselinePath: true, Obstacle: null);
+            return new MigrationsResult(TookBaselinePath: true, DatabaseWasCreated: isEmptyDatabase, Obstacle: null);
         }
 
         int dataCurrent     = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetDataCurrentVersion);
@@ -1102,7 +1125,7 @@ public class DatabaseInitializer(
             Logger.LogSchemaUpToDate(dataCurrent, consumerCurrent);
             if (SchemaVersionOvershootDetected)
                 Logger.LogSchemaVersionOvershoot(dataCurrent, DataOwnedMigrations.Count, consumerCurrent, _consumerMigrations.Count);
-            return new MigrationsResult(TookBaselinePath: false, Obstacle: null);
+            return new MigrationsResult(TookBaselinePath: false, DatabaseWasCreated: isEmptyDatabase, Obstacle: null);
         }
 
         // skipOwnBackup: DropAndRebuildAsync (Reset) already took its own backup before this call:
@@ -1121,7 +1144,7 @@ public class DatabaseInitializer(
             DataSchemaVersion = dataCurrent;
             SchemaVersion     = consumerCurrent;
             Logger.LogMigrationRefusedNoBackup(refused.Outcome.ToString());
-            return new MigrationsResult(TookBaselinePath: false, Obstacle: refused.Outcome);
+            return new MigrationsResult(TookBaselinePath: false, DatabaseWasCreated: isEmptyDatabase, Obstacle: refused.Outcome);
         }
 
         string? backupPath = migrationBackup?.Path;
@@ -1164,7 +1187,7 @@ public class DatabaseInitializer(
 
         Logger.LogSchemaUpdated(DataSchemaVersion, SchemaVersion);
 
-        return new MigrationsResult(TookBaselinePath: false, Obstacle: null);
+        return new MigrationsResult(TookBaselinePath: false, DatabaseWasCreated: isEmptyDatabase, Obstacle: null);
     }
 
     private async Task ApplyBaselineAsync(SqliteConnection connection)

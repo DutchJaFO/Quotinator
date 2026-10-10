@@ -99,20 +99,34 @@ public sealed class QuotinatorDatabaseInitializer(
     private readonly IVersionService _versionService = versionService;
 
     /// <inheritdoc/>
-    protected override async Task OnInitialisedAsync(SqliteConnection connection)
+    protected override async Task OnInitialisedAsync(SqliteConnection connection, bool databaseWasCreated)
     {
         SourceCacheResolution resolution = await ResolveEffectiveBatchesAsync(forceRefresh: false);
 
         // Read before seeding: whether this database already held content is what separates "the sources
         // changed and our copy is now stale" from "the seed just applied those very changes". Neither
-        // SeedIfEmptyAsync nor its internal counterpart reports back whether it did any work, and this is
-        // the same gate SeedIfEmptyInternalAsync applies to itself.
+        // SeedIfEmptyAsync nor its internal counterpart reports back whether it did any work.
         int quotesBeforeSeeding = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
+        int genresBeforeSeeding = await connection.ExecuteScalarAsync<int>(Sql.QuoteGenres.CountAll);
 
-        await SeedIfEmptyAsync(connection, resolution.EffectiveBatches);
+        // #423: only a database this run created seeds by itself. An empty quote table is not the same
+        // question: a Reset empties it deliberately, so gating on the count re-imposed the bundled
+        // dataset on the next restart, which is exactly what #156 decided must not happen and what
+        // #304's reseed recommendation exists to let the operator decide instead.
+        if (databaseWasCreated)
+            await SeedIfEmptyAsync(connection, resolution.EffectiveBatches);
+
         await ReSeedGenresIfEmptyAsync(connection, resolution.EffectiveBatches);
-        await ResolveReseedIfContentLoadedAsync(connection, quotesBeforeSeeding);
-        await RecommendReseedIfSourceContentChangedAsync(resolution, quotesBeforeSeeding);
+
+        // Whether this start loaded content is measured, not inferred. Both steps above are content
+        // loads, and since #423 the genre re-seed is the only one a start that did not create the
+        // database can perform: a notification waiting on content arriving is settled by either.
+        bool contentLoaded =
+            await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll)      > quotesBeforeSeeding ||
+            await connection.ExecuteScalarAsync<int>(Sql.QuoteGenres.CountAll) > genresBeforeSeeding;
+
+        await ResolveReseedIfContentLoadedAsync(contentLoaded);
+        await RecommendReseedIfSourceContentChangedAsync(resolution, seedRan: databaseWasCreated, quotesBeforeSeeding);
         await LogDatabaseStatsAsync(connection);
     }
 
@@ -149,19 +163,19 @@ public sealed class QuotinatorDatabaseInitializer(
     }
 
     /// <summary>
-    /// #348: a start that loaded content into an empty database has done what a reseed does, so it
-    /// resolves every notification waiting for one, such as an earlier start's backup refusal. Only once
-    /// the whole load has returned, and only if content is actually there: a notification is updated
-    /// after the action that settles it, never during it, so the seed itself no longer does this per file.
+    /// #348: a start that loaded content has done what a reseed does, so it resolves every notification
+    /// waiting for one, such as an earlier start's backup refusal. Only once the whole load has returned,
+    /// and only if something was actually loaded: a notification is updated after the action that settles
+    /// it, never during it, so the seed itself no longer does this per file.
     /// </summary>
-    /// <param name="connection">The open connection the load used.</param>
-    /// <param name="quotesBeforeSeeding">The quote count before the load, which is what says it had work to do.</param>
-    private async Task ResolveReseedIfContentLoadedAsync(SqliteConnection connection, int quotesBeforeSeeding)
+    /// <param name="contentLoaded">
+    /// Whether this start actually loaded content, measured by its caller across both load steps. #423:
+    /// an empty quote table beforehand no longer implies a load was even attempted, so the fact is
+    /// passed in rather than re-derived from a count here.
+    /// </param>
+    private async Task ResolveReseedIfContentLoadedAsync(bool contentLoaded)
     {
-        if (quotesBeforeSeeding > 0)
-            return;
-
-        if (await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll) == 0)
+        if (!contentLoaded)
             return;
 
         await _notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.Reseed, NotificationResolution.Reseeded);
@@ -178,13 +192,15 @@ public sealed class QuotinatorDatabaseInitializer(
     /// reading the resolution afterward, per ADR 018's event-driven system content rule and the
     /// relocation principle #302/#303 follow.
     /// </remarks>
-    private async Task RecommendReseedIfSourceContentChangedAsync(SourceCacheResolution resolution, int quotesBeforeSeeding)
+    private async Task RecommendReseedIfSourceContentChangedAsync(SourceCacheResolution resolution, bool seedRan, int quotesBeforeSeeding)
     {
         // No network check ran, so nothing was compared and nothing can be claimed to have changed.
         if (!_autoUpdateSources) return;
 
-        // The seed applied whatever changed on this very run.
-        if (quotesBeforeSeeding == 0) return;
+        // The seed applied whatever changed on this very run. #423: that is true only where a seed
+        // actually ran, which an empty quote table no longer establishes on its own: a database left
+        // empty by a Reset has applied nothing, so a changed source there is still worth recommending.
+        if (seedRan && quotesBeforeSeeding == 0) return;
 
         List<string> changedFiles = [.. resolution.Results
             .Where(result => result.Outcome == SourceRefreshOutcome.Updated)
@@ -504,11 +520,19 @@ public sealed class QuotinatorDatabaseInitializer(
     }
 
     /// <inheritdoc/>
-    /// <remarks>Mirrors the two count-gates <see cref="OnInitialisedAsync"/> itself runs (#277): <see cref="SeedIfEmptyInternalAsync"/> would do real work whenever Quotes is empty, and <see cref="ReSeedGenresIfEmptyAsync"/> would do real work whenever Genres is empty but Quotes is not.</remarks>
+    /// <remarks>
+    /// Mirrors what <see cref="OnInitialisedAsync"/> would actually do on a start that did not create
+    /// the database (#277, narrowed by #423). <see cref="SeedIfEmptyInternalAsync"/> no longer runs on
+    /// such a start at all, so an empty Quotes table is no longer pending work; the only remaining case
+    /// is <see cref="ReSeedGenresIfEmptyAsync"/>, which acts when Genres is empty <em>and</em> Quotes is
+    /// not, so both of its conditions are mirrored here rather than only the first. Claiming pending
+    /// work for a database with no quotes would take a backup before every start after a Reset, to
+    /// protect a seed that will not happen.
+    /// </remarks>
     protected override async Task<bool> HasPendingContentSeedAsync(SqliteConnection connection)
     {
         int quoteCount = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
-        if (quoteCount == 0) return true;
+        if (quoteCount == 0) return false;
 
         int genreCount = await connection.ExecuteScalarAsync<int>(Sql.QuoteGenres.CountAll);
         return genreCount == 0;
@@ -689,10 +713,12 @@ public sealed class QuotinatorDatabaseInitializer(
     /// <param name="effectiveBatches">The seed batches to apply, already resolved against the source cache.</param>
     /// <remarks>
     /// <para>
-    /// Cold start's own entry point, and the only one that asks whether there is anything to do. An
-    /// explicit reseed calls <see cref="ImportDesignatedFilesAsync"/> directly and never consults this
-    /// gate (see #372): on that path the check is not a safeguard, it suppresses the report the
-    /// operator ran the reseed to get.
+    /// Cold start's own entry point. Whether cold start seeds at all is decided by its caller, on
+    /// whether this run created the database (#423); the count below is not that decision. It is the
+    /// re-check a waiter performs after acquiring <see cref="DatabaseInitializer.SharedSeedLock"/>, so
+    /// that two starts in one process cannot both seed. An explicit reseed calls
+    /// <see cref="ImportDesignatedFilesAsync"/> directly and never consults it (see #372): on that path
+    /// the check is not a safeguard, it suppresses the report the operator ran the reseed to get.
     /// </para>
     /// <para>
     /// **"Empty" means no seedable content, not that no table has rows.** The check counts quotes on
