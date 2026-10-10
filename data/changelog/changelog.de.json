@@ -10,8 +10,9 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 424],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 423, 424],
     "highlights": [
+      "Eine zurückgesetzte Datenbank bleibt jetzt zurückgesetzt. Bisher lud der nächste Neustart die mit Quotinator gelieferten Zitate erneut, sodass ein Zurücksetzen, mit dem Sie mit eigenen Inhalten neu beginnen wollten, durch den nächsten Neustart, ein Add-on-Update oder einen Reboot aufgehoben wurde und die Benachrichtigung mit dem Angebot zum Neuladen so markiert wurde, als hätten Sie sie gewählt. Eine ganz neue Datenbank lädt die mitgelieferten Zitate beim ersten Start weiterhin, und das Neuladen auf Anforderung funktioniert weiterhin.",
       "Wenn Quotinator die Sicherung nicht erstellen kann, die vor dem Aktualisieren oder Befüllen der Datenbank nötig ist, hält es jetzt sicher an und sagt warum. Angeboten werden nur die Möglichkeiten, die funktionieren können, zusammen mit einer Anleitung, wie sich der Rest beheben lässt.",
       "Quotinator warnt jetzt schon, während sich der Sicherungsordner füllt, und nicht erst, wenn er voll ist: Sicherungen laufen aus dem in Reserve gehaltenen Platz weiter, und die Warnung nennt den verbleibenden Platz und verschwindet von selbst, sobald welcher frei geworden ist.",
       "Ist der Sicherungsordner wirklich voll, meldet Quotinator das jetzt als Fehler, weil sich zu diesem Zeitpunkt überhaupt keine Sicherung mehr erstellen lässt, und sagt dasselbe, unabhängig davon, wie der Ordner voll geworden ist.",
@@ -82,6 +83,7 @@
       "Jeder Host für automatisierte Tests startet jetzt mit deaktivierter Quellaktualisierung und deaktivierten mitgelieferten Quellen sowie einem eigenen Datenverzeichnis, das beim Beenden des Hosts entfernt wird; ein Test, der ein Schema benötigt, erhält eine vorbereitete Datenbank: Testwartung ohne Auswirkung auf die Anwendung (issue #424)"
     ],
     "fixed": [
+      "Der Start lädt die mitgelieferten Zitatdateien nicht mehr in jede Datenbank mit leerer Zitattabelle, sondern nur noch in eine gerade selbst erstellte. Ein Zurücksetzen hinterließ die Tabelle leer, also füllte der nächste Start sie erneut, was das Zurücksetzen aufhob und die auf die Betreiberin oder den Betreiber wartende Neulade-Empfehlung stillschweigend auflöste (issue #423)",
       "Ein Dialog beschrieb eine Höhenbegrenzung, die nie wirksam wurde, weil eine widersprechende Gestaltungsregel sie stets überschrieb. Die Begrenzung wurde entfernt statt durchgesetzt, denn was sie beschrieb, traf ohnehin schon zu: Ein Dialog passt ins Fenster, Titel und Schaltflächen bleiben an ihrem Platz, und der Inhalt scrollt (issue #422)",
       "Das Erzeugen einer Regeldatei zur Konfliktlösung aus einem geprüften Stapel scheitert nicht mehr vollständig, wenn die vorhandene Datei ein Zitat zweimal aufführt. Es wird jetzt gemeldet, welche Datei und welcher Eintrag die Ursache sind, und die mit Quotinator ausgelieferte Datei wurde korrigiert (issue #420)",
       "Eine Regel, die ein Zitat korrigiert, merkt sich jetzt für jedes Feld, das sie korrigiert, wie dieses Feld aussah, als die Regel geschrieben wurde. Eine Regel für zwei zu unterschiedlichen Zeitpunkten geschriebene Felder konnte das bisher nicht für beide korrekt festhalten, und genau das verursachte den doppelten Eintrag (issue #420)",

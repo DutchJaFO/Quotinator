@@ -10,8 +10,9 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 424],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 423, 424],
     "highlights": [
+      "Een database die je reset blijft nu gereset. Voorheen laadde de volgende herstart de citaten die met Quotinator meekomen opnieuw, waardoor een reset die je deed om met je eigen inhoud opnieuw te beginnen werd ongedaan gemaakt door de volgende herstart, add-on-update of reboot, en werd de melding die aanbood opnieuw te laden gemarkeerd alsof je daarvoor had gekozen. Een gloednieuwe database laadt de meegeleverde citaten nog steeds bij de eerste start, en op verzoek opnieuw laden werkt nog steeds.",
       "Als Quotinator de back-up die nodig is voordat je database wordt bijgewerkt of gevuld niet kan maken, stopt het nu veilig en vertelt het waarom. Alleen de keuzes die kunnen werken worden aangeboden, met een handleiding die uitlegt hoe je de rest oplost.",
       "Quotinator waarschuwt nu al terwijl de back-upmap volloopt en niet pas als die vol is: back-ups gaan door uit de ruimte die in reserve wordt gehouden, en de waarschuwing vertelt hoeveel ruimte er nog is en verdwijnt vanzelf zodra je ruimte hebt vrijgemaakt.",
       "Als de back-upmap echt vol is, meldt Quotinator dat nu als een fout, omdat er op dat moment helemaal geen back-up meer gemaakt kan worden, en het zegt hetzelfde ongeacht hoe de map vol is geraakt.",
@@ -82,6 +83,7 @@
       "Elke host voor geautomatiseerde tests start nu met het bijwerken van bronnen en de meegeleverde bronnen uitgeschakeld en met een eigen gegevensmap, die wordt verwijderd wanneer de host stopt; een test die een schema nodig heeft, krijgt een voorbereide database: testonderhoud zonder gevolgen voor de applicatie (issue #424)"
     ],
     "fixed": [
+      "Bij het opstarten worden de meegeleverde citatenbestanden niet langer geladen in elke database met een lege citatentabel, maar alleen in een database die net is aangemaakt. Een reset liet de tabel leeg achter, dus vulde de volgende start hem opnieuw, wat de reset ongedaan maakte en stilzwijgend de herlaadaanbeveling afhandelde die op de beheerder wachtte (issue #423)",
       "Een dialoogvenster beschreef een hoogtelimiet die nooit van kracht werd, omdat een conflicterende opmaakregel die altijd overschreef. De limiet is verwijderd in plaats van afgedwongen, omdat wat hij beschreef al klopte: een dialoogvenster past in het venster, de titel en knoppen blijven op hun plaats, en de inhoud schuift (issue #422)",
       "Het genereren van een regelbestand voor conflictoplossing uit een beoordeelde batch mislukt niet langer volledig wanneer het bestaande bestand één citaat twee keer vermeldt. Het meldt nu welk bestand en welke vermelding de oorzaak zijn, en het bestand dat met Quotinator wordt meegeleverd is gecorrigeerd (issue #420)",
       "Een regel die een citaat corrigeert onthoudt nu voor elk veld dat hij corrigeert hoe dat veld eruitzag toen de regel werd geschreven. Een regel die twee velden dekt die op verschillende momenten zijn geschreven kon dat voorheen niet voor beide correct vastleggen, en dat veroorzaakte de dubbele vermelding (issue #420)",

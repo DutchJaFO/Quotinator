@@ -3,8 +3,9 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 424],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 423, 424],
     "highlights": [
+      "A database you reset now stays reset. Previously the next restart reloaded the quotes that come with Quotinator, so a reset you made in order to start fresh with your own content was undone by the next restart, add-on update or reboot, and the notification offering to reload was marked as if you had chosen it. A brand-new database still loads the bundled quotes on its first start, and reloading on demand still works.",
       "If Quotinator cannot make the backup it needs before updating or loading your database, it now stops safely and tells you why, offering only the choices that can work, with a guide explaining how to fix the rest.",
       "Quotinator now warns you while the backups folder is filling up rather than only once it is full: backups carry on from the space held in reserve, and the warning says how much room is left and clears itself once you have freed some.",
       "When the backups folder is genuinely full, Quotinator now reports it as an error, because at that point no backup can be made at all, and it tells you the same thing however the folder came to be full.",
@@ -75,6 +76,7 @@
       "Every automated test host now starts with the source refresh and the bundled sources off and a data directory of its own, removed when the host stops, and a test that needs a schema is given a prepared database: test maintenance with no effect on the application (issue #424)"
     ],
     "fixed": [
+      "Startup no longer loads the bundled quote files into any database whose quote table is empty, only into one it has just created. A reset left the table empty, so the next start refilled it, which undid the reset and silently resolved the reload recommendation that was waiting for the operator (issue #423)",
       "A dialog described a height limit that never took effect, because a conflicting styling rule always overrode it. The limit has been removed rather than enforced, since what it described was already true: a dialog fits the window, its title and buttons stay in place, and its content scrolls (issue #422)",
       "Generating a conflict-resolution rule file from a reviewed batch no longer fails outright when the existing file lists one quote twice. It now reports which file and which entry are at fault, and the file that comes with Quotinator has been corrected (issue #420)",
       "A rule that corrects a quote now remembers, for each field it corrects, what that field looked like when the rule was written. A rule covering two fields written at different times could not record both correctly before, which is what caused the duplicate entry (issue #420)",

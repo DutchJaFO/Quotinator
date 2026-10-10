@@ -357,7 +357,6 @@
   <Folder Name="/docs/knowledgebase/">
     <File Path="docs/knowledgebase/README.md" />
     <File Path="docs/knowledgebase/a-quote-id-stops-working-after-an-upgrade.md" />
-    <File Path="docs/knowledgebase/a-reset-is-undone-by-the-next-restart.md" />
     <File Path="docs/knowledgebase/antiforgery-token-could-not-be-decrypted.md" />
     <File Path="docs/knowledgebase/degraded-startup-shows-every-count-as-zero.md" />
     <File Path="docs/knowledgebase/backups-have-reached-their-quota.md" />

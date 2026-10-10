@@ -15,7 +15,6 @@ per `knowledgebase.md`'s bootstrapping rule, entries come first and codes are as
 | [An uploaded file is rejected as invalid JSON](uploaded-file-is-rejected-as-invalid-json.md) | No | up to 1.9.0-alpha |
 | [Repeated "a suitable constructor could not be located" at startup](repeated-suitable-constructor-exceptions-at-startup.md) | No | 1.9.0-alpha only |
 | [A quote id that worked before an upgrade answers 404](a-quote-id-stops-working-after-an-upgrade.md) | No | upgrades from 1.8.2 or earlier |
-| [Quotes come back after a restart, although the database was reset](a-reset-is-undone-by-the-next-restart.md) | No | 1.9.0-alpha onwards |
 | [Content was not loaded, or a migration did not run, because no backup could be taken](no-backup-could-be-taken.md) | Yes, when a migration was refused | 1.9.0-alpha onwards |
 | [Backups have reached their quota](backups-have-reached-their-quota.md) | No | 1.9.0-alpha onwards |
 | [Every database count reads 0 after a startup problem](degraded-startup-shows-every-count-as-zero.md) | No | 1.9.0-alpha onwards |
