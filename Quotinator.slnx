@@ -351,6 +351,7 @@
     <File Path="docs/milestones/notification-system/420-two-rules-for-one-entity-plan.md" />
     <File Path="docs/milestones/notification-system/422-inert-modal-height-cap-plan.md" />
     <File Path="docs/milestones/notification-system/423-only-a-new-database-seeds-plan.md" />
+    <File Path="docs/milestones/notification-system/371-database-and-migration-notifications-plan.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/">
     <File Path="docs/automated-testing/README.md" />
