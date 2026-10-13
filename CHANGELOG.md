@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-10-10 09:23 UTC]: do not edit by hand.*
+##### *GENERATED FILE [2026-10-13 04:24 UTC]: do not edit by hand.*
 
 # Changelog
 
@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Highlights
+- Quotinator now tells you what it did to your database at startup. A database created for you says so, naming the schema version it was created at, so you know there was nothing to preserve. An update that changed an existing database reports each change separately, saying what it did rather than only its number. An ordinary restart, where neither happened, stays silent.
+- A database you reset now stays reset. Previously the next restart reloaded the quotes that come with Quotinator, so a reset you made in order to start fresh with your own content was undone by the next restart, add-on update or reboot, and the notification offering to reload was marked as if you had chosen it. A brand-new database still loads the bundled quotes on its first start, and reloading on demand still works.
 - If Quotinator cannot make the backup it needs before updating or loading your database, it now stops safely and tells you why, offering only the choices that can work, with a guide explaining how to fix the rest.
 - Quotinator now warns you while the backups folder is filling up rather than only once it is full: backups carry on from the space held in reserve, and the warning says how much room is left and clears itself once you have freed some.
 - When the backups folder is genuinely full, Quotinator now reports it as an error, because at that point no backup can be made at all, and it tells you the same thing however the folder came to be full.
@@ -32,6 +34,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Quotinator no longer downloads updated quote sources when it starts, unless you turn that on. It uses the quotes that come with each release as they are, so a slow or unreachable download site can no longer hold up startup. If you relied on the automatic update, turn it back on in the add-on's options or in your configuration.
 
 ### Added
+- A notification when Quotinator created the database, carrying the data and app schema versions it was created at (issue #371)
+- A notification per migration applied to an existing database, naming what that migration did rather than only its version (issue #371)
+- Every schema migration now carries a required description of what it did, guarded in each of the three migration lists so a future migration cannot be added without one (issue #371)
 - When a backup cannot be taken before startup loads content, the database is left untouched and a notification offers only the options that can run now: back up then reseed, remove the oldest backup then back up and reseed, or reseed without a backup after asking for permission. A Knowledgebase entry explains why any other option is blocked and how to resolve it (issue #348)
 - `GET /api/v1/notifications` lists what each notification's action can do right now as `availableActions` (issue #348)
 - A warning while the backups folder sits between its operating quota and its maximum, naming what the folder holds, the quota it has passed and the maximum it has not, and clearing itself once the folder is back under the quota (issue #348)
@@ -75,6 +80,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Every automated test host now starts with the source refresh and the bundled sources off and a data directory of its own, removed when the host stops, and a test that needs a schema is given a prepared database: test maintenance with no effect on the application (issue #424)
 
 ### Fixed
+- Startup no longer loads the bundled quote files into any database whose quote table is empty, only into one it has just created. A reset left the table empty, so the next start refilled it, which undid the reset and silently resolved the reload recommendation that was waiting for the operator (issue #423)
 - A dialog described a height limit that never took effect, because a conflicting styling rule always overrode it. The limit has been removed rather than enforced, since what it described was already true: a dialog fits the window, its title and buttons stay in place, and its content scrolls (issue #422)
 - Generating a conflict-resolution rule file from a reviewed batch no longer fails outright when the existing file lists one quote twice. It now reports which file and which entry are at fault, and the file that comes with Quotinator has been corrected (issue #420)
 - A rule that corrects a quote now remembers, for each field it corrects, what that field looked like when the rule was written. A rule covering two fields written at different times could not record both correctly before, which is what caused the duplicate entry (issue #420)

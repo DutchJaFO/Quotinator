@@ -1,6 +1,6 @@
 # #371: Notify that the database was created, and that migrations were applied
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #371
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,9 +9,9 @@
 
 ## Next action
 
-**Ask the developer for T1, then move this issue to `Waiting for release`.** Every step is ✅ and
-every row in the Verification table is green except row 21, T1, which is the developer's own action
-and cannot be performed or substituted here.
+**Wait for the release.** Every step and every verification row is ✅, T1 and T2 both confirmed, the
+changelog `unreleased` entries are in and the Definition of done is ticked except its closing-comment
+box, which becomes true only when the issue is actually closed.
 
 ---
 
@@ -552,4 +552,4 @@ This plan doc and the new T2 document are both added to `Quotinator.slnx`, and t
 | 18 | ✅ | A first boot shows the creation notification and no migration notification; a restart shows neither | Live | `docs/automated-testing/notifications-and-changelog/15-a-created-database-says-so.md` |
 | 19 | ✅ | An upgrade from the previous published tag shows one notification per applied migration, each naming what it did | Live | `docs/automated-testing/notifications-and-changelog/16-each-applied-migration-says-what-it-did.md` |
 | 20 | ✅ | The new rule is recorded where a migration author will read it | Unit test | `RepositoryStructureTests.MigrationDocuments_SayEveryMigrationCarriesADescription`, over CLAUDE.md and `docs/database-conventions.md` |
-| 21 | ❌ | T1: the application still starts | Live | Developer starts `Quotinator.Api` in Visual Studio and confirms it starts without error |
+| 21 | ✅ | T1: the application still starts | Live | Developer starts `Quotinator.Api` in Visual Studio and confirms it starts without error |

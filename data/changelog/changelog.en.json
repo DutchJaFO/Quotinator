@@ -3,8 +3,9 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 423, 424],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 371, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 423, 424],
     "highlights": [
+      "Quotinator now tells you what it did to your database at startup. A database created for you says so, naming the schema version it was created at, so you know there was nothing to preserve. An update that changed an existing database reports each change separately, saying what it did rather than only its number. An ordinary restart, where neither happened, stays silent.",
       "A database you reset now stays reset. Previously the next restart reloaded the quotes that come with Quotinator, so a reset you made in order to start fresh with your own content was undone by the next restart, add-on update or reboot, and the notification offering to reload was marked as if you had chosen it. A brand-new database still loads the bundled quotes on its first start, and reloading on demand still works.",
       "If Quotinator cannot make the backup it needs before updating or loading your database, it now stops safely and tells you why, offering only the choices that can work, with a guide explaining how to fix the rest.",
       "Quotinator now warns you while the backups folder is filling up rather than only once it is full: backups carry on from the space held in reserve, and the warning says how much room is left and clears itself once you have freed some.",
@@ -33,6 +34,9 @@
       ]
     },
     "added": [
+      "A notification when Quotinator created the database, carrying the data and app schema versions it was created at (issue #371)",
+      "A notification per migration applied to an existing database, naming what that migration did rather than only its version (issue #371)",
+      "Every schema migration now carries a required description of what it did, guarded in each of the three migration lists so a future migration cannot be added without one (issue #371)",
       "When a backup cannot be taken before startup loads content, the database is left untouched and a notification offers only the options that can run now: back up then reseed, remove the oldest backup then back up and reseed, or reseed without a backup after asking for permission. A Knowledgebase entry explains why any other option is blocked and how to resolve it (issue #348)",
       "`GET /api/v1/notifications` lists what each notification's action can do right now as `availableActions` (issue #348)",
       "A warning while the backups folder sits between its operating quota and its maximum, naming what the folder holds, the quota it has passed and the maximum it has not, and clearing itself once the folder is back under the quota (issue #348)",
