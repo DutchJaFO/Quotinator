@@ -424,6 +424,8 @@
     <File Path="docs/automated-testing/notifications-and-changelog/12-running-action-state.md" />
     <File Path="docs/automated-testing/notifications-and-changelog/13-notification-layout.md" />
     <File Path="docs/automated-testing/notifications-and-changelog/14-every-kind-renders-what-its-layout-promises.md" />
+    <File Path="docs/automated-testing/notifications-and-changelog/15-a-created-database-says-so.md" />
+    <File Path="docs/automated-testing/notifications-and-changelog/16-each-applied-migration-says-what-it-did.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/import-and-staged-actions/">
     <File Path="docs/automated-testing/import-and-staged-actions/01-staged-action-review-workflow.md" />

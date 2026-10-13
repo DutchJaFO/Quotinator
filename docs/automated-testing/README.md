@@ -1198,6 +1198,8 @@ different question in each.
 | 12 | [A running notification action says so, and cannot be started twice](notifications-and-changelog/12-running-action-state.md) | no |
 | 13 | [A notification renders its title and body as separate things, and keeps its line breaks](notifications-and-changelog/13-notification-layout.md) | no |
 | 14 | [Every notification kind is produced by its own trigger and renders what its layout promises](notifications-and-changelog/14-every-kind-renders-what-its-layout-promises.md) | no |
+| 15 | [A database created from scratch says so, and a routine restart does not say it again](notifications-and-changelog/15-a-created-database-says-so.md) | no |
+| 16 | [Each applied migration says what it did, one notification per migration](notifications-and-changelog/16-each-applied-migration-says-what-it-did.md) | no |
 
 ### `import-and-staged-actions/`
 

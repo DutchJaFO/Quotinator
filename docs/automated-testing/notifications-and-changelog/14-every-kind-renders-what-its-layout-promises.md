@@ -30,6 +30,7 @@ rendering assertion passing over a page nobody could reach in practice:
 | `ImportReviewPending` | the conflict fixture in `imports/`, staged by that seed |
 | `SchemaVersionOvershoot` | a consumer schema version rolled one past this build, then a restart |
 | `ReseedRecommended` | a database reset, which leaves the database empty |
+| `DatabaseCreated` | the same cold start, which is what creates the database (#371) |
 
 **`BackupRefused` is not produced here.** Its trigger is a startup that cannot take a backup, and that
 startup loads no content, so it cannot share a run with the kinds above, each of which needs content
@@ -43,6 +44,12 @@ own trigger produces it in `backup/08`, #348's document for the reserve.
 **`BackupMaxExceeded` is not produced here either**, for the same reason and by the same document: its
 trigger is a backups folder filled to its maximum, one band further than the warning above. `backup/08`
 produces both, and they are mutually exclusive, so no step there shows the two together.
+
+**`MigrationApplied` is not produced here either** (#371). Its trigger is an upgrade: migrations applied
+to a database an *earlier* build created. Every cold start in this document takes the baseline path,
+which applies no individual migration at all, so this run cannot produce it.
+[*Each applied migration says what it did*](16-each-applied-migration-says-what-it-did.md) is the
+document whose upgrade produces it, and which renders it on both surfaces.
 
 **The reset comes last, and in its own step.** Reset rebuilds every table (#156), so it takes the other
 five kinds with it, which is why it cannot share a page with them and why nothing after it may assume
@@ -96,7 +103,7 @@ JavaScript string, and `What's new` closes it: `SyntaxError: missing ) after arg
 
 ## Steps
 
-### 1. Cold start with a conflict waiting, and confirm four kinds were produced
+### 1. Cold start with a conflict waiting, and confirm five kinds were produced
 
 ```powershell
 $bind = Join-Path $env:TEMP "qt-notif-14-bind"
@@ -149,8 +156,10 @@ Kinds
 Read-Thrown
 ```
 
-**Expected:** `announcement=1 importreviewpending=1 reseedfileapplied=5 whatsnew=1`, and `thrown=0`.
-Four kinds, each written by the producer its trigger runs.
+**Expected:** `announcement=1 databasecreated=1 importreviewpending=1 reseedfileapplied=5 whatsnew=1`,
+and `thrown=0`. Five kinds, each written by the producer its trigger runs. `migrationapplied` is absent
+and must be: the baseline path applies no individual migration, which is the distinction #371 draws
+between creating a database and upgrading one.
 
 **`Capture-Row`'s script fragment is `$expandJs`, never `$expand`.** PowerShell names are
 case-insensitive, so `$expand` *is* the `[switch]$Expand` parameter: assigning it a string throws, and
@@ -198,14 +207,14 @@ counts the right thing*.
 **Expected:** every row renders a non-empty body with its title as its own element and never inside it
 (`titleInsideBody: false`); `expandsInPlace: false` throughout, because the page opens a dialog;
 `opensDetail: true` for exactly the rows whose payload carries a non-empty `counts` array (the five
-`reseedfileapplied` rows and the one `importreviewpending` row) and `false` for `announcement` and
-`whatsnew`, whose payloads carry no counts; and the review row is the only one with an extra button,
-reading `Decide`.
+`reseedfileapplied` rows and the one `importreviewpending` row) and `false` for `announcement`,
+`whatsnew` and `databasecreated`, whose payloads carry no counts; and the review row is the only one
+with an extra button, reading `Decide`.
 
 **That is the per-type layout decision, stated as what a reader sees.** Derive it from the payload when
 a kind is added: a kind whose payload says nothing its body does not opens no detail.
 
-**Capture the page, then each of the four kinds on it.** One of the five `reseedfileapplied` rows is
+**Capture the page, then each of the five kinds on it.** One of the five `reseedfileapplied` rows is
 enough, since the five are one kind:
 
 ```powershell
@@ -215,11 +224,12 @@ Capture-Row -Surface page -Match "operation IDs"    -Name announcement-page
 Capture-Row -Surface page -Match "new (unreleased)" -Name whatsnew-page
 Capture-Row -Surface page -Match "reseeded cleanly" -Name reseedfileapplied-page
 Capture-Row -Surface page -Match "needs review"     -Name importreviewpending-page
+Capture-Row -Surface page -Match "Database created" -Name databasecreated-page
 ```
 
-**Expected:** each call prints the row it found and its own rectangle, and the four match this step's
-own reading: `buttons` of `Dismiss` alone for the announcement and what's-new rows, `Details,
-Dismiss` for a reseeded file, `Details, Decide, Dismiss` for the review row.
+**Expected:** each call prints the row it found and its own rectangle, and the five match this step's
+own reading: `buttons` of `Dismiss` alone for the announcement, what's-new and database-created rows,
+`Details, Dismiss` for a reseeded file, `Details, Decide, Dismiss` for the review row.
 
 ### 3. Open a detail dialog and confirm it describes itself
 
@@ -507,6 +517,10 @@ logged an exception of its own; every line read was a stop's or restart's own `S
 
 Fifteen images: each surface whole, then each of the six kinds on each of the two surfaces, plus the
 detail the dialog opens and the two the popup expands in place.
+
+**This reading predates #371, so it has no row for `DatabaseCreated`.** That kind did not exist when
+the run above was taken, and inventing a row for it would record an observation nobody made. The next
+pass over this document fills it.
 
 **One defect in the instrument, found and fixed rather than tolerated.** A capture that killed its
 browser left every Blazor circuit half-open: thirteen captures against one container produced **72
