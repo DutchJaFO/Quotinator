@@ -133,6 +133,17 @@ Active milestones, open issues, and development priorities are tracked in GitHub
 - **Never reorder or edit an existing migration** — once applied to a real database, a migration is frozen. Changing it silently corrupts installations that already ran it.
 - **Every DDL statement must be idempotent where SQLite allows it.** Use `CREATE TABLE IF NOT EXISTS` and `DROP TABLE IF EXISTS`. **SQLite has no `IF EXISTS`/`IF NOT EXISTS` form for `ALTER TABLE ... RENAME TO` or `ALTER TABLE ... ADD COLUMN`** (verified against sqlite.org — neither statement's grammar supports it, at any version). A non-idempotent migration that fails partway through leaves the database in a state where the version is not recorded but the schema change was partially applied — causing a never-ending startup crash loop on every subsequent restart. See "No exception-based migration recovery" below for how this project handles statements that can't be made idempotent.
 - **One schema change per migration where possible.** Multi-statement migrations are harder to make fully idempotent and harder to reason about when partially applied.
+- **Every migration carries a `Description` saying what it did**, in one sentence an operator can read.
+  The property on `SchemaMigration` is `required`, so a new migration cannot be added without one, and
+  a notification can name what a migration did rather than only its number (#371). Neither the record
+  nor `System_SchemaVersion` could say anything but *migration 27 applied* before this. The description
+  is operator-facing, not developer rationale: *why* a widening needs a table rebuild, or why a
+  data-only migration needs no baseline counterpart, stays in the comment above the entry. All three
+  migration lists are guarded, each in its own project's tests
+  (`EveryDataOwnedMigration_HasANonEmptyDescription`, `EveryChangelogMigration_HasANonEmptyDescription`,
+  `QuotinatorMigrationsTests.All_Descriptions_AreNonEmpty`). Adding the property does **not** breach the
+  freeze rule above, which governs a migration's `Sql`: that stays byte-identical, and a description
+  changes nothing a database has already applied.
 - All migration SQL stays inside `DatabaseInitializer` as `private const string Migration00N_...` — not in `Sql.cs`. Migration text is frozen at migration time and must not be discoverable or modifiable via the `Sql` class.
 
 **When adding a persisted column backed by a C# enum — checklist (same migration), per [ADR 008](docs/architecture-decisions/008-enum-backed-columns-require-check-constraints.md):**
