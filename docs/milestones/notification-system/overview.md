@@ -85,7 +85,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#431](https://github.com/DutchJaFO/Quotinator/issues/431) | Let an operator name a backup they create | Planning | T1 ⬜ T2 ⬜ | none |
 | [#438](https://github.com/DutchJaFO/Quotinator/issues/438) | Two automated-test documents no longer match the product: the wait-page document cannot pass as written | Planning | T1 ⬜ T2 ⬜ | none |
 | [#397](https://github.com/DutchJaFO/Quotinator/issues/397) | Exceptions the application catches leave no trace outside Visual Studio | Waiting for release | T1 ✅ T2 ✅ | [397-exceptions-leave-no-trace-plan.md](397-exceptions-leave-no-trace-plan.md) |
-| [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | Planning | T1 ⬜ T2 ⬜ | [371-database-and-migration-notifications-plan.md](371-database-and-migration-notifications-plan.md) |
+| [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | In progress | T1 ⬜ T2 ⬜ | [371-database-and-migration-notifications-plan.md](371-database-and-migration-notifications-plan.md) |
 | [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | Waiting for release | T1 ✅ T2 ✅ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
 | [#373](https://github.com/DutchJaFO/Quotinator/issues/373) | An import that re-states identical content reports it as modified | Waiting for release | T1 ✅ T2 ✅ | [373-unchanged-is-not-modified-plan.md](373-unchanged-is-not-modified-plan.md) |
 | [#374](https://github.com/DutchJaFO/Quotinator/issues/374) | A conflict rule cannot tell "already correct" from "cannot apply" | Waiting for release | T1 ✅ T2 ✅ | [374-already-correct-is-not-cannot-apply-plan.md](374-already-correct-is-not-cannot-apply-plan.md) |
@@ -163,7 +163,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #382 ─── depends on #377: Waiting for release
 #383 ─── depends on #377: Waiting for release
 #367 ─── depends on #278, #304; blocks #308: Waiting for release
-#371 ─── (none): Planning
+#371 ─── (none): In progress
 #368 ─── depends on #303, #304, #390: Planning
 ```
 
@@ -212,7 +212,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 37 | **#420** ✅ | Waiting for release |
 | 38 | **#422** ✅ | Waiting for release |
 | 39 | **#423** ✅ | Waiting for release |
-| 40 | **#371** | Planning; before #351/#360, which each add migrations |
+| 40 | **#371** 🚧 | In progress; before #351/#360, which each add migrations |
 | 41 | **#350** | Planning |
 | 42 | **#339** 🚧 | In progress; blocked on #347 (v1.9.0); before #327 and #328 |
 | 43 | **#327** 🚧 | In progress; after #339 |
