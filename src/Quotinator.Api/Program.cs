@@ -1203,6 +1203,101 @@ if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
     }
 }
 
+// #371: a database created from scratch says so. Written here rather than from inside
+// Quotinator.Data's migration code, following #289's precedent immediately above: System_Notification
+// may not exist while migrations run, and a table-rebuild migration may be mid-flight. SeedOnceAsync
+// rather than its active-only sibling, because this is an event that happened once, not a condition
+// that can recur: no dismiss trigger, since nothing resolves a fact, and no expiry, matching #312's
+// opt-in default and #413's finding that a default expiry outlives its own correctness. Nothing is
+// written when the database already existed, which is requirement 5.
+if (dbHealth.IsHealthy && dbInitializer.DatabaseWasCreated)
+{
+    try
+    {
+        IApiLocalizer localizer = app.Services.GetRequiredService<IApiLocalizer>();
+
+        await NotificationSeeding.SeedOnceAsync(
+            app.Services.GetRequiredService<INotificationReader>(),
+            app.Services.GetRequiredService<INotificationWriter>(),
+            NotificationType.Information,
+            new DatabaseCreatedMetadataDto
+            {
+                DataSchemaVersion = dbInitializer.DataSchemaVersion,
+                AppSchemaVersion  = dbInitializer.SchemaVersion,
+                // Not about a release: this describes the database's own state, which no version
+                // number characterises. #289's producer says the same thing for the same reason.
+                ReleaseState = NotificationReleaseState.NotApplicable,
+            },
+            title: NotificationTranslations.Original(
+                       localizer, ApiMessages.NotificationDatabaseCreatedTitle),
+            body: NotificationTranslations.Original(
+                       localizer, ApiMessages.NotificationDatabaseCreatedBody,
+                       dbInitializer.DataSchemaVersion, dbInitializer.SchemaVersion),
+            appVersionId: currentVersion?.Id,
+            translations: NotificationTranslations.Build(
+                localizer,
+                ApiMessages.NotificationDatabaseCreatedTitle,
+                ApiMessages.NotificationDatabaseCreatedBody,
+                bodyArgs: [dbInitializer.DataSchemaVersion, dbInitializer.SchemaVersion]));
+    }
+    catch (Exception ex)
+    {
+        app.Services.GetRequiredService<ILogger<Program>>()
+            .LogWarning(ex, "[Server] Failed to seed the #371 database-created notification; non-fatal, startup continues.");
+    }
+}
+
+// #371: one notification per migration this startup applied, each naming what it did. Nothing is
+// persisted beyond the payload: the description comes from this build's own migration list by version
+// number, and because that list is append-only and frozen, a database migrated by an older build
+// resolves correctly against a newer one's. A long upgrade therefore reports one row per migration,
+// which is what the issue asks for. The list is empty on a created database (the baseline path applies
+// no individual migration) and on an up-to-date one, so neither writes anything here.
+if (dbHealth.IsHealthy && dbInitializer.MigrationsApplied.Count > 0)
+{
+    try
+    {
+        IApiLocalizer localizer = app.Services.GetRequiredService<IApiLocalizer>();
+        INotificationReader reader = app.Services.GetRequiredService<INotificationReader>();
+        INotificationWriter writer = app.Services.GetRequiredService<INotificationWriter>();
+
+        foreach (AppliedMigrationResult migration in dbInitializer.MigrationsApplied)
+        {
+            await NotificationSeeding.SeedOnceAsync(
+                reader,
+                writer,
+                NotificationType.Information,
+                new MigrationAppliedMetadataDto
+                {
+                    Phase            = migration.Phase,
+                    MigrationVersion = migration.Version,
+                    Description      = migration.Description,
+                    ReleaseState     = NotificationReleaseState.NotApplicable,
+                },
+                title: NotificationTranslations.Original(
+                           localizer, ApiMessages.NotificationMigrationAppliedTitle,
+                           migration.Phase, migration.Version),
+                // The description itself is English wherever it is read: it lives on the migration
+                // record, in code. Only the sentence around it is translated, which is why the body is
+                // a lead-in rather than a bare placeholder.
+                body: NotificationTranslations.Original(
+                          localizer, ApiMessages.NotificationMigrationAppliedBody, migration.Description),
+                appVersionId: currentVersion?.Id,
+                translations: NotificationTranslations.Build(
+                    localizer,
+                    ApiMessages.NotificationMigrationAppliedTitle,
+                    ApiMessages.NotificationMigrationAppliedBody,
+                    titleArgs: [migration.Phase, migration.Version],
+                    bodyArgs: [migration.Description]));
+        }
+    }
+    catch (Exception ex)
+    {
+        app.Services.GetRequiredService<ILogger<Program>>()
+            .LogWarning(ex, "[Server] Failed to seed the #371 migration-applied notifications; non-fatal, startup continues.");
+    }
+}
+
 // #81: third producer for #278's notification mechanism: announces every release's
 // notification-flagged changelog highlights (#307's ChangelogReservedAudience.Notification
 // convention) missed since lastActiveVersion (captured above, before migrations ran), one

@@ -17,15 +17,60 @@ public static class QuotinatorMigrations
     /// <summary>Quotinator's own domain schema migrations, in application order.</summary>
     public static IReadOnlyList<SchemaMigration> All { get; } =
     [
-        new SchemaMigration { Version = 1, Sql = Migration001_InitialSchema },
-        new SchemaMigration { Version = 2, Sql = Migration002_ReseedGenres },
-        new SchemaMigration { Version = 3, Sql = Migration003_ImportBatches },
-        new SchemaMigration { Version = 4, Sql = Migration004_ConsolidatedSinceV172 },
-        new SchemaMigration { Version = 5, Sql = Migration005_ConsolidatedSinceV182 },
-        new SchemaMigration { Version = 6, Sql = Migration006_SeasonTable },
-        new SchemaMigration { Version = 7, Sql = Migration007_SourceSeasonLink },
-        new SchemaMigration { Version = 8, Sql = Migration008_SourceDateInNaturalKey },
-        new SchemaMigration { Version = 9, Sql = Migration009_QuoteUniquePerSource },
+        new SchemaMigration
+        {
+            Version     = 1,
+            Sql         = Migration001_InitialSchema,
+            Description = "Creates the quote, source, character and person tables this application stores its content in.",
+        },
+        new SchemaMigration
+        {
+            Version     = 2,
+            Sql         = Migration002_ReseedGenres,
+            Description = "Clears the stored genres so they can be read again, after hyphenated ones were being silently dropped.",
+        },
+        new SchemaMigration
+        {
+            Version     = 3,
+            Sql         = Migration003_ImportBatches,
+            Description = "Starts recording which import each stored record came from.",
+        },
+        new SchemaMigration
+        {
+            Version     = 4,
+            Sql         = Migration004_ConsolidatedSinceV172,
+            Description = "Brings the content tables up to the v1.7.2 schema in one step, and merges characters that the same person played across sources.",
+        },
+        new SchemaMigration
+        {
+            Version     = 5,
+            Sql         = Migration005_ConsolidatedSinceV182,
+            Description = "Brings the content tables up to the v1.8.2 schema in one step, including their move to domain-prefixed names.",
+        },
+        new SchemaMigration
+        {
+            Version     = 6,
+            Sql         = Migration006_SeasonTable,
+            Description = "Adds seasons, so a quote can say which part of a series it came from.",
+        },
+        new SchemaMigration
+        {
+            Version     = 7,
+            Sql         = Migration007_SourceSeasonLink,
+            Description = "Lets a source belong to a season as well as to a series.",
+        },
+        new SchemaMigration
+        {
+            Version     = 8,
+            Sql         = Migration008_SourceDateInNaturalKey,
+            Description = "Lets two works that share a title but not a date be stored as two sources instead of one.",
+        },
+        new SchemaMigration
+        {
+            Version     = 9,
+            Sql         = Migration009_QuoteUniquePerSource,
+            Description = "Removes duplicate quotes within one source, and stops another being stored.",
+        },
     ];
 
     /// <summary>

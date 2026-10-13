@@ -50,6 +50,12 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public string? MigrationApplied => null;
 
     /// <inheritdoc/>
+    public bool DatabaseWasCreated => false;
+
+    /// <inheritdoc/>
+    public IReadOnlyList<AppliedMigrationResult> MigrationsApplied => [];
+
+    /// <inheritdoc/>
     public bool SchemaVersionOvershootDetected => false;
 
     /// <inheritdoc/>

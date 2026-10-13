@@ -63,50 +63,108 @@ public class DatabaseInitializer(
     // that may be in the same already-migrated state and isn't being reset alongside this one.
     private static readonly IReadOnlyList<SchemaMigration> DataOwnedMigrations =
     [
-        new SchemaMigration { Version = 1, Sql = AuditMigrations.CreateAuditEntriesTable },
-        new SchemaMigration { Version = 2, Sql = DataConsolidatedMigrations.SinceV172 },
-        new SchemaMigration { Version = 3, Sql = DataConsolidatedMigrations.SinceV182 },
-        // #81: System_AppVersion tracks the last app version that completed a healthy startup, read
-        // before migrations run on the following boot so the what's-new notification producer can walk
-        // every release missed since then, not just the one currently running.
-        new SchemaMigration { Version = 4, Sql = AppVersionMigrations.CreateAppVersionTable },
-        // #312: System_Notification gains a Title/Body split, a typed Metadata payload, and an
-        // AppVersionId provenance reference: the foundation the milestone's remaining producers and
-        // its richer rendering both build on.
-        new SchemaMigration { Version = 5, Sql = NotificationSchemaMigrations.SplitMessageAndAddMetadata },
-        // #312: System_AppVersion becomes an append-only Application+Version history, so a
-        // notification's provenance reference stays frozen instead of re-pointing on upgrade.
-        new SchemaMigration { Version = 6, Sql = AppVersionHistoryMigrations.AddApplicationColumn },
-        // #312: and gains an explicit recording-order counter, since neither DateCreated (second
-        // resolution) nor SQLite's implicit rowid is a trustworthy answer to "which version ran last".
-        new SchemaMigration { Version = 7, Sql = AppVersionHistoryMigrations.AddSequenceNumberColumn },
-        // #312: give v1.8.3's already-shipped notification the structured identity #312 introduced,
-        // so the upgrade recognises it instead of announcing it a second time. Data-only: no schema
-        // change, so the baseline needs no counterpart (a fresh database has no legacy row to fix).
-        new SchemaMigration { Version = 8, Sql = NotificationLegacyMetadataMigrations.BackfillAnnouncementMetadata },
-        // #312: and give that same notification the provenance it predates, creating the 1.8.3
-        // System_AppVersion row it references: conditional on the row actually being there, so a
-        // database that never ran v1.8.3 gains no history it never had.
-        new SchemaMigration { Version = 9, Sql = NotificationLegacyMetadataMigrations.BackfillAnnouncementProvenance },
-        // #312: what's-new rows written by an intermediate build state their release state implicitly
-        // (by whether a version is present); the payload now requires it explicitly, so those rows are
-        // brought up to that shape rather than becoming unreadable and re-announcing themselves.
-        new SchemaMigration { Version = 10, Sql = NotificationLegacyMetadataMigrations.BackfillWhatsNewReleaseState },
-        // #312: release state, the version a notification is about, and its content hash became common
-        // to every payload rather than what's-new's alone: the remaining kinds' stored rows are
-        // brought onto that shape so they stay identifiable instead of re-announcing themselves.
-        new SchemaMigration { Version = 11, Sql = NotificationLegacyMetadataMigrations.BackfillCommonReleaseFields },
-        // #319: a notification records which language its own Title/Body are written in, so a reader
-        // requesting a language with no translation falls back to the original rather than to nothing.
-        new SchemaMigration { Version = 12, Sql = NotificationTranslationMigrations.AddOriginalLanguageColumn },
-        // #319: and gains a sibling table holding one translated Title/Body per language: the same
-        // arrangement Quotinator_Quote/Quotinator_QuoteTranslation already uses, which is what keeps
-        // the original text (and therefore every producer's content hash) on the parent row untouched.
-        new SchemaMigration { Version = 13, Sql = NotificationTranslationMigrations.CreateNotificationTranslationTable },
-        // #319: v1.8.3's shipped announcement is the only notification any released build persisted,
-        // so it is the whole of the translation backfill. Data-only and conditional on that row being
-        // present: a database that never ran v1.8.3 matches nothing and gains nothing, so the
-        // baseline needs no counterpart.
+        new SchemaMigration
+        {
+            Version     = 1,
+            Sql         = AuditMigrations.CreateAuditEntriesTable,
+            Description = "Creates the audit trail that records every change made to a stored record.",
+        },
+        new SchemaMigration
+        {
+            Version     = 2,
+            Sql         = DataConsolidatedMigrations.SinceV172,
+            Description = "Brings the application's own system tables up to the v1.7.2 schema in one step.",
+        },
+        new SchemaMigration
+        {
+            Version     = 3,
+            Sql         = DataConsolidatedMigrations.SinceV182,
+            Description = "Brings the application's own system tables up to the v1.8.2 schema in one step.",
+        },
+        // #81: read before migrations run on the following boot, so the what's-new producer can walk
+        // every release missed since then rather than only the one currently running.
+        new SchemaMigration
+        {
+            Version     = 4,
+            Sql         = AppVersionMigrations.CreateAppVersionTable,
+            Description = "Starts recording which application version last completed a healthy startup.",
+        },
+        // #312: the foundation the milestone's remaining notification producers and its richer
+        // rendering both build on.
+        new SchemaMigration
+        {
+            Version     = 5,
+            Sql         = NotificationSchemaMigrations.SplitMessageAndAddMetadata,
+            Description = "Splits a notification's message into a separate title and body, and gives it a typed payload and a record of the version that wrote it.",
+        },
+        // #312: so a notification's provenance reference stays frozen instead of re-pointing on
+        // upgrade.
+        new SchemaMigration
+        {
+            Version     = 6,
+            Sql         = AppVersionHistoryMigrations.AddApplicationColumn,
+            Description = "Turns the version record into an append-only history, one entry per application.",
+        },
+        // #312: neither DateCreated (second resolution) nor SQLite's implicit rowid is a trustworthy
+        // answer to "which version ran last".
+        new SchemaMigration
+        {
+            Version     = 7,
+            Sql         = AppVersionHistoryMigrations.AddSequenceNumberColumn,
+            Description = "Adds an explicit recording order to that version history.",
+        },
+        // #312: data-only, so the baseline needs no counterpart: a fresh database has no legacy row
+        // to fix.
+        new SchemaMigration
+        {
+            Version     = 8,
+            Sql         = NotificationLegacyMetadataMigrations.BackfillAnnouncementMetadata,
+            Description = "Gives the announcement that v1.8.3 already wrote its structured identity, so an upgrade recognises it instead of announcing it a second time.",
+        },
+        // #312: conditional on that row actually being there, so a database that never ran v1.8.3
+        // gains no history it never had.
+        new SchemaMigration
+        {
+            Version     = 9,
+            Sql         = NotificationLegacyMetadataMigrations.BackfillAnnouncementProvenance,
+            Description = "Creates the v1.8.3 version record that same announcement refers to.",
+        },
+        // #312: rows written by an intermediate build state it implicitly, by whether a version is
+        // present; the payload now requires it explicitly, so such a row would otherwise become
+        // unreadable and re-announce itself.
+        new SchemaMigration
+        {
+            Version     = 10,
+            Sql         = NotificationLegacyMetadataMigrations.BackfillWhatsNewReleaseState,
+            Description = "States which release each stored what's-new notification describes, instead of leaving it implied.",
+        },
+        // #312: release state, the version a notification is about, and its content hash became
+        // common to every payload rather than what's-new's alone.
+        new SchemaMigration
+        {
+            Version     = 11,
+            Sql         = NotificationLegacyMetadataMigrations.BackfillCommonReleaseFields,
+            Description = "Brings every other stored notification onto those same release fields, so none of them re-announces itself.",
+        },
+        // #319: so a reader requesting a language with no translation falls back to the original
+        // rather than to nothing.
+        new SchemaMigration
+        {
+            Version     = 12,
+            Sql         = NotificationTranslationMigrations.AddOriginalLanguageColumn,
+            Description = "Records which language a notification's own title and body are written in.",
+        },
+        // #319: the same arrangement Quotinator_Quote/Quotinator_QuoteTranslation already uses, which
+        // is what keeps the original text (and therefore every producer's content hash) on the parent
+        // row untouched.
+        new SchemaMigration
+        {
+            Version     = 13,
+            Sql         = NotificationTranslationMigrations.CreateNotificationTranslationTable,
+            Description = "Adds a table holding one translated title and body per language.",
+        },
+        // #319: data-only and conditional on that row being present, so a database that never ran
+        // v1.8.3 matches nothing and gains nothing, and the baseline needs no counterpart.
         //
         // This migration's matching predicate was edited after it had already run on the developer's
         // own database: a T1 pass found it matched nothing, because it compared the whole Metadata
@@ -116,56 +174,115 @@ public class DatabaseInitializer(
         // between test runs, so no database was left stranded at a version whose script had changed.
         // ADR 015's revision (from #254) is unchanged and still governs: "unreleased" is not the test,
         // and the next migration in this position gets a new version number, exactly as #254 requires.
-        new SchemaMigration { Version = 14, Sql = NotificationTranslationMigrations.BackfillAnnouncementTranslations },
-        // #304: DismissTriggerKey gains 'Reseed' and MetadataKind gains 'ReseedRecommended'. SQLite
-        // cannot widen a CHECK in place, so this is a table rebuild: both widenings share the one
-        // rebuild rather than copying every row twice.
-        new SchemaMigration { Version = 15, Sql = NotificationReseedTriggerMigrations.WidenDismissTriggerAndMetadataKind },
-        // #304: record why a notification stopped being active, so running an action is not reported as
-        // a dismissal. A plain ADD COLUMN with its CHECK inline: no rebuild needed, since nothing
-        // existing is being widened.
-        new SchemaMigration { Version = 16, Sql = NotificationDismissReasonMigrations.AddDismissReasonColumn },
-        // #302: MetadataKind gains 'ReseedFileApplied' for the per-file reseed confirmation. A rebuild
-        // again, for the same reason migration 15 needed one: SQLite cannot widen a CHECK in place.
-        new SchemaMigration { Version = 17, Sql = NotificationReseedFileAppliedMigrations.WidenMetadataKindForFileApplied },
-        // #303: MetadataKind gains 'ImportReviewPending', DismissTriggerKey gains 'ImportReviewResolved',
-        // and DismissReason gains 'Obsolete'. All three widenings share one rebuild: migration 15's
-        // precedent, for the same reason: constraints on one table, and separate migrations would copy
-        // every row three times.
-        new SchemaMigration { Version = 18, Sql = NotificationImportReviewMigrations.WidenForImportReview },
-        // #308: Resolution records how a notification's own action settled it, where DismissReason says
-        // only that it settled. An added column with an inline CHECK, not a rebuild: migration 16's
-        // precedent, since nothing existing is being widened.
-        new SchemaMigration { Version = 19, Sql = NotificationResolutionMigrations.AddResolutionColumn },
-        // #373: ActionType gains 'Unchanged': an import that would leave a record exactly as it is.
-        // A rebuild, for the same reason migrations 15, 17 and 18 needed one: SQLite cannot widen an
-        // inline CHECK. Nothing about existing rows changes; only the constraint admits one more value.
-        new SchemaMigration { Version = 20, Sql = ImportActionUnchangedMigrations.WidenActionTypeForUnchanged },
-        // #377: ActionType gains 'ResolvedToExisting': a record whose fields differed from what arrived
-        // but whose resolution settled on the values already stored, so nothing is written differently.
-        // A rebuild for the same reason migration 20 needed one: SQLite cannot widen an inline CHECK.
-        new SchemaMigration { Version = 21, Sql = ImportActionResolvedToExistingMigrations.WidenActionTypeForResolvedToExisting },
-        // #376: ActionType gains 'AlreadyReported': a record whose conflict an earlier pass already
-        // staged, and which this pass therefore does not stage again. A rebuild for the same reason
-        // migrations 20 and 21 needed one: SQLite cannot widen an inline CHECK.
-        new SchemaMigration { Version = 22, Sql = ImportActionAlreadyReportedMigrations.WidenActionTypeForAlreadyReported },
-        // #348: MetadataKind gains 'BackupRefused': startup did not load content because no backup
-        // could be taken. A rebuild for the same reason migrations 15, 17 and 18 needed one.
-        new SchemaMigration { Version = 23, Sql = NotificationBackupRefusedMigrations.WidenMetadataKindForBackupRefused },
-        // #348: #279's announcement is reworded, and its content hash is part of its identity, so the
-        // stored row is rewritten to match rather than announced a second time. Data only: no schema
-        // change, so the baseline is unaffected.
-        new SchemaMigration { Version = 24, Sql = NotificationAnnouncementRewordMigrations.RewordOperationIdRename },
-        // #348: the backup quota warning, a new kind, dismiss trigger and resolution. One rebuild widens
-        // all three CHECKs, since they are on the same table.
-        new SchemaMigration { Version = 25, Sql = NotificationBackupQuotaMigrations.WidenForBackupQuotaWarning },
-        // #348: exceeding the maximum reports as an error of its own, so its kind, trigger and
-        // resolution join the same three CHECKs. One rebuild, for the reason migration 25 gives.
-        new SchemaMigration { Version = 26, Sql = NotificationBackupMaxMigrations.WidenForBackupMaxError },
-        // #413: the v1.8.3 announcement row keeps the 30-day expiry that release defaulted to, so a
-        // breaking change that still applies reads as Expired. Clears it, and restates the body over
-        // four lines, continuing migration 24's in-place edit of the same row.
-        new SchemaMigration { Version = 27, Sql = NotificationAnnouncementLineBreakMigrations.BreakAnnouncementIntoLines },
+        new SchemaMigration
+        {
+            Version     = 14,
+            Sql         = NotificationTranslationMigrations.BackfillAnnouncementTranslations,
+            Description = "Translates the announcement that v1.8.3 already wrote, the only notification any released build persisted.",
+        },
+        // #304: SQLite cannot widen a CHECK in place, so this is a table rebuild; both widenings share
+        // the one rebuild rather than copying every row twice.
+        new SchemaMigration
+        {
+            Version     = 15,
+            Sql         = NotificationReseedTriggerMigrations.WidenDismissTriggerAndMetadataKind,
+            Description = "Lets a notification recommend reloading content, and be cleared by actually reloading it.",
+        },
+        // #304: a plain ADD COLUMN with its CHECK inline, so no rebuild is needed: nothing existing is
+        // being widened.
+        new SchemaMigration
+        {
+            Version     = 16,
+            Sql         = NotificationDismissReasonMigrations.AddDismissReasonColumn,
+            Description = "Records why a notification stopped being active, so running its action is not reported as dismissing it.",
+        },
+        // #302: a rebuild again, for the reason migration 15 gives.
+        new SchemaMigration
+        {
+            Version     = 17,
+            Sql         = NotificationReseedFileAppliedMigrations.WidenMetadataKindForFileApplied,
+            Description = "Lets a notification confirm one content file that loaded with nothing left to review.",
+        },
+        // #303: all three widenings share one rebuild, migration 15's precedent and for its reason:
+        // they are constraints on one table, and separate migrations would copy every row three times.
+        new SchemaMigration
+        {
+            Version     = 18,
+            Sql         = NotificationImportReviewMigrations.WidenForImportReview,
+            Description = "Lets a notification report content awaiting review, and be cleared once that review is resolved.",
+        },
+        // #308: an added column with an inline CHECK, not a rebuild: migration 16's precedent, since
+        // nothing existing is being widened.
+        new SchemaMigration
+        {
+            Version     = 19,
+            Sql         = NotificationResolutionMigrations.AddResolutionColumn,
+            Description = "Records how a notification's own action settled it, where the dismiss reason says only that it settled.",
+        },
+        // #373: a rebuild, for the reason migrations 15, 17 and 18 give. Nothing about existing rows
+        // changes; only the constraint admits one more value.
+        new SchemaMigration
+        {
+            Version     = 20,
+            Sql         = ImportActionUnchangedMigrations.WidenActionTypeForUnchanged,
+            Description = "Lets an imported item record that it would leave the stored record exactly as it is.",
+        },
+        // #377: a rebuild for the reason migration 20 gives.
+        new SchemaMigration
+        {
+            Version     = 21,
+            Sql         = ImportActionResolvedToExistingMigrations.WidenActionTypeForResolvedToExisting,
+            Description = "Lets an imported item record a decision that settled on the values already stored, so nothing is written differently.",
+        },
+        // #376: a rebuild for the reason migrations 20 and 21 give.
+        new SchemaMigration
+        {
+            Version     = 22,
+            Sql         = ImportActionAlreadyReportedMigrations.WidenActionTypeForAlreadyReported,
+            Description = "Lets an imported item record a disagreement an earlier pass already raised, so this pass does not raise it again.",
+        },
+        // #348: a rebuild for the reason migrations 15, 17 and 18 give.
+        new SchemaMigration
+        {
+            Version     = 23,
+            Sql         = NotificationBackupRefusedMigrations.WidenMetadataKindForBackupRefused,
+            Description = "Lets a notification report that content was not loaded because no backup could be taken first.",
+        },
+        // #348: data only, no schema change, so the baseline is unaffected.
+        new SchemaMigration
+        {
+            Version     = 24,
+            Sql         = NotificationAnnouncementRewordMigrations.RewordOperationIdRename,
+            Description = "Rewords the v1.8.3 announcement in place, so the new wording does not read as a second announcement.",
+        },
+        // #348: one rebuild widens all three CHECKs, since they are on the same table.
+        new SchemaMigration
+        {
+            Version     = 25,
+            Sql         = NotificationBackupQuotaMigrations.WidenForBackupQuotaWarning,
+            Description = "Lets a notification warn that the backups folder has reached the size it is allowed to use.",
+        },
+        // #348: one rebuild, for the reason migration 25 gives.
+        new SchemaMigration
+        {
+            Version     = 26,
+            Sql         = NotificationBackupMaxMigrations.WidenForBackupMaxError,
+            Description = "Lets a notification report that the backups folder is at or above its maximum, so every backup is refused there.",
+        },
+        // #413: continues migration 24's in-place edit of the same row.
+        new SchemaMigration
+        {
+            Version     = 27,
+            Sql         = NotificationAnnouncementLineBreakMigrations.BreakAnnouncementIntoLines,
+            Description = "Clears the expiry on the v1.8.3 announcement, which still applies, and restates its body over four lines.",
+        },
+        // #371: one rebuild for both new kinds, for the reason migrations 15, 18, 25 and 26 give.
+        new SchemaMigration
+        {
+            Version     = 28,
+            Sql         = NotificationDatabaseLifecycleMigrations.WidenMetadataKindForDatabaseLifecycle,
+            Description = "Lets a notification report that the database was created, and that a migration was applied to it.",
+        },
     ];
 
     // Data's own baseline fragment: creates every Data-owned table directly under its final,
@@ -365,7 +482,7 @@ public class DatabaseInitializer(
             Title             TEXT,
             Metadata          TEXT,
             MetadataKind      TEXT
-                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied', 'ImportReviewPending', 'BackupRefused', 'BackupQuotaReached', 'BackupMaxExceeded')),
+                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied', 'ImportReviewPending', 'BackupRefused', 'BackupQuotaReached', 'BackupMaxExceeded', 'DatabaseCreated', 'MigrationApplied')),
             AppVersionId      TEXT    REFERENCES System_AppVersion(Id),
             OriginalLanguage  TEXT    NOT NULL DEFAULT 'en',
             DismissReason     TEXT
@@ -465,6 +582,12 @@ public class DatabaseInitializer(
     public string? MigrationApplied { get; protected set; }
 
     /// <inheritdoc/>
+    public bool DatabaseWasCreated { get; protected set; }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<AppliedMigrationResult> MigrationsApplied { get; protected set; } = [];
+
+    /// <inheritdoc/>
     public bool SchemaVersionOvershootDetected { get; protected set; }
 
     /// <inheritdoc/>
@@ -488,6 +611,14 @@ public class DatabaseInitializer(
 
         EnableWal(connection);
         MigrationsResult migrations = await ApplyMigrationsAsync(connection);
+
+        // #371: assigned here rather than inside ApplyMigrationsAsync, and that placement is
+        // load-bearing. DropAndRebuildAsync calls ApplyMigrationsAsync too, against a database it has
+        // just dropped every table from, so both of these would read as a freshly created database
+        // after an operator's Reset. Assigning in the startup path only leaves a Reset unable to
+        // disturb either one.
+        DatabaseWasCreated = migrations.DatabaseWasCreated;
+        MigrationsApplied  = migrations.Applied;
 
         // #348: a refused migration leaves the schema behind this build, and loading content into a schema
         // the build has not migrated is exactly the unprotected write the refusal exists to prevent.
@@ -515,6 +646,8 @@ public class DatabaseInitializer(
 
         EnableWal(connection);
         MigrationsResult migrations = await ApplyMigrationsAsync(connection, forceIncremental);
+        DatabaseWasCreated = migrations.DatabaseWasCreated;
+        MigrationsApplied  = migrations.Applied;
         await RunInitialisedHookAsync(connection, migrations.TookBaselinePath, migrations.DatabaseWasCreated);
     }
 
@@ -1083,7 +1216,16 @@ public class DatabaseInitializer(
     /// not refilled behind their back.
     /// </param>
     /// <param name="Obstacle">What stopped a backup, when pending migrations were refused for want of one.</param>
-    private readonly record struct MigrationsResult(bool TookBaselinePath, bool DatabaseWasCreated, BackupOutcome? Obstacle);
+    /// <param name="Applied">
+    /// Every migration this call actually ran, in order, across both phases (#371). Empty on the
+    /// baseline path, which applies no individual migration, and empty when nothing was pending or the
+    /// migrations were refused for want of a backup.
+    /// </param>
+    private readonly record struct MigrationsResult(
+        bool TookBaselinePath,
+        bool DatabaseWasCreated,
+        BackupOutcome? Obstacle,
+        IReadOnlyList<AppliedMigrationResult> Applied);
 
     /// <summary>Applies pending migrations, or the baseline for a genuinely fresh database, unless no backup can be taken first.</summary>
     private async Task<MigrationsResult> ApplyMigrationsAsync(SqliteConnection connection, bool forceIncremental = false, bool skipOwnBackup = false)
@@ -1101,7 +1243,7 @@ public class DatabaseInitializer(
         if (isEmptyDatabase && !forceIncremental && _consumerBaseline is not null)
         {
             await ApplyBaselineAsync(connection);
-            return new MigrationsResult(TookBaselinePath: true, DatabaseWasCreated: isEmptyDatabase, Obstacle: null);
+            return new MigrationsResult(TookBaselinePath: true, DatabaseWasCreated: isEmptyDatabase, Obstacle: null, Applied: []);
         }
 
         int dataCurrent     = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetDataCurrentVersion);
@@ -1125,7 +1267,7 @@ public class DatabaseInitializer(
             Logger.LogSchemaUpToDate(dataCurrent, consumerCurrent);
             if (SchemaVersionOvershootDetected)
                 Logger.LogSchemaVersionOvershoot(dataCurrent, DataOwnedMigrations.Count, consumerCurrent, _consumerMigrations.Count);
-            return new MigrationsResult(TookBaselinePath: false, DatabaseWasCreated: isEmptyDatabase, Obstacle: null);
+            return new MigrationsResult(TookBaselinePath: false, DatabaseWasCreated: isEmptyDatabase, Obstacle: null, Applied: []);
         }
 
         // skipOwnBackup: DropAndRebuildAsync (Reset) already took its own backup before this call:
@@ -1144,7 +1286,7 @@ public class DatabaseInitializer(
             DataSchemaVersion = dataCurrent;
             SchemaVersion     = consumerCurrent;
             Logger.LogMigrationRefusedNoBackup(refused.Outcome.ToString());
-            return new MigrationsResult(TookBaselinePath: false, DatabaseWasCreated: isEmptyDatabase, Obstacle: refused.Outcome);
+            return new MigrationsResult(TookBaselinePath: false, DatabaseWasCreated: isEmptyDatabase, Obstacle: refused.Outcome, Applied: []);
         }
 
         string? backupPath = migrationBackup?.Path;
@@ -1153,11 +1295,15 @@ public class DatabaseInitializer(
         // which requires dropping a table that other tables still hold live foreign-key references
         // to. Foreign key enforcement must be off for the duration: PRAGMA foreign_keys is a no-op
         // inside a transaction, so it cannot be toggled from within a migration's own SQL text.
+        // Declared outside the try so the successful return below can read it: on the exception path
+        // the backup is restored and the exception rethrown, so nothing reads it at all.
+        IReadOnlyList<AppliedMigrationResult> applied = [];
+
         await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
         try
         {
-            string? dataApplied = await ApplyMigrationPhaseAsync(
-                connection, "Data", DataOwnedMigrations, dataCurrent, Sql.Schema.InsertDataVersion);
+            IReadOnlyList<AppliedMigrationResult> dataApplied = await ApplyMigrationPhaseAsync(
+                connection, MigrationPhase.Data, DataOwnedMigrations, dataCurrent, Sql.Schema.InsertDataVersion);
             // #289: Math.Max, not a bare assignment to DataOwnedMigrations.Count: when this side
             // overshoots while the other side has genuine pending work (so this whole method doesn't
             // take the early "both up to date" return above), ApplyMigrationPhaseAsync writes nothing
@@ -1165,11 +1311,12 @@ public class DatabaseInitializer(
             // dataCurrent, not the smaller known count.
             DataSchemaVersion = Math.Max(dataCurrent, DataOwnedMigrations.Count);
 
-            string? consumerApplied = await ApplyMigrationPhaseAsync(
-                connection, "App", _consumerMigrations, consumerCurrent, Sql.Schema.InsertConsumerVersion);
+            IReadOnlyList<AppliedMigrationResult> consumerApplied = await ApplyMigrationPhaseAsync(
+                connection, MigrationPhase.App, _consumerMigrations, consumerCurrent, Sql.Schema.InsertConsumerVersion);
             SchemaVersion = Math.Max(consumerCurrent, _consumerMigrations.Count);
 
-            MigrationApplied = CombineMigrationApplied(dataApplied, consumerApplied);
+            applied           = [.. dataApplied, .. consumerApplied];
+            MigrationApplied  = RenderMigrationApplied(applied);
             if (SchemaVersionOvershootDetected)
                 Logger.LogSchemaVersionOvershoot(DataSchemaVersion, DataOwnedMigrations.Count, SchemaVersion, _consumerMigrations.Count);
         }
@@ -1187,7 +1334,7 @@ public class DatabaseInitializer(
 
         Logger.LogSchemaUpdated(DataSchemaVersion, SchemaVersion);
 
-        return new MigrationsResult(TookBaselinePath: false, DatabaseWasCreated: isEmptyDatabase, Obstacle: null);
+        return new MigrationsResult(TookBaselinePath: false, DatabaseWasCreated: isEmptyDatabase, Obstacle: null, Applied: applied);
     }
 
     private async Task ApplyBaselineAsync(SqliteConnection connection)
@@ -1224,23 +1371,30 @@ public class DatabaseInitializer(
 
     /// <summary>
     /// Applies one migration phase (either Quotinator.Data's own list or the consumer's own list)
-    /// against its own version table, starting from <paramref name="current"/>. Returns a
-    /// human-readable <c>"{Phase} vX → vY"</c> description if any migration in this phase actually
-    /// ran, or <c>null</c> if the phase was already up to date. No exception handling here: if a
+    /// against its own version table, starting from <paramref name="current"/>. Returns one
+    /// <see cref="AppliedMigrationResult"/> per migration that actually ran, in the order they ran, or
+    /// an empty list if the phase was already up to date. No exception handling here: if a
     /// migration's SQL throws, <c>using var tx</c> rolls back on unwind and the exception propagates
     /// untouched to the caller, which is responsible for the broader roll-back-to-previous-state
     /// (see <see cref="ApplyMigrationsAsync"/> and <see cref="DropAndRebuildAsync"/>).
     /// </summary>
-    private async Task<string?> ApplyMigrationPhaseAsync(
+    /// <remarks>
+    /// #371: this used to return the <c>"{Phase} vX → vY"</c> banner string directly. The banner is now
+    /// derived from the same list by <see cref="RenderMigrationApplied"/>, so the line an operator reads
+    /// and the notifications they receive cannot describe different work.
+    /// </remarks>
+    private async Task<IReadOnlyList<AppliedMigrationResult>> ApplyMigrationPhaseAsync(
         SqliteConnection connection,
-        string phaseName,
+        MigrationPhase phase,
         IReadOnlyList<SchemaMigration> migrations,
         int current,
         string insertVersionSql)
     {
-        if (current >= migrations.Count) return null;
+        if (current >= migrations.Count) return [];
 
-        Logger.LogApplyingMigrationPhase(migrations.Count - current, phaseName, current, migrations.Count);
+        Logger.LogApplyingMigrationPhase(migrations.Count - current, phase, current, migrations.Count);
+
+        List<AppliedMigrationResult> applied = [];
 
         for (int i = current; i < migrations.Count; i++)
         {
@@ -1251,19 +1405,32 @@ public class DatabaseInitializer(
                 new { v = i + 1, at = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat) },
                 transaction: tx);
             await tx.CommitAsync();
+
+            // Appended only after the commit: a migration whose transaction rolled back did not run,
+            // so it must not be reported as applied.
+            applied.Add(new AppliedMigrationResult(phase, migrations[i].Version, migrations[i].Description));
         }
 
-        return $"{phaseName} v{current} → v{migrations.Count}";
+        return applied;
     }
 
-    private static string? CombineMigrationApplied(string? dataApplied, string? consumerApplied)
-        => (dataApplied, consumerApplied) switch
-        {
-            (null, null)     => null,
-            (_, null)        => dataApplied,
-            (null, _)        => consumerApplied,
-            _                => $"{dataApplied}, {consumerApplied}"
-        };
+    /// <summary>
+    /// The startup banner's migration line, derived from the migrations actually applied (#371), or
+    /// <see langword="null"/> when none were.
+    /// </summary>
+    /// <param name="applied">Every migration this run applied, across both phases.</param>
+    private static string? RenderMigrationApplied(IReadOnlyList<AppliedMigrationResult> applied)
+    {
+        if (applied.Count == 0) return null;
+
+        // One span per phase, in the order the phases ran, each rendered from its own first and last
+        // entry rather than from a count held separately.
+        IEnumerable<string> spans = applied
+            .GroupBy(m => m.Phase)
+            .Select(phase => $"{phase.Key} v{phase.Min(m => m.Version) - 1} → v{phase.Max(m => m.Version)}");
+
+        return string.Join(", ", spans);
+    }
 
     // Discovers all user tables at runtime and drops them.
     // Table names come from sqlite_master (system metadata): string interpolation is safe.

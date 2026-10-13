@@ -65,15 +65,15 @@ public class UserSystemReseedConceptTests
 
     private UserContentTestInitializer CreateInitializer()
     {
-        SqliteConnectionFactory factory = new SqliteConnectionFactory(_dbPath);
-        DatabaseOptions options = new DatabaseOptions
+        SqliteConnectionFactory factory = new(_dbPath);
+        DatabaseOptions options = new()
         {
             DbPath      = _dbPath,
             BackupsPath = Path.Combine(_tempDir.Path, "backups"),
         };
         IReadOnlyList<SchemaMigration> migrations =
         [
-            new SchemaMigration { Version = 1, Sql = CreateTableSql },
+            new SchemaMigration { Version = 1, Sql = CreateTableSql, Description = "Creates this test's own user-content table." },
         ];
         return new UserContentTestInitializer(factory, options, migrations, new SchemaBaseline { Sql = CreateTableSql });
     }
@@ -85,7 +85,7 @@ public class UserSystemReseedConceptTests
 
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         int count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM UserContent_ExampleWidget;");
         Assert.AreEqual(1, count, "A consumer-defined system table must be seeded on first-ever install, via the same extension point Quotinator.Data itself uses.");
@@ -99,7 +99,7 @@ public class UserSystemReseedConceptTests
 
         await db.ResetAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         int count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM UserContent_ExampleWidget;");
         Assert.AreEqual(1, count, "A consumer-defined system table's content must be present again after Reset.");

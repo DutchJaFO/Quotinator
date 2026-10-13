@@ -5753,6 +5753,7 @@ public class DatabaseInitializerTests
         {
             Version = QuotinatorMigrations.All.Count + 1,
             Sql     = "CREATE TABLE IF NOT EXISTS Test_277_Dummy (Id INTEGER);",
+            Description = "Adds the #277 fixture's dummy table.",
         };
         List<SchemaMigration> extendedMigrations = [.. QuotinatorMigrations.All, extraMigration];
 
@@ -5829,6 +5830,7 @@ public class DatabaseInitializerTests
         {
             Version = QuotinatorMigrations.All.Count + 1,
             Sql     = $"CREATE TABLE IF NOT EXISTS {PendingMigrationTable} (Id INTEGER);",
+            Description = "Adds the fixture table that makes a migration pending.",
         };
 
         QuotinatorDatabaseInitializer db2 = CreateInitializer(
@@ -6063,6 +6065,171 @@ public class DatabaseInitializerTests
         await Assert.ThrowsExactlyAsync<SqliteException>(() => db2.InitialiseAsync());
 
         Assert.AreEqual(1, BackupFileCount(), "The backup must have succeeded before the execute step failed: distinguishing this from a backup-write failure");
+    }
+
+    #endregion
+
+    #region #371: what this startup created, and which migrations it applied
+
+    /// <summary>
+    /// #371: a run that found no table at all reports that it created the database, which is the
+    /// signal the creation notification is written from.
+    /// </summary>
+    [TestMethod]
+    public async Task FreshDatabase_ReportsItWasCreatedFromBaseline()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
+
+        await db.InitialiseAsync();
+
+        Assert.IsTrue(db.DatabaseWasCreated,
+            "A database with no table at all before this run was created by it.");
+    }
+
+    /// <summary>
+    /// #371, the negative: an ordinary restart against an existing, up-to-date database created
+    /// nothing, so it must not say it did.
+    /// </summary>
+    [TestMethod]
+    public async Task ExistingUpToDateDatabase_ReportsNoCreation()
+    {
+        QuotinatorDatabaseInitializer first = CreateInitializer([]);
+        await first.InitialiseAsync();
+        Assert.IsTrue(first.DatabaseWasCreated, "Precondition: the first run is the one that creates it.");
+
+        QuotinatorDatabaseInitializer second = CreateInitializer([]);
+        await second.InitialiseAsync();
+
+        Assert.IsFalse(second.DatabaseWasCreated,
+            "A restart against a database that already existed created nothing.");
+    }
+
+    /// <summary>
+    /// #371: every migration that actually ran is reported on its own, not collapsed into the single
+    /// <c>MigrationApplied</c> banner line, which cannot say what any one of them did.
+    /// </summary>
+    [TestMethod]
+    public async Task AppliedMigrations_AreReportedIndividually()
+    {
+        QuotinatorDatabaseInitializer created = CreateInitializer([]);
+        await created.InitialiseAsync();
+
+        List<SchemaMigration> withTwoMore =
+        [
+            .. QuotinatorMigrations.All,
+            new SchemaMigration
+            {
+                Version     = QuotinatorMigrations.All.Count + 1,
+                Sql         = "CREATE TABLE IF NOT EXISTS Test_371_First (Id INTEGER);",
+                Description = "Adds the first #371 probe table.",
+            },
+            new SchemaMigration
+            {
+                Version     = QuotinatorMigrations.All.Count + 2,
+                Sql         = "CREATE TABLE IF NOT EXISTS Test_371_Second (Id INTEGER);",
+                Description = "Adds the second #371 probe table.",
+            },
+        ];
+
+        QuotinatorDatabaseInitializer upgraded = CreateInitializer([], withTwoMore, useBaseline: true);
+        await upgraded.InitialiseAsync();
+
+        Assert.HasCount(2, upgraded.MigrationsApplied,
+            "Two migrations were pending, so two must be reported: one entry each, not one summary.");
+        Assert.AreEqual(QuotinatorMigrations.All.Count + 1, upgraded.MigrationsApplied[0].Version);
+        Assert.AreEqual(QuotinatorMigrations.All.Count + 2, upgraded.MigrationsApplied[1].Version);
+        Assert.AreEqual(MigrationPhase.App, upgraded.MigrationsApplied[0].Phase,
+            "A consumer migration belongs to the App phase, which is what separates it from Data's own list.");
+    }
+
+    /// <summary>
+    /// #371: the reported entry carries what the migration did. A version number alone is what
+    /// <c>System_SchemaVersion</c> already had, and is the whole reason this issue exists.
+    /// </summary>
+    [TestMethod]
+    public async Task AppliedMigration_IsReportedByItsDescriptionNotOnlyItsVersion()
+    {
+        const string description = "Adds the #371 description probe table.";
+
+        QuotinatorDatabaseInitializer created = CreateInitializer([]);
+        await created.InitialiseAsync();
+
+        List<SchemaMigration> withOneMore =
+        [
+            .. QuotinatorMigrations.All,
+            new SchemaMigration
+            {
+                Version     = QuotinatorMigrations.All.Count + 1,
+                Sql         = "CREATE TABLE IF NOT EXISTS Test_371_Described (Id INTEGER);",
+                Description = description,
+            },
+        ];
+
+        QuotinatorDatabaseInitializer upgraded = CreateInitializer([], withOneMore, useBaseline: true);
+        await upgraded.InitialiseAsync();
+
+        AppliedMigrationResult applied = upgraded.MigrationsApplied.Single();
+        Assert.AreEqual(description, applied.Description,
+            "The description on the migration's own record is what the report must carry.");
+    }
+
+    /// <summary>
+    /// #371, the negative: a database with nothing pending applied no migration, so it reports none.
+    /// </summary>
+    [TestMethod]
+    public async Task NoPendingMigrations_ReportsNoAppliedMigrations()
+    {
+        QuotinatorDatabaseInitializer first = CreateInitializer([]);
+        await first.InitialiseAsync();
+
+        QuotinatorDatabaseInitializer second = CreateInitializer([]);
+        await second.InitialiseAsync();
+
+        Assert.IsEmpty(second.MigrationsApplied,
+            "Nothing was pending, so nothing was applied, so nothing is reported.");
+    }
+
+    /// <summary>
+    /// #371 requirement 4, as a control rather than a red test: the initializer only *reports*. The
+    /// notification is written by the consumer afterwards, because <c>System_Notification</c> may not
+    /// exist while migrations run and a table-rebuild migration may be mid-flight.
+    /// </summary>
+    /// <remarks>
+    /// This asserts behaviour that is already correct and has to stay correct, so it can only go red if
+    /// this issue writes the notification from the wrong side.
+    /// </remarks>
+    [TestMethod]
+    public async Task ApplyingMigrations_WritesNoNotificationItself()
+    {
+        QuotinatorDatabaseInitializer created = CreateInitializer([]);
+        await created.InitialiseAsync();
+
+        int before = await CountNotificationsAsync();
+
+        List<SchemaMigration> withOneMore =
+        [
+            .. QuotinatorMigrations.All,
+            new SchemaMigration
+            {
+                Version     = QuotinatorMigrations.All.Count + 1,
+                Sql         = "CREATE TABLE IF NOT EXISTS Test_371_Silent (Id INTEGER);",
+                Description = "Adds the #371 silence probe table.",
+            },
+        ];
+
+        QuotinatorDatabaseInitializer upgraded = CreateInitializer([], withOneMore, useBaseline: true);
+        await upgraded.InitialiseAsync();
+
+        Assert.HasCount(1, upgraded.MigrationsApplied, "Precondition: a migration actually ran.");
+        Assert.AreEqual(before, await CountNotificationsAsync(),
+            "Applying a migration must write no notification from inside the initializer.");
+    }
+
+    private async Task<int> CountNotificationsAsync()
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        return await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_Notification;");
     }
 
     #endregion

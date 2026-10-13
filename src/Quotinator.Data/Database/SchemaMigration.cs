@@ -13,4 +13,18 @@ public sealed record SchemaMigration
 
     /// <summary>DDL SQL to execute atomically when this migration is applied.</summary>
     public required string Sql { get; init; }
+
+    /// <summary>
+    /// What this migration did, in one sentence an operator can read (#371).
+    /// </summary>
+    /// <remarks>
+    /// <see langword="required"/> is the point: neither this record nor <c>System_SchemaVersion</c>
+    /// could previously say anything but <c>migration 27 applied</c>, and making the description
+    /// unskippable is what stops the next migration being added without one.
+    /// <para>
+    /// This does not breach the migration-freeze rule, which governs <see cref="Sql"/>: that stays
+    /// byte-identical, and a description changes nothing a database has already applied.
+    /// </para>
+    /// </remarks>
+    public required string Description { get; init; }
 }

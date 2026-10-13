@@ -79,6 +79,125 @@ public class ProgramNotificationSeedingRegressionTests
     }
 
     /// <summary>
+    /// #371: a startup that created the database writes the creation notification, carrying both
+    /// schema versions in its payload rather than only in its prose.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_DatabaseCreated_SeedsTheCreationNotification()
+    {
+        FakeNotificationWriter writer = new();
+
+        using WebApplicationFactory<Program> factory = Build(writer, new ReportingDatabaseInitializer(databaseWasCreated: true));
+        using HttpClient client = factory.CreateClient();
+        await client.GetAsync("/api/v1/health", TestContext.CancellationToken);
+
+        // Per the suite's own rule: assert the notification a known cause produces, never a total.
+        string? created = writer.WrittenMetadata
+            .Where(m => m.Kind == NotificationMetadataKind.DatabaseCreated)
+            .Select(m => m.Metadata)
+            .SingleOrDefault();
+
+        Assert.IsNotNull(created, "a created database must write exactly one DatabaseCreated notification");
+        Assert.Contains("\"dataSchemaVersion\":3", created);
+        Assert.Contains("\"appSchemaVersion\":5", created);
+    }
+
+    /// <summary>
+    /// #371: every migration this startup applied writes its own notification, naming what it did.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_AfterPendingMigrations_SeedsOneNotificationPerMigration()
+    {
+        FakeNotificationWriter writer = new();
+        AppliedMigrationResult[] applied =
+        [
+            new AppliedMigrationResult(MigrationPhase.Data, 28, "Widens a probe constraint."),
+            new AppliedMigrationResult(MigrationPhase.App, 10, "Adds a probe table."),
+        ];
+
+        using WebApplicationFactory<Program> factory = Build(writer, new ReportingDatabaseInitializer(migrationsApplied: applied));
+        using HttpClient client = factory.CreateClient();
+        await client.GetAsync("/api/v1/health", TestContext.CancellationToken);
+
+        List<string?> migrationPayloads =
+            [.. writer.WrittenMetadata.Where(m => m.Kind == NotificationMetadataKind.MigrationApplied).Select(m => m.Metadata)];
+
+        Assert.HasCount(2, migrationPayloads, "two migrations applied, so two notifications");
+        Assert.Contains((string? p) => p!.Contains("Widens a probe constraint.", StringComparison.Ordinal), migrationPayloads,
+            "a notification must name what the migration did, not only its version");
+        Assert.Contains((string? p) => p!.Contains("Adds a probe table.", StringComparison.Ordinal), migrationPayloads,
+            "the second migration's own description must appear too");
+    }
+
+    /// <summary>
+    /// #371 requirement 5, the negative: an ordinary restart against an up-to-date database created
+    /// nothing and migrated nothing, so it writes neither notification.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_WithNothingToReport_SeedsNeitherNotification()
+    {
+        FakeNotificationWriter writer = new();
+
+        using WebApplicationFactory<Program> factory = Build(writer, new ReportingDatabaseInitializer());
+        using HttpClient client = factory.CreateClient();
+        await client.GetAsync("/api/v1/health", TestContext.CancellationToken);
+
+        // The positive control for this negative: #279's own announcement still seeds on the same
+        // startup, so the writer was reached and an empty result here is a decision, not a dead wire.
+        Assert.IsNotEmpty(writer.WrittenMetadata, "the startup producers must have run at all");
+        Assert.IsEmpty(
+            writer.WrittenMetadata.Where(m => m.Kind is NotificationMetadataKind.DatabaseCreated
+                                                     or NotificationMetadataKind.MigrationApplied),
+            "neither event happened, so neither notification may be written");
+    }
+
+    private static WebApplicationFactory<Program> Build(FakeNotificationWriter writer, IDatabaseInitializer initializer) =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+            {
+                services.AddSingleton<IQuoteService>(new FakeQuoteService());
+                services.AddSingleton(initializer);
+                services.AddSingleton<INotificationWriter>(writer);
+                services.AddSingleton<INotificationReader>(new FakeNotificationReader());
+            }));
+
+    /// <summary>
+    /// #371: reports whatever this startup is meant to have done, so the Program.cs producers can be
+    /// driven without a real database. The two version numbers match
+    /// <see cref="OvershootDatabaseInitializer"/>'s so both tests read the same pair.
+    /// </summary>
+    private sealed class ReportingDatabaseInitializer(
+        bool databaseWasCreated = false,
+        IReadOnlyList<AppliedMigrationResult>? migrationsApplied = null) : IDatabaseInitializer
+    {
+        public int SchemaVersion => 5;
+        public int DataSchemaVersion => 3;
+        public int QuoteCount => 0;
+        public int SourceCount => 0;
+        public int CharacterCount => 0;
+        public int PeopleCount => 0;
+        public int SeriesCount => 0;
+        public int SeasonCount => 0;
+        public int UniverseCount => 0;
+        public int StageDirectionCount => 0;
+        public int SoundCueCount => 0;
+        public int ConversationCount => 0;
+        public string? MigrationApplied => null;
+        public bool DatabaseWasCreated => databaseWasCreated;
+        public IReadOnlyList<AppliedMigrationResult> MigrationsApplied => migrationsApplied ?? [];
+        public bool SchemaVersionOvershootDetected => false;
+        public IReadOnlyList<FileImportReport> LastSeedReport => [];
+        public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
+
+        public BackupOutcome CheckBackupReadiness(long bytesFreedFirst = 0) => BackupOutcome.Succeeded;
+        public Task<DatabaseBackupResult> CreateBackupAsync() => Task.FromResult(DatabaseBackupResult.Success("stub-backup.db"));
+        public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
+        public Task<DatabaseOperationResult> ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false) => Task.FromResult(DatabaseOperationResult.Success());
+        public Task<SeedPreviewResult> PreviewSeedAsync() => Task.FromResult(new SeedPreviewResult([], []));
+        public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false) => Task.FromResult(new SourceCacheResolution([], []));
+    }
+
+    /// <summary>
     /// #293: same incident class as the two tests above: a live HA v1.8.2 → v1.8.3-beta migration
     /// failure left the database mid-degraded, and <c>DatabaseStatsSummary</c>
     /// (rendered on both Home's degraded modal and the always-reachable <c>/stats</c> page) crashed
@@ -122,6 +241,8 @@ public class ProgramNotificationSeedingRegressionTests
         public int SoundCueCount => 0;
         public int ConversationCount => 0;
         public string? MigrationApplied => null;
+        public bool DatabaseWasCreated => false;
+        public IReadOnlyList<AppliedMigrationResult> MigrationsApplied => [];
         public bool SchemaVersionOvershootDetected => false;
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
         public Task<DatabaseOperationResult> InitialiseAsync() => throw new InvalidOperationException("simulated migration failure");
@@ -183,6 +304,8 @@ public class ProgramNotificationSeedingRegressionTests
         public int SoundCueCount => 0;
         public int ConversationCount => 0;
         public string? MigrationApplied => null;
+        public bool DatabaseWasCreated => false;
+        public IReadOnlyList<AppliedMigrationResult> MigrationsApplied => [];
         public bool SchemaVersionOvershootDetected => true;
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
         public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());

@@ -78,6 +78,8 @@ public class StartupSummaryLoggerTests
         public int    SoundCueCount    => 0;
         public int    ConversationCount => 0;
         public string? MigrationApplied => migrationApplied;
+        public bool DatabaseWasCreated => false;
+        public IReadOnlyList<AppliedMigrationResult> MigrationsApplied => [];
         public bool SchemaVersionOvershootDetected => false;
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
         public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());

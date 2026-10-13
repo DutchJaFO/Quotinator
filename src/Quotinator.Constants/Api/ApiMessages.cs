@@ -93,6 +93,18 @@ public static class ApiMessages
 
     /// <summary>Body of #289's schema-version-overshoot notification. <c>{0}</c> is the data schema version, <c>{1}</c> the app's.</summary>
     public const string NotificationSchemaOvershootBody    = "NotificationSchemaOvershootBody";
+
+    /// <summary>Title of #371's database-created notification.</summary>
+    public const string NotificationDatabaseCreatedTitle   = "NotificationDatabaseCreatedTitle";
+
+    /// <summary>Body of #371's database-created notification. <c>{0}</c> is the data schema version, <c>{1}</c> the app's.</summary>
+    public const string NotificationDatabaseCreatedBody    = "NotificationDatabaseCreatedBody";
+
+    /// <summary>Title of #371's migration-applied notification. <c>{0}</c> is the phase, <c>{1}</c> the version within it.</summary>
+    public const string NotificationMigrationAppliedTitle  = "NotificationMigrationAppliedTitle";
+
+    /// <summary>Body of #371's migration-applied notification. <c>{0}</c> is what the migration did.</summary>
+    public const string NotificationMigrationAppliedBody   = "NotificationMigrationAppliedBody";
     public const string BackupNameInvalid                = "ErrorBackupNameInvalid";
     public const string BackupNotFound                   = "ErrorBackupNotFound";
     public const string BackupNotRemovable               = "ErrorBackupNotRemovable";

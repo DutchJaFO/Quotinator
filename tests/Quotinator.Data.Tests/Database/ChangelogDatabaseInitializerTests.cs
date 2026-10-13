@@ -18,6 +18,29 @@ public class ChangelogDatabaseInitializerTests
     [TestCleanup]
     public void TestCleanup() => SqliteConnection.ClearAllPools();
 
+    /// <summary>
+    /// #371: every entry in the changelog database's own migration list must say what it did, the same
+    /// requirement the main database's two lists carry.
+    /// </summary>
+    /// <remarks>
+    /// Placed here rather than in <see cref="DatabaseInitializerOwnershipTests"/>, where the plan named
+    /// it: this class already owns every other proof about this initializer, and a guard belongs with
+    /// its subject. It shares that class's reflection helper rather than a second copy of it.
+    /// </remarks>
+    [TestMethod]
+    public void EveryChangelogMigration_HasANonEmptyDescription()
+    {
+        IReadOnlyList<SchemaMigration> migrations =
+            DatabaseInitializerOwnershipTests.PrivateMigrationList(typeof(ChangelogDatabaseInitializer), "Migrations");
+
+        Assert.IsNotEmpty(migrations, "The reflected migration list is empty, so this test could not fail.");
+
+        string[] undescribed =
+            [.. migrations.Where(m => string.IsNullOrWhiteSpace(m.Description)).Select(m => $"v{m.Version}")];
+
+        Assert.IsEmpty(undescribed, "Changelog migrations with no description: " + string.Join(", ", undescribed));
+    }
+
     private static string UniqueConnectionString() =>
         $"file:{Guid.NewGuid():N}?mode=memory&cache=shared";
 
@@ -52,14 +75,14 @@ public class ChangelogDatabaseInitializerTests
     [TestMethod]
     public async Task Baseline_And_IncrementalReplay_ProduceIdenticalSchema()
     {
-        SqliteConnectionFactory factoryA = new SqliteConnectionFactory(UniqueConnectionString());
-        using ChangelogConnectionKeepAlive keepAliveA = new ChangelogConnectionKeepAlive(factoryA);
-        ChangelogDatabaseInitializer dbA = new ChangelogDatabaseInitializer(factoryA, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        SqliteConnectionFactory factoryA = new(UniqueConnectionString());
+        using ChangelogConnectionKeepAlive keepAliveA = new(factoryA);
+        ChangelogDatabaseInitializer dbA = new(factoryA, NullLogger<ChangelogDatabaseInitializer>.Instance);
         await dbA.InitialiseAsync();
 
-        SqliteConnectionFactory factoryB = new SqliteConnectionFactory(UniqueConnectionString());
-        using ChangelogConnectionKeepAlive keepAliveB = new ChangelogConnectionKeepAlive(factoryB);
-        ChangelogDatabaseInitializer dbB = new ChangelogDatabaseInitializer(factoryB, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        SqliteConnectionFactory factoryB = new(UniqueConnectionString());
+        using ChangelogConnectionKeepAlive keepAliveB = new(factoryB);
+        ChangelogDatabaseInitializer dbB = new(factoryB, NullLogger<ChangelogDatabaseInitializer>.Instance);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
         using SqliteConnection connA = (SqliteConnection)factoryA.CreateConnection();
@@ -85,14 +108,14 @@ public class ChangelogDatabaseInitializerTests
     [TestMethod]
     public async Task Baseline_And_IncrementalReplay_AcceptSameKindCheckConstraintValues()
     {
-        SqliteConnectionFactory factoryA = new SqliteConnectionFactory(UniqueConnectionString());
-        using ChangelogConnectionKeepAlive keepAliveA = new ChangelogConnectionKeepAlive(factoryA);
-        ChangelogDatabaseInitializer dbA = new ChangelogDatabaseInitializer(factoryA, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        SqliteConnectionFactory factoryA = new(UniqueConnectionString());
+        using ChangelogConnectionKeepAlive keepAliveA = new(factoryA);
+        ChangelogDatabaseInitializer dbA = new(factoryA, NullLogger<ChangelogDatabaseInitializer>.Instance);
         await dbA.InitialiseAsync();
 
-        SqliteConnectionFactory factoryB = new SqliteConnectionFactory(UniqueConnectionString());
-        using ChangelogConnectionKeepAlive keepAliveB = new ChangelogConnectionKeepAlive(factoryB);
-        ChangelogDatabaseInitializer dbB = new ChangelogDatabaseInitializer(factoryB, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        SqliteConnectionFactory factoryB = new(UniqueConnectionString());
+        using ChangelogConnectionKeepAlive keepAliveB = new(factoryB);
+        ChangelogDatabaseInitializer dbB = new(factoryB, NullLogger<ChangelogDatabaseInitializer>.Instance);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
         using SqliteConnection connA = (SqliteConnection)factoryA.CreateConnection();
@@ -125,9 +148,9 @@ public class ChangelogDatabaseInitializerTests
     [TestMethod]
     public async Task EmptyDatabase_AppliesBaseline()
     {
-        SqliteConnectionFactory factory = new SqliteConnectionFactory(UniqueConnectionString());
-        using ChangelogConnectionKeepAlive keepAlive = new ChangelogConnectionKeepAlive(factory);
-        ChangelogDatabaseInitializer db = new ChangelogDatabaseInitializer(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        SqliteConnectionFactory factory = new(UniqueConnectionString());
+        using ChangelogConnectionKeepAlive keepAlive = new(factory);
+        ChangelogDatabaseInitializer db = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
 
         await db.InitialiseAsync();
 

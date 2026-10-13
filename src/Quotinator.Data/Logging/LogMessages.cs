@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Quotinator.Data.Enums;
 
 namespace Quotinator.Data.Logging;
 
@@ -51,8 +52,13 @@ internal static partial class LogMessages
     public static partial void LogSchemaCreatedAtBaseline(this ILogger logger, int dataVersion, int appVersion);
 
     /// <summary>Logs the start of one migration phase (Data or App), listing how many migrations are pending.</summary>
+    /// <remarks>
+    /// #371: takes the phase as its own enum rather than a pre-rendered string, so the formatting is
+    /// deferred until the message is actually written. Passing <c>phase.ToString()</c> at the call site
+    /// evaluates it whether logging is enabled or not, which is what CA1873 flags.
+    /// </remarks>
     [LoggerMessage(Level = LogLevel.Information, Message = "[Database - Init] applying {Count} pending {Phase} migration(s) (version {Current} → {Target})...")]
-    public static partial void LogApplyingMigrationPhase(this ILogger logger, int count, string phase, int current, int target);
+    public static partial void LogApplyingMigrationPhase(this ILogger logger, int count, MigrationPhase phase, int current, int target);
 
     /// <summary>Logs that no manifest was found and files were imported in alphabetical order instead.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "[Database - Init] no manifest in {Dir}: importing {Count} JSON file(s) in alphabetical order")]

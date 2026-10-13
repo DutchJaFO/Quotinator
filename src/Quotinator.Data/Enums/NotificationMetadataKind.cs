@@ -92,5 +92,27 @@ public enum NotificationMetadataKind
     /// from outside, exceeding the maximum always reports. Resolved by the folder coming back under it,
     /// so it carries the <c>BackupBackUnderMax</c> dismiss trigger.
     /// </summary>
-    BackupMaxExceeded
+    BackupMaxExceeded,
+
+    /// <summary>
+    /// This run created the database from scratch (#371): the payload carries the two schema versions
+    /// it was created at.
+    /// <para>
+    /// An event rather than a condition, so it carries no dismiss trigger: nothing resolves the fact
+    /// that a database was created. It can only ever be written once per database, because the database
+    /// it would be recorded in did not exist beforehand.
+    /// </para>
+    /// </summary>
+    DatabaseCreated,
+
+    /// <summary>
+    /// One migration was applied to an existing database (#371): the payload carries which list it came
+    /// from, its version within that list, and what it did.
+    /// <para>
+    /// One notification per migration, so a long upgrade reports each step rather than collapsing them
+    /// into a count. Distinct from <see cref="DatabaseCreated"/>, which reports the opposite case: a
+    /// database created at the baseline applies no individual migration at all.
+    /// </para>
+    /// </summary>
+    MigrationApplied
 }

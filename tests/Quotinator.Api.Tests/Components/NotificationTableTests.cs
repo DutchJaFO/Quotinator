@@ -455,6 +455,11 @@ public class NotificationTableTests
         [NotificationMetadataKind.BackupQuotaReached]     = false,
         // #348: the same, for the two sizes the error's body already states.
         [NotificationMetadataKind.BackupMaxExceeded]      = false,
+        // #371: its two schema versions are what the body says, so there is nothing further to open.
+        [NotificationMetadataKind.DatabaseCreated]        = false,
+        // #371: one notification per migration, so its description is a sentence rather than a row,
+        // and a one-row table would align nothing under a column.
+        [NotificationMetadataKind.MigrationApplied]       = false,
     };
 
     /// <summary>
@@ -755,6 +760,12 @@ public class NotificationTableTests
             """{"releaseState":"NotApplicable","usedBytes":1020054732,"quotaBytes":966367641,"ceilingBytes":1073741824}""",
         NotificationMetadataKind.BackupMaxExceeded =>
             """{"releaseState":"NotApplicable","usedBytes":1181116006,"ceilingBytes":1073741824}""",
+        // #371: both payloads carry required properties, so the bare default below would not
+        // deserialize as either kind and the test would read an empty table for the wrong reason.
+        NotificationMetadataKind.DatabaseCreated =>
+            """{"releaseState":"NotApplicable","dataSchemaVersion":28,"appSchemaVersion":9}""",
+        NotificationMetadataKind.MigrationApplied =>
+            """{"releaseState":"NotApplicable","phase":"Data","migrationVersion":28,"description":"Adds a probe column."}""",
         _ => """{"releaseState":"NotApplicable"}""",
     };
 

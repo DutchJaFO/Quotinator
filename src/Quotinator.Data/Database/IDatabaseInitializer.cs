@@ -57,6 +57,28 @@ public interface IDatabaseInitializer
     string? MigrationApplied { get; }
 
     /// <summary>
+    /// <c>true</c> when no table existed at all when <see cref="InitialiseAsync"/> opened the
+    /// database, i.e. this run created it (#371).
+    /// <para>
+    /// Narrower than "the quote table was empty": #423 established that a row count cannot tell a
+    /// fresh install from a database an operator deliberately emptied. Set by
+    /// <see cref="InitialiseAsync"/> only, so a later <see cref="ResetAsync"/>, which also rebuilds
+    /// from the baseline, cannot make this read <c>true</c> for a database that already existed.
+    /// </para>
+    /// </summary>
+    bool DatabaseWasCreated { get; }
+
+    /// <summary>
+    /// Every migration that actually ran during <see cref="InitialiseAsync"/>, in the order they were
+    /// applied, or empty when the schema was already up to date or the baseline path was taken (#371).
+    /// <para>
+    /// The per-migration counterpart to <see cref="MigrationApplied"/>, which collapses the same
+    /// information into one banner line and so cannot say what any individual migration did.
+    /// </para>
+    /// </summary>
+    IReadOnlyList<AppliedMigrationResult> MigrationsApplied { get; }
+
+    /// <summary>
     /// <c>true</c> when the database's recorded Data or Consumer schema version exceeds this build's
     /// own known migration count (#289): the state a migration squash produces on a database that
     /// already applied the pre-squash migrations. The schema itself is treated as complete (nothing is

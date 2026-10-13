@@ -32,6 +32,8 @@ public static class NotificationMetadataKinds
         [NotificationMetadataKind.BackupRefused]          = typeof(BackupRefusedMetadataDto),
         [NotificationMetadataKind.BackupQuotaReached]     = typeof(BackupQuotaReachedMetadataDto),
         [NotificationMetadataKind.BackupMaxExceeded]      = typeof(BackupMaxExceededMetadataDto),
+        [NotificationMetadataKind.DatabaseCreated]        = typeof(DatabaseCreatedMetadataDto),
+        [NotificationMetadataKind.MigrationApplied]       = typeof(MigrationAppliedMetadataDto),
     };
 
     // A null-valued property states nothing and leaves the reader to decide what it was supposed to

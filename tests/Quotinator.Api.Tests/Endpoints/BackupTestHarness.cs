@@ -222,6 +222,10 @@ internal sealed class BackupTestHarness : IDisposable
         /// <inheritdoc/>
         public string? MigrationApplied => _inner.MigrationApplied;
         /// <inheritdoc/>
+        public bool DatabaseWasCreated => _inner.DatabaseWasCreated;
+        /// <inheritdoc/>
+        public IReadOnlyList<AppliedMigrationResult> MigrationsApplied => _inner.MigrationsApplied;
+        /// <inheritdoc/>
         public bool SchemaVersionOvershootDetected => _inner.SchemaVersionOvershootDetected;
         /// <inheritdoc/>
         public IReadOnlyList<FileImportReport> LastSeedReport => _inner.LastSeedReport;

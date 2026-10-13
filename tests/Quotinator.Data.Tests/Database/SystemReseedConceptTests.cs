@@ -47,15 +47,15 @@ public class SystemReseedConceptTests
 
     private static SystemContentTestInitializer CreateInitializer(string dbPath)
     {
-        SqliteConnectionFactory factory = new SqliteConnectionFactory(dbPath);
-        DatabaseOptions options = new DatabaseOptions
+        SqliteConnectionFactory factory = new(dbPath);
+        DatabaseOptions options = new()
         {
             DbPath      = dbPath,
             BackupsPath = Path.Combine(Path.GetDirectoryName(dbPath)!, "backups"),
         };
         IReadOnlyList<SchemaMigration> migrations =
         [
-            new SchemaMigration { Version = 1, Sql = CreateTableSql },
+            new SchemaMigration { Version = 1, Sql = CreateTableSql, Description = "Creates this test's own system-content table." },
         ];
         return new SystemContentTestInitializer(factory, options, migrations, new SchemaBaseline { Sql = CreateTableSql });
     }
@@ -63,12 +63,12 @@ public class SystemReseedConceptTests
     [TestMethod]
     public async Task SeedSystemContentAsync_AfterFreshInitialise_PopulatesSystemContentTable()
     {
-        using TempDatabase temp = new TempDatabase([]);
+        using TempDatabase temp = new([]);
         SystemContentTestInitializer db = CreateInitializer(temp.DbPath);
 
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={temp.DbPath}");
+        using SqliteConnection conn = new($"Data Source={temp.DbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         int count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM SystemContent_ExampleSetting;");
         Assert.AreEqual(1, count, "System content must be seeded on first-ever install.");
@@ -77,13 +77,13 @@ public class SystemReseedConceptTests
     [TestMethod]
     public async Task SeedSystemContentAsync_AfterReset_RepopulatesSystemContentTable()
     {
-        using TempDatabase temp = new TempDatabase([]);
+        using TempDatabase temp = new([]);
         SystemContentTestInitializer db = CreateInitializer(temp.DbPath);
         await db.InitialiseAsync();
 
         await db.ResetAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={temp.DbPath}");
+        using SqliteConnection conn = new($"Data Source={temp.DbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         int count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM SystemContent_ExampleSetting;");
         Assert.AreEqual(1, count,
@@ -94,7 +94,7 @@ public class SystemReseedConceptTests
     [TestMethod]
     public async Task ReseedEquivalentCall_DoesNotInvokeSeedSystemContentAsync()
     {
-        using TempDatabase temp = new TempDatabase([]);
+        using TempDatabase temp = new([]);
         SystemContentTestInitializer db = CreateInitializer(temp.DbPath);
         await db.InitialiseAsync();
         Assert.AreEqual(1, db.SeedSystemContentCallCount);

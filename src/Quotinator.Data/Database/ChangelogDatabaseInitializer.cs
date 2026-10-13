@@ -30,7 +30,12 @@ public sealed class ChangelogDatabaseInitializer(
     // real (persistent-file-variant) database, a migration here is frozen too.
     private static readonly IReadOnlyList<SchemaMigration> Migrations =
     [
-        new SchemaMigration { Version = 1, Sql = ChangelogContentMigrations.CreateChangelogTables },
+        new SchemaMigration
+        {
+            Version     = 1,
+            Sql         = ChangelogContentMigrations.CreateChangelogTables,
+            Description = "Creates the tables the changelog is served from.",
+        },
     ];
 
     // Identical content to Migrations[0].Sql today (there is only one migration yet) — kept as its
@@ -53,14 +58,14 @@ public sealed class ChangelogDatabaseInitializer(
 
     private async Task InitialiseAsync(bool forceIncremental)
     {
-        using var connection = (SqliteConnection)factory.CreateConnection();
+        using SqliteConnection connection = (SqliteConnection)factory.CreateConnection();
         await connection.OpenAsync();
 
         // Must run before Sql.ChangelogSchema.CreateVersionTable below — otherwise every fresh
         // database registers as "not empty" on the very next line, permanently disabling the
         // baseline path. Matches DatabaseInitializer.ApplyMigrationsAsync's own ordering for the
         // identical reason.
-        var isEmptyDatabase = await connection.ExecuteScalarAsync<int>(Sql.ChangelogSchema.AnyTableExists) == 0;
+        bool isEmptyDatabase = await connection.ExecuteScalarAsync<int>(Sql.ChangelogSchema.AnyTableExists) == 0;
 
         await connection.ExecuteAsync(Sql.ChangelogSchema.CreateVersionTable);
 
@@ -70,7 +75,7 @@ public sealed class ChangelogDatabaseInitializer(
             return;
         }
 
-        var current = await connection.ExecuteScalarAsync<int>(Sql.ChangelogSchema.GetCurrentVersion);
+        int current = await connection.ExecuteScalarAsync<int>(Sql.ChangelogSchema.GetCurrentVersion);
 
         if (current >= Migrations.Count)
         {
@@ -79,9 +84,9 @@ public sealed class ChangelogDatabaseInitializer(
             return;
         }
 
-        for (var i = current; i < Migrations.Count; i++)
+        for (int i = current; i < Migrations.Count; i++)
         {
-            using var tx = connection.BeginTransaction();
+            using SqliteTransaction tx = connection.BeginTransaction();
             await connection.ExecuteAsync(Migrations[i].Sql, transaction: tx);
             await connection.ExecuteAsync(
                 Sql.ChangelogSchema.InsertVersion,
@@ -96,7 +101,7 @@ public sealed class ChangelogDatabaseInitializer(
 
     private async Task ApplyBaselineAsync(SqliteConnection connection)
     {
-        using var tx = connection.BeginTransaction();
+        using SqliteTransaction tx = connection.BeginTransaction();
         await connection.ExecuteAsync(BaselineSql, transaction: tx);
         await connection.ExecuteAsync(
             Sql.ChangelogSchema.InsertVersion,

@@ -1,3 +1,4 @@
+using System.Reflection;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
@@ -804,6 +805,18 @@ public class DatabaseInitializerOwnershipTests
                 "VALUES (@id, 'Information', 'x', 'NotARealResolution', @now);",
                 new { id = Guid.NewGuid().ToString(), now }));
 
+            // #371 widens MetadataKind once more, for the two database-lifecycle notifications. Both
+            // in one rebuild, so both are accepted on both paths or neither is.
+            await conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Body, Metadata, MetadataKind, DateCreated) " +
+                "VALUES (@id, 'Information', 'A database was created.', '{}', 'DatabaseCreated', @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            await conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Body, Metadata, MetadataKind, DateCreated) " +
+                "VALUES (@id, 'Information', 'A migration was applied.', '{}', 'MigrationApplied', @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
             // ...and the widened MetadataKind CHECK still rejects a value outside the enum, which is
             // the half a rebuild is most likely to drop by rewriting the constraint too loosely.
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
@@ -992,6 +1005,43 @@ public class DatabaseInitializerOwnershipTests
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
     }
 
+    // ── #371: every migration says what it did ────────────────────────────────
+
+    /// <summary>
+    /// #371: every entry in Quotinator.Data's own migration list must say what it did, so a
+    /// notification can name it rather than only its number.
+    /// </summary>
+    /// <remarks>
+    /// Read by reflection, the way <c>SqlQueryGuardTests</c> reaches <c>Sql</c>'s private statics,
+    /// rather than by adding a test-only accessor to production code. Derived from the list, so a
+    /// future migration added without a description fails here instead of shipping; the field lookup
+    /// is asserted first so a rename fails loudly rather than passing over an empty set.
+    /// </remarks>
+    [TestMethod]
+    public void EveryDataOwnedMigration_HasANonEmptyDescription()
+    {
+        IReadOnlyList<SchemaMigration> migrations = PrivateMigrationList(typeof(DatabaseInitializer), "DataOwnedMigrations");
+
+        Assert.IsNotEmpty(migrations, "The reflected migration list is empty, so this test could not fail.");
+
+        string[] undescribed =
+            [.. migrations.Where(m => string.IsNullOrWhiteSpace(m.Description)).Select(m => $"v{m.Version}")];
+
+        Assert.IsEmpty(undescribed, "Data-owned migrations with no description: " + string.Join(", ", undescribed));
+    }
+
+    /// <summary>Reads a private static migration list off <paramref name="owner"/>.</summary>
+    /// <param name="owner">The type declaring the list.</param>
+    /// <param name="fieldName">The private static field's name.</param>
+    internal static IReadOnlyList<SchemaMigration> PrivateMigrationList(Type owner, string fieldName)
+    {
+        FieldInfo? field = owner.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.IsNotNull(field, $"{owner.Name} has no private static '{fieldName}' field; it was renamed or removed.");
+
+        return (IReadOnlyList<SchemaMigration>)field.GetValue(null)!;
+    }
+
     // ── Ordering proof ────────────────────────────────────────────────────────
 
     /// <summary>
@@ -1011,6 +1061,7 @@ public class DatabaseInitializerOwnershipTests
                 Version = 1,
                 Sql = "INSERT INTO Audit_Entry (Id, TableName, Operation, PerformedAt, DateCreated) " +
                       "VALUES (lower(hex(randomblob(16))), 'Probe', 'Inserted', '2026-01-01 00:00:00', '2026-01-01 00:00:00');",
+                Description = "Writes a probe row into Data's own audit table.",
             },
         ];
         DatabaseInitializer db = CreateBareInitializer(temp.DbPath, consumerMigrations);
@@ -1066,7 +1117,7 @@ public class DatabaseInitializerOwnershipTests
 
         IReadOnlyList<SchemaMigration> workingMigrations =
         [
-            new SchemaMigration { Version = 1, Sql = "CREATE TABLE IF NOT EXISTS Probe (Id INTEGER); INSERT INTO Probe (Id) VALUES (999);" },
+            new SchemaMigration { Version = 1, Sql = "CREATE TABLE IF NOT EXISTS Probe (Id INTEGER); INSERT INTO Probe (Id) VALUES (999);", Description = "Creates and fills this test's probe table." },
         ];
         ResettableTestInitializer db = CreateResettableInitializer(temp.DbPath, workingMigrations);
         await db.InitialiseAsync();
@@ -1076,7 +1127,7 @@ public class DatabaseInitializerOwnershipTests
         // dropped by the time this runs).
         IReadOnlyList<SchemaMigration> poisonMigrations =
         [
-            new SchemaMigration { Version = 1, Sql = "THIS IS NOT VALID SQL;" },
+            new SchemaMigration { Version = 1, Sql = "THIS IS NOT VALID SQL;", Description = "Fails on purpose, so the restore path can be observed." },
         ];
         ResettableTestInitializer db2 = CreateResettableInitializer(temp.DbPath, poisonMigrations);
 
