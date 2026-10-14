@@ -62,7 +62,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#339](https://github.com/DutchJaFO/Quotinator/issues/339) | Restructure the T2 suite into docs/automated-testing/, one document per test | In progress | T1 ⬜ T2 ✅ | [339-automated-testing-restructure-plan.md](339-automated-testing-restructure-plan.md) |
 | [#348](https://github.com/DutchJaFO/Quotinator/issues/348) | Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable | Waiting for release | T1 ✅ T2 ✅ | [348-backup-outcomes-and-refusal-plan.md](348-backup-outcomes-and-refusal-plan.md) |
 | [#349](https://github.com/DutchJaFO/Quotinator/issues/349) | Admin endpoints to list, delete and report status for database backups | Waiting for release | T1 ✅ T2 ✅ | [349-backup-management-endpoints-plan.md](349-backup-management-endpoints-plan.md) |
-| [#350](https://github.com/DutchJaFO/Quotinator/issues/350) | A schema-version overshoot runs healthy instead of degrading, on a schema whose shape is unknown | In progress | T1 ⬜ T2 ⬜ | [350-overshoot-must-degrade-plan.md](350-overshoot-must-degrade-plan.md) |
+| [#350](https://github.com/DutchJaFO/Quotinator/issues/350) | A schema-version overshoot runs healthy instead of degrading, on a schema whose shape is unknown | Waiting for release | T1 ✅ T2 ✅ | [350-overshoot-must-degrade-plan.md](350-overshoot-must-degrade-plan.md) |
 | [#351](https://github.com/DutchJaFO/Quotinator/issues/351) | AuditOperation is a string-constant set where the project's convention is an enum | Planning | T1 ⬜ T2 ⬜ | [351-audit-operation-enum-plan.md](351-audit-operation-enum-plan.md) |
 | [#352](https://github.com/DutchJaFO/Quotinator/issues/352) | Restore a stored backup, refusing one taken ahead of this build | Planning | T1 ⬜ T2 ⬜ | [352-restore-a-stored-backup-plan.md](352-restore-a-stored-backup-plan.md) |
 | [#353](https://github.com/DutchJaFO/Quotinator/issues/353) | Upload a backup file | Planning | T1 ⬜ T2 ⬜ | [353-upload-a-backup-file-plan.md](353-upload-a-backup-file-plan.md) |
@@ -128,7 +128,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #339 ─── depends on #347 (v1.9.0); blocks #327, #328: In progress
 #348 ─── depends on #349; blocks #327: Waiting for release
 #349 ─── (none); soft-relates to #348: Waiting for release
-#350 ─── (none): In progress
+#350 ─── (none): Waiting for release
 #352 ─── (none): Planning
 #360 ─── (none): Planning
 #353 ─── (none): Planning
@@ -213,7 +213,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 38 | **#422** ✅ | Waiting for release |
 | 39 | **#423** ✅ | Waiting for release |
 | 40 | **#371** ✅ | Waiting for release; before #351/#360, which each add migrations |
-| 41 | **#350** | In progress |
+| 41 | **#350** | Waiting for release |
 | 42 | **#339** 🚧 | In progress; blocked on #347 (v1.9.0); before #327 and #328 |
 | 43 | **#327** 🚧 | In progress; after #339 |
 | 44 | **#328** | Planning; after #339 |

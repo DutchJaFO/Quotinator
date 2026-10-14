@@ -1,6 +1,6 @@
 # #350: A schema-version overshoot runs healthy instead of degrading, on a schema whose shape is unknown
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #350
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -73,13 +73,17 @@ reported as an outcome for the caller to act on, never thrown. The flag is that 
 decides the response, so `SchemaVersionOvershootDetected` keeps its current meaning and its current
 detection site.
 
-### Degraded has two meanings, and only one of them stops a query
+### Degraded means untrusted, and nothing is read from an untrusted database
 
-`DatabaseHealthState` carries a single `IsHealthy` bool today, and nine places read it for two different
-questions. Three ask *is the application degraded* and must keep reading `IsHealthy`, since an overshoot
-is degraded: `Home.razor` and `RestApi.razor` show the startup error layout from it, and `NavMenu.razor`
-marks the degraded state. Four ask *may I run a live query*, and that is the question an overshoot
-answers differently from every fault the flag was built for:
+Developer direction, 2026-10-13:
+
+> *"Note that due to an overshoot we cannot trust the database itself as a source. That is why a reset
+> or a restore from backup are our only options."*
+
+That is why the remedy set is exactly two, and why no third option (true up the counter, continue
+anyway) is offered or built: neither makes the content trustworthy. It also settles what the degraded
+surfaces may show, which is nothing that came out of that database. Four components hold a read gate,
+and all four keep asking `IsHealthy`:
 
 | Component | What its gate skips | Why the gate exists |
 |---|---|---|
@@ -88,39 +92,15 @@ answers differently from every fault the flag was built for:
 | `ImportReview.razor.cs` | the staged-action list | the same read, from the review page (#326) |
 | `DatabaseStatsSummary.razor.cs` | its file-history query only, never the counts | `Import_FileResource`/`Import_Batch` may not exist yet after a failed migration (#293) |
 
-Every one of those reasons is a schema that may be *missing* what this build expects. An overshot
-database has everything this build expects plus unknown extra, so the query runs. Leaving these four on
-`IsHealthy` would suppress the notification explaining the degradation exactly as effectively as the
-`Program.cs` gate requirement 3 removes, one layer down.
+Each was written for a schema that may be *missing* what this build expects, and an overshoot is the
+opposite case: the query would execute. **That difference is not a reason to read.** Whether a query
+runs says nothing about whether its answer can be trusted, and this build cannot vouch for the shape of
+what it would return. The `Scope changes` section above records the round where that was built the
+other way and reversed.
 
-So `DatabaseHealthState` records which kind of fault it holds, and derives from it the one question
-these four ask:
-
-- `DatabaseFaultKind` (`src/Quotinator.Api/Enums/`, per ADR 016): `ExpectedSchemaMissing` for a fault
-  where a query written against this build's schema cannot be expected to execute, and
-  `SchemaAheadOfThisBuild` for the overshoot.
-- `MarkFailed(string reason, DatabaseFaultKind kind)`: the kind is a required parameter, so a fault
-  added later cannot inherit an answer by default. The four existing call sites all pass
-  `ExpectedSchemaMissing`, which is what they mean today.
-- `ExpectedSchemaIsPresent`, true while healthy and false only for `ExpectedSchemaMissing`. The four
-  components above gate on this; nothing else changes.
-
-A second `MarkFailed` overload, or a separate `MarkSchemaAheadOfThisBuild` method, was the smaller
-change and loses on exactly that point: nothing would force the next fault's author to decide which of
-the two classes it belongs to, which is the mistake this issue is fixing one layer up.
-
-### What may be read from an untrusted database, and what may not
-
-Developer direction, 2026-10-13:
-
-> *"Note that due to an overshoot we cannot trust the database itself as a source. That is why a reset
-> or a restore from backup are our only options."*
-
-That is why the remedy set is exactly two, and why no third option (true up the counter, continue
-anyway) is offered or built: neither would make the content trustworthy. It also sets what the four
-components above are allowed to be: diagnostic surfaces, read so an operator can see what the
-application thinks is wrong, never a claim that the content is authoritative. Quote content stays
-gated by the middleware, which is the only thing a consumer would take as authoritative.
+**So the explanation an operator gets cannot be a row.** `StartupErrorModal` renders
+`DatabaseHealthState.FailureReason`, which is in-memory state: it is there whatever the database turns
+out to hold, and it is there even if the notification's own `INSERT` never landed.
 
 ### How the notification survives the health gate
 
@@ -165,6 +145,48 @@ existing `{0}`/`{1}` substitution, updated in all three files in the same commit
 
 ---
 
+## Scope changes
+
+### The degraded surfaces read nothing from an overshot database (developer, 2026-10-14)
+
+**Reversed after T1.** The cross-check finding below settled that the four read gates should
+distinguish *"cannot be read"* from *"readable, of unrecognised version"*, so the notification
+explaining the overshoot would stay visible. Built that way and run live, the developer read the
+result and rejected it:
+
+> *"statistics was accessible: data is not to be trusted! import review: ditto. notifications: why did
+> you expect this to be usable at all? data is not to be trusted. We cannot assume that the
+> notification informing us about the overrun is available at all."*
+
+**The distinction was the wrong one.** Whether a query *executes* says nothing about whether its answer
+can be trusted, and an overshot schema's content is untrusted either way. The third sentence is the
+decisive one: the notification is a row in a table this build cannot vouch for, so the design must not
+depend on reading it back, and this build cannot even assume the `INSERT` landed.
+
+**What changed back:** `DatabaseFaultKind`, `ExpectedSchemaIsPresent` and the `MarkFailed` kind
+parameter are gone, and `Notifications`, `NotificationSummary`, `ImportReview` and
+`DatabaseStatsSummary` gate on `IsHealthy` again, as they did before this issue. One flag is the whole
+answer.
+
+**What did not change:** the notification is still written, still off the health gate. The issue's own
+requirement 3 asks for that, and the correction is about depending on it rather than producing it. What
+explains the degraded state to an operator is `StartupErrorModal`'s reason, which is in-memory state
+and cannot go missing with the schema.
+
+### The counts in the degraded modal are #428's, and this path sharpens them
+
+`DatabaseStatsSummary`'s counts are not gated by health at all, so the degraded modal introduces ten
+real numbers with *"The database was left at its last known-good state:"* while the schema they came
+from is one this build cannot vouch for.
+[#428](https://github.com/DutchJaFO/Quotinator/issues/428) already owns withholding them, and its
+expected behaviour covers this path verbatim: *"While the database is degraded, no count is shown on
+either surface."* It sits in the **Startup and degraded experience** milestone rather than this one.
+
+Raised rather than taken: this issue makes the case stronger, because the numbers here are populated
+and plausible rather than the zeros #428 was filed about, which is the more convincing wrong answer.
+
+---
+
 ## Cross-check against authoritative sources
 
 Seven findings against the issue body and the code as it stands, 2026-10-13.
@@ -183,33 +205,32 @@ requirement 4's second remedy. The unprovable claim survives in exactly two plac
 `LogMessages.LogSchemaVersionOvershoot`'s template (*"the schema is treated as complete"*) and the
 comment above the detection in `DatabaseInitializer.cs`, which states #289's premise as fact.
 
-### The page-level health gate is in scope
+### The page-level health gate was raised here, and the answer is in Scope changes
 
-**Decided (developer, 2026-10-13): in scope.** The gate is described under *Degraded has two meanings*
-above. Raised because requirement 3 names only the `Program.cs` gate, while four components hold the
-same suppression one layer down, so fixing only the named one would leave the notification written and
-invisible. The alternative considered was a separate issue covering the four components; it lost because
-#350's own requirement 3 is not met while the operator cannot see the notification.
+Raised because requirement 3 names only the `Program.cs` gate, while four components hold a read gate
+one layer down. It was first decided *in scope*, built so those four would read an overshot database,
+and then reversed by the developer after T1: see `Scope changes` above. What stands is that all four
+keep gating on `IsHealthy`, and the operator's explanation comes from the reason text rather than from
+a row.
 
 Scope checked against the components themselves rather than the issue: four gates skip a read, not
-three, and `DatabaseStatsSummary`'s gate covers only its file-history query, since its counts are an
-in-memory snapshot that never queries.
+three, and `DatabaseStatsSummary`'s gate covers only its file-history query. Its counts never query at
+all, which is why they survive the gate and why #428 rather than this issue removes them.
 
 ### This plan names three tests the issue's table does not
 
 Requirement 4 (both remedies) has no row of its own for the notification body, and the issue's table
-predates the page-gate decision above. Rows 3, 8, 10 and 12 of the verification table carry them: the
-health reason's remedies, the fault-kind property, the body's remedies in all three languages, and the
-page actually listing the notification while degraded.
+names nothing for the health-state behaviour. Rows 3, 8 and 10 of the verification table carry them:
+the health reason's remedies, an overshoot degrading like any other fault, and the body's remedies in
+all three languages.
 
-### Page rendering has no unit-test home, so the property is asserted instead
+### Page rendering has no unit-test home, so the live document carries it
 
 `NotificationTableTests` records that this project has no Blazor component-rendering infrastructure (no
 bUnit), which is why its own assertions are over mapping methods rather than rendered components. So
-*the page shows the notification* is asserted at the two points that can carry it: `DatabaseHealthState`
-exposing `ExpectedSchemaIsPresent` for an overshoot (unit), and document 06 reading the live page with a
-screenshot (T2). The other three components share that one property and have no separate assertion;
-`ImportReview` in particular has nothing to show in this scenario, since an overshoot stages no actions.
+*what the degraded pages show* is asserted in document 06, reading the live modal and the live
+notifications page with screenshots. The unit tier carries what it can: that the pages answer `200`
+rather than `500`, and that an overshoot degrades like any other fault.
 
 ### #289's own unit test keeps its assertions and loses its summary's premise
 
@@ -239,23 +260,20 @@ positional, and two repository tests hold the index's links to files that exist.
 
 ### 1. Give `DatabaseHealthState` the fault kind, signatures only
 
-**Status:** ✅ Done, 2026-10-14. Build clean at 0 warnings, 0 errors, with no behaviour added.
+**Status:** ↩️ Reverted, 2026-10-14. Built, then undone by the `Scope changes` decision above;
+`DatabaseHealthState` carries one flag again, as it did before this issue.
+
+What this step added and later removed: `DatabaseFaultKind`, a required `MarkFailed` kind parameter,
+and `ExpectedSchemaIsPresent`. Kept from it, because the reversal did not touch them: the
+`DatabaseHealthStateTests` method asserting that an overshoot degrades like any other fault, and the
+reading below.
 
 **Fourteen call sites, not the four in `Program.cs`.** The required parameter found ten more in test
 code that the cross-check's read of `Program.cs` could not see: six in `DatabaseHealthStateTests`
 (which already exists, so step 2 adds to it rather than creating it), three in
 `NotificationActionExecutorTests`, one in `DatabaseHealthGateMiddlewareTests` and one in
-`BackupTestHarness`. All ten mean `ExpectedSchemaMissing`: every one of them stands for a generic
-degraded startup.
-
-`DatabaseFaultKind`, the required `MarkFailed` parameter, `ExpectedSchemaIsPresent`, and all fourteen
-existing call sites stating `ExpectedSchemaMissing`.
-
-**Signatures only, so step 2's tests compile and fail for the right reason.** The members exist here;
-their behaviour does not. `ExpectedSchemaIsPresent` returns `IsHealthy`, which is exactly what the four
-components read today, so every fault including an overshoot still suppresses their reads and step 2's
-property test goes red. Step 5 gives it its real answer. This step changes no behaviour at all, which is
-what makes the four call-site edits safe to land ahead of the tests.
+`BackupTestHarness`. Worth keeping even though the parameter is gone: a signature change to this type
+reaches four times as far as `Program.cs` suggests, which is what made reverting it cheap to get wrong.
 
 ### 2. Write every named test and confirm it red
 
@@ -269,7 +287,7 @@ the start. Readings below.
 | `..._DegradesRatherThanServing` | `expected: ServiceUnavailable, actual: OK` |
 | `..._HealthReasonNamesTheOvershoot` | `/health` answered `{"status":"healthy"}` |
 | `..._HealthReasonNamesBothRemedies` | the same body, so neither remedy is named |
-| `MarkFailed_SchemaAheadOfThisBuild_LeavesTheExpectedSchemaPresent` | `ExpectedSchemaIsPresent` false, since step 1 derives it from `IsHealthy` |
+| `MarkFailed_SchemaAheadOfThisBuild_...` | red as the property test the reversal later replaced; the method that stands asserts the degradation, not a second flag |
 | `Read_SchemaVersionOvershoot_NamesBothRemediesInEachLanguage` | the German body names no `Sicherung` |
 | `SchemaVersionOvershoot_IsReportedAsAFaultRatherThanACompleteSchema` | the log line says *"the schema is treated as complete"* |
 
@@ -278,8 +296,8 @@ the start. Readings below.
 - `..._BlazorPagesRenderDegradedUiRatherThan500` and `..._OpenApiRemainsReachableForRecovery` assert
   what a healthy build already does. Their red state is reachable only once the application degrades,
   which is the regression they are here to catch.
-- `MarkFailed_ExpectedSchemaMissing_MarksItAbsent` is the control for the property's other half, red
-  against an implementation that answers true for every fault.
+- `MarkFailed_ExpectedSchemaMissing_MarksItAbsent` was the control for that property's other half.
+  It went with the property when the reversal removed it.
 - `..._SurfacesTheNotificationWhileDegraded` passes today because the database is healthy on an
   overshoot, so nothing suppresses the write. Its red moment falls between steps 3 and 4, and step 3
   captures the reading.
@@ -343,17 +361,21 @@ Drop the `dbHealth.IsHealthy &&` clause. The comment above the block currently e
 a squash artefact, and has to say what the state actually is, including why the write is attempted
 against a schema of unknown shape and why its failure is tolerated.
 
-### 5. Let the four diagnostic surfaces read a queryable database
+### 5. Keep the four diagnostic surfaces from reading an untrusted database
 
-**Status:** ✅ Done, 2026-10-14. Every test in this issue's own set green, with
-`DatabaseHealthGateMiddlewareTests` run alongside to confirm the request gate still answers from
-`IsHealthy`: 38 passed, 0 failed.
+**Status:** ✅ Done, 2026-10-14, after being built the other way round first.
 
-`ExpectedSchemaIsPresent` stops deriving from `IsHealthy` and answers from the fault kind instead, which
-is the one behavioural change of this step, and `Notifications`, `NotificationSummary`, `ImportReview`
-and `DatabaseStatsSummary` gate on it. Each one's gate comment names the #326 or #293 reason it exists
-for, so each comment gains the distinction rather than losing it: the query is skipped because the
-schema may be missing what the query names, not because the application is degraded.
+This step originally moved `Notifications`, `NotificationSummary`, `ImportReview` and
+`DatabaseStatsSummary` onto `ExpectedSchemaIsPresent` so they would read an overshot database. The
+developer rejected that result at T1 (see `Scope changes`), and all four went back to `IsHealthy`.
+
+What they gained instead is the second reason, written at each gate: the query is skipped not only
+because the schema may be missing what the query names, but because its answer cannot be trusted when
+the schema's shape is unknown. `DatabaseStatsSummary`'s comment also records that its counts are not
+behind this gate at all and that #428 owns them.
+
+Confirmed live on the final build: the degraded modal renders its reason and `notificationRows=0`, and
+the notifications page reads `rows=0` with *No notifications yet.*
 
 ### 6. Rewrite the messages
 
@@ -442,25 +464,79 @@ character in `LocalTimestamp.Absent` as its own constant for an absent value. Ch
 convention change across every surface that constant reaches, which is wider than this issue, so it is
 raised rather than decided here.
 
-### 9. Full suite, T1 and T2
+### 9. Give the degraded page a repair control of its own
 
-**Status:** 🔄 In progress. T2 complete; T1 is the developer's own step and is the one row left.
+**Status:** ✅ Done, 2026-10-14. Red first on `RefusedRepair_NamesTheObstacleThatStoppedIt`
+(*expected value to not be null*), then green, then driven live.
 
-**Full suite: 4,554 tests across 11 projects, all passed, 0 warnings, 0 errors**, under
-`--configuration Release --verbosity normal -m:1`.
+**Found by the developer at T1, and created by step 5's reversal.** The only UI control for a Reset
+while degraded was the overshoot notification's own action button, and once the notifications summary
+stopped rendering, the modal was left with nothing but `Continue`: the reason named a route the
+operator could not take without an API client.
+
+> *"when the app is in a degraded state the user needs to have options to repair. that is why we offer
+> the reset database and/or restore from backup options are for. the backup could be local or uploaded
+> by the user"* (developer, 2026-10-14)
+
+`DatabaseRepairActions` offers `Reset the database`, arming to `Confirm`/`Cancel` the same way the
+Notifications page's action does, and runs it through `INotificationActionExecutor` so the sequence
+(back up, rebuild, restore health, re-record the version, re-run the condition checks) stays in one
+place rather than being written a second time. Everything it needs is in-memory state or the executor,
+so it does not depend on the untrusted database in any way. On success the page reloads into the normal
+UI; a refusal is reported in place, since a Reset that cannot take a backup changes nothing.
+
+**It went on the modal first, and that was not enough.** Developer, 2026-10-14, after driving it:
+*"The reset option was only available on the modal dialog."* The modal is dismissed once, with
+`Continue`, which navigates to `/rest-api` and leaves the operator reading a reason that names a remedy
+they cannot run. So the control is its own component, and `DegradedDatabaseBanner` puts it with the
+reason on every degraded page that can carry an interactive control: `/rest-api`, `/notifications`,
+`/import-review` and `/stats`. `/rest-api` and `/stats` gained `@rendermode InteractiveServer` for it,
+the first because it is where `Continue` lands and the second because it is where database-derived
+numbers are read while the database is untrusted.
+
+`/about` carries none and stays static SSR: it holds no database content, and the nav reaches
+`/rest-api` from anywhere.
+
+`INotificationActionExecutor`'s own summary said it is invoked *"never from the read-only startup-modal
+summary"*. That was true of the summary, and still is: the action belongs to the modal around it, not
+to a notification row inside it.
+
+**The labels are reused, not duplicated**: `NotificationsResetActionButton`,
+`NotificationsConfirmActionButton`, `NotificationsCancelActionButton` and `NotificationsExecutingLabel`
+already exist in all three locales, and a second key holding the same words is what the string
+centralisation policy exists to prevent. The refusal text is English, like the reason above it.
+
+**Restore is not built here.** The developer chose a Reset button now with restore as its own issue
+(2026-10-14): `BackupEndpoints` today lists, creates, downloads and deletes backups, and there is no
+restore endpoint and no upload path, so restore stays a named remedy an operator performs by hand.
+
+### 10. Full suite, T1 and T2
+
+**Status:** ✅ Done, 2026-10-14. Full suite, T2 and T1 all green, re-run after the reversal and the repair control.
+
+**T1, 2026-10-14:** a standard migration start in Visual Studio, on a database at data v3 and app v5.
+The pre-migration backup was taken, 25 Data and 4 App migrations applied to v28 and v9, the banner
+reported its counts, and the application reached ready with no error and no degraded reason, which is
+the path this issue leaves untouched.
+
+**Full suite: 4,555 tests across 11 projects, all passed, 0 warnings, 0 errors**, under
+`--configuration Release --verbosity normal -m:1`, run three times: once on the original build, once
+after the reversal, and once after the repair control.
 
 **`startup-and-degradation/06` was confirmed red against the pre-issue build first.** A worktree at
 `a3a8c787` (this branch's parent) built as `quotinator:pre350`, and the rewritten document's step 3
 read `Expected 503, got 200` on it, with the quote endpoint serving and the log carrying *the schema is
 treated as complete*. Image, container and worktree torn down afterwards.
 
-**Then green against `quotinator:local`, all seven steps**, with the readings written into the
-document's own Observed effect. The notifications page renders in full while degraded, overshoot row
-first, and `POST /admin/database/reset` recovers the application in the same process.
+**Then green against `quotinator:local`, all seven steps**, re-run whole on the final build after
+the reversal and the repair control, with the readings written into the document's own Observed effect.
+The degraded modal names the overshoot and both remedies with `notificationRows=0`, the notifications
+page reads `rows=0` with *No notifications yet.*, and the modal's own `Reset the database` takes
+`/health` from `503` to `200` with `quotes` from `795` to `0`.
 
 **`notifications-and-changelog/14` re-run from step 1.** Steps 1 and 2 (healthy rendering of five
 kinds) green unchanged; steps 4 to 8, the ones this issue's change reaches, all green on the rewritten
-waits: `/health` `503` after the overshoot, the fifth kind read from the page because the API is gated,
+waits: `/health` `503` after the overshoot, the fifth kind read from the page once the overshoot is cleared, since nothing is shown from it while it stands,
 the popup rendering every kind on a degraded start, line breaks `pre-line` and honoured, and step 7's
 Reset restoring health and producing the sixth kind. Step 3 (a detail dialog on a healthy app) was not
 re-run: nothing in this issue reaches it.
@@ -502,10 +578,12 @@ rather than the zeros that entry describes.
 | 5 | ✅ | The OpenAPI surface stays reachable | Unit test | `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_OpenApiRemainsReachableForRecovery`: `/openapi/v1.json` answers `200` |
 | 6 | ✅ | The remedy the reason names is reachable while degraded | Unit test | Same test: an admin route reaches its handler rather than the gate's `unavailable` body, so `POST /api/v1/admin/database/reset` is callable |
 | 7 | ✅ | The notification is raised although the database is unhealthy | Unit test | `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_SurfacesTheNotificationWhileDegraded`, read through `INotificationReader` from the factory's services |
-| 8 | ✅ | An overshoot leaves a queryable database; every other fault does not | Unit test | `DatabaseHealthStateTests.SchemaAheadOfThisBuild_LeavesTheExpectedSchemaPresent` and `.ExpectedSchemaMissing_MarksItAbsent` |
+| 8 | ✅ | An overshoot degrades like any other fault, with no second notion of health | Unit test | `DatabaseHealthStateTests.MarkFailed_SchemaAheadOfThisBuild_DegradesLikeAnyOtherFault` |
 | 9 | ✅ | No message claims the schema is complete or the application normal | Unit test | `DatabaseInitializerTests.SchemaVersionOvershoot_IsReportedAsAFaultRatherThanACompleteSchema`, over `CapturingLogger<DatabaseInitializer>.Messages` |
 | 10 | ✅ | The notification body names both remedies in all three languages | Unit test | `NotificationTranslationSourceTests.Read_SchemaVersionOvershoot_NamesBothRemediesInEachLanguage` |
 | 11 | ✅ | Both notification strings still exist in all three languages | Unit test | `TranslationCompletenessTests` |
-| 12 | ✅ | The notifications page lists the overshoot notification while degraded | Live | `docs/automated-testing/startup-and-degradation/06-schema-version-ahead-of-the-application.md`, its notifications-page step, with the `capture-page.csx` screenshot it names |
-| 13 | ✅ | The live overshoot degrades, explains itself, and the remedy is reachable | Live | The same document, rewritten, confirmed red against a pre-issue build first |
-| 14 | ❌ | T1: the application still starts | Live | Developer starts `Quotinator.Api` in Visual Studio and confirms it starts without error |
+| 12 | ✅ | Nothing read from the untrusted database is shown, and the reason explains the state instead | Live | `docs/automated-testing/startup-and-degradation/06-schema-version-ahead-of-the-application.md` step 5: modal reason names the overshoot and both remedies with `notificationRows=0`, notifications page `rows=0` |
+| 13 | ✅ | A refused repair names the obstacle that stopped it | Unit test | `StartupErrorModalTests.RefusedRepair_NamesTheObstacleThatStoppedIt` and `.SuccessfulRepair_SaysNothing` |
+| 14 | ✅ | Every degraded page that can carry a control offers the repair, not just the modal | Live | `startup-and-degradation/06` step 7: `resetButtons=1` on `/rest-api`, `/notifications`, `/import-review` and `/stats`; Cancel leaves `quotes` at `795`, Confirm from either surface takes `/health` to `200` with `quotes` at `0` |
+| 15 | ✅ | The live overshoot degrades, explains itself, and the remedy is reachable | Live | The same document, rewritten, confirmed red against a pre-issue build first |
+| 16 | ✅ | T1: the application still starts | Live | Developer started `Quotinator.Api` in Visual Studio, 2026-10-14: a standard migration start, backup taken, Data v3 to v28 and App v5 to v9 applied, ready with no errors |
