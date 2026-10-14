@@ -46,10 +46,11 @@ from it is a foot gun.
   passes only against a version recorded one beyond what the database already holds: recorded at the
   level it already holds, the flag is never set, the application stays healthy, and every step below
   would be asserting against an ordinary install.
-- **The notification is read from the page, not from `/api/v1/notifications`.** That route is not in
-  `DatabaseHealthGateMiddleware`'s exempt list, so while degraded it answers `503` by design. The Blazor
-  page is exempt and reads through `INotificationReader` in-process, which is what an operator actually
-  opens.
+- **Nothing read from the database is shown while degraded, and that is asserted rather than assumed.**
+  An overshot schema is of unknown shape, so its content is untrusted whether or not a query against it
+  would execute: the notifications page, the import-review page and the file history all render their
+  degraded empty state. The operator's explanation comes from `StartupErrorModal`'s reason, which is
+  in-memory state and cannot depend on a row that may never have been written.
 
 ## Steps
 
@@ -127,39 +128,55 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/a
 running, or not running one it safely could. A gated admin route means the remedy the reason names
 cannot be reached, which makes the reason point nowhere.
 
-### 5. Confirm the notification is raised and visible on the page
+### 5. Confirm the operator is told why, and that nothing from the database is shown
 
 ```powershell
 $out = "$PWD\.claude\temp\qt-startup-06-shots"
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-$rowScript = @'
-  const rows = [...document.querySelectorAll('tr')];
-  const row = rows.find(r => r.textContent.includes('ahead of this build'));
-  const r = row ? row.getBoundingClientRect() : { height: 0 };
-  return { found: !!row,
-           buttons: row ? [...row.querySelectorAll('button')].map(b => b.textContent.trim()) : [],
-           namesRestore: !!row && /restore a backup/i.test(row.textContent),
-           innerHeight: r.height };
+# Substring matches rather than regex literals: a /pattern/ inside a here-string is read as a path by
+# some shells before it ever reaches the browser.
+$modalScript = @'
+  const modal = document.querySelector('.modal');
+  const text  = (modal ? modal.innerText : '').toLowerCase();
+  return { modal: !!modal,
+           namesTheOvershoot: text.includes('schema version is ahead'),
+           namesReset: text.includes('reset'),
+           namesRestore: text.includes('restore a backup'),
+           notificationRows: modal ? modal.querySelectorAll('.notification-body').length : -1 };
 '@
-$page = $rowScript | dotnet script scripts/testing/capture-page.csx -- `
-  --url "http://localhost:18406/notifications" --out "$out\notifications.png" --height 1100 `
+$modalRead = $modalScript | dotnet script scripts/testing/capture-page.csx -- `
+  --url "http://localhost:18406/" --out "$out\degraded-home.png" --width 1280 --height 1100 `
   --script-stdin | ConvertFrom-Json
-"found=$($page.found) innerHeight=$($page.innerHeight) namesRestore=$($page.namesRestore)"
-"buttons=$($page.buttons -join ' | ')"
+"modal=$($modalRead.modal) overshoot=$($modalRead.namesTheOvershoot) reset=$($modalRead.namesReset) restore=$($modalRead.namesRestore) rows=$($modalRead.notificationRows)"
+
+$pageScript = @'
+  return { rows: document.querySelectorAll('tbody tr').length,
+           bodyCells: document.querySelectorAll('.notification-body').length,
+           emptyState: document.body.innerText.toLowerCase().includes('no notifications yet') };
+'@
+$pageRead = $pageScript | dotnet script scripts/testing/capture-page.csx -- `
+  --url "http://localhost:18406/notifications" --out "$out\degraded-notifications.png" --height 1100 `
+  --script-stdin | ConvertFrom-Json
+"notificationsPage rows=$($pageRead.rows) bodyCells=$($pageRead.bodyCells) emptyState=$($pageRead.emptyState)"
 ```
 
-**Expected:** `found=True` with a non-zero `innerHeight`, `namesRestore=True`, and a `Reset the
-database` button. The screenshot shows the row on the degraded page.
+**Expected:** the modal renders, its reason names the overshoot and both remedies, and
+`notificationRows=0`. The notifications page reads `rows=0`, `bodyCells=0` and `emptyState=True`
+(*No notifications yet.*). Both screenshots record it.
 
-**This is the half of the defect that is easiest to lose.** The notification is written while the
-database is unhealthy, which every other producer's `dbHealth.IsHealthy` gate would have suppressed,
-and the page itself held a second gate that emptied its own list whenever the database was unhealthy.
-`found=False` here, with step 3 passing, means one of those two gates is back: the application degraded
-and then said nothing about why.
+**`$home` is read-only in PowerShell 5.1**, so the modal reading is held in `$modalRead`: assigning
+`$home` fails the step with a variable error that has nothing to do with the application.
 
-**On failure:** an empty page with a populated `/health` reason means the page gate is reading
-`IsHealthy` again rather than `ExpectedSchemaIsPresent`.
+**The reason is the only channel that can be relied on here, and that is the point of this step.** An
+overshot schema is of unknown shape, so every row read from it is untrusted content, the notification
+explaining the overshoot included: this build cannot even assume that row was written, since the
+`INSERT` ran against a table it cannot vouch for. The reason text is in-memory state, so it is there
+whatever the database turns out to hold.
+
+**On failure:** any notification row rendering on either surface means a read gate is back to asking
+whether the query *would execute* rather than whether its answer can be trusted. A modal with no
+reason means the degradation was recorded without one.
 
 ### 6. Confirm the detection is in the log as well as the UI
 
@@ -177,20 +194,73 @@ somewhere other than this startup, most likely a row left over from an earlier r
 directory: re-run from step 1 with a fresh `$dataDir`. A match for `treated as complete` means a
 message is claiming the schema is intact, which this build has no way to know.
 
-### 7. Confirm one of the two remedies actually resolves it
+### 7. Repair it from the degraded pages themselves
+
+The operator's own route, and a driver step: the reason names a Reset, and the degraded pages are where
+they run one without reaching for an API client. Every page that can carry an interactive control shows
+the same banner, because the modal is dismissed once and the repair must not go with it.
 
 ```powershell
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/admin/database/reset" `
-  --method POST --expect 200 --status
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/health" --expect 200 --status
+$js = @'
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const resets = () => [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === 'Reset the database').length;
+for (let i = 0; i < 40 && resets() === 0; i++) await sleep(250);
+return { resetButtons: resets(), reasonShown: document.body.innerText.includes('schema version is ahead') };
+'@
+foreach ($p in '/rest-api','/notifications','/import-review','/stats','/about') {
+  $r = $js | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18406$p" `
+         --out "$out\degraded-$($p.Trim('/')).png" --width 1280 --height 900 --script-stdin | ConvertFrom-Json
+  "$p -> resetButtons=$($r.resetButtons) reasonShown=$($r.reasonShown)"
+}
 ```
 
-**Expected:** `200` from the Reset, then `200` from `/health`: the rebuild recorded this build's own
-version, so there is no overshoot left to degrade on.
+**Expected:** `resetButtons=1` and `reasonShown=True` on `/rest-api`, `/notifications`,
+`/import-review` and `/stats`; `0` and `False` on `/about`, which is static SSR and carries no
+interactive control. `/rest-api` is where the modal's Continue lands and is reachable from the nav
+anywhere, so no degraded page is more than one click from the repair.
 
-**On failure:** a `409` means the Reset refused for want of a backup, which is a different fault with
-its own documents in `backup/`. A `503` still answering afterwards means the Reset ran without
-clearing the recorded state, so the application would stay degraded until the operator restarted it.
+**On failure:** a `0` on any of the first four means that page is back to naming a remedy the operator
+cannot run from it. `/about` reading `1` is not a failure, but it means that page became interactive,
+which is a change worth knowing about.
+
+```powershell
+"quotes before: $((Invoke-RestMethod 'http://localhost:18406/api/v1/version').database.quotes)"
+```
+
+Then open `http://localhost:18406/` and, against the modal:
+
+```js
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const modal = () => document.querySelector('.modal');
+const btn = t => modal() ? [...modal().querySelectorAll('button')].find(b => b.textContent.trim() === t) : null;
+for (let i = 0; i < 40 && !modal(); i++) await sleep(250);
+const before = [...modal().querySelectorAll('button')].map(b => b.textContent.trim());
+btn('Reset the database').click(); await sleep(1500);
+const armed = [...modal().querySelectorAll('button')].map(b => b.textContent.trim());
+btn('Cancel').click(); await sleep(1200);
+return { before, armed, afterCancel: [...modal().querySelectorAll('button')].map(b => b.textContent.trim()) };
+```
+
+**Expected:** `before` is `Reset the database, Continue`, `armed` is `Confirm, Cancel, Continue`, and
+`afterCancel` returns to `before`. The quote count is unchanged: Cancel called nothing.
+
+Then click **Reset the database** and **Confirm**, and read the result:
+
+```powershell
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/health" --expect 200 --status
+"quotes after: $((Invoke-RestMethod 'http://localhost:18406/api/v1/version').database.quotes)"
+```
+
+**Expected:** `200` from `/health` and `quotes after: 0`. The rebuild recorded this build's own
+version, so there is no overshoot left to degrade on, and the page reloads into the normal UI.
+
+**The quote count is what separates Cancel from Confirm**, as it is on the Notifications page: both
+leave the modal looking similar, and only the domain read says which one ran.
+
+**On failure:** no `Reset the database` button means the degraded page has no repair control at all,
+and the reason names a route the operator cannot take from the UI. A `409` from the equivalent API call
+means the Reset refused for want of a backup, which is a different fault with its own documents in
+`backup/`; the modal reports that refusal in place of reloading.
 
 ## Observed effect
 
@@ -219,19 +289,25 @@ and nothing matching `treated as complete`, the claim #289's message made and #3
 operator reading a real log sees numbers there and should recognise the shape; no step compares against
 them, and they move whenever a migration is added.
 
-**The notifications page renders fully while degraded**, with the overshoot row first: *Action
-required*, naming both remedies, carrying a `Reset the database` button, measured `innerHeight`
-`179.39`. The whole list renders, not just that row, which is what the page gate used to prevent.
+**The modal carries the reason and no database content.** The notifications page shows its empty
+state, and the modal's own summary lists no rows: an overshot schema's content is untrusted, so none
+of it is shown, and what the operator reads is the in-memory reason above it.
 
-**The counts in the startup banner are real, not zero.** Measured `795 quotes`, `473 sources`,
-`15 characters` on the degraded start. This fault completes `InitialiseAsync`, so it does not produce
-the symptom
+**The counts are populated rather than zero on this path, and are no more trustworthy for it.**
+Measured `795 quotes`, `473 sources`, `15 characters` on the degraded start, because this fault
+completes `InitialiseAsync` where the faults in
 [`degraded-startup-shows-every-count-as-zero`](../../knowledgebase/degraded-startup-shows-every-count-as-zero.md)
-describes, which belongs to a startup that never completes.
+never do. [#428](https://github.com/DutchJaFO/Quotinator/issues/428) owns withholding them on both
+surfaces, and this path is one more reason it should: a real-looking number read from a schema this
+build cannot vouch for is the most convincing wrong answer of the three.
 
-**The remedy works and clears itself.** `POST /api/v1/admin/database/reset` answers `200`, `/health`
-returns to `200` in the same process, the API comes back out of the gate, and the overshoot
-notification is gone: its `DatabaseReset` dismiss trigger resolved it.
+**The remedy works from the pages, not only from an API client.** Measured 2026-10-14: the modal
+offers `Reset the database` next to `Continue`, arming to `Confirm, Cancel, Continue`; Cancel leaves
+`quotes` at `795`, and Confirm takes `/health` from `503` to `200` with `quotes` at `0` and the page
+reloaded into the normal UI. The same control appears on `/rest-api`, `/notifications`,
+`/import-review` and `/stats`, above the reason; running it from `/notifications` produced the same
+`503` to `200` and `795` to `0`. `/about` carries none: it is static SSR. The equivalent
+`POST /api/v1/admin/database/reset` answers `200` too, and the API comes back out of the gate with it.
 
 ## Cleanup
 
