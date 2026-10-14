@@ -1,6 +1,6 @@
 # #350: A schema-version overshoot runs healthy instead of degrading, on a schema whose shape is unknown
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #350
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,8 +9,9 @@
 
 ## Next action
 
-**Execute from step 1.** The contract, where the overshoot degrades, where the notification is raised,
-which components may still query a degraded database, and what every message says are all settled below.
+**Execute the steps in order; each step section carries its own status.** The contract, where the
+overshoot degrades, where the notification is raised, which components may still query a degraded
+database, and what every message says are all settled below.
 
 ---
 
@@ -236,9 +237,61 @@ positional, and two repository tests hold the index's links to files that exist.
 
 ## Steps
 
-### 1. Write every named test and confirm it red
+### 1. Give `DatabaseHealthState` the fault kind, signatures only
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-14. Build clean at 0 warnings, 0 errors, with no behaviour added.
+
+**Fourteen call sites, not the four in `Program.cs`.** The required parameter found ten more in test
+code that the cross-check's read of `Program.cs` could not see: six in `DatabaseHealthStateTests`
+(which already exists, so step 2 adds to it rather than creating it), three in
+`NotificationActionExecutorTests`, one in `DatabaseHealthGateMiddlewareTests` and one in
+`BackupTestHarness`. All ten mean `ExpectedSchemaMissing`: every one of them stands for a generic
+degraded startup.
+
+`DatabaseFaultKind`, the required `MarkFailed` parameter, `ExpectedSchemaIsPresent`, and all fourteen
+existing call sites stating `ExpectedSchemaMissing`.
+
+**Signatures only, so step 2's tests compile and fail for the right reason.** The members exist here;
+their behaviour does not. `ExpectedSchemaIsPresent` returns `IsHealthy`, which is exactly what the four
+components read today, so every fault including an overshoot still suppresses their reads and step 2's
+property test goes red. Step 5 gives it its real answer. This step changes no behaviour at all, which is
+what makes the four call-site edits safe to land ahead of the tests.
+
+### 2. Write every named test and confirm it red
+
+**Status:** ✅ Done, 2026-10-14. Ten tests, six red on their own assertions, four controls green from
+the start. Readings below.
+
+**Red against the pre-issue build, each on an assertion rather than the build:**
+
+| Test | Reading |
+|---|---|
+| `..._DegradesRatherThanServing` | `expected: ServiceUnavailable, actual: OK` |
+| `..._HealthReasonNamesTheOvershoot` | `/health` answered `{"status":"healthy"}` |
+| `..._HealthReasonNamesBothRemedies` | the same body, so neither remedy is named |
+| `MarkFailed_SchemaAheadOfThisBuild_LeavesTheExpectedSchemaPresent` | `ExpectedSchemaIsPresent` false, since step 1 derives it from `IsHealthy` |
+| `Read_SchemaVersionOvershoot_NamesBothRemediesInEachLanguage` | the German body names no `Sicherung` |
+| `SchemaVersionOvershoot_IsReportedAsAFaultRatherThanACompleteSchema` | the log line says *"the schema is treated as complete"* |
+
+**Four controls, green from the start, each red against an implementation that over-reports:**
+
+- `..._BlazorPagesRenderDegradedUiRatherThan500` and `..._OpenApiRemainsReachableForRecovery` assert
+  what a healthy build already does. Their red state is reachable only once the application degrades,
+  which is the regression they are here to catch.
+- `MarkFailed_ExpectedSchemaMissing_MarksItAbsent` is the control for the property's other half, red
+  against an implementation that answers true for every fault.
+- `..._SurfacesTheNotificationWhileDegraded` passes today because the database is healthy on an
+  overshoot, so nothing suppresses the write. Its red moment falls between steps 3 and 4, and step 3
+  captures the reading.
+
+**The issue's own Failing-tests table is wrong about three of these**, which it marks `❌`: the two
+reachability tests and the notification one. Per the precedent #423 set and #371 followed, the issue
+body gains a paragraph above that table saying so, at `Waiting for release` with the Definition-of-done
+sync.
+
+**German needed a bare particle, not the infinitive.** `zurücksetzen` and `setzen Sie ... zurück` are
+one verb, and the shipped body uses the second spelling, so a keyword of the first would have gone red
+on correct prose. The per-language words are each one that can only come from that remedy's own clause.
 
 The six `StartupResilienceTests` methods and the one `DatabaseInitializerTests` method the issue names,
 plus the three from the cross-check above.
@@ -253,26 +306,38 @@ directory and then recording one version past `QuotinatorMigrations.All.Count`. 
 empty directory sets the same flag from a database that never migrated at all, which is a different
 state.
 
-### 2. Give `DatabaseHealthState` the fault kind
-
-**Status:** ⬜ Not started
-
-`DatabaseFaultKind`, the required `MarkFailed` parameter, `ExpectedSchemaIsPresent`, and the four
-existing call sites in `Program.cs` stating `ExpectedSchemaMissing`. No behaviour changes in this step:
-every fault that exists today is `ExpectedSchemaMissing`, so the derived property is false in exactly
-the cases `IsHealthy` was false before.
-
 ### 3. Degrade on an overshoot
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-14. Four of step 2's red tests green: `DegradesRatherThanServing`,
+`HealthReasonNamesTheOvershoot`, `HealthReasonNamesBothRemedies`, and both reachability controls held.
 
 `SchemaOvershootGuidance.Reason(dataVersion, appVersion)`, and the `MarkFailed(reason,
 SchemaAheadOfThisBuild)` call in `Program.cs` next to #348's. The reason states the symptom, the cause
 and both remedies, in that order, which is the shape #333's sweep expects to find.
 
+**Checked after the refused-migration case, never before it.** `MarkFailed` is first-wins, and a
+refusal leaves the schema *behind* this build, where a live query may throw. That is the stricter
+fault, so it has to win when a database manages both at once (one side overshooting while the other
+has pending work).
+
+**The overshoot needed its own log message.** `LogStartupDatabaseInitFailed` takes a non-nullable
+`Exception`, and there is no exception here: the condition was detected, and per ADR 022 a detected
+condition is an outcome rather than something thrown. `LogStartupSchemaOvershoot` mirrors
+`LogStartupMigrationRefused`, which exists for the same reason one issue earlier.
+
+**`..._SurfacesTheNotificationWhileDegraded` is now red**, which is the reading step 2 deferred to
+here: `expected: not empty, actual: empty`, because the `dbHealth.IsHealthy &&` gate suppresses the
+write the moment the overshoot degrades. Step 4 makes it green.
+
+**One wording correction, found by its own test.** The reason first read *"by restoring a backup"*,
+and `Assert.Contains("restore", ...)` does not match `restoring`. The clause became the imperative
+*"or restore a backup ... and restart"*, which is also parallel with the Reset clause it follows.
+
 ### 4. Move the notification off the health gate
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-14. `..._SurfacesTheNotificationWhileDegraded` green: the row is written
+to the overshot database and read back through `INotificationReader`, so the write itself survives a
+schema this build cannot vouch for.
 
 Drop the `dbHealth.IsHealthy &&` clause. The comment above the block currently explains the overshoot as
 a squash artefact, and has to say what the state actually is, including why the write is attempted
@@ -280,53 +345,149 @@ against a schema of unknown shape and why its failure is tolerated.
 
 ### 5. Let the four diagnostic surfaces read a queryable database
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-14. Every test in this issue's own set green, with
+`DatabaseHealthGateMiddlewareTests` run alongside to confirm the request gate still answers from
+`IsHealthy`: 38 passed, 0 failed.
 
-`Notifications`, `NotificationSummary`, `ImportReview` and `DatabaseStatsSummary` gate on
-`ExpectedSchemaIsPresent`. Each one's gate comment names the #326 or #293 reason it exists for, so each
-comment gains the distinction rather than losing it: the query is skipped because the schema may be
-missing what the query names, not because the application is degraded.
+`ExpectedSchemaIsPresent` stops deriving from `IsHealthy` and answers from the fault kind instead, which
+is the one behavioural change of this step, and `Notifications`, `NotificationSummary`, `ImportReview`
+and `DatabaseStatsSummary` gate on it. Each one's gate comment names the #326 or #293 reason it exists
+for, so each comment gains the distinction rather than losing it: the query is skipped because the
+schema may be missing what the query names, not because the application is degraded.
 
 ### 6. Rewrite the messages
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-14. `SchemaVersionOvershoot_IsReportedAsAFaultRatherThanACompleteSchema`,
+`Read_SchemaVersionOvershoot_NamesBothRemediesInEachLanguage` and `TranslationCompletenessTests` all
+green, with #289's own two overshoot tests still passing on their original assertions.
+
+**Dutch said the opposite of what it meant.** The shipped body rendered the Reset as *"Zet de
+database terug"*, which in Dutch reads as restoring it. With a restore now named alongside, the two
+remedies would have been one sentence apart in the same words, so the Reset became *"Bouw de database
+opnieuw op"* (rebuild) and the restore *"zet een back-up terug"*.
 
 The log template, the notification body in all three locale files, the detection comment in
 `DatabaseInitializer.cs`, and #289's test summary. Nothing left claiming the schema is complete or the
 application normal; both remedies named wherever one is named today.
 
-### 7. Rewrite `startup-and-degradation/06` and both index entries
+### 7. Rewrite every document this reversal invalidates
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-14 (written; both documents run in step 9).
+`RepositoryStructureTests` green, so the index, the links and the solution file still agree.
 
-It currently asserts `/health` `200` and tells the reader not to "fix" a `503` by relaxing the
-expectation, advice that is exactly backwards once this lands, and it carries a superseded-contract
-banner (with a stray `>:` on its last line) that goes with the rewrite. Its `Determinism` section gains
-the reasoning above: the unknown schema is the fault, the stale counter only its symptom. It gains a
-notifications-page step with a `capture-page.csx` screenshot, following `backup/06` and
-`notifications-and-changelog/15`. The suite index needs the row title and the downgrade passage.
+**`startup-and-degradation/06`** asserted `/health` `200` and told the reader not to "fix" a `503` by
+relaxing the expectation, advice that is exactly backwards once this lands, and carried a
+superseded-contract banner (with a stray `>:` on its last line) that went with the rewrite. It now
+asserts the same contract as its siblings, across seven steps: degrade, the reachable surface, the
+notification read from the page with a `capture-page.csx` screenshot (following `backup/06` and
+`notifications-and-changelog/15`), the log, and a Reset that actually clears it. Its `Determinism`
+gained the reasoning this plan records, and two new entries: the second start waits for *listening*
+rather than healthy, and the notification is read from the page because `/api/v1/notifications` is
+gated while degraded by design.
 
-`docs/knowledgebase/degraded-startup-shows-every-count-as-zero.md` is checked against what that pass
-actually observes on an overshoot, and corrected only if the entry's claim no longer holds for it. Its
-stated cause is a startup that never completes, which is not this fault, so the pass decides it rather
-than this plan.
+**Step 2 now stops the container rather than destroying it**, and step 3 is a `reenter` rather than a
+second `create`. `test-env.csx` records both reasons itself: `rm -f` is a SIGKILL that leaves the
+`-wal` sidecars behind, so a row written from the host lands beside a journal the next startup still
+replays, and a second startup over existing data is what `reenter` is for.
+
+**`notifications-and-changelog/14` broke on this change and is fixed here, not later.** Found while
+sweeping the suite for other documents describing the old behaviour: its step 4 triggers an overshoot
+deliberately (the version bump is the only trigger for that notification kind) and then waited for
+`/health` `200` and read `/api/v1/notifications`. Both now fail by design, the first by timing out.
+Steps 4 and 5 wait for `503`, and step 4 reads its fifth kind from the page, which its own next
+command already did. Nothing else in that document needed touching: steps 5 and 6 read pages, and
+step 7's Reset restores health before the API is used again.
+
+**The suite index** needed the row title and the *"Downgrade is deliberately not covered yet"*
+decision, which reasoned from the old behaviour.
+
+**`execute-sql.csx`'s own output is quoted verbatim, em dash included.** Both documents expect
+`OK — 1 row(s) affected.`; the dash rule keeps a quote faithful to a source this issue does not
+change, and a doc rewriting it to `OK,` would no longer match what a reader sees.
+
+`docs/knowledgebase/degraded-startup-shows-every-count-as-zero.md` is checked against what step 9
+actually observes. Its stated cause is a startup that never completes, and an overshoot completes
+`InitialiseAsync` normally, so the counts in the banner should be real rather than zero. If that is
+what the pass shows, the entry needs a line saying the zeros do not follow from the startup-problem
+message alone.
 
 ### 8. Boyscout pass and solution file
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-14. Full rebuild at 0 warnings, 0 errors.
 
-Per `checklist.md`: every touched file into `.editorconfig`'s scoped `IDE0008` and `IDE0090` sections
-with both conversions run to a stable count, `[Subsystem - Phase]` on any log line in a touched file
-that lacks one, and no em or en dash left in any file this issue touches. This plan doc is already in
-`Quotinator.slnx`, and the rewritten T2 document keeps its path, so nothing new is added there.
+Six files joined `.editorconfig`'s scoped `IDE0008` section and seven its `IDE0090` section, and both
+conversions ran to a stable count, with the `IDE0028` follow-on they exposed fixed in the same pass.
+`[Subsystem - Phase]` holds on both new log messages (`[Server]` and `[Database - Init]`), and no
+`Sql.*` class was touched, so the `nameof` rule has nothing to apply to. Nothing was added to
+`Quotinator.slnx`: the two new source files live inside a project, and the rewritten T2 document kept
+its path.
+
+**An incremental build hides a newly scoped warning.** After the `var` pass reported zero `IDE0008`,
+`dotnet build` showed 0 warnings twice over, and `--no-incremental` then surfaced 18: analyzers do not
+re-run for a project MSBuild considers up to date. Every warning count in this step was taken from a
+full rebuild.
+
+**Forty of the 41 em dashes in the touched files became prose punctuation**, reviewed line by line
+rather than substituted; `ImportReview.razor.cs` alone held 22. Two replacements were wrong on the
+first pass, both mine rather than the rule's, and worth naming: writing a file back through PowerShell
+added a BOM to a file that had none and stripped one from a file that had it, and a blanket pass turned
+a box-drawing separator (`──`, U+2500, not a dash at all) into `==`. Both restored; only the en dash
+inside `rows 14–16` on that line needed changing.
+
+**Four dashes stay, each a stated exception.** Three are the same verbatim quote of
+`execute-sql.csx`'s own output in the two T2 documents and in this plan, which the dash rule keeps
+faithful to a source this issue does not change. The fourth is `DatabaseStatsSummary`'s `"—"` for an
+unknown file origin: a rendered display placeholder rather than prose, and the project keeps the same
+character in `LocalTimestamp.Absent` as its own constant for an absent value. Changing it is a UI
+convention change across every surface that constant reaches, which is wider than this issue, so it is
+raised rather than decided here.
 
 ### 9. Full suite, T1 and T2
 
-**Status:** ⬜ Not started
+**Status:** 🔄 In progress. T2 complete; T1 is the developer's own step and is the one row left.
 
-`dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`,
-both at zero warnings. Then the T2 smoke set plus every document this issue touches, against a Docker
-image, with document 06 confirmed red against a pre-issue build first.
+**Full suite: 4,554 tests across 11 projects, all passed, 0 warnings, 0 errors**, under
+`--configuration Release --verbosity normal -m:1`.
+
+**`startup-and-degradation/06` was confirmed red against the pre-issue build first.** A worktree at
+`a3a8c787` (this branch's parent) built as `quotinator:pre350`, and the rewritten document's step 3
+read `Expected 503, got 200` on it, with the quote endpoint serving and the log carrying *the schema is
+treated as complete*. Image, container and worktree torn down afterwards.
+
+**Then green against `quotinator:local`, all seven steps**, with the readings written into the
+document's own Observed effect. The notifications page renders in full while degraded, overshoot row
+first, and `POST /admin/database/reset` recovers the application in the same process.
+
+**`notifications-and-changelog/14` re-run from step 1.** Steps 1 and 2 (healthy rendering of five
+kinds) green unchanged; steps 4 to 8, the ones this issue's change reaches, all green on the rewritten
+waits: `/health` `503` after the overshoot, the fifth kind read from the page because the API is gated,
+the popup rendering every kind on a degraded start, line breaks `pre-line` and honoured, and step 7's
+Reset restoring health and producing the sixth kind. Step 3 (a detail dialog on a healthy app) was not
+re-run: nothing in this issue reaches it.
+
+**The nine smoke documents, all green**: `api-surface/01` and `02`, `database-lifecycle/03`,
+`startup-and-degradation/03`, `notifications-and-changelog/01` and `07`,
+`import-and-staged-actions/01`, `14` and `19`. `notifications-and-changelog/01` included its browser
+steps: the four constructed rows read `Active`, `Expired`, `Dismissed` and `No longer applicable`, and
+the action button's Cancel path left `quotes` at `795` where Confirm drove it to `0`.
+
+**`startup-and-degradation/03` has two defects of its own, in its commands rather than in the
+application.** Its step 1 fetches `/version` with `--expect 200` while its own Expected text says
+`503`, so the command fails on correct behaviour; and it reads `/` through `http.csx`, which sends no
+`Accept` header, then asserts HTML properties of the body. Measured: with no `Accept` the wait page is
+`application/problem+json`, and with `Accept: text/html` it is the HTML page with `autoRefresh=True`
+and no external assets, which is what the document means. The application is right on every claim the
+document makes. Not fixed here: the document belongs to #419, and a breach in a file this issue does
+not touch is surfaced rather than cleaned up in passing.
+
+**Every exception in every log was accounted for.** `SocketException` on each container stop, which
+`transport-connection-cancelled-during-a-request` covers, and four `WebSocketException`s from one
+capture of mine that failed while writing its PNG, which document 14 already names as four per failed
+capture. None from the application's own paths.
+
+**The knowledgebase entry was corrected from what the pass observed**, as planned: an overshoot
+completes `InitialiseAsync`, so the Statistics page and the startup banner both report the real `795`
+rather than the zeros that entry describes.
 
 ---
 
@@ -334,17 +495,17 @@ image, with document 06 confirmed red against a pre-issue build first.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | An overshoot does not serve quote content, and the process survives it | Unit test | `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_DegradesRatherThanServing`: a quote endpoint answers `503 unavailable` and `StartupPhaseState.IsComplete` is true |
-| 2 | ❌ | `/health` reports unhealthy with a reason naming the overshoot | Unit test | `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_HealthReasonNamesTheOvershoot`: `503`, body contains `unhealthy` and names the recorded schema version |
-| 3 | ❌ | The reason names a Reset and a restore, not only the Reset | Unit test | `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_HealthReasonNamesBothRemedies` |
-| 4 | ❌ | Every Blazor route the gate exempts renders rather than `500` | Unit test | `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_BlazorPagesRenderDegradedUiRatherThan500`, one `DataRow` per exempt route |
-| 5 | ❌ | The OpenAPI surface stays reachable | Unit test | `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_OpenApiRemainsReachableForRecovery`: `/openapi/v1.json` answers `200` |
-| 6 | ❌ | The remedy the reason names is reachable while degraded | Unit test | Same test: an admin route reaches its handler rather than the gate's `unavailable` body, so `POST /api/v1/admin/database/reset` is callable |
-| 7 | ❌ | The notification is raised although the database is unhealthy | Unit test | `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_SurfacesTheNotificationWhileDegraded`, read through `INotificationReader` from the factory's services |
-| 8 | ❌ | An overshoot leaves a queryable database; every other fault does not | Unit test | `DatabaseHealthStateTests.SchemaAheadOfThisBuild_LeavesTheExpectedSchemaPresent` and `.ExpectedSchemaMissing_MarksItAbsent` |
-| 9 | ❌ | No message claims the schema is complete or the application normal | Unit test | `DatabaseInitializerTests.SchemaVersionOvershoot_IsReportedAsAFaultRatherThanACompleteSchema`, over `CapturingLogger<DatabaseInitializer>.Messages` |
-| 10 | ❌ | The notification body names both remedies in all three languages | Unit test | `NotificationTranslationSourceTests.Read_SchemaVersionOvershoot_NamesBothRemediesInEachLanguage` |
-| 11 | ❌ | Both notification strings still exist in all three languages | Unit test | `TranslationCompletenessTests` |
-| 12 | ❌ | The notifications page lists the overshoot notification while degraded | Live | `docs/automated-testing/startup-and-degradation/06-schema-version-ahead-of-the-application.md`, its notifications-page step, with the `capture-page.csx` screenshot it names |
-| 13 | ❌ | The live overshoot degrades, explains itself, and the remedy is reachable | Live | The same document, rewritten, confirmed red against a pre-issue build first |
+| 1 | ✅ | An overshoot does not serve quote content, and the process survives it | Unit test | `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_DegradesRatherThanServing`: a quote endpoint answers `503 unavailable` and `StartupPhaseState.IsComplete` is true |
+| 2 | ✅ | `/health` reports unhealthy with a reason naming the overshoot | Unit test | `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_HealthReasonNamesTheOvershoot`: `503`, body contains `unhealthy` and names the recorded schema version |
+| 3 | ✅ | The reason names a Reset and a restore, not only the Reset | Unit test | `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_HealthReasonNamesBothRemedies` |
+| 4 | ✅ | Every Blazor route the gate exempts renders rather than `500` | Unit test | `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_BlazorPagesRenderDegradedUiRatherThan500`, one `DataRow` per exempt route |
+| 5 | ✅ | The OpenAPI surface stays reachable | Unit test | `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_OpenApiRemainsReachableForRecovery`: `/openapi/v1.json` answers `200` |
+| 6 | ✅ | The remedy the reason names is reachable while degraded | Unit test | Same test: an admin route reaches its handler rather than the gate's `unavailable` body, so `POST /api/v1/admin/database/reset` is callable |
+| 7 | ✅ | The notification is raised although the database is unhealthy | Unit test | `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_SurfacesTheNotificationWhileDegraded`, read through `INotificationReader` from the factory's services |
+| 8 | ✅ | An overshoot leaves a queryable database; every other fault does not | Unit test | `DatabaseHealthStateTests.SchemaAheadOfThisBuild_LeavesTheExpectedSchemaPresent` and `.ExpectedSchemaMissing_MarksItAbsent` |
+| 9 | ✅ | No message claims the schema is complete or the application normal | Unit test | `DatabaseInitializerTests.SchemaVersionOvershoot_IsReportedAsAFaultRatherThanACompleteSchema`, over `CapturingLogger<DatabaseInitializer>.Messages` |
+| 10 | ✅ | The notification body names both remedies in all three languages | Unit test | `NotificationTranslationSourceTests.Read_SchemaVersionOvershoot_NamesBothRemediesInEachLanguage` |
+| 11 | ✅ | Both notification strings still exist in all three languages | Unit test | `TranslationCompletenessTests` |
+| 12 | ✅ | The notifications page lists the overshoot notification while degraded | Live | `docs/automated-testing/startup-and-degradation/06-schema-version-ahead-of-the-application.md`, its notifications-page step, with the `capture-page.csx` screenshot it names |
+| 13 | ✅ | The live overshoot degrades, explains itself, and the remedy is reachable | Live | The same document, rewritten, confirmed red against a pre-issue build first |
 | 14 | ❌ | T1: the application still starts | Live | Developer starts `Quotinator.Api` in Visual Studio and confirms it starts without error |
