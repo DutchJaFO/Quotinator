@@ -7,6 +7,10 @@
 <h1>@Text.ImportReviewHeading</h1>
 <p class="text-muted">@Text.ImportReviewDescription</p>
 
+@* #350: same reason as the Notifications page: nothing staged is listed while the database is
+   degraded, so the banner explains the empty page and offers the way out of it. *@
+<DegradedDatabaseBanner />
+
 @if (Actions.Count == 0)
 {
     <p class="text-muted">@Text.ImportReviewNothingPending</p>
@@ -33,7 +37,7 @@ else
                         @if (BatchIsGone(action.BatchId))
                         {
                             @* #369: stored as Pending, but its batch is gone and nothing can be applied
-                               against it — said on the row, not left for the operator to discover. *@
+                               against it: said on the row, not left for the operator to discover. *@
                             <span class="badge bg-secondary ms-1">@Text.ImportReviewBatchGone</span>
                         }
                     </td>
@@ -53,7 +57,7 @@ else
                     <td>
                         @if (BatchIsGone(action.BatchId))
                         {
-                            @* #369: dismissing discards the whole batch — every action in it is equally
+                            @* #369: dismissing discards the whole batch: every action in it is equally
                                impossible, so they go together. *@
                             <button type="button" class="btn btn-sm btn-outline-secondary"
                                     @onclick="() => DismissAsync(action)">

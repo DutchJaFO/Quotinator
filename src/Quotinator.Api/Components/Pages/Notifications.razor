@@ -7,6 +7,10 @@
 <h1>@Text.NotificationsHeading</h1>
 <p class="text-muted">@Text.NotificationsDescription</p>
 
+@* #350: this page lists nothing while the database is degraded, since its content cannot be trusted.
+   The banner says why, and carries the repair, so the empty list is explained rather than puzzling. *@
+<DegradedDatabaseBanner />
+
 @if (AllNotifications.Count > 0)
 {
     <div class="btn-group mb-3" role="group" aria-label="@Text.NotificationsFilterLabel">

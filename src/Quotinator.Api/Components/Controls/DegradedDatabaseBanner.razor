@@ -1,0 +1,11 @@
+@* #350: what a degraded page tells its operator: why the application is degraded, and the repair they
+   can run from where they are. Renders nothing while the database is healthy, so a page can include it
+   unconditionally. The reason comes from in-memory state, never from the database, whose content is
+   untrusted for as long as this banner shows at all. *@
+@if (!DatabaseHealth.IsHealthy)
+{
+    <div class="alert alert-warning" role="alert">
+        <p class="mb-2">@FailureReason</p>
+        <DatabaseRepairActions />
+    </div>
+}

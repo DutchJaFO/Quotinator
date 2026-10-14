@@ -1,0 +1,23 @@
+@* #350: the repair the degraded reason names, offered wherever the operator is rather than only in the
+   startup modal. Nothing here reads the database: while degraded its content is untrusted, so the
+   notification that carries this same action on the Notifications page is not rendered and may never
+   have been written. Everything this control needs is in-memory state or the executor itself. *@
+@if (RepairOutcome is string outcome)
+{
+    <p class="text-danger">@outcome</p>
+}
+
+@if (Repairing)
+{
+    <span>@Text.NotificationsExecutingLabel</span>
+}
+else if (ConfirmingReset)
+{
+    <div class="form-text">@Text.NotificationsConfirmActionWarning</div>
+    <button type="button" class="btn btn-danger me-1" @onclick="ConfirmResetAsync">@Text.NotificationsConfirmActionButton</button>
+    <button type="button" class="btn btn-outline-secondary" @onclick="() => ConfirmingReset = false">@Text.NotificationsCancelActionButton</button>
+}
+else
+{
+    <button type="button" class="btn btn-danger" @onclick="() => ConfirmingReset = true">@Text.NotificationsResetActionButton</button>
+}

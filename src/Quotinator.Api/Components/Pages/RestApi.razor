@@ -1,4 +1,8 @@
 @page "/rest-api"
+@* #350: interactive because this is where the startup modal's Continue lands, and the repair control
+   below it runs in-process. Without a circuit the operator reaches this page and has no way to act on
+   the remedy the failure reason names. *@
+@rendermode InteractiveServer
 
 <PageTitle>@Text.RestApiHeading — Quotinator</PageTitle>
 
@@ -8,6 +12,7 @@
 {
     <div class="alert alert-warning" role="alert">@Text.RestApiDegradedBanner</div>
 }
+<DegradedDatabaseBanner />
 
 <p>@Text.RestApiDescription</p>
 

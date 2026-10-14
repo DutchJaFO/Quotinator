@@ -1,8 +1,14 @@
 @page "/stats"
+@* #350: interactive because this page shows database-derived numbers, and while the database is
+   degraded they came from a schema this build cannot vouch for. The banner below says so and carries
+   the repair, rather than leaving an operator to read those figures as fact. *@
+@rendermode InteractiveServer
 
 <PageTitle>@Text.StatsHeading — Quotinator</PageTitle>
 
 <h1>@Text.StatsHeading</h1>
 <p class="text-muted">@Text.StatsDescription</p>
+
+<DegradedDatabaseBanner />
 
 <DatabaseStatsSummary />

@@ -19,6 +19,9 @@
         <DatabaseStatsSummary />
     </ChildContent>
     <Footer>
+        @* #350: the same control the degraded pages carry, so dismissing this modal does not take the
+           repair away with it. *@
+        <div class="me-auto"><DatabaseRepairActions /></div>
         <button type="button" class="btn btn-outline-danger" @onclick="OnContinue">@Text.StartupErrorContinueButton</button>
     </Footer>
 </ModalDialog>
