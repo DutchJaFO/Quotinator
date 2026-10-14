@@ -29,6 +29,13 @@ The counts are read only once startup completes, and a startup with a problem ne
 are never read. The page and the popup render the unread values as `0` rather than saying they are
 unknown.
 
+**Not every startup problem produces this.** A problem reported on the Home page is not by itself the
+cause: a schema version recorded ahead of the running build degrades the application (#350) while
+`InitialiseAsync` completes normally, so the counts were read and are real. Measured 2026-10-14 on a
+database of 795 quotes degraded that way: the Statistics page and the startup banner both report
+`795`, not `0` and not withheld. If the application reports a problem and the counts look right, they
+are right.
+
 ## Remedy
 
 Ignore the counts while the application reports a startup problem, and resolve the problem the Home page

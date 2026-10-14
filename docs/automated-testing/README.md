@@ -1061,9 +1061,10 @@ before it ever shipped. **If a tag a test depends on ever stops being pullable, 
 revisit this decision, not a reason to quietly drop the test.**
 
 **Downgrade is deliberately not covered yet** (developer direction, 2026-08-25). Migrations are
-append-only, and an older build meeting a newer database is already a handled degraded state rather
-than a crash: `DatabaseInitializer` sets `SchemaVersionOvershootDetected`, logs it, and surfaces it as
-a notification. What a rollback should actually guarantee becomes a real question the first time a
+append-only, and an older build meeting a newer database is a handled degraded state rather than a
+crash: `DatabaseInitializer` sets `SchemaVersionOvershootDetected`, and since #350 the application
+degrades on it, explains itself through `/health` and a notification, and names the two routes out (a
+Reset or a restore). What a rollback should actually guarantee becomes a real question the first time a
 milestone removes a feature, and the process gets reviewed then, against that concrete case. Recorded
 as a decision so a later reader does not read the absence as an oversight.
 
@@ -1157,7 +1158,7 @@ The five this suite runs on:
 | 03 | [Kestrel serves a wait page during initialisation](startup-and-degradation/03-startup-wait-page.md) | yes |
 | 04 | [Migration replay under restricted write](startup-and-degradation/04-migration-replay-under-restricted-write.md) | no |
 | 05 | [Degraded pages survive a migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) | no |
-| 06 | [A recorded schema version ahead of the build stays healthy](startup-and-degradation/06-schema-version-ahead-of-the-application.md) | no |
+| 06 | [A recorded schema version ahead of the build degrades and says why](startup-and-degradation/06-schema-version-ahead-of-the-application.md) | no |
 | 07 | [The source refresh is off unless it is turned on, and still works when it is](startup-and-degradation/07-the-source-refresh-is-off-unless-turned-on.md) | no |
 
 ### `backup/`

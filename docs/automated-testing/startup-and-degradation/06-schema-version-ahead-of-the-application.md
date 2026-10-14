@@ -1,32 +1,28 @@
-# A recorded schema version ahead of the build stays healthy and says so
+# A recorded schema version ahead of the build degrades and says why
 
 **Smoke:** no
 **Environment:** Fresh
-**Traces to:** #327, #289
-
-> **⚠ This document asserts a contract that is being reversed.**
-> [#350](https://github.com/DutchJaFO/Quotinator/issues/350) establishes that an overshoot must
-> **degrade** rather than run healthy: the missing migrations may have added, altered or removed things
-> this build does not expect, so the schema's shape is unknown and serving from it is a foot gun. Every
-> assertion below about `/health` returning `200`, and the step 3 note telling you not to "fix" a `503`
->: is superseded by that issue, which owns rewriting this document. It is left in place meanwhile
-> because deleting it before its replacement exists would trade a wrong test for no test.
+**Traces to:** #350, #327, #289
 
 ## Preconditions
 
 **Beyond the profile.** The database is the one the Fresh profile's own startup creates, fully migrated,
-then given one extra `System_ConsumerSchemaVersion` row *after* the container has stopped. The container
+then given one extra `System_ConsumerSchemaVersion` row while the container is stopped. The container
 binds its data directory to a host path (`--bind`) so the row can be written from the host: a docker
 volume would put the file somewhere `execute-sql.csx` cannot reach.
 
-**This is deliberately not a degradation scenario**, and it is the only document in this category that
-is not. Per #289 the application detects an overshoot on purpose and carries on: the schema is complete
-and only the counter is stale, which is what happens after a migration squash against a database that
-already applied the pre-squash migrations individually. Asserting `503` here would either fail outright
-or get "fixed" by breaking correct behaviour.
+**This is a degradation scenario like every other document in this category.** It did not used to be:
+#289 read an overshoot as a complete schema behind a stale counter, the state a migration squash leaves,
+and had the application carry on. #350 reversed that, because nothing can tell that case apart from a
+database that ran migrations this build has never seen. The migrations it never saw may have added,
+altered or removed anything, so what the schema actually holds is unknown, and serving quote content
+from it is a foot gun.
 
 ## Determinism
 
+- **The unknown schema is the fault; the stale counter is only its symptom.** That is why `503` is the
+  expected answer here and not an over-strict reading of a cosmetic mismatch. A build that serves from
+  this database is not being lenient, it is vouching for a shape it has never seen.
 - **The extra version is computed, never written as a literal.** Step 2 inserts `MAX(Version) + 1`, so
   the row is one beyond whatever this build actually migrated to. A literal would need re-deriving every
   time a milestone adds a migration, and would silently stop overshooting once the build caught up with
@@ -37,16 +33,23 @@ or get "fixed" by breaking correct behaviour.
 - **The consumer counter is the one that moves.** `System_ConsumerSchemaVersion` tracks the app's own
   migrations, `System_SchemaVersion` tracks `Quotinator.Data`'s. Either overshooting sets the flag, and
   moving one keeps the construction minimal.
-- **The row is added while the container is stopped.** Writing to the database under a running
-  container races the app's own connections, and the result would depend on timing rather than on the
-  state this test builds.
-- **The second start waits for *healthy*, not merely listening.** Unlike the degradation documents in
-  this category, healthy is the expected outcome, so the wait is itself part of the assertion, and a
-  build that wrongly degraded fails here rather than at a later step.
-- **Without step 2 there is no notification at all.** Confirmed in-process by
-  `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_StaysHealthyAndSurfacesTheOvershoot`,
-  whose assertion fails when the version is recorded at the level the database already holds instead of
-  one beyond it, so step 4 is discriminating rather than reporting a notification that is always there.
+- **The row is added while the container is stopped, and stopped cleanly.** Writing to the database
+  under a running container races the app's own connections. `docker stop -t 15` rather than `rm -f` is
+  the same reasoning `test-env.csx` records for its own `reenter`: a SIGKILL leaves the `-wal` and
+  `-shm` sidecars behind, so a row written from the host afterwards is a row written beside a journal
+  the next startup still has to replay.
+- **The second start waits for *listening*, not healthy.** Degraded is the expected outcome, so a
+  readiness poll for healthy would never return and the document would fail at the wrong step, saying
+  nothing about what the application actually did.
+- **Without step 2 there is nothing to find.** Confirmed in-process by
+  `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_DegradesRatherThanServing`, which
+  passes only against a version recorded one beyond what the database already holds: recorded at the
+  level it already holds, the flag is never set, the application stays healthy, and every step below
+  would be asserting against an ordinary install.
+- **The notification is read from the page, not from `/api/v1/notifications`.** That route is not in
+  `DatabaseHealthGateMiddleware`'s exempt list, so while degraded it answers `503` by design. The Blazor
+  page is exempt and reads through `INotificationReader` in-process, which is what an operator actually
+  opens.
 
 ## Steps
 
@@ -54,7 +57,7 @@ or get "fixed" by breaking correct behaviour.
 
 ```powershell
 $dataDir = "$PWD\.claude\temp\qt-startup-06-data"
-# A folder left by an earlier run holds a database, and step 5's single log match assumes none.
+# A folder left by an earlier run holds a database, and step 6's single log match assumes none.
 if (Test-Path $dataDir) { Remove-Item -LiteralPath $dataDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 
@@ -67,105 +70,168 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-startup-06 --port
 **On failure:** if the build cannot reach healthy on a fresh database, nothing below is about
 overshoot: stop and fix that first.
 
-### 2. Stop the container and record a version one beyond this build
+### 2. Stop the container cleanly and record a version one beyond this build
 
 ```powershell
 $dataDir = "$PWD\.claude\temp\qt-startup-06-data"
 docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-06 --bind $dataDir
+docker stop -t 15 qt-startup-06
 
 dotnet script scripts/testing/execute-sql.csx -- --db "$dataDir\quotinatordata.db" `
-  --sql "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) SELECT MAX(Version) + 1, '2026-08-27 00:00:00' FROM System_ConsumerSchemaVersion;"
+  --sql "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) SELECT MAX(Version) + 1, '2026-10-14 00:00:00' FROM System_ConsumerSchemaVersion;"
 ```
 
-**Expected:** the log read before the stop finds nothing, then `OK — 1 row(s) affected.`
+**Expected:** the log read before the stop finds nothing, the stop echoes the container name, then
+`OK — 1 row(s) affected.` (the em dash is `execute-sql.csx`'s own output, quoted verbatim).
 
 **On failure:** a SQL error means the overshoot state was never built, and every step below would be
 asserting against an ordinary healthy database, which proves nothing. Stop.
 
-### 3. Restart, and confirm the application stays healthy
+### 3. Restart, and confirm the application degrades
 
 ```powershell
 $dataDir = "$PWD\.claude\temp\qt-startup-06-data"
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-06 --port 18406 `
-  --image quotinator:local --bind $dataDir
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-06 --port 18406 `
+  --image quotinator:local --bind $dataDir --wait-listening
 
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/health" --expect 200 --status
+$health = dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/health" --expect 503 | ConvertFrom-Json
+"status=$($health.status)"
+"namesTheOvershoot=$($health.reason -match 'schema version is ahead')"
+"namesReset=$($health.reason -match 'Reset')"
+"namesRestore=$($health.reason -match 'restore a backup')"
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/quotes/random" --expect 503 --status
 ```
 
-**Expected:** the wait reports healthy and `/health` returns `200`.
+**Expected:** `503` from `/health` with `status=unhealthy`, all three of `namesTheOvershoot`,
+`namesReset` and `namesRestore` `True`, and `503` from the quote endpoint.
 
-**On failure:** a `503` is the regression this document exists to catch: an overshoot being treated as
-a fault. The schema is complete; only the bookkeeping is stale, and the application must keep working.
-Do not "fix" this by relaxing the expectation to `503`.
+**On failure:** a `200` from either is the defect #350 exists to remove: the application vouching for a
+schema whose shape it has never seen. A `503` whose reason names only the Reset leaves an operator who
+wants their data back believing the route that discards it is the only one there is.
 
-### 4. Confirm the overshoot is surfaced as a notification
+### 4. Confirm the degraded surface and the recovery routes stay reachable
 
 ```powershell
-$n = dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/notifications" | ConvertFrom-Json
-$overshoot = $n.items | Where-Object { $_.metadataKind -eq 'schemaversionovershoot' }
-"found=$($null -ne $overshoot)"
-"type=$($overshoot.type)"
-"bodyNamesTheRemedy=$($overshoot.body -match 'Reset the database')"
+foreach ($p in '/', '/about', '/stats', '/notifications', '/import-review', '/rest-api') {
+  $code = dotnet script scripts/testing/http.csx -- --url "http://localhost:18406$p" --status
+  "$p -> $code"
+}
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/openapi/v1.json" --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/admin/database/seed/preview" --status
 ```
 
-**Expected:** `found=True`, `type=actionrequired`, and `bodyNamesTheRemedy=True`.
+**Expected:** `200` from every page, `200` from the spec, and anything other than the gate's own
+`unavailable` body from the admin route.
 
-**The phrase follows the body's wording, which has changed once.** This matched `database Reset` until
-the body was reworded to *Reset the database from the admin endpoints…*; measured 2026-09-22, the old
-pattern read `False` against a body that still names the remedy. If it reads `False` again, read the
-body before concluding the remedy is gone.
+**On failure:** a `500` from a page means the degraded UI is rendering against a query it should not be
+running, or not running one it safely could. A gated admin route means the remedy the reason names
+cannot be reached, which makes the reason point nowhere.
 
-**On failure:** health at `200` with no notification is the worse half of this defect: the application
-noticed the overshoot and told nobody, leaving an operator with stale bookkeeping they cannot discover.
-`found=False` fails the test even though step 3 passed.
+### 5. Confirm the notification is raised and visible on the page
 
-### 5. Confirm the detection is in the log as well as the API
+```powershell
+$out = "$PWD\.claude\temp\qt-startup-06-shots"
+New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+$rowScript = @'
+  const rows = [...document.querySelectorAll('tr')];
+  const row = rows.find(r => r.textContent.includes('ahead of this build'));
+  const r = row ? row.getBoundingClientRect() : { height: 0 };
+  return { found: !!row,
+           buttons: row ? [...row.querySelectorAll('button')].map(b => b.textContent.trim()) : [],
+           namesRestore: !!row && /restore a backup/i.test(row.textContent),
+           innerHeight: r.height };
+'@
+$page = $rowScript | dotnet script scripts/testing/capture-page.csx -- `
+  --url "http://localhost:18406/notifications" --out "$out\notifications.png" --height 1100 `
+  --script-stdin | ConvertFrom-Json
+"found=$($page.found) innerHeight=$($page.innerHeight) namesRestore=$($page.namesRestore)"
+"buttons=$($page.buttons -join ' | ')"
+```
+
+**Expected:** `found=True` with a non-zero `innerHeight`, `namesRestore=True`, and a `Reset the
+database` button. The screenshot shows the row on the degraded page.
+
+**This is the half of the defect that is easiest to lose.** The notification is written while the
+database is unhealthy, which every other producer's `dbHealth.IsHealthy` gate would have suppressed,
+and the page itself held a second gate that emptied its own list whenever the database was unhealthy.
+`found=False` here, with step 3 passing, means one of those two gates is back: the application degraded
+and then said nothing about why.
+
+**On failure:** an empty page with a populated `/health` reason means the page gate is reading
+`IsHealthy` again rather than `ExpectedSchemaIsPresent`.
+
+### 6. Confirm the detection is in the log as well as the UI
 
 ```powershell
 docker logs qt-startup-06 2>&1 | Select-String -Pattern 'schema version overshoot detected'
+docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch 'is ahead of this build'
+docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch 'treated as complete'
 ```
 
-**Expected:** one match, naming both the recorded and the known versions.
+**Expected:** one match for the detection, at least one for the degraded reason, and **no** match for
+`treated as complete`.
 
-**On failure:** no match while step 4 passed means the notification came from somewhere other than this
-startup's own detection: most likely a row left over from an earlier run against the same directory.
-Re-run from step 1 with a fresh `$dataDir`.
+**On failure:** no match for the detection while step 5 passed means the notification came from
+somewhere other than this startup, most likely a row left over from an earlier run against the same
+directory: re-run from step 1 with a fresh `$dataDir`. A match for `treated as complete` means a
+message is claiming the schema is intact, which this build has no way to know.
+
+### 7. Confirm one of the two remedies actually resolves it
+
+```powershell
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/admin/database/reset" `
+  --method POST --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/health" --expect 200 --status
+```
+
+**Expected:** `200` from the Reset, then `200` from `/health`: the rebuild recorded this build's own
+version, so there is no overshoot left to degrade on.
+
+**On failure:** a `409` means the Reset refused for want of a backup, which is a different fault with
+its own documents in `backup/`. A `503` still answering afterwards means the Reset ran without
+clearing the recorded state, so the application would stay degraded until the operator restarted it.
 
 ## Observed effect
 
-**Measured 2026-08-27** against `quotinator:local`, on the first run of this document.
+**Measured 2026-10-14** against `quotinator:local`, on the first run of this document after #350, on a
+database recorded at data v28, app v10 against a build knowing app v9.
 
-`/health` returns `200`; the application is fully functional and the quote endpoints serve normally. The
-log carries one warning at startup:
+`/health` answers `503` with:
 
-> `[Database - Init] schema version overshoot detected: recorded data v11 (known: v11), recorded app v6
-> (known: v5); the schema is treated as complete, but a database Reset is recommended to true up the
-> version bookkeeping`
+> The database's recorded schema version is ahead of this build (data v28, app v10). This build does
+> not know what the migrations it never saw changed, so the schema's shape is unknown and quote content
+> is not served from it. Resolve it with a database Reset (POST /api/v1/admin/database/reset), which
+> rebuilds the schema at this build's own version and discards what the database holds now, or restore
+> a backup taken before the version moved ahead and restart.
 
-and `GET /api/v1/notifications` carries an `actionrequired` entry titled *Recorded schema version is
-ahead of this build*:
+`/api/v1/quotes/random` answers `503`, while all six exempt pages, the OpenAPI spec and the admin
+surface answer normally. The log carries the detection once:
 
-> This database's recorded schema version (data v11, app v6) is ahead of what this build expects —
-> usually because a set of not-yet-released migrations were consolidated after this database already
-> applied them individually (issue #289). The schema itself is complete and the app is working
-> normally; running a database Reset (POST /api/v1/admin/database/reset) will true up the version
-> bookkeeping.
+> `[Database - Init] schema version overshoot detected: recorded data v28 (known: v28), recorded app
+> v10 (known: v9). This build does not know what the migrations it never saw changed, so the schema's
+> shape is unknown: resolve it with a database Reset, or restore a backup taken before the version
+> moved ahead`
 
-**Re-measured 2026-09-22**: the same log line with `recorded app v10 (known: v9)`, and the body now
-reading *This database's recorded schema version (data v22, app v10) is ahead of what this build knows
-how to apply. Reset the database from the admin endpoints to rebuild it at this build's own schema
-version.*
+and nothing matching `treated as complete`, the claim #289's message made and #350 removed.
 
-**The version numbers above are observed output, not assertions.** They are recorded because an operator
-reading a real log will see numbers there and should recognise the shape; no step compares against them,
-and they move whenever a migration is added.
+**The version numbers above are observed output, not assertions.** They are recorded because an
+operator reading a real log sees numbers there and should recognise the shape; no step compares against
+them, and they move whenever a migration is added.
 
-**The recovery route is reachable and it works.** Unlike
-[`05`](05-degraded-pages-survive-a-migration-failure.md), where a Reset cannot fix an unwritable mount,
-here the remedy the notification names is genuinely available: the database is healthy and writable, so
-`POST /api/v1/admin/database/reset` both runs and resolves the stale counter. The notification also
-clears itself once it does, via its `DatabaseReset` dismiss trigger.
+**The notifications page renders fully while degraded**, with the overshoot row first: *Action
+required*, naming both remedies, carrying a `Reset the database` button, measured `innerHeight`
+`179.39`. The whole list renders, not just that row, which is what the page gate used to prevent.
+
+**The counts in the startup banner are real, not zero.** Measured `795 quotes`, `473 sources`,
+`15 characters` on the degraded start. This fault completes `InitialiseAsync`, so it does not produce
+the symptom
+[`degraded-startup-shows-every-count-as-zero`](../../knowledgebase/degraded-startup-shows-every-count-as-zero.md)
+describes, which belongs to a startup that never completes.
+
+**The remedy works and clears itself.** `POST /api/v1/admin/database/reset` answers `200`, `/health`
+returns to `200` in the same process, the API comes back out of the gate, and the overshoot
+notification is gone: its `DatabaseReset` dismiss trigger resolved it.
 
 ## Cleanup
 
@@ -174,4 +240,5 @@ $dataDir = "$PWD\.claude\temp\qt-startup-06-data"
 docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-06 --bind $dataDir
 Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "$PWD\.claude\temp\qt-startup-06-shots" -ErrorAction SilentlyContinue
 ```

@@ -279,12 +279,18 @@ $thrownSeen = @(docker logs qt-notif-14 2>&1 | Select-String -SimpleMatch '[Runt
 dotnet script scripts/testing/execute-sql.csx -- --db "$bind\quotinatordata.db" `
   --sql "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) SELECT MAX(Version) + 1, '2026-01-01 00:00:00' FROM System_ConsumerSchemaVersion;"
 docker start qt-notif-14
-dotnet script scripts/testing/http.csx -- --url "http://localhost:19514/api/v1/health" --wait-for 200 --status
-Kinds
+dotnet script scripts/testing/http.csx -- --url "http://localhost:19514/api/v1/health" --wait-for 503 --status
 ```
 
-**Expected:** `thrown=0` before the stop, `OK — 1 row(s) affected.`, then the same four kinds plus
-`schemaversionovershoot=1`.
+**Expected:** `thrown=0` before the stop, `OK — 1 row(s) affected.`, then `503`.
+
+**The overshoot degrades the application, and that is the point of waiting for `503` here** (#350).
+From this step until step 7's Reset, `/api/v1/notifications` is answered by
+`DatabaseHealthGateMiddleware` rather than its handler, so `Kinds` cannot run and the page is where
+the kinds are read. Step 1 already proved the other four were produced; what this step adds is the
+fifth, and the row below is that evidence. The degradation itself is
+[`startup-and-degradation/06`](../startup-and-degradation/06-schema-version-ahead-of-the-application.md)'s
+subject, not this document's.
 
 Open `http://localhost:19514/notifications` and read the overshoot row with the snippet from step 2.
 
@@ -305,7 +311,8 @@ Close the browser tab, then:
 ```powershell
 Read-Thrown
 docker restart qt-notif-14
-dotnet script scripts/testing/http.csx -- --url "http://localhost:19514/api/v1/health" --wait-for 200 --status
+# Still 503: the overshoot from step 4 stands until step 7 resets the database (#350).
+dotnet script scripts/testing/http.csx -- --url "http://localhost:19514/api/v1/health" --wait-for 503 --status
 $thrownSeen = @(docker logs qt-notif-14 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count
 ```
 
