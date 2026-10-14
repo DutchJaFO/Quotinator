@@ -210,7 +210,7 @@ public class NotificationActionExecutorTests
     public async Task ExecuteAsync_Reseed_DoesNotTouchDatabaseHealthOrAppVersion()
     {
         DatabaseHealthState health = new();
-        health.MarkFailed("some prior failure", DatabaseFaultKind.ExpectedSchemaMissing);
+        health.MarkFailed("some prior failure");
         SpyAppVersionTracker appVersionTracker = new();
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), health, new FakeNotificationWriter(),
@@ -229,7 +229,7 @@ public class NotificationActionExecutorTests
     {
         SpyDatabaseInitializer dbInitializer = new();
         DatabaseHealthState health = new();
-        health.MarkFailed("some prior failure", DatabaseFaultKind.ExpectedSchemaMissing);
+        health.MarkFailed("some prior failure");
         FakeNotificationWriter notificationWriter = new();
         SpyAppVersionTracker appVersionTracker = new();
         NotificationActionExecutor executor = new(
@@ -748,7 +748,7 @@ public class NotificationActionExecutorTests
     public async Task DatabaseReset_WhenRefused_LeavesTheDatabaseUnhealthy()
     {
         DatabaseHealthState health = new();
-        health.MarkFailed("some prior failure", DatabaseFaultKind.ExpectedSchemaMissing);
+        health.MarkFailed("some prior failure");
 
         await CreateExecutor(dbInitializer: new SpyDatabaseInitializer { ResetResult = DatabaseOperationResult.RefusedForBackup(BackupOutcome.BudgetExceeded, BackupGuardedStep.Reset) }, health: health)
             .ExecuteAsync(NotificationDismissTrigger.DatabaseReset);

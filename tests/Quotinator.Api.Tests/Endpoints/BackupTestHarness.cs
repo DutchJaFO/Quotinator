@@ -108,8 +108,7 @@ internal sealed class BackupTestHarness : IDisposable
     /// </summary>
     internal void MarkDatabaseUnhealthy() =>
         _factory.Services.GetRequiredService<Quotinator.Api.Startup.DatabaseHealthState>()
-                .MarkFailed("Simulated degraded startup (#349 reachability test).",
-                            Quotinator.Api.Enums.DatabaseFaultKind.ExpectedSchemaMissing);
+                .MarkFailed("Simulated degraded startup (#349 reachability test).");
 
     /// <summary>A client carrying <see cref="TestKey"/>.</summary>
     internal HttpClient AuthenticatedClient()

@@ -50,7 +50,7 @@ public class DatabaseHealthGateMiddlewareTests
     public async Task Unhealthy_NonExemptPath_Returns503AndSkipsNext()
     {
         DatabaseHealthState health = new();
-        health.MarkFailed("schema mismatch", DatabaseFaultKind.ExpectedSchemaMissing);
+        health.MarkFailed("schema mismatch");
         DatabaseHealthGateMiddleware middleware = new(health);
         (RequestDelegate? next, Func<bool>? wasCalled) = SpyNext();
         DefaultHttpContext context = MakeContext("/api/v1/quotes/random");
@@ -65,7 +65,7 @@ public class DatabaseHealthGateMiddlewareTests
     public async Task Unhealthy_NonExemptPath_ResponseBodyIncludesFailureReason()
     {
         DatabaseHealthState health = new();
-        health.MarkFailed("schema mismatch", DatabaseFaultKind.ExpectedSchemaMissing);
+        health.MarkFailed("schema mismatch");
         DatabaseHealthGateMiddleware middleware = new(health);
         DefaultHttpContext context = MakeContext("/api/v1/quotes/random");
 
@@ -97,7 +97,7 @@ public class DatabaseHealthGateMiddlewareTests
     public async Task Unhealthy_ExemptPath_CallsNext(string path)
     {
         DatabaseHealthState health = new();
-        health.MarkFailed("schema mismatch", DatabaseFaultKind.ExpectedSchemaMissing);
+        health.MarkFailed("schema mismatch");
         DatabaseHealthGateMiddleware middleware = new(health);
         (RequestDelegate? next, Func<bool>? wasCalled) = SpyNext();
 
@@ -110,7 +110,7 @@ public class DatabaseHealthGateMiddlewareTests
     public async Task Unhealthy_QuotesEndpoint_StaysGated()
     {
         DatabaseHealthState health = new();
-        health.MarkFailed("schema mismatch", DatabaseFaultKind.ExpectedSchemaMissing);
+        health.MarkFailed("schema mismatch");
         DatabaseHealthGateMiddleware middleware = new(health);
         (RequestDelegate? next, Func<bool>? wasCalled) = SpyNext();
         DefaultHttpContext context = MakeContext("/api/v1/quotes/random");
