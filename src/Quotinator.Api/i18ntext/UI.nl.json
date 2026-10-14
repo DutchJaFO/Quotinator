@@ -24,7 +24,7 @@
   "NotificationWhatsNewReleasedTitle": "Nieuw in v{0}",
   "NotificationWhatsNewUnreleasedTitle": "Nieuw (nog niet uitgebracht)",
   "NotificationSchemaOvershootTitle": "Vastgelegde schemaversie loopt voor op deze build",
-  "NotificationSchemaOvershootBody": "De vastgelegde schemaversie van deze database (data v{0}, app v{1}) loopt voor op wat deze build kan toepassen. Zet de database terug via de beheer-endpoints om hem opnieuw op te bouwen op de schemaversie van deze build.",
+  "NotificationSchemaOvershootBody": "De vastgelegde schemaversie van deze database (data v{0}, app v{1}) loopt voor op wat deze build kan toepassen, dus de vorm van het schema is onbekend en de applicatie werkt beperkt. Bouw de database opnieuw op via de beheer-endpoints, op de schemaversie van deze build, of zet een back-up terug die is gemaakt voordat de versie vooruitliep.",
   "NotificationDatabaseCreatedTitle": "Database aangemaakt",
   "NotificationDatabaseCreatedBody": "Er is geen database gevonden, dus is er een nieuwe aangemaakt op dataschema v{0} en appschema v{1}. Er was niets te bewaren.",
   "NotificationMigrationAppliedTitle": "Migratie toegepast ({0} v{1})",

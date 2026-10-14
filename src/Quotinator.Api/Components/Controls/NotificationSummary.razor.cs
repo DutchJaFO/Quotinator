@@ -8,10 +8,10 @@ using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 namespace Quotinator.Api.Components.Controls;
 
 /// <summary>
-/// Active-notification summary (#278) — every undismissed, unexpired notification regardless of
+/// Active-notification summary (#278): every undismissed, unexpired notification regardless of
 /// type, embedded in both <see cref="StartupSuccessModal"/> and <see cref="StartupErrorModal"/>
 /// alongside <see cref="DatabaseStatsSummary"/>. Which modal renders is already determined by
-/// <c>DatabaseHealthState</c>, not by notification type — a Warning/Error notification unrelated to
+/// <c>DatabaseHealthState</c>, not by notification type: a Warning/Error notification unrelated to
 /// database health (e.g. "backup skipped due to low disk space") must still be visible during a
 /// perfectly healthy startup, so both modals show the same unfiltered active set rather than each
 /// showing only a subset of types. Display-only: dismissing a notification is done from
@@ -27,24 +27,28 @@ public partial class NotificationSummary
         Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);
 
         // #326: same gate, and the same reason, as DatabaseStatsSummary's own (#293). This is a live
-        // query, and NotificationReader only tolerates a missing System_Notification table — a data
+        // query, and NotificationReader only tolerates a missing System_Notification table: a data
         // directory that cannot be written throws SQLITE_CANTOPEN straight past that catch. Since this
         // component is embedded in StartupErrorModal, the modal that exists specifically to explain a
         // failed startup, an ungated query here crashed the whole degraded page it was meant to render.
-        if (!DatabaseHealth.IsHealthy)
+        //
+        // #350: the gate asks whether the schema this query names is guaranteed to be there, not
+        // whether the application is degraded. A schema-version overshoot leaves System_Notification
+        // intact, and this modal is where its notification is most likely to be read.
+        if (!DatabaseHealth.ExpectedSchemaIsPresent)
         {
             Notifications = [];
             return;
         }
 
-        // #319: the UI language decides the notification's language here — CurrentUICulture is what the
+        // #319: the UI language decides the notification's language here, and CurrentUICulture is what the
         // LanguageSelector cookie and Accept-Language already resolve to, so the popup follows the rest
         // of the interface rather than staying English inside a translated page.
         Notifications = await NotificationReader.GetActiveNotificationsAsync(
             CultureInfo.CurrentUICulture.TwoLetterISOLanguageName);
 
         // #369: the popup shows the Status column too, so an alert whose action can no longer run reads
-        // the same here as on the Notifications page — one read, behind the same health gate.
+        // the same here as on the Notifications page: one read, behind the same health gate.
         Availability = await ActionExecutor.GetAvailabilityAsync();
     }
 

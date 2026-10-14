@@ -1249,11 +1249,15 @@ public class DatabaseInitializer(
         int dataCurrent     = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetDataCurrentVersion);
         int consumerCurrent = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetConsumerCurrentVersion);
 
-        // #289: a recorded version higher than this build's own known migration count is only
-        // reachable after a migration squash, on a database that already applied the pre-squash
-        // migrations: the schema itself is complete (nothing to replay), only the counter is stale
-        // relative to this build. Detected here (not treated as a hard failure) so the caller can
-        // surface it via a notification instead: see IDatabaseInitializer.SchemaVersionOvershootDetected.
+        // #289: a recorded version higher than this build's own known migration count. A migration
+        // squash on a database that already applied the pre-squash migrations reaches this state, and
+        // #289 read it as that case alone: a complete schema behind a stale counter.
+        //
+        // #350: nothing here can tell that case apart from a database that ran migrations this build
+        // has never seen, so the schema's shape is unknown rather than known-complete. Still detected
+        // rather than thrown, per ADR 022: the condition is reported as an outcome and the consumer
+        // decides what it means, which is where the degradation now happens.
+        // See IDatabaseInitializer.SchemaVersionOvershootDetected.
         SchemaVersionOvershootDetected =
             dataCurrent > DataOwnedMigrations.Count || consumerCurrent > _consumerMigrations.Count;
 

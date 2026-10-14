@@ -106,6 +106,12 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Critical, Message = "[Server] {Reason:l}")]
     public static partial void LogStartupMigrationRefused(this ILogger logger, string reason);
 
+    /// <summary>Logs that startup degraded because the recorded schema version is ahead of this build (#350).</summary>
+    /// <param name="logger">The logger to write to.</param>
+    /// <param name="reason">The degraded reason: both recorded versions, why the schema's shape is unknown, and the two remedies.</param>
+    [LoggerMessage(Level = LogLevel.Critical, Message = "[Server] {Reason:l}")]
+    public static partial void LogStartupSchemaOvershoot(this ILogger logger, string reason);
+
     /// <summary>Logs the server stopping, with the running version.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "[Server] Quotinator v{Version} stopping")]
     public static partial void LogServerStopping(this ILogger logger, string version);

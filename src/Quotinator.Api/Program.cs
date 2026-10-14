@@ -12,6 +12,7 @@ using Microsoft.OpenApi;
 using Quotinator.Api.Components;
 using Quotinator.Api.Endpoints;
 using Quotinator.Api.Endpoints.Filters;
+using Quotinator.Api.Enums;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Constants.Routes;
@@ -771,7 +772,7 @@ if (dataDirectoryFailure is not null)
 {
     app.Services.GetRequiredService<ILogger<Program>>()
         .LogWarning("[Config] {Reason:l}", dataDirectoryFailure);
-    dbHealth.MarkFailed(dataDirectoryFailure);
+    dbHealth.MarkFailed(dataDirectoryFailure, DatabaseFaultKind.ExpectedSchemaMissing);
 }
 
 IHostApplicationLifetime lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
@@ -1000,7 +1001,22 @@ try
     {
         string failureReason = BackupObstacleGuidance.MigrationRefusedReason(obstacle);
         app.Services.GetRequiredService<ILogger<Program>>().LogStartupMigrationRefused(failureReason);
-        dbHealth.MarkFailed(failureReason);
+        dbHealth.MarkFailed(failureReason, DatabaseFaultKind.ExpectedSchemaMissing);
+    }
+
+    // #350: a recorded version ahead of this build means the migrations it never saw may have added,
+    // altered or removed anything, so the schema is of unknown shape rather than known-good, and
+    // serving quote content from it is a foot gun. #289 shipped the opposite reading, that an
+    // overshoot is only ever a stale counter left by a migration squash; the plan doc records why that
+    // was reversed. Checked after the refused-migration case above and never before it:
+    // MarkFailed is first-wins, and a refusal leaves the schema behind this build, which is the
+    // stricter of the two faults because a live query may then throw.
+    if (dbInitializer.SchemaVersionOvershootDetected)
+    {
+        string overshootReason = SchemaOvershootGuidance.Reason(
+            dbInitializer.DataSchemaVersion, dbInitializer.SchemaVersion);
+        app.Services.GetRequiredService<ILogger<Program>>().LogStartupSchemaOvershoot(overshootReason);
+        dbHealth.MarkFailed(overshootReason, DatabaseFaultKind.SchemaAheadOfThisBuild);
     }
 }
 // #326: an unwritable data directory is a different fault with a different remedy, and the generic
@@ -1014,7 +1030,7 @@ catch (Exception ex) when (IsDataDirectoryNotWritable(ex))
 {
     ILogger<Program> startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
     startupLogger.LogStartupDatabaseInitFailed(ex, DataDirectoryNotWritableReason);
-    dbHealth.MarkFailed(DataDirectoryNotWritableReason);
+    dbHealth.MarkFailed(DataDirectoryNotWritableReason, DatabaseFaultKind.ExpectedSchemaMissing);
 }
 catch (Exception ex)
 {
@@ -1025,7 +1041,7 @@ catch (Exception ex)
         "Resolve with an explicit database Reset (POST /api/v1/admin/database/reset) or by " +
         "stopping the app, deleting the database file, and restarting.";
     startupLogger.LogStartupDatabaseInitFailed(ex, failureReason);
-    dbHealth.MarkFailed(failureReason);
+    dbHealth.MarkFailed(failureReason, DatabaseFaultKind.ExpectedSchemaMissing);
 }
 
 // #81: the version this app instance was running as of its *previous* healthy startup, the lower
@@ -1151,16 +1167,24 @@ if (dbHealth.IsHealthy)
     }
 }
 
-// #289: second producer for #278's notification mechanism: announces a schema-version-overshoot
-// (the recorded version exceeds this build's own known migration count, which only happens after a
-// migration squash on a database that already applied the pre-squash migrations). The dedupe key
-// includes the actual detected versions, not a fixed string like #279's: repeats of the same
-// already-notified overshoot state (e.g. the operator hasn't reset yet and the app just restarted)
-// stay deduped, but a genuinely different future overshoot (a later squash producing different
-// version numbers) still gets its own notification. ActionRequired + DatabaseReset dismiss trigger:
-// POST /admin/database/reset already calls DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset)
-// (see AdminEndpoints.cs), so this clears itself automatically once the operator resets.
-if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
+// #289: second producer for #278's notification mechanism: announces a schema-version overshoot, a
+// recorded version exceeding this build's own known migration count. The dedupe key includes the
+// actual detected versions, not a fixed string like #279's: repeats of the same already-notified
+// overshoot state (e.g. the operator hasn't reset yet and the app just restarted) stay deduped, but a
+// genuinely different future overshoot still gets its own notification. ActionRequired + DatabaseReset
+// dismiss trigger: POST /admin/database/reset already calls
+// DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset) (see AdminEndpoints.cs), so this
+// clears itself automatically once the operator resets.
+//
+// #350: deliberately NOT gated on dbHealth.IsHealthy, unlike every other producer below. An overshoot
+// now degrades the database, so that gate would suppress the one notification that explains why the
+// application is degraded. The write targets a notifications table whose shape this build cannot
+// vouch for, which is what the try/catch below is for: a failure here is logged and startup carries
+// on. This is the opposite of #348's refused-migration decision not to notify at all, and the
+// difference is the direction of the mismatch: a refusal leaves the schema behind this build, so the
+// write is known to target an unmigrated table, while an overshoot leaves it ahead, where the table is
+// very likely intact and this row is the only record of the fault that outlives the restart.
+if (dbInitializer.SchemaVersionOvershootDetected)
 {
     try
     {

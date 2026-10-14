@@ -4,18 +4,19 @@ using Quotinator.Api.Startup;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
 namespace Quotinator.Api.Components.Controls;
 
 /// <summary>
-/// Database counts and per-file import history (#263) — the counts and file table shared by
+/// Database counts and per-file import history (#263): the counts and file table shared by
 /// <see cref="StartupErrorModal"/> and <see cref="Pages.Stats"/>. The counts reflect
 /// <see cref="IDatabaseInitializer"/>'s current state, which stays meaningful (the
 /// last known-good snapshot) even while the database is degraded. The file table reads
 /// <see cref="IFileResourceRepository"/>/<see cref="IImportBatchRepository"/> (#251's persisted
-/// provenance) rather than <see cref="IDatabaseInitializer.LastSeedReport"/> — that report only
+/// provenance) rather than <see cref="IDatabaseInitializer.LastSeedReport"/>, which only
 /// reflects what happened during the current process's own most recent seed pass, which is empty on
 /// every ordinary restart once the database already has data (seeding is skipped entirely), making it
 /// look like the file history was lost. The persisted store has no such gap.
@@ -31,37 +32,41 @@ public partial class DatabaseStatsSummary
 
         // #293: unlike the counts above (a last-known-good in-memory snapshot, safe regardless of
         // schema state), the file-history table is a live query against Import_FileResource/
-        // Import_Batch — tables a failed migration may not have created yet. Skipping it while
+        // Import_Batch, tables a failed migration may not have created yet. Skipping it while
         // degraded keeps this component's own promise ("stays meaningful even while degraded")
         // honest, instead of crashing the whole page the same way NotificationReader once did.
-        if (!DatabaseHealth.IsHealthy)
+        //
+        // #350: which is exactly what the gate asks, so it asks it directly now: are the tables this
+        // query names guaranteed to be there. A schema-version overshoot degrades the application
+        // while leaving both of them intact.
+        if (!DatabaseHealth.ExpectedSchemaIsPresent)
         {
             FileHistory = [];
             return;
         }
 
-        var page = await FileResourceRepository.GetPageAsync(fileName: null, origin: null, page: 1, pageSize: 0);
-        var latestPerFile = page.Items
+        PagedItems<FileResourceListItem> page = await FileResourceRepository.GetPageAsync(fileName: null, origin: null, page: 1, pageSize: 0);
+        IOrderedEnumerable<FileResourceListItem> latestPerFile = page.Items
             .GroupBy(item => item.FileName, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
             .OrderBy(item => item.FileName, StringComparer.OrdinalIgnoreCase);
 
-        var rows = new List<FileHistoryRow>();
-        foreach (var item in latestPerFile)
+        List<FileHistoryRow> rows = [];
+        foreach (FileResourceListItem? item in latestPerFile)
         {
-            var batchIds = await FileResourceRepository.GetBatchIdsAsync(item.Id);
-            var batches  = new List<ImportBatchEntity>(batchIds.Count);
-            foreach (var batchId in batchIds)
+            IReadOnlyList<Guid> batchIds = await FileResourceRepository.GetBatchIdsAsync(item.Id);
+            List<ImportBatchEntity> batches  = new(batchIds.Count);
+            foreach (Guid batchId in batchIds)
             {
-                var batch = await ImportBatchRepository.GetByIdAsync(batchId);
+                ImportBatchEntity? batch = await ImportBatchRepository.GetByIdAsync(batchId);
                 if (batch is not null) batches.Add(batch);
             }
 
             // A file resource linked to batches with more than one distinct Url (e.g. manifest.json,
             // which is captured alongside every batch it drives, per each of those batches' own
-            // upstream source) has no single meaningful "source batch" — showing an arbitrary one's
+            // upstream source) has no single meaningful "source batch": showing an arbitrary one's
             // Url/RecordCount against this file would misattribute another file's provenance to it.
-            var representative = batches.Select(b => b.Url).Distinct().Count() <= 1
+            ImportBatchEntity? representative = batches.Select(b => b.Url).Distinct().Count() <= 1
                 ? batches.OrderByDescending(b => b.ImportedAt, StringComparer.Ordinal).FirstOrDefault()
                 : null;
 

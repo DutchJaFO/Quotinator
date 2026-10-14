@@ -13,7 +13,7 @@ using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 namespace Quotinator.Api.Components.Pages;
 
 /// <summary>
-/// Minimal import-review page (#303) — every staged action still awaiting a human decision, across all
+/// Minimal import-review page (#303): every staged action still awaiting a human decision, across all
 /// batches, with a basic decide control per row.
 /// <para>
 /// Deliberately not the side-by-side diff/merge editor #66 envisions: no field-level comparison view,
@@ -21,7 +21,7 @@ namespace Quotinator.Api.Components.Pages;
 /// so an operator can clear a backlog without reaching for curl.
 /// </para>
 /// <para>
-/// Calls <see cref="IImportActionService"/> directly — server-side Blazor, same process — matching
+/// Calls <see cref="IImportActionService"/> directly, server-side Blazor in the same process, matching
 /// <see cref="Notifications"/>'s own precedent of sourcing data directly rather than round-tripping
 /// through this project's REST endpoints.
 /// </para>
@@ -32,12 +32,12 @@ public partial class ImportReview
 
     /// <summary>
     /// The statuses that represent work still waiting on a person. Public and static so it can be
-    /// unit-tested without rendering the component — this project has no bUnit.
+    /// unit-tested without rendering the component: this project has no bUnit.
     /// </summary>
     /// <remarks>
     /// <c>Decided</c>, <c>Applied</c> and <c>Discarded</c> are all finished states: something has
     /// already happened to them, and listing them would present settled work as outstanding. A row
-    /// whose stored status cannot be parsed is excluded rather than assumed reviewable — it is data
+    /// whose stored status cannot be parsed is excluded rather than assumed reviewable: it is data
     /// this application did not write, and guessing would put phantom work on the page.
     /// </remarks>
     /// <param name="actions">Every action to consider.</param>
@@ -47,7 +47,7 @@ public partial class ImportReview
             && status is ImportActionStatus.Pending or ImportActionStatus.Blocked or ImportActionStatus.Stale);
 
     /// <summary>
-    /// The field-level rows a whole-action decision resolves — one per field actually in conflict, all
+    /// The field-level rows a whole-action decision resolves: one per field actually in conflict, all
     /// carrying <paramref name="choice"/>.
     /// </summary>
     /// <remarks>
@@ -57,7 +57,7 @@ public partial class ImportReview
     /// every field would overwrite ones nobody was asked about, including nulling a field the incoming
     /// file simply does not carry.
     /// <para>
-    /// Returns nothing for an action with no ambiguous fields — a <c>Blocked</c> action is held because
+    /// Returns nothing for an action with no ambiguous fields: a <c>Blocked</c> action is held because
     /// it would touch a protected field, not because two values disagree, so a whole-action decision has
     /// nothing to resolve for it.
     /// </para>
@@ -86,7 +86,11 @@ public partial class ImportReview
         // Same gate as Notifications (#326): this route is exempt from DatabaseHealthGateMiddleware, so
         // it is reachable precisely when the database is not. Rendering an empty list is the degraded
         // answer; letting a live query throw past the page is not one.
-        if (!DatabaseHealth.IsHealthy)
+        //
+        // #350: the gate asks whether the schema this query names is guaranteed to be there, not
+        // whether the application is degraded. A schema-version overshoot leaves the import tables
+        // intact, so whatever is staged for review stays visible while the operator recovers.
+        if (!DatabaseHealth.ExpectedSchemaIsPresent)
         {
             Actions = [];
             return;
@@ -108,7 +112,7 @@ public partial class ImportReview
     private Quotinator.Api.I18nText.UI Text = new();
     private IReadOnlyList<ImportActionSummaryResponse> Actions = [];
 
-    // #303, developer feedback from T1: the batch id is correct and meaningless — an operator cannot act
+    // #303, developer feedback from T1: the batch id is correct and meaningless: an operator cannot act
     // on a GUID. Import_Batch.Name is the file name the batch was created from, which is what actually
     // tells them where the conflict came from and which file to go and fix.
     private Dictionary<string, string> BatchFileNames = [];
@@ -127,10 +131,10 @@ public partial class ImportReview
     /// pending-review alert recorded, else <paramref name="unresolved"/> (#369).
     /// </summary>
     /// <remarks>
-    /// The live batch wins where both exist — it is the record itself, and the alert only a copy taken
+    /// The live batch wins where both exist: it is the record itself, and the alert only a copy taken
     /// when it was raised. Never the batch id: an operator cannot act on a GUID, and a row whose batch is
-    /// gone with no alert to name it — one staged before #303 shipped — has nothing truthful to show but
-    /// that fact. Static and internal so the mapping can be tested without rendering the component —
+    /// gone with no alert to name it, one staged before #303 shipped, has nothing truthful to show but
+    /// that fact. Static and internal so the mapping can be tested without rendering the component:
     /// this project has no bUnit.
     /// </remarks>
     /// <param name="liveBatchFileNames">Every batch that still exists, by id.</param>
@@ -156,7 +160,7 @@ public partial class ImportReview
     /// <remarks>
     /// Keyed case-insensitively, since an action's stored batch id and the alert's copy of it are two
     /// independently-cased values (ADR 012). A payload that cannot be read contributes nothing rather than
-    /// throwing — a row written by an older build must not take the page down.
+    /// throwing: a row written by an older build must not take the page down.
     /// </remarks>
     /// <param name="notifications">Pending-review alerts, dismissed ones included.</param>
     internal static IReadOnlyDictionary<string, string> FileNamesFromNotifications(IEnumerable<NotificationEntity> notifications)
@@ -178,7 +182,7 @@ public partial class ImportReview
     /// <remarks>
     /// The one predicate the page and its tests agree on. Derived at render time from the page's own
     /// batch lookup rather than stored: the absence of the row is already the fact, which is why no status
-    /// or schema change was needed — and ADR 014 rules out a stored flag for a dangling reference. As
+    /// or schema change was needed, and ADR 014 rules out a stored flag for a dangling reference. As
     /// case-insensitive as <paramref name="liveBatchFileNames"/>' own comparer, which the page builds that
     /// way.
     /// </remarks>
@@ -190,7 +194,7 @@ public partial class ImportReview
     /// <summary>Whether a whole-action Keep/Take is offered for <paramref name="action"/> (#369).</summary>
     /// <remarks>
     /// Never once the batch is gone, whatever the row's own conflicts say: the decision would have
-    /// nothing to be applied against. Removed rather than disabled — impossible, not unavailable.
+    /// nothing to be applied against. Removed rather than disabled: impossible, not unavailable.
     /// </remarks>
     /// <param name="action">The row being rendered.</param>
     /// <param name="batchIsGone">Whether the row's batch no longer exists.</param>
@@ -205,21 +209,21 @@ public partial class ImportReview
         // what a whole-action decision resolves. The reader returns raw entities, which do not.
         //
         // pageSize 0 is this project's "every matching row as a single page" contract, not an empty
-        // page — a review backlog is bounded by what an operator has left undecided, and paging it here
+        // page: a review backlog is bounded by what an operator has left undecided, and paging it here
         // would hide rows behind a control this minimal page deliberately does not have.
         PagedItems<ImportActionSummaryResponse> page = await ActionService.GetPagedAsync(
             batchId: null, status: null, entityType: null, page: 1, pageSize: 0);
 
         Actions = [.. AwaitingReview(page.Items)];
 
-        // One read for the whole page rather than one per row — the batch count is small, and a lookup
+        // One read for the whole page rather than one per row: the batch count is small, and a lookup
         // per action would be an N+1 against a table this page already knows it needs in full.
         IReadOnlyList<ImportBatchEntity> batches = await ImportBatches.GetAllAsync();
         BatchFileNames = batches
             .GroupBy(batch => batch.Id.ToCanonicalId(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First().Name, StringComparer.OrdinalIgnoreCase);
 
-        // #369: one read for the page as well, and over the alert history rather than the active set —
+        // #369: one read for the page as well, and over the alert history rather than the active set:
         // a batch that is gone is exactly one whose alert may already have been dismissed.
         IReadOnlyList<NotificationEntity> alerts =
             await NotificationReader.GetByMetadataKindAsync(NotificationMetadataKind.ImportReviewPending);
@@ -230,7 +234,7 @@ public partial class ImportReview
     /// Decides <paramref name="action"/>'s conflicted fields and applies its batch.
     /// </summary>
     /// <remarks>
-    /// Internal and static so the sequence can be tested without rendering the component — this project
+    /// Internal and static so the sequence can be tested without rendering the component: this project
     /// has no bUnit, the same reason <see cref="AwaitingReview"/> and <see cref="DecisionRows"/> are
     /// shaped this way.
     /// </remarks>
@@ -244,14 +248,14 @@ public partial class ImportReview
     {
         List<ImportActionFieldRowDto> rows = [.. DecisionRows(action, choice)];
 
-        // Nothing in conflict means nothing this control can settle — a Blocked action needs its
+        // Nothing in conflict means nothing this control can settle: a Blocked action needs its
         // completeness hold lifted, which is #66's per-item UX, not a whole-action keep/take.
         if (rows.Count == 0) return;
 
         await service.BulkDecideAsync(action.BatchId, rows);
 
         // Deciding stages the choice; it does not write it. Applying is the completion of the decision
-        // the operator just made, not a second one taken on their behalf — and it is what dismisses the
+        // the operator just made, not a second one taken on their behalf, and it is what dismisses the
         // alert, which is wired to ApplyBatchAsync rather than to deciding. TryApplyBatchAsync writes
         // nothing while any action in the batch is still Pending/Blocked/Stale, so calling it after each
         // row is a no-op until the last one is settled and atomic when it is.
@@ -259,7 +263,7 @@ public partial class ImportReview
     }
 
     /// <summary>
-    /// Discards <paramref name="action"/>'s whole batch — the one thing left to do with a row whose batch
+    /// Discards <paramref name="action"/>'s whole batch: the one thing left to do with a row whose batch
     /// is gone (#369).
     /// </summary>
     /// <remarks>

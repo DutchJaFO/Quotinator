@@ -37,7 +37,12 @@ public partial class Notifications
         // NotificationReader's missing-table catch when the data directory cannot be written. Rendering
         // an empty list is the degraded answer; crashing the page is not one. Same gate as
         // DatabaseStatsSummary (#293) and NotificationSummary.
-        if (!DatabaseHealth.IsHealthy)
+        //
+        // #350: the gate asks whether the schema this query names is guaranteed to be there, not
+        // whether the application is degraded. A schema-version overshoot degrades it while leaving
+        // every table this query reads intact, and suppressing the list there would hide the one
+        // notification that explains the degraded state.
+        if (!DatabaseHealth.ExpectedSchemaIsPresent)
         {
             AllNotifications = [];
             Now = DateTime.UtcNow;
