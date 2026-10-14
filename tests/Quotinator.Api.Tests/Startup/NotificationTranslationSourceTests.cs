@@ -8,7 +8,7 @@ namespace Quotinator.Api.Tests.Startup;
 
 /// <summary>
 /// #319: the producers that run at startup need every language at once, not the one
-/// <see cref="System.Globalization.CultureInfo.CurrentUICulture"/> happens to be — a startup producer
+/// <see cref="System.Globalization.CultureInfo.CurrentUICulture"/> happens to be: a startup producer
 /// has no request culture, which is the whole reason a notification's text is stored per language
 /// rather than resolved at render time.
 /// </summary>
@@ -17,10 +17,10 @@ public class NotificationTranslationSourceTests
 {
     private static readonly string I18nDir = Path.Combine(AppContext.BaseDirectory, "i18ntext");
 
-    // The non-original languages this project ships, alphabetically — the order .Order() produces.
+    // The non-original languages this project ships, alphabetically, the order .Order() produces.
     private static readonly string[] ExpectedTranslatedLanguages = ["de", "nl"];
 
-    // #377: every shipped language, including the original — a composed fragment has no title/body
+    // #377: every shipped language, including the original: a composed fragment has no title/body
     // pair to exclude English from, so all three must resolve it.
     private static readonly string[] AllShippedLanguages = ["de", "en", "nl"];
 
@@ -96,12 +96,12 @@ public class NotificationTranslationSourceTests
         Assert.AreNotEqual(
             afterReset.Single(t => t.Language == "nl").Body,
             contentChanged.Single(t => t.Language == "nl").Body,
-            "The two reasons are different notifications and must not share one body — identical text "
+            "The two reasons are different notifications and must not share one body: identical text "
             + "would mean one of the two keys was never actually looked up.");
     }
 
     /// <summary>
-    /// The original stored on the row is English regardless of the host's current culture — a startup
+    /// The original stored on the row is English regardless of the host's current culture: a startup
     /// producer has no request culture, and a stored original in the wrong language would be mislabelled
     /// by <c>OriginalLanguage</c> rather than translated.
     /// </summary>
@@ -115,7 +115,7 @@ public class NotificationTranslationSourceTests
         Assert.AreEqual("The database holds no quotes", title);
     }
 
-    // ── #81's producer (rows 14–16) ──────────────────────────────────────────
+    // ── #81's producer (rows 14 to 16) ───────────────────────────────────────
 
     private static ChangelogDocument DocumentIn(string language, string version, params string[] highlights) => new()
     {
@@ -130,7 +130,7 @@ public class NotificationTranslationSourceTests
         ],
     };
 
-    /// <summary>The body comes from that language's own changelog rows — already translated at source.</summary>
+    /// <summary>The body comes from that language's own changelog rows, already translated at source.</summary>
     [TestMethod]
     public void WhatsNew_TakesBodyTranslationsFromThePerLanguageChangelog()
     {
@@ -173,7 +173,7 @@ public class NotificationTranslationSourceTests
             "German had no changelog content, so it must contribute nothing rather than English text labelled 'de'.");
     }
 
-    /// <summary>The title is not in the changelog — it resolves per language from the locale files, version substituted.</summary>
+    /// <summary>The title is not in the changelog: it resolves per language from the locale files, version substituted.</summary>
     [TestMethod]
     public void WhatsNew_TitleResolvesPerLanguageWithTheVersionSubstituted()
     {
@@ -193,7 +193,7 @@ public class NotificationTranslationSourceTests
 
     /// <summary>
     /// #289's overshoot notification carries both recorded schema versions, and each language's own
-    /// template receives them — not one language's prose with numbers baked in at write time
+    /// template receives them, not one language's prose with numbers baked in at write time
     /// (requirement 7).
     /// </summary>
     [TestMethod]
@@ -221,6 +221,54 @@ public class NotificationTranslationSourceTests
                 $"The {translation.Language} body still carries an unsubstituted placeholder.");
         }
     }
+    /// <summary>
+    /// #350: an overshoot is resolvable by a database Reset or by restoring a backup taken before the
+    /// version moved ahead, and every language has to offer both. A language naming only the Reset
+    /// tells its reader that the route which discards their data is the only one there is.
+    /// </summary>
+    /// <remarks>
+    /// The words are per language because the claim is about each translation's own prose, not about
+    /// the English one having been copied. The table is asserted to cover every language the producer
+    /// emits, so a fourth language fails this test rather than passing unchecked.
+    /// </remarks>
+    [TestMethod]
+    public void Read_SchemaVersionOvershoot_NamesBothRemediesInEachLanguage()
+    {
+        Dictionary<string, (string Reset, string Restore)> remedyWords = new(StringComparer.OrdinalIgnoreCase)
+        {
+            // Each pair is a word that can only come from that remedy's own clause in that language.
+            // German's "zurück" is deliberately the bare particle: "zurücksetzen" and "setzen Sie ...
+            // zurück" are the same verb, and only one of the two spellings would match the other.
+            ["en-GB"] = ("reset", "restore"),
+            ["nl"]    = ("opnieuw op", "back-up"),
+            ["de"]    = ("zurück", "Sicherung"),
+        };
+
+        ApiLocalizer localizer = new(I18nDir);
+
+        IReadOnlyList<NotificationTranslation> translations = NotificationTranslations.Build(
+            localizer,
+            ApiMessages.NotificationSchemaOvershootTitle,
+            ApiMessages.NotificationSchemaOvershootBody,
+            bodyArgs: [14, 5]);
+
+        Assert.IsNotEmpty(translations, "The overshoot notification must have translations to read.");
+
+        foreach (NotificationTranslation translation in translations)
+        {
+            Assert.IsTrue(
+                remedyWords.TryGetValue(translation.Language, out (string Reset, string Restore) words),
+                $"{translation.Language} is produced but this test names no remedy words for it, so its "
+                + "body would go unchecked.");
+
+            Assert.Contains(words.Reset, translation.Body, StringComparison.OrdinalIgnoreCase,
+                $"The {translation.Language} body does not name a database Reset.");
+            Assert.Contains(words.Restore, translation.Body, StringComparison.OrdinalIgnoreCase,
+                $"The {translation.Language} body does not name restoring a backup, so it reads as "
+                + "though a Reset were the only way out.");
+        }
+    }
+
     /// <summary>Positional arguments substitute into each language's own template, not only English's.</summary>
     [TestMethod]
     public void Build_WithArguments_SubstitutesIntoEveryLanguage()
@@ -274,7 +322,7 @@ public class NotificationTranslationSourceTests
     /// <summary>
     /// #377 (developer, 2026-09-09): the sentence names only what happened. Omitting a zero clause is
     /// safe because every count remains visible per entity type in the notification's detail table and
-    /// in the seed log — the completeness work that landed before this change.
+    /// in the seed log, the completeness work that landed before this change.
     /// </summary>
     [TestMethod]
     public void ComposeForEveryLanguage_OmitsWhatDidNotHappen()
@@ -324,6 +372,6 @@ public class NotificationTranslationSourceTests
             AllShippedLanguages, languages,
             "Every shipped language must be able to say it, or a reader in one of them sees nothing at all.");
         Assert.DoesNotContain("0", composed["en"],
-            "Said in words rather than as a count — the point is that it is unexpected, not that it is zero.");
+            "Said in words rather than as a count: the point is that it is unexpected, not that it is zero.");
     }
 }

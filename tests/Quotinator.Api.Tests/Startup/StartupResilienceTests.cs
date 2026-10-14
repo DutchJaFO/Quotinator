@@ -6,8 +6,10 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Startup;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Paths;
+using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Api.Tests.Startup;
@@ -142,46 +144,134 @@ public class StartupResilienceTests
     }
 
     /// <summary>
-    /// #327/#289: asserts the shipped behaviour: an overshoot runs healthy, plus a notification.
+    /// #350: a recorded schema version ahead of this build means the migrations this build never saw
+    /// may have added, altered or removed anything, so the schema's shape is unknown and serving quote
+    /// content from it is a foot gun. It degrades like every other startup fault in this class.
     /// <para>
-    /// <strong>This contract is being reversed by #350.</strong> An overshoot means the missing
-    /// migrations may have added, altered or removed things this build does not expect, so the schema's
-    /// shape is unknown and serving from it is a foot gun. #350 makes it degrade, and <em>replaces</em>
-    /// this test rather than editing it: the method name states the old contract, and flipping the
-    /// assertion in place would leave a name that lies about what it checks.
+    /// Replaces #327's <c>StaysHealthyAndSurfacesTheOvershoot</c>, which asserted the reverse contract
+    /// #289 shipped. Removed rather than edited: its name stated that contract, and flipping the
+    /// assertion in place would have left a name that lies about what it checks.
     /// </para>
     /// </summary>
     [TestMethod]
-    public async Task Startup_SchemaVersionAheadOfApplication_StaysHealthyAndSurfacesTheOvershoot()
+    public async Task Startup_SchemaVersionAheadOfApplication_DegradesRatherThanServing()
     {
-        string dataDirectory = NewDataDirectory();
+        using WebApplicationFactory<Program> factory = FactoryWithASchemaVersionAheadOfThisBuild();
 
-        // A real, fully migrated database first. The overshoot #289 describes is a stale counter on a
-        // complete schema; bumping the counter of an empty directory would test a database that never
-        // migrated at all, which is a different thing that happens to set the same flag.
-        using (WebApplicationFactory<Program> firstRun = FactoryFor(dataDirectory))
-        {
-            using HttpClient warmUp = firstRun.CreateClient();
-        }
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage quote = await client.GetAsync(RandomQuoteRoute, TestContext.CancellationToken);
+        string body = await quote.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
-        RecordASchemaVersionAheadOfThisBuild(dataDirectory);
+        Assert.IsTrue(
+            factory.Services.GetRequiredService<StartupPhaseState>().IsComplete,
+            "startup never completed: degrading must never cost the process, which is what keeps "
+            + "/health, the pages and the recovery routes answering");
+        Assert.AreEqual(
+            HttpStatusCode.ServiceUnavailable, quote.StatusCode,
+            "quote content was served from a schema this build cannot vouch for");
+        Assert.Contains("unavailable", body, StringComparison.OrdinalIgnoreCase);
+    }
 
-        using WebApplicationFactory<Program> factory = FactoryFor(dataDirectory);
+    [TestMethod]
+    public async Task Startup_SchemaVersionAheadOfApplication_HealthReasonNamesTheOvershoot()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithASchemaVersionAheadOfThisBuild();
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage health = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+        string body = await health.Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, health.StatusCode);
+        Assert.Contains("unhealthy", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "schema version", body, StringComparison.OrdinalIgnoreCase,
+            "the reason must name the fault. A generic reason sends the operator looking for a "
+            + "different problem than the one they have");
+        Assert.Contains(
+            "ahead", body, StringComparison.OrdinalIgnoreCase,
+            "which direction the version is wrong in is the whole fault: behind this build is a "
+            + "pending migration, ahead of it is a schema of unknown shape");
+    }
+
+    /// <summary>
+    /// #350: an overshoot is resolvable by a Reset or by restoring a backup taken before the version
+    /// moved ahead. Naming only the Reset tells an operator who wants their data back that their only
+    /// route is the one that discards it.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_SchemaVersionAheadOfApplication_HealthReasonNamesBothRemedies()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithASchemaVersionAheadOfThisBuild();
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage health = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+        string body = await health.Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.Contains("reset", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "restore", body, StringComparison.OrdinalIgnoreCase,
+            "the second remedy is missing, so the reason reads as though a Reset were the only way out");
+    }
+
+    /// <summary>
+    /// Every Blazor route <c>DatabaseHealthGateMiddleware</c> exempts is, by construction, reachable
+    /// exactly when the database is degraded, so each one must render rather than 500.
+    /// </summary>
+    [TestMethod]
+    [DataRow("/")]
+    [DataRow("/about")]
+    [DataRow("/stats")]
+    [DataRow("/notifications")]
+    [DataRow("/rest-api")]
+    [DataRow("/import-review")]
+    public async Task Startup_SchemaVersionAheadOfApplication_BlazorPagesRenderDegradedUiRatherThan500(string route)
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithASchemaVersionAheadOfThisBuild();
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync(route, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, $"{route} must render degraded UI, not 500");
+    }
+
+    [TestMethod]
+    public async Task Startup_SchemaVersionAheadOfApplication_OpenApiRemainsReachableForRecovery()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithASchemaVersionAheadOfThisBuild();
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage openApi = await client.GetAsync("/openapi/v1.json", TestContext.CancellationToken);
+        HttpResponseMessage admin = await client.GetAsync("/api/v1/admin/database/seed/preview", TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, openApi.StatusCode, "the OpenAPI surface is the documented recovery route");
+        string adminBody = await admin.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        Assert.IsFalse(
+            adminBody.Contains("\"status\":\"unavailable\"", StringComparison.OrdinalIgnoreCase),
+            "the admin surface was answered by the health gate rather than reaching its handler, so "
+            + "POST /api/v1/admin/database/reset would be unreachable too");
+    }
+
+    /// <summary>
+    /// #350: the overshoot notification is the only record of the fault that outlives the restart, so
+    /// it is written although the database is unhealthy. Read through <c>INotificationReader</c>
+    /// rather than <c>GET /api/v1/notifications</c>, which the health gate answers while degraded:
+    /// asserting through that route would assert the gate, not the notification.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_SchemaVersionAheadOfApplication_SurfacesTheNotificationWhileDegraded()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithASchemaVersionAheadOfThisBuild();
+
         using HttpClient client = factory.CreateClient();
 
-        HttpResponseMessage health = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
-        Assert.AreEqual(
-            HttpStatusCode.OK, health.StatusCode,
-            "an overshoot is not a fault: the schema is complete and the app works normally, so "
-            + "degrading here would be the regression, not the safeguard");
+        IReadOnlyList<NotificationEntity> raised =
+            await factory.Services.GetRequiredService<INotificationReader>()
+                         .GetByMetadataKindAsync(NotificationMetadataKind.SchemaVersionOvershoot);
 
-        HttpResponseMessage notifications = await client.GetAsync(NotificationsRoute, TestContext.CancellationToken);
-        string body = await notifications.Content.ReadAsStringAsync(TestContext.CancellationToken);
-
-        Assert.Contains(
-            NotificationMetadataKind.SchemaVersionOvershoot.ToString(), body, StringComparison.OrdinalIgnoreCase,
-            "the overshoot was detected but never surfaced, so an operator has no way to learn their "
-            + "version bookkeeping is stale");
+        Assert.IsNotEmpty(
+            raised,
+            "the overshoot was detected and degraded the application, but nothing was raised to say "
+            + "why, so the notification explaining the degraded state is suppressed by it");
     }
 
     [TestMethod]
@@ -205,7 +295,26 @@ public class StartupResilienceTests
     }
 
     private const string HealthRoute = "/api/v1/health";
-    private const string NotificationsRoute = "/api/v1/notifications";
+    private const string RandomQuoteRoute = "/api/v1/quotes/random";
+
+    /// <summary>
+    /// A database that really migrated, then had one version recorded past what this build knows.
+    /// Reached that way deliberately: bumping the counter of an empty directory sets the same flag
+    /// from a database that never migrated at all, which is a different state.
+    /// </summary>
+    private WebApplicationFactory<Program> FactoryWithASchemaVersionAheadOfThisBuild()
+    {
+        string dataDirectory = NewDataDirectory();
+
+        using (WebApplicationFactory<Program> firstRun = FactoryFor(dataDirectory))
+        {
+            using HttpClient warmUp = firstRun.CreateClient();
+        }
+
+        RecordASchemaVersionAheadOfThisBuild(dataDirectory);
+
+        return FactoryFor(dataDirectory);
+    }
 
     private WebApplicationFactory<Program> FactoryWithCorruptDatabase()
     {

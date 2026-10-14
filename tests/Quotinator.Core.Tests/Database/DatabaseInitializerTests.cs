@@ -5120,10 +5120,14 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #289: a recorded version higher than this build's own known migration count (the state a
-    /// migration squash produces on a database that already applied the pre-squash migrations) is
-    /// treated as already-complete, not an error: no exception, the real recorded (higher) version is
-    /// reported rather than the smaller known count, and the overshoot is flagged for the caller.
+    /// #289: a recorded version higher than this build's own known migration count does not throw.
+    /// The real recorded (higher) version is reported rather than the smaller known count, and the
+    /// overshoot is flagged for the caller.
+    /// <para>
+    /// #350 did not change any of that, and these assertions stand unedited: what changed is what the
+    /// caller does with the flag. The schema is not known to be complete, only to hold at least what
+    /// this build expects, so the consumer degrades on it rather than carrying on.
+    /// </para>
     /// </summary>
     [TestMethod]
     public async Task InitialiseAsync_RecordedVersionExceedsKnownMigrations_TreatsAsUpToDateAndFlagsOvershoot()
@@ -5146,6 +5150,45 @@ public class DatabaseInitializerTests
         Assert.IsTrue(db2.SchemaVersionOvershootDetected, "A recorded version ahead of the known migration list must be flagged");
         Assert.AreEqual(QuotinatorMigrations.All.Count + 1, db2.SchemaVersion,
             "The real recorded (higher) version must be reported, not silently replaced by the smaller known count");
+    }
+
+    /// <summary>
+    /// #350: the overshoot is logged as a fault whose resolution the operator owns, never as a
+    /// complete schema with stale bookkeeping. This build does not know what the migrations it never
+    /// saw did, so "complete" is a claim it has no way to support, whichever way the squash #289
+    /// reasoned from happens to have gone.
+    /// </summary>
+    [TestMethod]
+    public async Task SchemaVersionOvershoot_IsReportedAsAFaultRatherThanACompleteSchema()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
+        await db.InitialiseAsync();
+
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync(TestContext.CancellationToken);
+            await conn.ExecuteAsync(
+                "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) VALUES (@v, @at);",
+                new { v = QuotinatorMigrations.All.Count + 1, at = "2026-01-01T00:00:00Z" });
+        }
+
+        CapturingLogger<DatabaseInitializer> logger = new();
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([], logger: logger);
+        await db2.InitialiseAsync();
+
+        string overshoot = logger.Messages.SingleOrDefault(
+            m => m.Contains("overshoot", StringComparison.OrdinalIgnoreCase))
+            ?? throw new AssertFailedException(
+                "the overshoot was never logged at all, so there is no message to hold to anything");
+
+        Assert.DoesNotContain(
+            "complete", overshoot, StringComparison.OrdinalIgnoreCase,
+            "the message claims the schema is complete, which this build cannot know: the migrations "
+            + "it never saw may have added, altered or removed anything");
+        Assert.Contains(
+            "unknown", overshoot, StringComparison.OrdinalIgnoreCase,
+            "what is actually true is that the schema's shape is unknown, and the message has to say "
+            + "so rather than describing stale bookkeeping");
     }
 
     /// <summary>#289: an ordinary, correctly-migrated database never flags an overshoot.</summary>
