@@ -87,10 +87,10 @@ public partial class ImportReview
         // it is reachable precisely when the database is not. Rendering an empty list is the degraded
         // answer; letting a live query throw past the page is not one.
         //
-        // #350: the gate asks whether the schema this query names is guaranteed to be there, not
-        // whether the application is degraded. A schema-version overshoot leaves the import tables
-        // intact, so whatever is staged for review stays visible while the operator recovers.
-        if (!DatabaseHealth.ExpectedSchemaIsPresent)
+        // #350: a schema-version overshoot degrades the database too, and staged actions read from a
+        // schema of unknown shape are exactly the content an operator must not act on: deciding one
+        // writes against that same schema.
+        if (!DatabaseHealth.IsHealthy)
         {
             Actions = [];
             return;

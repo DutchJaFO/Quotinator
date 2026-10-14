@@ -36,10 +36,11 @@ public partial class DatabaseStatsSummary
         // degraded keeps this component's own promise ("stays meaningful even while degraded")
         // honest, instead of crashing the whole page the same way NotificationReader once did.
         //
-        // #350: which is exactly what the gate asks, so it asks it directly now: are the tables this
-        // query names guaranteed to be there. A schema-version overshoot degrades the application
-        // while leaving both of them intact.
-        if (!DatabaseHealth.ExpectedSchemaIsPresent)
+        // #350: a schema-version overshoot degrades the database too, and the gate holds there for a
+        // second reason: the file history would be read from a schema of unknown shape. The counts
+        // above are a separate question, and #428 owns it: they are populated on this path rather
+        // than zero, and showing a number read from an untrusted schema is what that issue removes.
+        if (!DatabaseHealth.IsHealthy)
         {
             FileHistory = [];
             return;

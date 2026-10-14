@@ -32,10 +32,11 @@ public partial class NotificationSummary
         // component is embedded in StartupErrorModal, the modal that exists specifically to explain a
         // failed startup, an ungated query here crashed the whole degraded page it was meant to render.
         //
-        // #350: the gate asks whether the schema this query names is guaranteed to be there, not
-        // whether the application is degraded. A schema-version overshoot leaves System_Notification
-        // intact, and this modal is where its notification is most likely to be read.
-        if (!DatabaseHealth.ExpectedSchemaIsPresent)
+        // #350: a schema-version overshoot degrades the database too, and the gate holds there for a
+        // second reason: its schema is of unknown shape, so nothing read from it belongs in a modal
+        // whose whole job is telling the operator what is wrong. The reason text above this summary
+        // carries that, and it comes from in-memory state rather than from the database.
+        if (!DatabaseHealth.IsHealthy)
         {
             Notifications = [];
             return;

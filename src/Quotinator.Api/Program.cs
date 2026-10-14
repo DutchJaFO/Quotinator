@@ -772,7 +772,7 @@ if (dataDirectoryFailure is not null)
 {
     app.Services.GetRequiredService<ILogger<Program>>()
         .LogWarning("[Config] {Reason:l}", dataDirectoryFailure);
-    dbHealth.MarkFailed(dataDirectoryFailure, DatabaseFaultKind.ExpectedSchemaMissing);
+    dbHealth.MarkFailed(dataDirectoryFailure);
 }
 
 IHostApplicationLifetime lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
@@ -1001,7 +1001,7 @@ try
     {
         string failureReason = BackupObstacleGuidance.MigrationRefusedReason(obstacle);
         app.Services.GetRequiredService<ILogger<Program>>().LogStartupMigrationRefused(failureReason);
-        dbHealth.MarkFailed(failureReason, DatabaseFaultKind.ExpectedSchemaMissing);
+        dbHealth.MarkFailed(failureReason);
     }
 
     // #350: a recorded version ahead of this build means the migrations it never saw may have added,
@@ -1016,7 +1016,7 @@ try
         string overshootReason = SchemaOvershootGuidance.Reason(
             dbInitializer.DataSchemaVersion, dbInitializer.SchemaVersion);
         app.Services.GetRequiredService<ILogger<Program>>().LogStartupSchemaOvershoot(overshootReason);
-        dbHealth.MarkFailed(overshootReason, DatabaseFaultKind.SchemaAheadOfThisBuild);
+        dbHealth.MarkFailed(overshootReason);
     }
 }
 // #326: an unwritable data directory is a different fault with a different remedy, and the generic
@@ -1030,7 +1030,7 @@ catch (Exception ex) when (IsDataDirectoryNotWritable(ex))
 {
     ILogger<Program> startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
     startupLogger.LogStartupDatabaseInitFailed(ex, DataDirectoryNotWritableReason);
-    dbHealth.MarkFailed(DataDirectoryNotWritableReason, DatabaseFaultKind.ExpectedSchemaMissing);
+    dbHealth.MarkFailed(DataDirectoryNotWritableReason);
 }
 catch (Exception ex)
 {
@@ -1041,7 +1041,7 @@ catch (Exception ex)
         "Resolve with an explicit database Reset (POST /api/v1/admin/database/reset) or by " +
         "stopping the app, deleting the database file, and restarting.";
     startupLogger.LogStartupDatabaseInitFailed(ex, failureReason);
-    dbHealth.MarkFailed(failureReason, DatabaseFaultKind.ExpectedSchemaMissing);
+    dbHealth.MarkFailed(failureReason);
 }
 
 // #81: the version this app instance was running as of its *previous* healthy startup, the lower

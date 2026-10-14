@@ -38,11 +38,12 @@ public partial class Notifications
         // an empty list is the degraded answer; crashing the page is not one. Same gate as
         // DatabaseStatsSummary (#293) and NotificationSummary.
         //
-        // #350: the gate asks whether the schema this query names is guaranteed to be there, not
-        // whether the application is degraded. A schema-version overshoot degrades it while leaving
-        // every table this query reads intact, and suppressing the list there would hide the one
-        // notification that explains the degraded state.
-        if (!DatabaseHealth.ExpectedSchemaIsPresent)
+        // #350: a schema-version overshoot degrades the database too, and the gate holds there for a
+        // second reason: the schema is of unknown shape, so nothing read from it can be trusted enough
+        // to show. The notification explaining the overshoot is no exception, and it may not even have
+        // been written. What explains the degraded state is StartupErrorModal's own reason text, which
+        // is in-memory state rather than a row.
+        if (!DatabaseHealth.IsHealthy)
         {
             AllNotifications = [];
             Now = DateTime.UtcNow;
