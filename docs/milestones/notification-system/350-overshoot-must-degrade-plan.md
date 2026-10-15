@@ -125,10 +125,13 @@ An overshoot is resolvable by a database Reset **or** by restoring a backup take
 moved ahead (developer direction, 2026-08-27). The second matters when the operator wants their data
 back rather than a clean rebuild. Both the health reason and the notification body name both.
 
-[#349](https://github.com/DutchJaFO/Quotinator/issues/349) records a restore endpoint as future work.
-Naming restore here is still correct: an operator holding a pre-overshoot backup can restore it by hand
-today, and per the issue's own scope boundary, if that ordering is wrong the answer is to pull restore
-forward, not to trim the remedy text to match what happens to be implemented.
+**Restore has no route yet, and that is tracked rather than papered over.** The issue's own scope
+boundary anticipated this: if naming a remedy nothing implements is the wrong order, restore gets pulled
+forward rather than the remedy text trimmed to match. The developer chose the first on 2026-10-14, a
+Reset button now and restore as its own issue, filed as
+[#444](https://github.com/DutchJaFO/Quotinator/issues/444) in the Startup and degraded experience
+milestone. Naming it here stays correct meanwhile: an operator holding a pre-overshoot backup can put it
+back by hand today.
 
 ### Where each message lives
 
@@ -497,6 +500,27 @@ numbers are read while the database is untrusted.
 `/about` carries none and stays static SSR: it holds no database content, and the nav reaches
 `/rest-api` from anywhere.
 
+**The repair ended in a forced page reload, and that cost four errors per success.** Developer,
+2026-10-15: *"it is obvious you caused the exceptions so we fix those now."* Measured first, because
+the mechanism matters: a plain `location.reload()` on any interactive page, with no reset involved at
+all, takes a container from `thrown=0` to `thrown=4`, every one a `WebSocketException` at `Error`. The
+circuit is torn down without a close handshake. So the reload was not writing its own exceptions, it
+was triggering the ones any reload writes, and a repair that worked still put four error lines into
+the log an operator reads to find real faults.
+
+`DatabaseHealthState` now raises `Changed` when `IsHealthy` actually moves, and the surfaces that
+render health state subscribe: `DegradedDatabaseBanner`, `NavMenu`, `Home` and `RestApi`, each
+unsubscribing on dispose because the state is a singleton that outlives them. The repair re-renders
+them instead of reloading the page. Measured after: `thrown=0` before the repair and `0` after, the
+banner and button gone in place, and on Home the started-with-a-problem modal replaced by the ready
+one.
+
+**`NavMenu`'s badge lags by one page load, and is left that way on purpose.** It renders in the static
+layout rather than in a page's interactive island, so its subscription cannot re-render it; every page
+loaded after a repair reads the badge correctly. Giving the nav its own render mode would close the
+gap, and `CLAUDE.md` records the language selector inside it as working deliberately without a Blazor
+circuit, so that is a decision about a documented constraint rather than a line to add in passing.
+
 `INotificationActionExecutor`'s own summary said it is invoked *"never from the read-only startup-modal
 summary"*. That was true of the summary, and still is: the action belongs to the modal around it, not
 to a notification row inside it.
@@ -507,8 +531,9 @@ already exist in all three locales, and a second key holding the same words is w
 centralisation policy exists to prevent. The refusal text is English, like the reason above it.
 
 **Restore is not built here.** The developer chose a Reset button now with restore as its own issue
-(2026-10-14): `BackupEndpoints` today lists, creates, downloads and deletes backups, and there is no
-restore endpoint and no upload path, so restore stays a named remedy an operator performs by hand.
+(2026-10-14), filed as [#444](https://github.com/DutchJaFO/Quotinator/issues/444): `BackupEndpoints`
+today lists, creates, downloads and deletes backups, and there is no restore endpoint and no upload
+path, so restore stays a named remedy an operator performs by hand.
 
 ### 10. Full suite, T1 and T2
 
@@ -583,7 +608,8 @@ rather than the zeros that entry describes.
 | 10 | ✅ | The notification body names both remedies in all three languages | Unit test | `NotificationTranslationSourceTests.Read_SchemaVersionOvershoot_NamesBothRemediesInEachLanguage` |
 | 11 | ✅ | Both notification strings still exist in all three languages | Unit test | `TranslationCompletenessTests` |
 | 12 | ✅ | Nothing read from the untrusted database is shown, and the reason explains the state instead | Live | `docs/automated-testing/startup-and-degradation/06-schema-version-ahead-of-the-application.md` step 5: modal reason names the overshoot and both remedies with `notificationRows=0`, notifications page `rows=0` |
-| 13 | ✅ | A refused repair names the obstacle that stopped it | Unit test | `StartupErrorModalTests.RefusedRepair_NamesTheObstacleThatStoppedIt` and `.SuccessfulRepair_SaysNothing` |
-| 14 | ✅ | Every degraded page that can carry a control offers the repair, not just the modal | Live | `startup-and-degradation/06` step 7: `resetButtons=1` on `/rest-api`, `/notifications`, `/import-review` and `/stats`; Cancel leaves `quotes` at `795`, Confirm from either surface takes `/health` to `200` with `quotes` at `0` |
-| 15 | ✅ | The live overshoot degrades, explains itself, and the remedy is reachable | Live | The same document, rewritten, confirmed red against a pre-issue build first |
-| 16 | ✅ | T1: the application still starts | Live | Developer started `Quotinator.Api` in Visual Studio, 2026-10-14: a standard migration start, backup taken, Data v3 to v28 and App v5 to v9 applied, ready with no errors |
+| 13 | ✅ | A refused repair names the obstacle that stopped it | Unit test | `DatabaseRepairActionsTests.RefusedRepair_NamesTheObstacleThatStoppedIt` and `.SuccessfulRepair_SaysNothing` |
+| 14 | ✅ | A repair tells the rendered page, so it costs no page reload and no log lines | Unit test + Live | `DatabaseHealthStateTests.MarkHealthy_AfterAFailure_RaisesChanged`, `.MarkFailed_RaisesChanged`, `.MarkFailed_Twice_RaisesChangedOnce`; `startup-and-degradation/06` step 7 reads `thrown` unchanged across the repair |
+| 15 | ✅ | Every degraded page that can carry a control offers the repair, not just the modal | Live | `startup-and-degradation/06` step 7: `resetButtons=1` on `/rest-api`, `/notifications`, `/import-review` and `/stats`; Cancel leaves `quotes` at `795`, Confirm from either surface takes `/health` to `200` with `quotes` at `0` |
+| 16 | ✅ | The live overshoot degrades, explains itself, and the remedy is reachable | Live | The same document, rewritten, confirmed red against a pre-issue build first |
+| 17 | ✅ | T1: the application still starts | Live | Developer started `Quotinator.Api` in Visual Studio, 2026-10-14: a standard migration start, backup taken, Data v3 to v28 and App v5 to v9 applied, ready with no errors |

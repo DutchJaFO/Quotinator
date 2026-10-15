@@ -10,8 +10,9 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 371, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 423, 424],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 350, 367, 369, 370, 371, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 423, 424],
     "highlights": [
+      "Wanneer Quotinator een database aantreft die door een nieuwere versie van zichzelf is geschreven, gaat hij niet langer verder alsof er niets aan de hand is. Hij kan niet weten wat die nieuwere versie heeft gewijzigd, dus start hij beperkt, zegt dat met zoveel woorden en toont niets uit die database in plaats van cijfers waarvoor hij niet kan instaan. Elke pagina die je nog kunt bereiken biedt de uitweg: bouw de database opnieuw op volgens de indeling van deze versie, waarbij verdwijnt wat erin staat, of zet een back-up terug die is gemaakt voordat de versie vooruitliep.",
       "Quotinator vertelt nu wat het bij het opstarten met je database heeft gedaan. Een database die voor je is aangemaakt zegt dat, met de schemaversie waarop hij is aangemaakt, zodat je weet dat er niets te bewaren was. Een update die een bestaande database heeft gewijzigd meldt elke wijziging apart en vertelt wat die deed in plaats van alleen het nummer. Een gewone herstart, waarbij geen van beide gebeurde, blijft stil.",
       "Een database die je reset blijft nu gereset. Voorheen laadde de volgende herstart de citaten die met Quotinator meekomen opnieuw, waardoor een reset die je deed om met je eigen inhoud opnieuw te beginnen werd ongedaan gemaakt door de volgende herstart, add-on-update of reboot, en werd de melding die aanbood opnieuw te laden gemarkeerd alsof je daarvoor had gekozen. Een gloednieuwe database laadt de meegeleverde citaten nog steeds bij de eerste start, en op verzoek opnieuw laden werkt nog steeds.",
       "Als Quotinator de back-up die nodig is voordat je database wordt bijgewerkt of gevuld niet kan maken, stopt het nu veilig en vertelt het waarom. Alleen de keuzes die kunnen werken worden aangeboden, met een handleiding die uitlegt hoe je de rest oplost.",
@@ -41,6 +42,7 @@
       ]
     },
     "added": [
+      "Een herstelknop op elke beperkte pagina die er een kan dragen: het opstartvenster en de pagina's REST API, Meldingen, Importbeoordeling en Statistieken bieden elk een database-reset met een bevestigingsstap, die ter plekke wordt uitgevoerd. Een reset die wordt geweigerd omdat er geen back-up kan worden gemaakt, wordt bij de knop zelf gemeld met de reden, in plaats van stil te mislukken (issue #350)",
       "Een melding wanneer Quotinator de database heeft aangemaakt, met de data- en app-schemaversies waarop hij is aangemaakt (issue #371)",
       "Een melding per migratie die op een bestaande database is toegepast, met wat die migratie deed in plaats van alleen het versienummer (issue #371)",
       "Elke schemamigratie heeft nu een verplichte beschrijving van wat hij deed, afgedwongen in elk van de drie migratielijsten zodat een toekomstige migratie er niet zonder kan worden toegevoegd (issue #371)",
@@ -87,6 +89,10 @@
       "Elke host voor geautomatiseerde tests start nu met het bijwerken van bronnen en de meegeleverde bronnen uitgeschakeld en met een eigen gegevensmap, die wordt verwijderd wanneer de host stopt; een test die een schema nodig heeft, krijgt een voorbereide database: testonderhoud zonder gevolgen voor de applicatie (issue #424)"
     ],
     "fixed": [
+      "Een database waarvan de vastgelegde schemaversie voorloopt op deze build laat de applicatie nu beperkt draaien in plaats van eruit te serveren. Die toestand werd eerder gelezen als een volledig schema met een verouderde teller, iets wat deze build onmogelijk kan vaststellen: de migraties die hij nooit heeft gezien kunnen van alles hebben toegevoegd, gewijzigd of verwijderd (issue #350)",
+      "Zolang de database beperkt draait tonen de meldingenpagina, de importbeoordelingspagina en de bestandsgeschiedenis hun lege toestand in plaats van inhoud uit een schema waarvoor deze build niet kan instaan, en geen enkele tekst beweert nog dat het schema volledig is of dat de applicatie normaal werkt (issue #350)",
+      "De melding over een schemaversie die voorloopt op deze build wordt niet langer onderdrukt door de beperkte toestand die zij juist meldt, en de reden op `/health` en op de beperkte pagina noemt nu beide uitwegen in plaats van alleen de reset (issue #350)",
+      "De database herstellen vanaf een beperkte pagina laadt de pagina niet langer opnieuw, wat de verbinding met de browser verbrak en vier fouten in het logboek schreef voor een herstel dat gewoon slaagde (issue #350)",
       "Bij het opstarten worden de meegeleverde citatenbestanden niet langer geladen in elke database met een lege citatentabel, maar alleen in een database die net is aangemaakt. Een reset liet de tabel leeg achter, dus vulde de volgende start hem opnieuw, wat de reset ongedaan maakte en stilzwijgend de herlaadaanbeveling afhandelde die op de beheerder wachtte (issue #423)",
       "Een dialoogvenster beschreef een hoogtelimiet die nooit van kracht werd, omdat een conflicterende opmaakregel die altijd overschreef. De limiet is verwijderd in plaats van afgedwongen, omdat wat hij beschreef al klopte: een dialoogvenster past in het venster, de titel en knoppen blijven op hun plaats, en de inhoud schuift (issue #422)",
       "Het genereren van een regelbestand voor conflictoplossing uit een beoordeelde batch mislukt niet langer volledig wanneer het bestaande bestand één citaat twee keer vermeldt. Het meldt nu welk bestand en welke vermelding de oorzaak zijn, en het bestand dat met Quotinator wordt meegeleverd is gecorrigeerd (issue #420)",

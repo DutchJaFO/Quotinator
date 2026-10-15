@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-10-13 04:24 UTC]: do not edit by hand.*
+##### *GENERATED FILE [2026-10-15 18:47 UTC]: do not edit by hand.*
 
 # Changelog
 
@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Highlights
+- When Quotinator finds a database written by a newer version of itself, it no longer carries on as though nothing were wrong. It cannot know what that newer version changed, so it starts in a limited state, says so plainly, and shows nothing out of that database rather than figures it cannot vouch for. Every page you can still reach offers the way out: rebuild the database at this version's own layout, which discards what it currently holds, or put back a backup taken before it moved ahead.
 - Quotinator now tells you what it did to your database at startup. A database created for you says so, naming the schema version it was created at, so you know there was nothing to preserve. An update that changed an existing database reports each change separately, saying what it did rather than only its number. An ordinary restart, where neither happened, stays silent.
 - A database you reset now stays reset. Previously the next restart reloaded the quotes that come with Quotinator, so a reset you made in order to start fresh with your own content was undone by the next restart, add-on update or reboot, and the notification offering to reload was marked as if you had chosen it. A brand-new database still loads the bundled quotes on its first start, and reloading on demand still works.
 - If Quotinator cannot make the backup it needs before updating or loading your database, it now stops safely and tells you why, offering only the choices that can work, with a guide explaining how to fix the rest.
@@ -34,6 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Quotinator no longer downloads updated quote sources when it starts, unless you turn that on. It uses the quotes that come with each release as they are, so a slow or unreachable download site can no longer hold up startup. If you relied on the automatic update, turn it back on in the add-on's options or in your configuration.
 
 ### Added
+- A repair control on every degraded page that can carry one: the startup popup and the REST API, Notifications, Import review and Statistics pages each offer a database Reset with a confirm step, run in place. A Reset refused for want of a backup is reported where the button is, naming the obstacle, rather than failing silently (issue #350)
 - A notification when Quotinator created the database, carrying the data and app schema versions it was created at (issue #371)
 - A notification per migration applied to an existing database, naming what that migration did rather than only its version (issue #371)
 - Every schema migration now carries a required description of what it did, guarded in each of the three migration lists so a future migration cannot be added without one (issue #371)
@@ -80,6 +82,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Every automated test host now starts with the source refresh and the bundled sources off and a data directory of its own, removed when the host stops, and a test that needs a schema is given a prepared database: test maintenance with no effect on the application (issue #424)
 
 ### Fixed
+- A database whose recorded schema version is ahead of this build now leaves the application degraded instead of serving from it. The state was previously read as a complete schema behind a stale counter, which this build has no way to establish: the migrations it never saw may have added, altered or removed anything (issue #350)
+- While the database is degraded, the notifications page, the import review page and the file history table show their empty state rather than content read from a schema this build cannot vouch for, and no message claims the schema is complete or the application working normally (issue #350)
+- The notification explaining a schema version ahead of this build is no longer suppressed by the degraded state it reports, and the reason on `/health` and the degraded page now names both ways out rather than only the Reset (issue #350)
+- Repairing the database from a degraded page no longer reloads the page, which used to tear down the connection to the browser and write four errors into the log for a repair that worked (issue #350)
 - Startup no longer loads the bundled quote files into any database whose quote table is empty, only into one it has just created. A reset left the table empty, so the next start refilled it, which undid the reset and silently resolved the reload recommendation that was waiting for the operator (issue #423)
 - A dialog described a height limit that never took effect, because a conflicting styling rule always overrode it. The limit has been removed rather than enforced, since what it described was already true: a dialog fits the window, its title and buttons stay in place, and its content scrolls (issue #422)
 - Generating a conflict-resolution rule file from a reviewed batch no longer fails outright when the existing file lists one quote twice. It now reports which file and which entry are at fault, and the file that comes with Quotinator has been corrected (issue #420)

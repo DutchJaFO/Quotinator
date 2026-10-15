@@ -244,18 +244,34 @@ return { before, armed, afterCancel: [...modal().querySelectorAll('button')].map
 **Expected:** `before` is `Reset the database, Continue`, `armed` is `Confirm, Cancel, Continue`, and
 `afterCancel` returns to `before`. The quote count is unchanged: Cancel called nothing.
 
-Then click **Reset the database** and **Confirm**, and read the result:
+Then click **Reset the database** and **Confirm**. The banner clears itself, in place, with no page
+reload:
 
 ```powershell
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/health" --expect 200 --status
 "quotes after: $((Invoke-RestMethod 'http://localhost:18406/api/v1/version').database.quotes)"
+"thrown: $(@(docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count)"
 ```
 
-**Expected:** `200` from `/health` and `quotes after: 0`. The rebuild recorded this build's own
-version, so there is no overshoot left to degrade on, and the page reloads into the normal UI.
+**Expected:** `200` from `/health`, `quotes after: 0`, and `thrown` **unchanged from before the
+repair**. The rebuild recorded this build's own version, so there is no overshoot left to degrade on,
+and the banner and its button disappear where they stand.
+
+**The exception count is an assertion, not a detail.** The repair used to end in a forced page reload,
+and a full reload of an interactive page tears the Blazor circuit down without a close handshake:
+measured 2026-10-14, four `WebSocketException`s at `Error` for every reload, so a repair that worked
+wrote four error lines into the log an operator reads to find out what is wrong. The surfaces now
+re-render from `DatabaseHealthState.Changed` instead. Any rise here means a reload is back.
 
 **The quote count is what separates Cancel from Confirm**, as it is on the Notifications page: both
-leave the modal looking similar, and only the domain read says which one ran.
+leave the page looking similar, and only the domain read says which one ran.
+
+**One thing lags, deliberately.** The nav's `Limited` badge and its disabled Home link are rendered by
+`NavMenu`, which lives in the static layout rather than in the page's interactive island, so they
+correct themselves on the next page load rather than the instant the repair finishes. Measured: every
+page loaded after the repair reads `limitedBadge=False`. Making the nav interactive would close that
+gap and is not done here, because `CLAUDE.md` documents the language selector inside it as working
+deliberately without a Blazor circuit.
 
 **On failure:** no `Reset the database` button means the degraded page has no repair control at all,
 and the reason names a route the operator cannot take from the UI. A `409` from the equivalent API call
@@ -301,13 +317,18 @@ never do. [#428](https://github.com/DutchJaFO/Quotinator/issues/428) owns withho
 surfaces, and this path is one more reason it should: a real-looking number read from a schema this
 build cannot vouch for is the most convincing wrong answer of the three.
 
-**The remedy works from the pages, not only from an API client.** Measured 2026-10-14: the modal
+**The remedy works from the pages, not only from an API client.** Measured 2026-10-15: the modal
 offers `Reset the database` next to `Continue`, arming to `Confirm, Cancel, Continue`; Cancel leaves
-`quotes` at `795`, and Confirm takes `/health` from `503` to `200` with `quotes` at `0` and the page
-reloaded into the normal UI. The same control appears on `/rest-api`, `/notifications`,
-`/import-review` and `/stats`, above the reason; running it from `/notifications` produced the same
-`503` to `200` and `795` to `0`. `/about` carries none: it is static SSR. The equivalent
+`quotes` at `795`, and Confirm takes `/health` from `503` to `200` with `quotes` at `0`. The same
+control appears on `/rest-api`, `/notifications`, `/import-review` and `/stats`, above the reason, and
+running it from any of them does the same. `/about` carries none: it is static SSR. The equivalent
 `POST /api/v1/admin/database/reset` answers `200` too, and the API comes back out of the gate with it.
+
+**The repair costs no log lines.** Measured on the same run: `thrown=0` before the repair and `0`
+after, where the earlier forced-reload version wrote four `WebSocketException`s every time it
+succeeded. On a degraded page the banner and its button vanish in place; on the Home modal, the
+started-with-a-problem modal is replaced by the ready one, so the two surfaces agree without either
+being reloaded.
 
 ## Cleanup
 
