@@ -67,6 +67,56 @@ public class DatabaseHealthStateTests
         Assert.AreEqual("recorded schema version is ahead", state.FailureReason);
     }
 
+    /// <summary>
+    /// #350: a repair run from a degraded page has to reach the components rendering that page, or
+    /// the only way they learn the application is healthy again is a full page reload, which tears
+    /// the circuit down and logs four errors for a successful repair.
+    /// </summary>
+    [TestMethod]
+    public void MarkHealthy_AfterAFailure_RaisesChanged()
+    {
+        DatabaseHealthState state = new();
+        state.MarkFailed("recorded schema version is ahead");
+        int raised = 0;
+        state.Changed += () => raised++;
+
+        state.MarkHealthy();
+
+        Assert.AreEqual(1, raised, "nothing told the rendered page its database had been repaired");
+    }
+
+    /// <summary>The other direction: a startup that degrades tells whatever is already rendered.</summary>
+    [TestMethod]
+    public void MarkFailed_RaisesChanged()
+    {
+        DatabaseHealthState state = new();
+        int raised = 0;
+        state.Changed += () => raised++;
+
+        state.MarkFailed("recorded schema version is ahead");
+
+        Assert.AreEqual(1, raised);
+    }
+
+    /// <summary>
+    /// Only a real change is announced: both marks are idempotent, and a subscriber re-rendering for
+    /// a no-op is work nobody asked for.
+    /// </summary>
+    [TestMethod]
+    public void MarkFailed_Twice_RaisesChangedOnce()
+    {
+        DatabaseHealthState state = new();
+        int raised = 0;
+        state.Changed += () => raised++;
+
+        state.MarkFailed("first failure");
+        state.MarkFailed("second failure");
+        state.MarkHealthy();
+        state.MarkHealthy();
+
+        Assert.AreEqual(2, raised, "one for the failure, one for the repair, and nothing for the repeats");
+    }
+
     [TestMethod]
     public void MarkFailed_AfterMarkHealthy_RecordsNewFailure()
     {
