@@ -18,6 +18,24 @@ internal sealed class DatabaseHealthState
     public string? FailureReason { get; private set; }
 
     /// <summary>
+    /// Raised when <see cref="IsHealthy"/> actually changes, so a rendered component can react to a
+    /// repair instead of being reloaded into the new state (#350).
+    /// </summary>
+    /// <remarks>
+    /// Repairing the database from a degraded page used to end in a forced page reload, which is the
+    /// only way a component outside the one that ran the repair learned the application was healthy
+    /// again. Measured 2026-10-14: any full reload of an interactive page tears the Blazor circuit
+    /// down without a close handshake and logs four <c>WebSocketException</c>s at <c>Error</c>, so the
+    /// successful path wrote four error lines into the log an operator reads to find real faults.
+    /// Subscribers re-render themselves instead, and the circuit survives.
+    /// <para>
+    /// A subscriber must unsubscribe when it is disposed: this state is a singleton and outlives every
+    /// component that listens to it.
+    /// </para>
+    /// </remarks>
+    public event Action? Changed;
+
+    /// <summary>
     /// Records that startup database initialisation failed. Idempotent: a second call is a no-op,
     /// keeping the first failure's reason.
     /// </summary>
@@ -34,6 +52,7 @@ internal sealed class DatabaseHealthState
         if (!IsHealthy) return;
         IsHealthy     = false;
         FailureReason = reason;
+        Changed?.Invoke();
     }
 
     /// <summary>
@@ -45,7 +64,9 @@ internal sealed class DatabaseHealthState
     /// </summary>
     public void MarkHealthy()
     {
-        IsHealthy     = true;
-        FailureReason = null;
+        bool wasDegraded = !IsHealthy;
+        IsHealthy        = true;
+        FailureReason    = null;
+        if (wasDegraded) Changed?.Invoke();
     }
 }

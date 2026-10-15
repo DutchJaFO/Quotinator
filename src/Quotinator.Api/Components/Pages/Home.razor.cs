@@ -7,16 +7,29 @@ namespace Quotinator.Api.Components.Pages;
 /// <summary>
 /// The application home page. Shows a random quote once the database is healthy; shows the degraded
 /// error card instead while it isn't (#263). Startup status (counts, per-file import history) lives
-/// permanently on the Statistics page rather than as a one-time interstitial here — see #263's plan
+/// permanently on the Statistics page rather than as a one-time interstitial here: see #263's plan
 /// doc Notes for why an earlier one-time-summary design was dropped.
 /// </summary>
-public partial class Home
+public partial class Home : IDisposable
 {
+    #region Public
+
+    /// <summary>Stops listening to <see cref="DatabaseHealthState"/>, which outlives this component.</summary>
+    public void Dispose() => DatabaseHealth.Changed -= OnHealthChanged;
+
+    #endregion
+
     #region Protected
 
     /// <inheritdoc/>
-    protected override async Task OnInitializedAsync() =>
+    protected override async Task OnInitializedAsync()
+    {
+        // #350: the repair inside the error modal leaves the application healthy, and this page is
+        // what decides whether that modal is shown at all. Without this the modal stays on screen
+        // over a repaired application until the page is loaded again.
+        DatabaseHealth.Changed += OnHealthChanged;
         Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);
+    }
 
     #endregion
 
@@ -28,10 +41,12 @@ public partial class Home
 
     private Quotinator.Api.I18nText.UI Text = new();
 
-    // #263: Home is disabled in the nav while unhealthy — QuoteCard fundamentally can't render, so
+    // #263: Home is disabled in the nav while unhealthy, because QuoteCard fundamentally can't render, so
     // there is no "normal Home" to land in here. Continue instead takes the user to the one page
     // that's actually useful in degraded mode.
     private void ContinueToErrorLayout() => Navigation.NavigateTo("rest-api");
+
+    private void OnHealthChanged() => _ = InvokeAsync(StateHasChanged);
 
     #endregion
 }

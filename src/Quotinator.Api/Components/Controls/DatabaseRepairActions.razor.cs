@@ -13,7 +13,8 @@ namespace Quotinator.Api.Components.Controls;
 /// wherever they are rather than only from the startup modal.
 /// <para>
 /// A restore from a backup is the second remedy the reason names and is not offered here: no restore
-/// endpoint exists yet, and an operator performs one by hand. It joins this control when it is built.
+/// endpoint exists yet, and an operator performs one by hand. It joins this control when #444 builds
+/// it.
 /// </para>
 /// <para>
 /// This control never reads the database. While degraded its content is untrusted, which is why the
@@ -57,7 +58,6 @@ public partial class DatabaseRepairActions
 
     [Inject] private I18nTextService I18nText { get; set; } = default!;
     [Inject] private INotificationActionExecutor ActionExecutor { get; set; } = default!;
-    [Inject] private NavigationManager Navigation { get; set; } = default!;
 
     private Quotinator.Api.I18nText.UI Text = new();
 
@@ -87,9 +87,13 @@ public partial class DatabaseRepairActions
         }
 
         // A reset that ran leaves the application healthy, and every surface rendering this control
-        // exists only while it is not: reload so the normal UI replaces it rather than leaving a dead
-        // degraded page on screen.
-        if (RepairOutcome is null) Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+        // exists only while it is not. They learn that from DatabaseHealthState.Changed, which
+        // MarkHealthy raises, and re-render themselves.
+        //
+        // This used to be Navigation.NavigateTo(Uri, forceLoad: true). A full reload of an interactive
+        // page tears the Blazor circuit down without a close handshake: measured 2026-10-14, four
+        // WebSocketExceptions at Error per reload, so a repair that worked wrote four error lines into
+        // the log an operator reads to find out what is wrong.
     }
 
     #endregion
