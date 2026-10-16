@@ -125,7 +125,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #329 ─── depends on #323, #325; blocks #324: Planning
 #330 ─── (none); blocks #331: Planning
 #331 ─── depends on #330: Planning
-#339 ─── depends on #347 (v1.9.0); blocks #327, #328: In progress
+#339 ─── (none); blocks #327, #328: In progress
 #348 ─── depends on #349; blocks #327: Waiting for release
 #349 ─── (none); soft-relates to #348: Waiting for release
 #350 ─── (none): Waiting for release
@@ -214,7 +214,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 39 | **#423** ✅ | Waiting for release |
 | 40 | **#371** ✅ | Waiting for release |
 | 41 | **#350** ✅ | Waiting for release |
-| 42 | **#339** 🚧 | In progress; blocked on #347 (v1.9.0); before #327 and #328 |
+| 42 | **#339** 🚧 | In progress; before #327 and #328 |
 | 43 | **#327** 🚧 | In progress; after #339 |
 | 44 | **#328** | Planning; after #339 |
 | 45 | **#329** | Planning; before #324, which consumes its statistics |
