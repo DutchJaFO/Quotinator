@@ -173,8 +173,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 
 | # | Issue | Reason |
 |---|-------|--------|
-| 1 | **#313** ✅ | Waiting for release; test-harness reliability |
-| 2 | **#323** ✅ | Waiting for release; independent |
+| 1 | **#313** ✅ | Waiting for release |
+| 2 | **#323** ✅ | Waiting for release |
 | 3 | **#325** ⛔ | Closed as not planned |
 | 4 | **#312** ✅ | Waiting for release; foundation for the producers below |
 | 5 | **#81** ✅ | Waiting for release |
@@ -185,12 +185,12 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 10 | **#424** ✅ | Waiting for release |
 | 11 | **#349** ✅ | Waiting for release |
 | 12 | **#307** ✅ | Waiting for release |
-| 13 | **#319** ✅ | Waiting for release; gateway for the producers below |
+| 13 | **#319** ✅ | Waiting for release |
 | 14 | **#304** ✅ | Waiting for release |
 | 15 | **#302** ✅ | Waiting for release |
 | 16 | **#303** ✅ | Waiting for release |
-| 17 | **#367** ✅ | Waiting for release; moved up so #308 designs against the finished status set |
-| 18 | **#308** ✅ | Waiting for release; before #413 |
+| 17 | **#367** ✅ | Waiting for release |
+| 18 | **#308** ✅ | Waiting for release |
 | 19 | **#375** ✅ | Waiting for release |
 | 20 | **#374** ✅ | Waiting for release |
 | 21 | **#378** ✅ | Waiting for release |
@@ -202,7 +202,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 27 | **#376** ✅ | Waiting for release |
 | 28 | **#389** ✅ | Waiting for release |
 | 29 | **#369** ✅ | Waiting for release |
-| 30 | **#397** ✅ | Waiting for release; before #370 |
+| 30 | **#397** ✅ | Waiting for release |
 | 31 | **#370** ✅ | Waiting for release |
 | 32 | **#409** ✅ | Waiting for release |
 | 33 | **#410** ✅ | Waiting for release |
@@ -212,8 +212,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 37 | **#420** ✅ | Waiting for release |
 | 38 | **#422** ✅ | Waiting for release |
 | 39 | **#423** ✅ | Waiting for release |
-| 40 | **#371** ✅ | Waiting for release; before #351/#360, which each add migrations |
-| 41 | **#350** | Waiting for release |
+| 40 | **#371** ✅ | Waiting for release |
+| 41 | **#350** ✅ | Waiting for release |
 | 42 | **#339** 🚧 | In progress; blocked on #347 (v1.9.0); before #327 and #328 |
 | 43 | **#327** 🚧 | In progress; after #339 |
 | 44 | **#328** | Planning; after #339 |
