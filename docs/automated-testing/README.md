@@ -1323,6 +1323,12 @@ A document that needs nothing beyond its profile says so.
 
 Every variable the outcome depends on, and how each is pinned.
 
+## Explicitly not covered here   ← only when it applies
+
+What this document deliberately does not cover, and where that coverage lives instead: a unit test
+that already proves it, the issue that owns it, or a path with nothing observable in a running
+container.
+
 ## Steps
 
 ### 1. <what this step does>
@@ -1343,6 +1349,12 @@ Every variable the outcome depends on, and how each is pinned.
 What this circumstance actually produces: the log lines, health response, UI state and messages an
 operator would see. Distinct from the per-step expectations, which state only what must be true for a
 pass.
+
+## Canary
+
+How this document is proven able to fail: a build from the commit before the issue in `Traces to`,
+run against these same steps, naming which step reads what on that build. Or, where no pre-fix build
+applies, the positive control this run produces for itself. A procedure, never a verdict.
 
 ## Cleanup
 
@@ -1380,3 +1392,52 @@ described its setup in prose, in a single file nobody read end to end.
 
 A test whose `Preconditions` cannot be confirmed, or whose `Determinism` cannot be pinned, is a finding
 about the test. Report it rather than writing the document anyway.
+
+**`Canary` is required of every document, and it carries a procedure rather than a verdict.**
+[`testing-policy.md`](../testing-policy.md)'s *A feature is covered when both outcomes, both extremes,
+and a canary exist* requires one of every T2 document, and until this section existed the template had
+nowhere to put it: twelve documents improvised one under eleven different headings, five of them
+carrying the issue number in the heading itself, and placed variously before and after
+`Observed effect`. A field the policy requires and the template omits does not go unwritten, it goes
+written eleven ways.
+
+Two forms, and the section says which one applies:
+
+- **A pre-fix build**, where the document traces to a specific fix. The commit before that issue's
+  first commit, built under a distinct tag per `testing-policy.md`'s *Red first applies to automated
+  tests*, with the reading each relevant step gives against it.
+- **A positive control inside the run**, where no pre-fix build applies: a baseline or contract
+  document whose subject predates this suite, or one whose pre-fix build the current `test-env.csx`
+  cannot run. The control is whatever makes a step that could report nothing report something,
+  produced by the test itself.
+
+**A document whose canary has never been run still states the canary it needs.** That is the same rule
+this index already applies to a missing observation and to a document's own verdict: the specification
+says what must be done and what a pass looks like, and what a particular run found belongs to the run.
+Writing "not yet run" here would be a status line, true on the day it is written and silently wrong
+afterwards.
+
+**Where neither form can be stated, that is a finding about the document**, and it is reported rather
+than resolved by writing a canary nobody can run.
+
+**`Explicitly not covered here` is optional, and has exactly one spelling.** Three documents reached
+for this independently, pointing at a unit test, at test-only fixtures, and at a unit-tier guard, each
+under a heading of its own invention. Three authors reaching for the same shape is a missing slot
+rather than three mistakes. A document with nothing to exclude omits the section; one that has
+something uses this heading in this position.
+
+**This block is the authoritative list of what a document contains.** Three guards in
+`RepositoryStructureTests` read their expectations from it, parsing it for its headings and its header
+fields rather than carrying a list of their own:
+`EveryAutomatedTestingDocument_CarriesEverySectionTheTemplateDefines`,
+`...OrdersItsSectionsAsTheTemplateDoes`, and
+`NoAutomatedTestingDocument_CarriesASectionTheTemplateDoesNotDefine`. A hardcoded list would be a
+second source of truth, and the template drifting from its own guard is the defect this template
+exists to prevent, one layer down. So a section added here becomes required of every document on the
+next test run, and one marked `← only when it applies` becomes permitted rather than required.
+
+**Every element of this template that a guard covered held across 75 documents; every element without
+one drifted.** Measured 2026-10-16, which is the reason the guards read from here rather than the
+template being a convention to remember: `Observed effect` was missing from 15 documents and `Cleanup`
+from 2, while `Smoke`, `Environment`, `Traces to`, `Preconditions`, `Determinism`, `Steps` and every
+step's own `Expected` were present in all 75.

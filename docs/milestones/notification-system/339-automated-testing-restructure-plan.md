@@ -1,6 +1,6 @@
 # #339: Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (step 2)
+**Status:** In progress (step 3)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 
@@ -144,10 +144,17 @@ issue's structure, which is what they were actually waiting for.
 
 ### 2. Extend the document template with Canary and an exclusions section
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-16
 
 Two additions to the index's *Document template* block, each because the suite demonstrated the need
 rather than to anticipate one.
+
+Both landed in the block itself, with the optional one carrying the same `← only when it applies`
+marker the `Fully green after:` field already used, so optionality is readable from the template
+rather than known separately by the guards. The prose beneath records why each exists, both canary
+forms, the rule that a canary section states a procedure and never a run's verdict, and the
+measurement that guarded elements held at 75 documents while unguarded ones drifted. The 45 existing
+`RepositoryStructureTests` stayed green across the change.
 
 **`## Canary`, required, between `## Observed effect` and `## Cleanup`.** It states how this document
 is proven able to fail: a build from the commit before the issue in `Traces to`, run against the
