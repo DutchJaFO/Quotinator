@@ -1,6 +1,6 @@
 # #339: Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 4)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 
@@ -172,7 +172,7 @@ step 2 read their expectations from it.
 
 ### 3. Write the three conformance guards and confirm each red
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-17
 
 Three statements, so three tests, in `RepositoryStructureTests` beside the seven that already hold the
 suite.
@@ -200,13 +200,32 @@ guard is the same defect one layer down.
   `## Explicitly not covered here` sections stop being off-template the moment step 2 defines the
   heading.
 
-**The ordering guard cannot be red against the current suite, and says so rather than claiming a red
-run it did not have.** Every document's defined sections are already in the template's order, because
-the improvised canary sections are off-template headings the ordering guard does not recognise. Its
-red-green is therefore established by mutation once step 4 lands, per `testing-policy.md`'s *Red first
-means signatures first*: move one normalised `## Canary` above `## Observed effect`, confirm the guard
-fails and the other two still pass, restore. Three documents currently place their improvised canary
-there, so the position authors get wrong is the one the mutation reproduces.
+**Measured red state, 2026-10-17.** All three failed, 45 existing guards stayed green, and the build
+reported 0 warnings and 0 errors.
+
+| Guard | Failures | Matches the prediction |
+|---|---|---|
+| Presence | 92: 75 `## Canary`, 15 `## Observed effect`, 2 `## Cleanup` | yes |
+| Off-template | 13 | yes, and the two `## Explicitly not covered here` sections correctly dropped out once step 2 defined the heading |
+| Order | 2 | no, and this is the better result |
+
+**The ordering guard was predicted unable to fail, and that prediction was wrong.** The reasoning was
+that no document uses the bare `## Canary` heading yet, so nothing recognisable could be out of place,
+and a mutation would be needed to show the guard works. Running it found a real case instead:
+`api-surface/02` and `database-lifecycle/03` both place their exclusions section after
+`## Observed effect`, where the template puts it between `## Determinism` and `## Steps`. Two authors
+independently chose the later position, which is worth knowing, and the template's position stands;
+step 7 moves both. No mutation was needed for this guard.
+
+**The guards were confirmed to read the template rather than a list of their own**, which is the
+property that keeps them from drifting apart. `## Canary` was removed from the template block and the
+presence guard's 75 Canary failures went to 0 while its 15 `## Observed effect` failures stayed; the
+block was then restored byte-identical. A hardcoded list would have been indifferent to the edit.
+
+**Three MSTEST0037 warnings were introduced and fixed in the same step**, before the red run was
+recorded: `Assert.IsTrue` on an index comparison wants `Assert.IsGreaterThan` and
+`Assert.IsGreaterThanOrEqualTo`. The 0-warnings gate applies to a test build exactly as to a plain
+one.
 
 ### 4. Normalise the twelve improvised canary sections
 
@@ -300,9 +319,9 @@ per the boyscout rule.
 | 11 | ✅ | No bash construct returns to the suite | Unit test | `RepositoryStructureTests.EveryAutomatedTestingCodeBlock_IsPowerShell` |
 | 12 | ✅ | The reliability rule is stated in the index and served by a Determinism field on every document | Live | Index carries the rule; row 13 covers the per-document half |
 | 13 | ❌ | Every document carries every section the template defines | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_CarriesEverySectionTheTemplateDefines`, red against the 92 missing sections measured 2026-10-16 |
-| 14 | ❌ | The sections appear in the order the template defines | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_OrdersItsSectionsAsTheTemplateDoes`, red by the mutation named in step 3, since no document uses the bare `## Canary` heading beforehand |
+| 14 | ❌ | The sections appear in the order the template defines | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_OrdersItsSectionsAsTheTemplateDoes`, red 2026-10-17 against `api-surface/02` and `database-lifecycle/03`, which place their exclusions section after `## Observed effect` |
 | 15 | ❌ | No document carries a section the template does not define | Unit test | `RepositoryStructureTests.NoAutomatedTestingDocument_CarriesASectionTheTemplateDoesNotDefine`, red against the 13 off-template sections measured 2026-10-16 |
-| 16 | ❌ | The guards read their expectations from the index's template block, so template and guard cannot drift | Live | Repointing the template block's heading list makes all three guards fail; restoring it makes them pass |
+| 16 | ✅ | The guards read their expectations from the index's template block, so template and guard cannot drift | Live | Removing `## Canary` from the template block took the presence guard's 75 Canary failures to 0 while its 15 `## Observed effect` failures stayed, 2026-10-17; the block was restored byte-identical |
 | 17 | ❌ | The template defines a Canary section, required of every document, carrying a procedure rather than a verdict | Live | The index's template block states it, its position, and both forms; no document states a pass or fail in it |
 | 18 | ❌ | The template defines the exclusions section, and the three off-template sections use it | Live | `api-surface/02`, `database-lifecycle/03` and `identity-and-casing/02` carry `## Explicitly not covered here` in the defined position |
 | 19 | ❌ | Test outcomes are recorded as Knowledgebase material by an `Observed effect` section on every document | Unit test | Row 13's guard covers the presence half; #333 requirement 6 states the sweep |
