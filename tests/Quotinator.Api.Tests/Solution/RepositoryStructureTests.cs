@@ -750,6 +750,145 @@ public partial class RepositoryStructureTests
             + string.Join("\n", failures.Order()));
     }
 
+    /// <summary>
+    /// Every test document carries every header field and section the index's own document template
+    /// defines, so the template is a contract rather than a convention to remember.
+    /// </summary>
+    /// <remarks>
+    /// Measured 2026-10-16 across 75 documents: every template element a guard already covered was
+    /// present in all of them, while both elements without one had drifted, <c>## Observed effect</c>
+    /// missing from 15 documents and <c>## Cleanup</c> from 2. The required set is read from the
+    /// index's template block rather than hardcoded here, for the reason
+    /// <see cref="EveryAutomatedTestingDocument_NamesAKnownEnvironmentProfile"/> reads its profiles
+    /// the same way: a list here would be a second source of truth, and the template drifting from
+    /// its own guard is the defect the template exists to prevent. See #339.
+    /// </remarks>
+    [TestMethod]
+    public void EveryAutomatedTestingDocument_CarriesEverySectionTheTemplateDefines()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        List<TemplateElement> required = [.. LoadTemplateElements().Where(e => !e.Optional)];
+
+        Assert.IsNotEmpty(required,
+            "The index's document template defines no required element, so no document can be "
+            + "checked against it.");
+
+        List<string> documents = FindAutomatedTestingDocuments();
+
+        Assert.IsNotEmpty(documents,
+            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
+
+        List<string> failures = [];
+
+        foreach (string document in documents)
+        {
+            string text = File.ReadAllText(
+                Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
+            List<string> headings = SectionHeadings(text);
+
+            if (!DocumentTitle().IsMatch(text))
+                failures.Add($"{document}: no '# ' title line");
+
+            foreach (TemplateElement element in required.Where(e => !DocumentCarries(text, headings, e)))
+                failures.Add($"{document}: missing '{element.Text}'");
+        }
+
+        Assert.IsEmpty(failures,
+            "Test documents must carry every element the index's document template defines, otherwise "
+            + "the template is a suggestion and the next document written is free to omit whichever "
+            + $"part nothing checks:\n{string.Join("\n", failures.Order())}");
+    }
+
+    /// <summary>
+    /// A test document's sections appear in the order the index's document template states them.
+    /// </summary>
+    /// <remarks>
+    /// Presence alone is not the template: a canary placed above <c>Observed effect</c> in one
+    /// document and below it in the next is the same drift one step further on, and three documents
+    /// had done exactly that with the improvised canary sections this template replaced. See #339.
+    /// </remarks>
+    [TestMethod]
+    public void EveryAutomatedTestingDocument_OrdersItsSectionsAsTheTemplateDoes()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        List<string> templateOrder = [.. LoadTemplateElements().Where(e => e.IsSection).Select(e => e.Text)];
+
+        Assert.IsNotEmpty(templateOrder,
+            "The index's document template defines no sections, so no order can be checked.");
+
+        List<string> documents = FindAutomatedTestingDocuments();
+
+        Assert.IsNotEmpty(documents,
+            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
+
+        List<string> failures = [];
+
+        foreach (string document in documents)
+        {
+            string text = File.ReadAllText(
+                Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
+
+            List<string> asWritten = [.. SectionHeadings(text).Where(templateOrder.Contains)];
+            List<string> asTemplated = [.. templateOrder.Where(asWritten.Contains)];
+
+            if (!asWritten.SequenceEqual(asTemplated))
+                failures.Add($"{document}: {string.Join(" | ", asWritten)}");
+        }
+
+        Assert.IsEmpty(failures,
+            "Test documents must order their sections as the document template does. Each line below "
+            + $"is a document's own order:\n{string.Join("\n", failures.Order())}\n\n"
+            + $"The template's order: {string.Join(" | ", templateOrder)}");
+    }
+
+    /// <summary>
+    /// No test document carries a section the index's document template does not define.
+    /// </summary>
+    /// <remarks>
+    /// The open end of the same problem: a required-sections check is satisfied by a document that
+    /// also invents three more. Twelve documents had improvised a canary section under eleven
+    /// different headings before the template defined one, and nothing could see them. A section
+    /// genuinely needed belongs in the template, where every document gets it. See #339.
+    /// </remarks>
+    [TestMethod]
+    public void NoAutomatedTestingDocument_CarriesASectionTheTemplateDoesNotDefine()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        HashSet<string> defined =
+            [.. LoadTemplateElements().Where(e => e.IsSection).Select(e => e.Text)];
+
+        Assert.IsNotEmpty(defined,
+            "The index's document template defines no sections, so every section would read as undefined.");
+
+        List<string> documents = FindAutomatedTestingDocuments();
+
+        Assert.IsNotEmpty(documents,
+            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
+
+        List<string> failures = [];
+
+        foreach (string document in documents)
+        {
+            string text = File.ReadAllText(
+                Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
+
+            foreach (string heading in SectionHeadings(text).Where(h => !defined.Contains(h)))
+                failures.Add($"{document}: '{heading}'");
+        }
+
+        Assert.IsEmpty(failures,
+            "These sections are not defined by the index's document template. A section a document "
+            + "genuinely needs is added to the template, so every document carries it; one invented "
+            + $"per document is how the suite ended up with eleven spellings of the same thing:\n"
+            + string.Join("\n", failures.Order()));
+    }
+
     private const string AutomatedTestingRelativePath = "docs/automated-testing";
 
     private static readonly string AutomatedTestingDir =
@@ -765,6 +904,141 @@ public partial class RepositoryStructureTests
             .SelectMany(d => Directory.GetFiles(d, "*.md", SearchOption.AllDirectories))
             .Select(f => Path.GetRelativePath(AutomatedTestingDir, f).Replace('\\', '/'))
     ];
+
+    /// <summary>
+    /// One element of the index's document template: a header field such as <c>**Smoke:**</c> or a
+    /// section heading such as <c>## Canary</c>.
+    /// </summary>
+    /// <param name="Text">The literal a document must carry.</param>
+    /// <param name="IsSection">
+    /// True for a section heading, false for a header field. Only sections carry an order.
+    /// </param>
+    /// <param name="Optional">
+    /// True where the template marks the element with its "only when it applies" note, as the
+    /// <c>Fully green after:</c> field and the exclusions section are.
+    /// </param>
+    private sealed record TemplateElement(string Text, bool IsSection, bool Optional);
+
+    /// <summary>
+    /// The elements the index's document template defines, in the order it states them.
+    /// </summary>
+    /// <remarks>
+    /// Read from the index rather than hardcoded, so adding a section to the template is what makes
+    /// it required of every document. The template says so itself, under *Document template*.
+    /// </remarks>
+    private static List<TemplateElement> LoadTemplateElements()
+    {
+        string index = File.ReadAllText(Path.Combine(AutomatedTestingDir, "README.md"));
+        List<TemplateElement> elements = [];
+
+        foreach (string line in ExtractDocumentTemplateBlock(index))
+        {
+            bool optional = line.Contains("only when it applies", StringComparison.Ordinal);
+
+            System.Text.RegularExpressions.Match field = TemplateHeaderField().Match(line);
+            if (field.Success)
+            {
+                string name = field.Groups["name"].Value.Trim();
+                elements.Add(new($"**{name}:**", false, optional));
+                continue;
+            }
+
+            System.Text.RegularExpressions.Match section = SectionHeading().Match(line);
+            if (section.Success)
+            {
+                // The optional marker trails the heading text, so it is not part of the name.
+                string name = section.Groups["name"].Value.Split('←')[0].Trim();
+                elements.Add(new($"## {name}", true, optional));
+            }
+        }
+
+        return elements;
+    }
+
+    /// <summary>
+    /// The lines of the fenced sample under the index's <c>## Document template</c> heading.
+    /// </summary>
+    /// <remarks>
+    /// The sample is a markdown fence containing a nested PowerShell fence, so its end cannot be
+    /// found by the next fence line, and its own <c>## </c> headings mean it cannot be bounded by the
+    /// next top-level heading either. Depth is counted instead: a fence naming a language opens a
+    /// block, a bare fence closes the innermost one.
+    /// </remarks>
+    private static List<string> ExtractDocumentTemplateBlock(string index)
+    {
+        List<string> lines = [.. index.Split('\n').Select(l => l.TrimEnd('\r'))];
+
+        int heading = lines.FindIndex(l => l == "## Document template");
+        Assert.IsGreaterThanOrEqualTo(0, heading,
+            $"{AutomatedTestingRelativePath}/README.md has no '## Document template' section, so the "
+            + "template every document is held to cannot be read.");
+
+        int open = lines.FindIndex(heading, l => l.StartsWith("```markdown", StringComparison.Ordinal));
+        Assert.IsGreaterThan(heading, open,
+            "The index's '## Document template' section contains no ```markdown block.");
+
+        int depth = 1;
+        int close = -1;
+        for (int i = open + 1; i < lines.Count && close < 0; i++)
+        {
+            if (!lines[i].StartsWith("```", StringComparison.Ordinal))
+                continue;
+
+            if (lines[i].TrimEnd().Length > 3)
+                depth++;
+            else if (--depth == 0)
+                close = i;
+        }
+
+        Assert.IsGreaterThan(open, close,
+            "The index's document template block is never closed, so its elements cannot be read.");
+
+        return [.. lines[(open + 1)..close]];
+    }
+
+    /// <summary>
+    /// A document's own <c>## </c> headings, in order, ignoring anything inside a fenced code block so
+    /// a heading appearing in sample output is not read as a section of the document.
+    /// </summary>
+    private static List<string> SectionHeadings(string documentText)
+    {
+        List<string> headings = [];
+        bool inFence = false;
+
+        foreach (string line in documentText.Split('\n').Select(l => l.TrimEnd('\r')))
+        {
+            if (line.StartsWith("```", StringComparison.Ordinal))
+            {
+                inFence = !inFence;
+                continue;
+            }
+
+            if (!inFence && SectionHeading().IsMatch(line))
+                headings.Add(line.TrimEnd());
+        }
+
+        return headings;
+    }
+
+    private static bool DocumentCarries(string documentText, List<string> headings, TemplateElement element) =>
+        element.IsSection
+            ? headings.Contains(element.Text)
+            : documentText.Split('\n')
+                .Any(l => l.TrimStart().StartsWith(element.Text, StringComparison.Ordinal));
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\*\*(?<name>[^*:]+):\*\*")]
+    private static partial System.Text.RegularExpressions.Regex TemplateHeaderField();
+
+    /// <summary>
+    /// A level-two heading. The <c>[^#]</c> keeps it from matching a <c>### </c> step heading.
+    /// </summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"^##\s+(?<name>[^#].*?)\s*$")]
+    private static partial System.Text.RegularExpressions.Regex SectionHeading();
+
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"^#\s+[^#\s].*$",
+        System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex DocumentTitle();
 
     [System.Text.RegularExpressions.GeneratedRegex(@"\]\((?<target>[^)]+)\)")]
     private static partial System.Text.RegularExpressions.Regex MarkdownLinkTarget();
