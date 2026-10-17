@@ -2,6 +2,7 @@
 
 **Smoke:** yes
 **Environment:** Fresh
+**Deterministic:** no
 **Traces to:** #280, #419
 **Fully green after:** [#438](https://github.com/DutchJaFO/Quotinator/issues/438) — step 1 asks
 `/version` for `200` where its own prose says `503`, and never sends a browser `Accept`, so its
@@ -33,6 +34,12 @@ the wrong thing. A false negative, never a false positive. If it starts failing 
 a larger seed or a slower start, not a longer sleep.
 
 The second wait is an ordinary readiness wait and polls.
+
+**What varies:** whether the first set of requests lands inside the startup window at all, which
+depends on how fast the machine seeds. The window cannot be pinned from outside the application, and
+it cannot be polled for, since a poll waits for a state to arrive and stays blind to one that has
+already gone. The variability is bounded in the safe direction: missing the window fails the
+assertions rather than passing them, so the result is a false negative and never a false positive.
 
 ## Steps
 
@@ -131,7 +138,7 @@ Well established. The log ordering above *is* an observed effect, and the wait p
 self-contained, auto-refreshing, localized, is the user-visible state during a window that would
 otherwise look like a dead server.
 
-**#419 measured 2026-10-03**, red against `quotinator:canary419` (built from the commit before any of
+**Measured 2026-10-03**, #419's half, red against `quotinator:canary419` (built from the commit before any of
 this issue's code) and green against `quotinator:local`:
 
 | In the startup window | canary (before) | local (after) |

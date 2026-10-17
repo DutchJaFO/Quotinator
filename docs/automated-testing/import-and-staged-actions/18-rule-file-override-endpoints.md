@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #153
 
 ## Preconditions
@@ -154,7 +155,7 @@ must own that input* section describes.
 
 ## Observed effect
 
-Originally live-verified 2026-07-26 against real bundled data, surfacing 3 genuine near-duplicates the
+**Measured 2026-07-26** against real bundled data, surfacing 3 genuine near-duplicates the
 curated alias file did not cover: `"When Harry Met Sally"` vs `"When Harry Met Sally..."`,
 `"Avengers - Age of Ultron"` vs `"Avengers: Age of Ultron"` — the normalizer strips `-` and `:`
 identically, correctly catching this — and `"Airplane"` vs `"Airplane!"`, aliased in a different

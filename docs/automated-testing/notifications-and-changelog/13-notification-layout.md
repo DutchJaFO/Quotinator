@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #308
 
 ## Preconditions
@@ -354,6 +355,25 @@ passes now and keeps passing when that is fixed.
 The log read before the stop shows what the read-only directory provokes: `IOException` and
 `SqliteException` from startup, and the `CryptographicException` behind the `500`. That is this
 environment's expected output, not shutdown noise and not a new finding.
+
+## Observed effect
+
+A notification reads as a notification rather than as one run-on string. The title is its own element
+instead of a prefix inside the body, a row with no title renders its body with no empty title element
+left behind, and a body written over two lines renders as two lines because the body honours its own
+line breaks.
+
+Where a notification carries counts, the detail opens as a dialog on the page and expands in place in
+the startup modal, as a table rather than a list, and it fits: either the dialog declares no maximum
+height or it is no taller than the viewport it has to sit in.
+
+The buttons say what they do. None reads a bare `Run`, the review alert's reads `Decide`, and a row
+offering a choice offers `Keep existing`, `Take incoming` and `Cancel`, asking before it acts. Once
+resolved, the row says how, which is the difference between a decision recorded and a decision merely
+closed.
+
+All of it still renders during a degraded startup, which is when an operator is most likely to be
+reading these pages at all.
 
 ## Canary
 

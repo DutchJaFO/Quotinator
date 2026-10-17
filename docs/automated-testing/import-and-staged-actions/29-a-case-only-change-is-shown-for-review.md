@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #409
 
 ## Preconditions
@@ -98,6 +99,21 @@ $decided = (Invoke-RestMethod "$base/import/actions?batchId=$batchId&pageSize=0"
 ```
 
 **Expected:** `204`, then `status=Decided quoteText=SURELY YOU CANNOT BE SERIOUS.`
+
+## Observed effect
+
+A quote whose text differs only in casing is held for review with `quoteText` named as the field
+needing a decision, exactly as a quote whose wording changed would be. The operator sees something to
+decide rather than a row that appears to have nothing in it.
+
+Deciding it without choosing answers `422`, and the refusal names `quoteText`, so the reason is
+actionable rather than a generic rejection. Choosing the incoming text answers `204` and the stored
+text becomes `SURELY YOU CANNOT BE SERIOUS.`
+
+The behaviour this replaces is the one worth remembering: a case-only change showed nothing to decide
+and was then decided without anyone being asked, so a correction and a downgrade were applied with
+equal confidence. Casing in a display-bearing field is meaning, and only a person can say which of the
+two a change is.
 
 ## Canary
 

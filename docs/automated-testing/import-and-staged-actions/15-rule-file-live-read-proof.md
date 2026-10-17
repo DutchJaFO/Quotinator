@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #181
 
 ## Preconditions
@@ -110,7 +111,7 @@ limitation #181's own Step 10 addendum documents.
 
 ## Observed effect
 
-Live-verified 2026-07-25. The `MergedFields` value is the load-bearing observation: the endpoint
+**Measured 2026-07-25**. The `MergedFields` value is the load-bearing observation: the endpoint
 response is unchanged either way, so only the audit trail distinguishes a rule that applied from one
 that did not.
 

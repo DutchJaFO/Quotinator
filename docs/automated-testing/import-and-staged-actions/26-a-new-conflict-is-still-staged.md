@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #376
 
 **Pairs with [`25`](25-an-already-reported-conflict-does-not-accumulate.md)**, which asserts the other
@@ -162,14 +163,18 @@ The underlying *row* counts differ — `1 → 3` pre-fix against `1 → 2` post-
 **On failure:** `1` means the check is over-reaching and suppressing a conflict nobody has seen — the
 failure mode this document exists to catch, and one that `25` would not notice.
 
-### 6. Tear down
+## Observed effect
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-26
-Remove-Item -Recurse -Force "$temp\376b-imports"
-```
+A conflict nobody has seen before is staged, even on a reseed that also re-encounters conflicts it has
+already reported. The operator's review queue therefore still gains the row that needs a decision,
+rather than being suppressed along with the familiar ones.
 
-**Expected:** the container and its volume are gone.
+Declaring the second title and reseeding settles it, and the outstanding count falls accordingly. So
+the queue tracks outstanding work in both directions: it does not grow for a conflict already
+reported, and it does not stay quiet about one that is new.
+
+That is what makes the queue trustworthy as a to-do list. A guard tuned only to stop duplicates would
+leave an operator believing there was nothing to decide.
 
 ## Canary
 
@@ -190,3 +195,12 @@ So run both, in either order, in containers of their own. Running this one alone
 correct check from one that stages every conflict on every reseed.
 
 Remove the container, image and worktree afterwards.
+
+## Cleanup
+
+```powershell
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-26
+Remove-Item -Recurse -Force "$temp\376b-imports"
+```
+
+**Expected:** the container and its volume are gone.

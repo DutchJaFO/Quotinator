@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Upgraded + Constrained
+**Deterministic:** yes
 **Traces to:** #348
 
 ## Preconditions

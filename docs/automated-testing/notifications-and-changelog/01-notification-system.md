@@ -2,6 +2,7 @@
 
 **Smoke:** yes
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #278
 
 ## Preconditions
@@ -278,7 +279,7 @@ Read-Thrown
 
 ## Observed effect
 
-**Captured 2026-08-25, driving a real browser.** `/notifications` renders a table with Created / Type /
+**Measured 2026-08-25**, driving a real browser. `/notifications` renders a table with Created / Type /
 Message / Expires / Status / Action columns and a Show filter offering Active, All and Expired only;
 the Message column carries each notification's **body**, not its title. `/` renders
 *Quotinator is ready … Startup completed successfully.* above the notification summary and the entity

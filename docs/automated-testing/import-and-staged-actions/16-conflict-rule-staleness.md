@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #153
 **Fully green after:** [#347](https://github.com/DutchJaFO/Quotinator/issues/347) — step 3's
 evaluation line does not exist until then, so that reading is inconclusive; every other reading passes
@@ -190,7 +191,7 @@ did not ask for.
 
 ## Observed effect
 
-**Step 4 live-verified 2026-10-06**: `stale=1`, a `Modify` on the curated Airplane! quote
+**Measured 2026-10-06**, step 4: `stale=1`, a `Modify` on the curated Airplane! quote
 (`588334be-…`) with status `Stale`, after the rule recorded the first fixture's text and the reseed
 offered the curated file's own. This is also what establishes that staleness still fires after #420
 moved the recorded value onto the field it governs, which step 3's empty list cannot show.

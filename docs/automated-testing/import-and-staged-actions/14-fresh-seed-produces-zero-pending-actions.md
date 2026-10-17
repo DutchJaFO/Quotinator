@@ -2,6 +2,7 @@
 
 **Smoke:** yes
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #181
 **Fully green after:** [#400](https://github.com/DutchJaFO/Quotinator/issues/400): step 5 cannot run
 until then: it calls a `--convert` entry point that does not exist

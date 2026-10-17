@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #382
 
 **Pairs with [`24`](24-complete-row-still-blocks-a-real-write.md)**, which asserts the other half — a
@@ -196,6 +197,20 @@ an operator had to clear by hand for a change that was never going to be made.
 **On failure:** `blocked=1` is this document's whole point failing — the guard is still reading the
 unresolved payload. `blocked=0` with *no* new action at all is a different failure: the row was never
 re-evaluated, which the printed action list is there to distinguish.
+
+## Observed effect
+
+Marking a row `Complete` without changing it reports the field that was ambiguous, `quoteText`, and
+leaves the stored text exactly as it was. The apply answers `200`, so the operator sees a decision
+recorded rather than a write.
+
+A later reseed over that same row produces nothing blocked. The action is recorded as `Applied` with
+its resolution noted as resolved to the existing value, which tells an operator the row was considered
+and found already correct, rather than skipped or silently overwritten.
+
+That distinction is the whole operator-facing value here. A guard that blocked every reseed over a
+`Complete` row would fill the review queue with rows that need no decision, and the queue stops being
+a list of things to do.
 
 ## Canary
 

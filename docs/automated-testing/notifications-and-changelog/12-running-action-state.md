@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #367
 
 ## Preconditions
@@ -159,6 +160,20 @@ completed the reseed proves nothing about stranding.
 that owned the run: the notification is now permanently unrunnable, with no Run control and no way
 back. That is the failure mode a stored column would have had, and this step is what keeps the
 in-memory choice honest if anyone later persists it.
+
+## Observed effect
+
+While a notification's action is running, the row says so. The status badge reads **Running…** with a
+spinning icon, and the row offers no controls at all, so the operator cannot start the same action a
+second time while the first is still going.
+
+It settles by itself. The action runs exactly once, the alert ends up dismissed with its reason
+recorded as resolved, and the content the action produced is there to confirm it.
+
+A restart in the middle strands nothing. The row does not come back still claiming to be running, and
+the partial content left behind is visible as a count well below a full seed rather than presented as a
+finished run. Nothing is logged as an exception across the restart, so an interrupted action reads as
+interrupted rather than as a fault.
 
 ## Canary
 

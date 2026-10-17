@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #304
 
 ## Preconditions
@@ -153,7 +154,7 @@ document that can catch it.
 
 ## Observed effect
 
-Executed 2026-08-30 against `quotinator:local` — the values below come from a clean run of the document
+**Measured 2026-08-30** against `quotinator:local` — the values below come from a clean run of the document
 exactly as written, on a fresh container, after the corrections above:
 
 | Step | Observed |

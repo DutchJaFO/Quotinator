@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #210
 
 ## Preconditions
@@ -25,6 +26,32 @@ the one fully-unmitigated gap of this kind found across the whole codebase.
 - **The id comparison is `-ceq`.** `-eq` is case-insensitive in PowerShell, so with it this test would
   report the canonical form as correct whichever casing came back — the one thing it exists to tell
   apart.
+
+## Explicitly not covered here
+
+**The systemic id-case guard has no test of its own here, and needs none.**
+`Quotinator.Data.Diagnostics.SqlIdCaseGuard` scans every SQL query in the codebase for an unwrapped
+id-comparison, at unit-test tier: `SqlConstant_PassesIdCaseGuard` and `AssembledQuery_PassesIdCaseGuard`
+in both `Quotinator.Core.Tests` and `Quotinator.Data.Tests`, plus `RepositorySqlFactory_PassesIdCaseGuard`
+and `AllJoinStrategies_BuildSql_PassesIdCaseGuard` in `Quotinator.Data.Tests`. It is why
+`RepositorySql.cs`'s generic `SelectById`/`SoftDelete`/etc. are `LOWER()`-wrapped — see ADR 012's
+system-wide lowercase revision for why `LOWER()` and not `UPPER()`.
+
+That guard needs no Docker verification: it is mechanical, it enumerates every query rather than a
+maintained list, and a gap in it is a failing unit test.
+
+**It does not follow that the endpoints are covered, and the note this replaced claimed it did.**
+Verified 2026-08-22: the guard proves the SQL is wrapped; nothing proves each endpoint wires that
+query correctly — route binding, 404-versus-200, and for write paths the update itself. Eleven
+endpoints take an `/{id}` route parameter and exactly two are exercised live in both casings: this one,
+and Source in
+[`05-generic-repository-select-list-wrapping.md`](05-generic-repository-select-list-wrapping.md).
+
+Three of the remainder do not share Source's generic-repository path and so are not covered by proxy
+either — Conversation (`Sql.Conversations.SelectForRead`), Captured import file
+(`SqliteFileResourceRepository`, its own `Sql.FileResources.SelectById`), and the notification dismiss
+endpoint (`Sql.Notifications.UpdateDismissById`, a *write* by id). Closing that is
+[#341](https://github.com/DutchJaFO/Quotinator/issues/341); it is not this test's job.
 
 ## Steps
 
@@ -89,31 +116,6 @@ together; either alone would leave the other unverified.
 
 Not yet established. The HTTP responses are asserted above; what the container logs while resolving
 either casing has not been captured.
-
-## Why the systemic id-case guard has no test of its own
-
-`Quotinator.Data.Diagnostics.SqlIdCaseGuard` scans every SQL query in the codebase for an unwrapped
-id-comparison, at unit-test tier: `SqlConstant_PassesIdCaseGuard` and `AssembledQuery_PassesIdCaseGuard`
-in both `Quotinator.Core.Tests` and `Quotinator.Data.Tests`, plus `RepositorySqlFactory_PassesIdCaseGuard`
-and `AllJoinStrategies_BuildSql_PassesIdCaseGuard` in `Quotinator.Data.Tests`. It is why
-`RepositorySql.cs`'s generic `SelectById`/`SoftDelete`/etc. are `LOWER()`-wrapped — see ADR 012's
-system-wide lowercase revision for why `LOWER()` and not `UPPER()`.
-
-That guard needs no Docker verification: it is mechanical, it enumerates every query rather than a
-maintained list, and a gap in it is a failing unit test.
-
-**It does not follow that the endpoints are covered, and the note this replaced claimed it did.**
-Verified 2026-08-22: the guard proves the SQL is wrapped; nothing proves each endpoint wires that
-query correctly — route binding, 404-versus-200, and for write paths the update itself. Eleven
-endpoints take an `/{id}` route parameter and exactly two are exercised live in both casings: this one,
-and Source in
-[`05-generic-repository-select-list-wrapping.md`](05-generic-repository-select-list-wrapping.md).
-
-Three of the remainder do not share Source's generic-repository path and so are not covered by proxy
-either — Conversation (`Sql.Conversations.SelectForRead`), Captured import file
-(`SqliteFileResourceRepository`, its own `Sql.FileResources.SelectById`), and the notification dismiss
-endpoint (`Sql.Notifications.UpdateDismissById`, a *write* by id). Closing that is
-[#341](https://github.com/DutchJaFO/Quotinator/issues/341); it is not this test's job.
 
 ## Canary
 

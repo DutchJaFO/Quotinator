@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #302
 
 ## Preconditions
@@ -381,6 +382,21 @@ row. Note the restart — the modal renders once per process run, so the dismiss
 
 **On failure:** check `/notifications` first. If the confirmations are there but not in the modal, the
 fault is in the modal's own active-notification query, not in this issue's producer.
+
+## Observed effect
+
+A seeding run says what it did, per file. A cold start leaves one confirmation for each bundled file
+that applied cleanly, and a reseed does the same, so an operator who asks the application to pick up
+its files again is told the outcome rather than left to infer it from a quote count.
+
+The breakdown covers more than quotes. Each confirmation lists the entity types the file carried, and
+the rows resolved to an existing value are totalled and add up against their own parts, so a file that
+contributed characters, people or sources shows that rather than reporting a single number.
+
+Running it again does not duplicate the confirmations, and dismissing them and reseeding confirms
+afresh. The reseed's own dismissal does not sweep them away: every confirmation reads as not dismissed
+with no expiry, which is what lets them survive long enough to be read. After a restart they reach the
+startup modal, where an operator sees them without going looking.
 
 ## Canary
 

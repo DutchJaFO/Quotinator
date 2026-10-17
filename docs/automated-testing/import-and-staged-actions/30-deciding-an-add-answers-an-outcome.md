@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #410
 
 ## Preconditions
@@ -127,6 +128,19 @@ docker logs qt-import-30 2>&1 | Select-String -SimpleMatch '[Runtime - Exception
 ```
 
 **Expected:** `after=0`, equal to `before`.
+
+## Observed effect
+
+Every held Add says why it is held, and each one decided without a decision answers `422` carrying
+that reason: already resolved, or still waiting for review. The operator gets an outcome they can act
+on, naming which of the two applies to this row.
+
+Nothing is logged as an exception while that happens. The count after the decides equals the count
+before them, so a queue of held Adds can be worked through without filling the log.
+
+The replaced behaviour is why this is worth a document: deciding a Quote Add answered `500`, which
+tells an operator nothing about the row, cannot be distinguished from the application being broken,
+and leaves the decision unmade with no indication of what to try instead.
 
 ## Canary
 

@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #370
 
 ## Preconditions
@@ -109,6 +110,20 @@ an undecided decide threw nothing.
 
 **On failure:** each line names the exception type and its id. `UnresolvedFieldConflictException` is
 the defect this document exists for.
+
+## Observed effect
+
+Reviewing conflicted content is quiet in the log. Listing the pending actions, exporting them,
+rendering the review page and refusing a decision that supplied no decisions all add no
+`[Runtime - Exception]` line, so the count after the reads equals the count before them.
+
+That matters to an operator because the alternative was not a crash. An expected conflict signalled by
+throwing produced one logged exception per conflicted row per render, so simply opening the review page
+filled the log with entries describing data that was behaving exactly as designed, and a real fault
+somewhere else became impossible to spot.
+
+The refusal itself is still a refusal: deciding with no decisions is rejected, and the rejection is
+reported to the caller rather than thrown past them.
 
 ## Canary
 

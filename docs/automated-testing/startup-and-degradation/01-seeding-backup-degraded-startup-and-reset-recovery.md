@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh + Constrained
+**Deterministic:** yes
 **Traces to:** #254
 
 ## Preconditions

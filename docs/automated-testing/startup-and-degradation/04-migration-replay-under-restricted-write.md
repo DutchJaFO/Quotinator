@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Upgraded + Constrained
+**Deterministic:** yes
 **Traces to:** #294
 
 ## Preconditions
@@ -104,10 +105,10 @@ the failure ever run.
 
 ## Observed effect
 
-Established for the failing case, which is unusual and useful. Reverting the fix reproduces a real
-`SqliteException` — `SQLite Error 10: 'disk I/O error'` was live-verified 2026-08-11 — plus the
-degraded `/health` → `503 {"status":"unhealthy"}` and `/version` → `schemaVersion: 0, quotes: 0`
-outcome the original incident showed.
+**Measured 2026-08-11** for the failing case, which is unusual and useful. Reverting the fix reproduces
+a real `SqliteException`, `SQLite Error 10: 'disk I/O error'`, plus the degraded `/health` →
+`503 {"status":"unhealthy"}` and `/version` → `schemaVersion: 0, quotes: 0` outcome the original
+incident showed.
 
 That error code differs from the original incident's `SQLite Error 14: 'unable to open database file'`,
 because `--read-only`'s full write-denial hits a different syscall than the real profile's

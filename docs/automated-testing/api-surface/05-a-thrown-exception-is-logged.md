@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** [#397](https://github.com/DutchJaFO/Quotinator/issues/397)
 
 ## Preconditions
@@ -79,6 +80,21 @@ $quiet = ([regex]::Matches((docker logs qt-api-05 2>&1 | Out-String), '\[Runtime
 ```
 
 **Expected:** `healthy`, and `quiet` equal to `after` — a request that throws nothing adds no line.
+
+## Observed effect
+
+A healthy container is silent about exceptions: nothing in a normal startup or an ordinary request
+produces an `[Runtime - Exception]` line, so any line that appears was caused by something a caller
+did.
+
+An upload the application cannot parse answers `422` to the caller and writes `ERR` lines on the way,
+each carrying an id for the throw. The two sides can therefore be matched: a `422` a user reports has
+a logged counterpart with an identifier, rather than being a failure visible only to whoever was
+attached to a debugger at the time.
+
+That pairing is the operator-facing point of this document. Before it, an exception thrown where the
+application actually runs left nothing behind outside Visual Studio, so a report of a rejected upload
+could not be traced at all.
 
 ## Canary
 

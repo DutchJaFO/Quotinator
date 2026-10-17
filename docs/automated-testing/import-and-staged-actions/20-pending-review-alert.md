@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #303
 
 ## Preconditions
@@ -311,6 +312,21 @@ does not own.
 at startup before any request — which are the defect above rather than anything this document
 provokes. It also keeps its own key ring rather than the suite's shared one, which `test-env.csx`
 never mounts over a read-only `/data`.
+
+## Observed effect
+
+A file left awaiting review raises one alert per file, of type `actionrequired`, naming its batch, the
+file it came from, and how much work is waiting. The operator does not have to go looking: the alert
+reaches the startup modal on the next process run, and the review page lists the same work in
+server-rendered HTML, so it is visible without a Blazor circuit.
+
+Resolving the review records that it was carried out rather than waved away: the alert reads **Done**,
+with a dismiss reason of `resolved`, and a notification that was merely dismissed reads differently. A
+decision taken from either surface reaches the data as `Applied`, not `Decided`, so the stored text
+matches what was chosen.
+
+The pages keep answering while the database is degraded, which is when an operator most needs them.
+`/import-review` behaves as `/notifications` does, and `/about` and `/stats` answer too.
 
 ## Canary
 

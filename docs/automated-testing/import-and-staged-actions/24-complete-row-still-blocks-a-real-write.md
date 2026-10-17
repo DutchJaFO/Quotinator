@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #382, #181
 
 **Pairs with [`23`](23-complete-row-blocks-only-on-a-real-write.md)**, which asserts the other half — a
@@ -224,6 +225,20 @@ decision instead, which is what #181 existed to guarantee and what #382 delibera
 `Complete` row accepted a genuine overwrite — a more serious defect than the one #382 fixed.
 `blocked=0` with no new action at all means the row was never re-evaluated (see Determinism). A
 `Stale` action means the rule's recorded snapshot does not match both sides.
+
+## Observed effect
+
+With a `Replace` rule in place and the file genuinely changed, a reseed over a `Complete` row produces
+exactly one blocked action, recorded as `Blocked` against a `Modify`, and the stored text is left
+unchanged.
+
+What the operator sees is a row held for them rather than a value quietly replaced: the completion they
+recorded earlier still stands, and the incoming change is waiting with its own action to be decided
+on.
+
+Read together with its sibling, the pair describes the whole behaviour. A resolution that writes
+nothing passes through, and one that would write a different value stops. An operator who sees neither
+blocked action nor applied change has a guard that is doing something other than either.
 
 ## Canary
 

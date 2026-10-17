@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #376
 
 **Pairs with [`26`](26-a-new-conflict-is-still-staged.md)**, which asserts the other half — a conflict
@@ -191,14 +192,17 @@ shrinking total reads as content the file stopped mentioning.
 **On a pre-fix image there is no `AlreadyReported` group at all** — that kind did not exist — and the
 `Modify` count is 3 rather than 1.
 
-### 7. Tear down
+## Observed effect
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-25
-Remove-Item -Recurse -Force "$temp\376-imports"
-```
+A conflict between two files is reported once. The first seed leaves one unresolved conflict against
+the Source, and every later reseed leaves the count where it was, so an operator who reseeds daily
+does not arrive at a review queue that has grown by one row a day for a conflict they have already
+seen.
 
-**Expected:** the container and its volume are gone.
+It is recorded as recognised rather than passed over: each reseed adds an `AlreadyReported` entry
+alongside the `Modify`, `Add` and `Unchanged` counts for that file. An operator reading the report can
+therefore tell *we saw this conflict again and left it alone* from *we stopped looking*, which an
+unchanged count alone cannot say.
 
 ## Canary
 
@@ -222,3 +226,12 @@ unwrapped form fails precisely when the test is working.
 test.
 
 Remove the container, image and worktree afterwards.
+
+## Cleanup
+
+```powershell
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-25
+Remove-Item -Recurse -Force "$temp\376-imports"
+```
+
+**Expected:** the container and its volume are gone.

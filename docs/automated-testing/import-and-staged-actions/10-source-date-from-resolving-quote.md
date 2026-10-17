@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #191
 
 ## Preconditions
@@ -130,7 +131,7 @@ below the warning about it.
 
 ## Observed effect
 
-Measured 2026-08-22 on a real seeded database: `423` of `461` sources carried a date — recorded as an
+**Measured 2026-08-22** on a real seeded database: `423` of `461` sources carried a date — recorded as an
 observation, not as an expectation for the next run. The shortfall was titles present only in
 `vilaboim_movie-quotes.json`, which supplies `"date": null` throughout, so there was no date anywhere
 to inherit: missing upstream data rather than a defect in this path.

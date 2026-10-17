@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** no
 **Traces to:** [#411](https://github.com/DutchJaFO/Quotinator/issues/411)
 
 ## Preconditions
@@ -26,6 +27,12 @@ and what step 2 proves.
 - **Step 1's first visit is not asserted.** Whether it logs the pair depends on what the browser held
   before this test began — nothing in a fresh pane, since the cookie lives only for the browser session.
   Step 1's second visit is what pins the browser to a cookie from the shared ring.
+
+**What varies:** step 1's first reading, which is `0` in a fresh browser pane and `2` where the pane
+already held a cookie from an earlier container. It cannot be pinned without owning the browser's
+whole session, so the step accepts either value and step 1's second visit establishes the state
+everything after it depends on. Every other reading in this document is deterministic once that
+cookie is pinned.
 - **Each count is the lines added since the previous read**, so one visit's result cannot absorb
   another's.
 - **Each log is read before its container is stopped**, per the index's *Read the log before the
@@ -126,7 +133,7 @@ until it reads `0`.
 
 ## Observed effect
 
-Measured 2026-09-19 while designing #411's shared key ring. A container with its own keys, visited by a
+**Measured 2026-09-19** while designing #411's shared key ring. A container with its own keys, visited by a
 browser holding a cookie from any other, logs exactly one pair — `CryptographicException: The key {…}
 was not found in the key ring` and `AntiforgeryValidationException: The antiforgery token could not be
 decrypted` — with frames ending in `DefaultAntiforgery.GetCookieTokenDoesNotThrow`. The page renders

@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Upgraded + Constrained
+**Deterministic:** yes
 **Traces to:** #312
 
 ## Preconditions
@@ -160,7 +161,7 @@ reading them.
 
 ## Observed effect
 
-**Captured 2026-09-22**, on this construction: the v8 build logged `version 3 → 8`, the current build
+**Measured 2026-09-22**, on this construction: the v8 build logged `version 3 → 8`, the current build
 `applying 14 pending "Data" migration(s) (version 8 → 22)`, stayed healthy, and left:
 
 ```text

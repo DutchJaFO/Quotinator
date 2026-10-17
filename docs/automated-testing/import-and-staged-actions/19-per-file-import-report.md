@@ -2,6 +2,7 @@
 
 **Smoke:** yes
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #221
 
 ## Preconditions

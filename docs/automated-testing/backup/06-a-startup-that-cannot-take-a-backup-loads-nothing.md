@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #348
 
 ## Preconditions
@@ -302,7 +303,7 @@ loads the content.
 
 ## Observed effect
 
-**Re-measured 2026-10-10** against `quotinator:local`, on the genre re-seed setup #423 moved this
+**Measured 2026-10-10** against `quotinator:local`, re-read on the genre re-seed setup #423 moved this
 document to. Every step passes as written.
 
 The seeded container reports `quotes=795` and `Genres` `25`. With the genre rows removed and the budget

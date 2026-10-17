@@ -2,6 +2,7 @@
 
 **Smoke:** yes
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #195
 
 ## Preconditions
@@ -45,6 +46,18 @@ default and a second on `false` for the same reason.
 - **The default-page-size assertion needs populated tables too** — an empty table would return the
   default without proving it was applied rather than defaulted-through.
 - Admin key present for the `/admin/audit` calls.
+
+## Explicitly not covered here
+
+`page`/`pageSize` publishing as `integer` rather than `string` on the live spec is **not** part of
+this test. It was originally a text-matching check on the published spec here, and the first version of
+that command was wrong — it assumed single-line JSON and never matched anything. Matching a
+pretty-printed multi-line body for a nested field is fragile and its pass/fail needs a human to eyeball
+the output.
+
+It is now `OpenApiSpecEndpointTests`, a `WebApplicationFactory` test that fetches the real
+`/openapi/v1.json` through the full pipeline and asserts the type via `JsonDocument` — so it runs
+deterministically in every `dotnet test` instead of requiring a live container.
 
 ## Steps
 
@@ -140,18 +153,6 @@ Not yet established as a captured record. What this test exists to catch is docu
 the audit and import readers were found passing `pageSize=0` straight into `LIMIT @pageSize` rather
 than translating it to `LIMIT -1`, during #195's own T2 pass. No unit test could have caught it — the
 stub readers those tests use echo their input back instead of exercising real SQL.
-
-## Explicitly not covered here
-
-`page`/`pageSize` publishing as `integer` rather than `string` on the live spec is **not** part of
-this test. It was originally a text-matching check on the published spec here, and the first version of
-that command was wrong — it assumed single-line JSON and never matched anything. Matching a
-pretty-printed multi-line body for a nested field is fragile and its pass/fail needs a human to eyeball
-the output.
-
-It is now `OpenApiSpecEndpointTests`, a `WebApplicationFactory` test that fetches the real
-`/openapi/v1.json` through the full pipeline and asserts the type via `JsonDocument` — so it runs
-deterministically in every `dotnet test` instead of requiring a live container.
 
 ## Canary
 

@@ -1,7 +1,8 @@
-﻿# Upgrading translates the notification a released build already wrote
+# Upgrading translates the notification a released build already wrote
 
 **Smoke:** no
 **Environment:** Upgraded
+**Deterministic:** yes
 **Traces to:** #319
 
 ## Preconditions

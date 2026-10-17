@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #154
 
 ## Preconditions
@@ -60,7 +61,7 @@ never attempts to read the request body — again with its own `detail`.
 
 ## Observed effect
 
-Captured 2026-08-23, running this document verbatim.
+**Measured 2026-08-23**, running this document verbatim.
 
 A bodyless `POST /import` returns an RFC 4918 problem document:
 

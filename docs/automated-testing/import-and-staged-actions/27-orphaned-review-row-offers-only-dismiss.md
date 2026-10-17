@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #369
 
 ## Preconditions
@@ -178,6 +179,20 @@ $all = (Invoke-RestMethod "http://localhost:18627/api/v1/notifications?pageSize=
 **Expected:** the screenshot shows one badge per row and every badge carrying a word — the alert from
 step 5 reads **Done**, the others **Active** — and the page shows as many rows as `rows =` reports. An
 empty badge, or a page that fails to render at all, is the failure this step exists to catch.
+
+## Observed effect
+
+A review row whose batch has gone presents itself honestly. The page names the file the row came from
+rather than showing an id nobody can look up, says the batch is gone, and offers only Dismiss: the
+Keep and Take decisions are absent, because neither could be carried out.
+
+The alert agrees with the page. It names the file, reports its action as no longer possible, and does
+not offer its Decide action, so an operator is never invited from the notification into a decision the
+page will refuse.
+
+Dismissing it discards the batch and resolves the alert together, and the page then reads *Nothing is
+waiting for review.* The Status column keeps rendering its states as words, one badge per row, so a
+reader is not left matching numbers to meanings.
 
 ## Canary
 

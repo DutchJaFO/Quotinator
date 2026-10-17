@@ -2,6 +2,7 @@
 
 **Smoke:** yes
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #45, #149, #152, #154
 
 ## Preconditions
@@ -166,6 +167,20 @@ a bug — step 8's count is what confirms it should not happen here.
 ```
 
 **Expected:** after a successful apply, one group — `Applied` — holding every action in the batch.
+
+## Observed effect
+
+An import that conflicts with stored content answers `202` rather than `200`, and that status is the
+operator's signal that nothing was written and work is waiting. The actions it staged are listed under
+their own batch, so the work can be found without knowing what the file contained.
+
+Each action moves through the workflow visibly: a decision answers `204` and the action appears under
+`Decided`, an undo returns it to `Pending`, and the apply is refused while anything is still pending.
+A successful apply answers `200` and the batch's tally collapses to a single `Applied` group holding
+every action, which is how an operator confirms a batch is finished rather than partly done.
+
+The legacy conflicts endpoint answers `404`. Anything else means the old machinery is still serving,
+and a reader comparing the two surfaces would get different answers from each.
 
 ## Canary
 

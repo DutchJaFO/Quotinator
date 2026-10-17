@@ -2,6 +2,7 @@
 
 **Smoke:** yes
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #156
 
 ## Preconditions
@@ -31,6 +32,12 @@ and rebuilds via the baseline path, reversing #141's preserve-on-reset behaviour
   fresh database takes the consolidated baseline path and records one collapsed row per counter, so
   there is no granular history to preserve in the first place. Steps 7 and 8 say what they do and do
   not establish; proving the granular half needs the Upgraded profile.
+
+## Explicitly not covered here
+
+There is no live check for the `SeedSystemContentAsync` extension point. No real system or reference
+table exists in production yet — it is proven only via test-only fixtures, see #156's plan doc — so
+nothing observable changes in a running container for that part.
 
 ## Steps
 
@@ -165,12 +172,6 @@ one row to begin with.
 
 Partially established. The row counts and the self-trace row are observed state and are asserted
 above. What the container logs during the drop and rebuild has not been captured.
-
-## Explicitly not covered here
-
-There is no live check for the `SeedSystemContentAsync` extension point. No real system or reference
-table exists in production yet — it is proven only via test-only fixtures, see #156's plan doc — so
-nothing observable changes in a running container for that part.
 
 ## Canary
 

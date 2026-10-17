@@ -2,6 +2,7 @@
 
 **Smoke:** no
 **Environment:** Fresh
+**Deterministic:** yes
 **Traces to:** #372
 
 ## Preconditions
@@ -208,6 +209,20 @@ $batches | Select-Object -First 5 | ForEach-Object { "  $($_.id)  type=$($_.type
 
 **Expected:** the batches from the first seed are still listed. A reseed that removed them would
 invalidate every review alert naming one, which is what #303's alerts do.
+
+## Observed effect
+
+A reseed is additive from the operator's point of view. A quote imported by hand, described by no
+source file, is still there afterwards and still findable by search, and the import batches recorded by
+earlier seeds are still listed. Nothing an operator put in is lost by asking the application to pick up
+its files again.
+
+Running a reseed twice changes nothing the second time, and no new actions appear awaiting review, so a
+reseed is safe to repeat when its outcome is unclear.
+
+Where a row really is missing, a reseed repairs exactly that row and leaves the count where it was
+before the loss. The per-file report names every entity type the file carried rather than quotes alone,
+so an operator can see which parts of a file were understood.
 
 ## Canary
 
