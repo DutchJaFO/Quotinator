@@ -8,7 +8,7 @@
 ## Preconditions
 
 **Beyond the profile.** This test runs **four containers of its own**, because
-each needs a different configuration and a configuration is fixed at start — a restart cannot supply
+each needs a different configuration and a configuration is fixed at start: a restart cannot supply
 it. Everything else about each run is Fresh: same image, same first-boot seed, same readiness poll. The
 audit activity it reads is produced by that seeding, so nothing needs importing first.
 
@@ -24,12 +24,12 @@ left to a default.
 - **Waits for health, not a duration**, at every container start.
 - **Copy the `-wal` and `-shm` sidecars** with every `.db` copy, *where they exist*. SQLite does not
   checkpoint recent writes into the main file until the WAL passes its threshold, so the `.db` alone
-  can be missing exactly what was just written. After a clean `docker stop` they are usually gone —
-  the close checkpointed and removed them — which is why each sidecar copy ends `2>$null` and why
+  can be missing exactly what was just written. After a clean `docker stop` they are usually gone,
+  since the close checkpointed and removed them, which is why each sidecar copy ends `2>$null` and why
   their absence is not a warning sign. See the index's *Snapshot and restore*.
 - **Each configuration gets a fresh container with no prior data.** The auto-purge-off run in
   particular is meaningless against a volume where the on-by-default run already purged.
-- **`PurgeTraces` equals the number of bundled seed batches** — one per batch. Derive it from the batch
+- **`PurgeTraces` equals the number of bundled seed batches**, one per batch. Derive it from the batch
   count in the same run rather than fixing a number: the bundled file set changes, and this is a
   relationship, not a prediction.
 - **The container side is the ordinary `8080`, not the ingress port `8099`.** These containers
@@ -46,7 +46,7 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-db-02-default --p
 ([regex]::Matches((docker logs qt-db-02-default 2>&1 | Out-String), 'Quotinator ready')).Count
 ```
 
-**Expected:** `1`. Counted rather than eyeballed — reading the tail of a log and deciding whether it
+**Expected:** `1`. Counted rather than eyeballed: reading the tail of a log and deciding whether it
 looks finished is not a condition that can fail.
 
 **On failure:** the audit activity every check below reads is produced by that seeding. A container
@@ -121,7 +121,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
 (Invoke-RestMethod "http://localhost:18302/api/v1/import/batches?type=seed").totalCount
 ```
 
-**Expected:** `PurgeTraces` equals the seed-batch count printed beneath it — one trace per batch, even
+**Expected:** `PurgeTraces` equals the seed-batch count printed beneath it, one trace per batch, even
 though the `Import_Action` rows themselves are gone. Derived in the same run rather than written here,
 per Determinism.
 
@@ -163,7 +163,7 @@ $purgedBatchId = (dotnet script scripts/testing/http.csx -- --method POST `
 $purgedBatchId
 ```
 
-**Expected:** `200` and a non-empty batch id — the curated file re-imports as all-Modify against
+**Expected:** `200` and a non-empty batch id: the curated file re-imports as all-Modify against
 already-seeded data, with no pending decisions to stage.
 
 ### 9. Attempt to reverse that batch
@@ -192,15 +192,15 @@ $after = Invoke-RestMethod "http://localhost:18302/api/v1/admin/audit/date-range
 "secondsOld=$([int]((Get-Date).ToUniversalTime() - [datetime]$after.earliestDate).TotalSeconds)"
 ```
 
-**Expected:** `earliestDate` and `latestDate` are the same just-now timestamp — the clear's own
-self-recorded `Purged` trace, seconds old — and not the seed's much earlier activity, which is now gone
+**Expected:** `earliestDate` and `latestDate` are the same just-now timestamp, the clear's own
+self-recorded `Purged` trace, seconds old, and not the seed's much earlier activity, which is now gone
 along with the `Audit_Change` rows. The age is printed rather than the range being eyeballed, so "still
 showing the old data" fails rather than being read past.
 
 ### 12. Confirm a table-scoped clear leaves `Audit_Change` untouched
 
 **Step 10's unscoped clear emptied `Audit_Change`, so this step has to put rows back first.** Import a
-file that really changes a stored quote — the suite's conflict fixture, applied with `newest-wins` —
+file that really changes a stored quote (the suite's conflict fixture, applied with `newest-wins`):
 read the count, run the scoped clear, and read it again:
 
 ```powershell
@@ -230,7 +230,7 @@ leaves `Audit_Change` untouched.
 
 **The non-zero before-reading is what makes this an assertion at all.** Run straight after step 10 both
 readings are `0`, and "the count is unchanged" then holds equally well when a scoped clear wrongly
-wipes the table — which is how this step read until #339's full run. Measured with 13 real change rows
+wipes the table, which is how this step read until #339's full run. Measured with 13 real change rows
 present: the scoped clear left all 13, so the behaviour is correct and only the ordering was hiding it.
 
 **On failure:** a zero `ChangesBefore` means the import produced no change rows, so the comparison
@@ -246,7 +246,7 @@ Partially established. The raw table counts and the purge traces are observed st
 above.
 
 **The unscoped-clear behaviour was found live during T1**: date-range and export kept showing data
-after a clear, because the endpoint had only ever cleared `Audit_Entry` — even though #249 treats both
+after a clear, because the endpoint had only ever cleared `Audit_Entry`, even though #249 treats both
 tables as one combined concern everywhere else.
 
 ## Canary

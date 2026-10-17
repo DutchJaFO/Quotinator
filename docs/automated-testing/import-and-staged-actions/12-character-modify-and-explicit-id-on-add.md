@@ -8,7 +8,7 @@
 ## Preconditions
 
 Before this issue, `characters[]` supported only Correction (`id` present, matched by id) or
-brand-new-via-natural-key — there was no way to correct an existing Character's `Name` through the
+brand-new-via-natural-key: there was no way to correct an existing Character's `Name` through the
 staging/decide pipeline the way Source, Person
 ([`08-person-modify-and-lowercase-id-reversal.md`](08-person-modify-and-lowercase-id-reversal.md)),
 StageDirection and SoundCue
@@ -26,7 +26,7 @@ depends on it.
 
 - **Every listing is scoped to this test's own `batchId` and read with `pageSize=0`.** Unscoped, the
   default page is 20 and any staged action left by an earlier run satisfies a `status=pending` or
-  `status=blocked` check without this test having produced it — and the masterdata list holds hundreds
+  `status=blocked` check without this test having produced it, and the masterdata list holds hundreds
   of characters, so "includes X" read off page one is satisfied by X being on page twelve. Neither
   failure is visible in the output.
 - **The Character chosen for the Modify half must not already be `Complete`.** The sequence is Modify →
@@ -38,7 +38,7 @@ depends on it.
 
 **The explicit-id-on-Add half exists because a unit-test-only pass could not have caught the bug.** An
 explicit `characters[]` id matching nothing was being silently discarded in favour of a freshly-computed
-`EntityIdentity`-derived id — unlike `PlanSourcesAsync`'s established `canonicalId ?? EntityIdentity.SourceId(...)`
+`EntityIdentity`-derived id, unlike `PlanSourcesAsync`'s established `canonicalId ?? EntityIdentity.SourceId(...)`
 precedent. **The unit suite's own two tests for this were written against the bug and passed**, because
 they never independently verified which id actually landed in the database. Only the walkthrough below
 surfaces it.
@@ -46,10 +46,10 @@ surfaces it.
 - **The explicit id is uppercase in the file and looked up in lowercase.** Both castings are
   load-bearing; matching them removes the test's point.
 - **The Source-casing fixture uses `AIRPLANE!` in both the quote's `source` and the character's
-  `sourceTitle`.** Changing either to the stored casing tests nothing — and step 8's comparison is
+  `sourceTitle`.** Changing either to the stored casing tests nothing, and step 8's comparison is
   `-ceq`, because `-eq` is case-insensitive in PowerShell and would report a case-variant duplicate as
   the correctly-cased row.
-- The Modify half asserts `ambiguousFields` contains **only** `name` — `sourceId` appearing would mean
+- The Modify half asserts `ambiguousFields` contains **only** `name`: `sourceId` appearing would mean
   an unchanged `SourceId` is spuriously tripping `FieldMergeResolver`.
 
 ## Steps
@@ -63,7 +63,7 @@ $base = "http://localhost:18612/api/v1"
 $temp = "$PWD\.claude\temp"
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
@@ -90,9 +90,9 @@ $characterId = ($characters | Where-Object { $_.name -ceq 'Ted Striker' })[0].id
 "characterId=$characterId"
 ```
 
-**Expected:** `airplaneSources=1` before anything runs, the Add returns `200`, `created=1` — linked to
+**Expected:** `airplaneSources=1` before anything runs, the Add returns `200`, `created=1` linked to
 the existing `Airplane!` Source with no id supplied, resolved via ADR 013's algorithm finding no
-candidate and then a genuine Add — and a non-empty `characterId` for the Modify half.
+candidate and then a genuine Add, plus a non-empty `characterId` for the Modify half.
 
 **On failure:** `airplaneSources=0` means the seed did not supply the Source every fixture here resolves
 against, and every later step would then be creating one rather than matching it. Stop.
@@ -114,7 +114,7 @@ $batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base
 $batchId
 ```
 
-**Expected:** a non-empty `batchId` — the import staged under `review`.
+**Expected:** a non-empty `batchId`: the import staged under `review`.
 
 This here-string is double-quoted (`@"…"@`) rather than literal, because `$characterId` has to be
 substituted into it. Nothing else in the JSON begins with `$`.
@@ -130,7 +130,7 @@ $actionId = $characterAction.id
 "actionId=$actionId ambiguous=$($characterAction.ambiguousFields -join ',')"
 ```
 
-**Expected:** `ambiguous=name` — **only** `name` — since `sourceId` appearing would mean an unchanged
+**Expected:** `ambiguous=name`, **only** `name`, since `sourceId` appearing would mean an unchanged
 `SourceId` is spuriously tripping `FieldMergeResolver`, and `actionId` is non-empty.
 
 ### 5. Decide the ambiguous field, apply the batch, and read the Character back
@@ -183,16 +183,16 @@ $blocked | Group-Object status | Select-Object Count, Name
 (Invoke-RestMethod "$base/masterdata/characters/$characterId").name
 ```
 
-**Expected:** `blockedCharacter=1` — a genuinely different `name` against a `Complete` row stages
-**`Blocked`, not `Pending`** — and the Character still reads `Renamed Via Smoke Test`, not
+**Expected:** `blockedCharacter=1`: a genuinely different `name` against a `Complete` row stages
+**`Blocked`, not `Pending`**, and the Character still reads `Renamed Via Smoke Test`, not
 `Renamed A Third Time`. That is the same guarantee Source, Person, StageDirection and SoundCue already
 have.
 
 **On failure:** `blockedCharacter=0` with an otherwise-empty tally is the tell that the fixture, not
-the guard, is wrong — either the name in the file already matches the stored one, or nothing staged.
+the guard, is wrong: either the name in the file already matches the stored one, or nothing staged.
 The full tally is printed alongside for exactly that reason.
 
-### 7. Add a Character carrying an explicit uppercase id — the T2-only fix
+### 7. Add a Character carrying an explicit uppercase id: the T2-only fix
 
 ```powershell
 $explicit = @'
@@ -212,7 +212,7 @@ $explicitCharacter = dotnet script scripts/testing/http.csx -- `
 ```
 
 **Expected:** the explicit-id Add succeeds, the lowercase masterdata lookup returns `200`, and
-`canonical=True` — the returned `id` is the lowercase-canonicalized form of the file's own id,
+`canonical=True`: the returned `id` is the lowercase-canonicalized form of the file's own id,
 **never an unrelated `EntityIdentity`-derived one**.
 
 ### 8. Match an existing Source through a differently-cased title
@@ -234,17 +234,17 @@ $sources = (Invoke-RestMethod "$base/masterdata/sources?pageSize=0").items
 "uppercaseDuplicate=$(@($sources | Where-Object { $_.title -ceq 'AIRPLANE!' }).Count)"
 ```
 
-**Expected:** `storedCasing=1` and `uppercaseDuplicate=0` — despite `AIRPLANE!` appearing in both the
+**Expected:** `storedCasing=1` and `uppercaseDuplicate=0`: despite `AIRPLANE!` appearing in both the
 quote's `source` and the character's `sourceTitle`, the entry resolved to the pre-existing Source
 rather than creating a case-sensitive duplicate.
 
 **Both comparisons are `-ceq`.** With `-eq` the two lines would count the same rows and always agree,
-so the assertion could never fail — the casing is the entire subject here.
+so the assertion could never fail, and the casing is the entire subject here.
 
 ## Observed effect
 
 Not yet established as a captured record. The id that lands in the database is the load-bearing
-observation for the explicit-id half — the import reported success in the failing case too.
+observation for the explicit-id half: the import reported success in the failing case too.
 
 ## Canary
 

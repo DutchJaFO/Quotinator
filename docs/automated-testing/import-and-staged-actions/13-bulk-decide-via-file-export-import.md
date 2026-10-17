@@ -12,7 +12,7 @@ Modify actions into rows; `POST /import/actions/bulk-decide` reads an edited ver
 back and applies each row's decision.
 
 Beyond the Fresh profile: **nothing.** Bundled sources are switched off, and this test brings its own
-files — a base file of six quotes, and three conflicting files of two quotes each, one per batch. A
+files: a base file of six quotes, and three conflicting files of two quotes each, one per batch. A
 change to bundled content cannot make it pass or fail. Each conflicting import must return `202`, which
 is what confirms the precondition rather than assuming it.
 
@@ -29,12 +29,12 @@ being present.
 
 **Every unit-level round trip used bare `JsonSerializer` calls on both sides, which silently agreed on
 PascalCase and never exercised the app's real configuration.** Only a live HTTP round trip through the
-actual pipeline surfaces this class of bug — which is why this test sends the export's own output back,
+actual pipeline surfaces this class of bug, which is why this test sends the export's own output back,
 with only its decisions filled in, rather than hand-writing an input.
 
 - **The export of a pending conflict carries no decisions.** Sent back unmodified, bulk-decide
   correctly refuses every action as ambiguous. Each round trip therefore sets `keep` on the `quoteText`
-  rows first — the only field the conflicting files disagree on. The edited file goes through the same
+  rows first, the only field the conflicting files disagree on. The edited file goes through the same
   reader, so the camelCase deserialization is still exercised.
 - **Each batch conflicts with different quotes.** A conflict already awaiting review is recognised as
   already reported and stages nothing new, so three batches of the same two quotes would leave the
@@ -96,7 +96,7 @@ $pendingCount = Pending $batchId
 "batchId=$batchId pendingCount=$pendingCount"
 ```
 
-**Expected:** a non-empty `batchId` and `pendingCount=2` — the figure step 3 compares `actionsDecided`
+**Expected:** a non-empty `batchId` and `pendingCount=2`, the figure step 3 compares `actionsDecided`
 against.
 
 ### 3. Export that batch as JSON, decide it, send it back, and apply
@@ -150,7 +150,7 @@ $csvResult = dotnet script scripts/testing/http.csx -- --method POST `
 
 **The edits are a script rather than a shell one-liner**, per
 [ADR 010](../../architecture-decisions/010-repository-is-csharp-only.md). The script matches the column
-**by header name** and the row by its position among the data rows, found above by its `Field` value —
+**by header name** and the row by its position among the data rows, found above by its `Field` value,
 so a new column or field appearing in the export shifts nothing.
 
 ### 5. Stage a third batch, and bulk-decide a copy with one malformed row
@@ -188,7 +188,7 @@ $after = (Invoke-RestMethod "$base/import/actions?batchId=$thirdBatchId&pageSize
 `actionsDecided=1 errors=2`. Both errors concern the corrupted action:
 
 - `Row 1: 'not-a-choice' is not a recognised Decision value.`
-- `The following fields are ambiguous and need an explicit decision: quoteText` — its only decision was
+- `The following fields are ambiguous and need an explicit decision: quoteText`, since its only decision was
   the rejected one, so the field it disagrees on is left undecided.
 
 Then `bad=Pending good=Decided`. "One bad row never aborts the rest of the file", matching the contract
@@ -225,7 +225,7 @@ $noBatch = dotnet script scripts/testing/http.csx -- --method POST `
 $noBatch.detail
 ```
 
-**Expected:** `422` with a `detail` naming the missing `batchId` — never a bare `400` with none.
+**Expected:** `422` with a `detail` naming the missing `batchId`, never a bare `400` with none.
 
 ## Observed effect
 
@@ -235,12 +235,12 @@ The camelCase deserialization failure described in Determinism was the first.
 
 The second: a request with neither `batchId` nor a multipart body returned a bare, uninformative `400`
 with no `detail`. The endpoint bound `IFormFile? file` directly as a minimal-API parameter, which
-requires a form content-type to even attempt binding — so a request with no `Content-Type` or body
+requires a form content-type to even attempt binding, so a request with no `Content-Type` or body
 fails at the framework's own routing/binding layer rather than as a thrown exception, bypassing
 `BadRequestExceptionHandler` entirely.
 
-**That is the same bug class `POST /import` had fixed earlier** — see
-[`06-bodyless-request-validation.md`](06-bodyless-request-validation.md) — and never retrofitted onto
+**That is the same bug class `POST /import` had fixed earlier**, see
+[`06-bodyless-request-validation.md`](06-bodyless-request-validation.md), and never retrofitted onto
 this newer endpoint. Fixed by switching to `HttpRequest request` and checking `batchId`, then
 `request.HasFormContentType`, before attempting to read the form.
 

@@ -15,7 +15,7 @@ A browser holding a cookie protected by a key the application does not have send
 page request. The application cannot read it, logs a `CryptographicException` /
 `AntiforgeryValidationException` pair, and issues a new cookie in the same response. This is the
 Knowledgebase entry *The log reports that an antiforgery token could not be decrypted*, provoked on
-purpose. Every other browser-driven test must never see it — which is what the shared key ring is for,
+purpose. Every other browser-driven test must never see it, which is what the shared key ring is for,
 and what step 2 proves.
 
 ## Determinism
@@ -25,7 +25,7 @@ and what step 2 proves.
   measured 2026-09-19, the same provocation read 5 lines with the old page open and exactly 2 with it
   closed.
 - **Step 1's first visit is not asserted.** Whether it logs the pair depends on what the browser held
-  before this test began — nothing in a fresh pane, since the cookie lives only for the browser session.
+  before this test began: nothing in a fresh pane, since the cookie lives only for the browser session.
   Step 1's second visit is what pins the browser to a cookie from the shared ring.
 
 **What varies:** step 1's first reading, which is `0` in a fresh browser pane and `2` where the pane
@@ -62,7 +62,7 @@ In the browser, in a new tab (closing any other): open `http://localhost:18106/n
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-06-a
 ```
 
-**Expected:** the first count is either `0` or `2` — see Determinism. The second is `0`.
+**Expected:** the first count is either `0` or `2`, per Determinism. The second is `0`.
 
 **On failure:** a non-zero second count means the application failed to replace the cookie it could not
 read. Stop: every later step depends on the browser holding one it can.
@@ -83,11 +83,11 @@ dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-06-b
 **Expected:** `0`. The container has a new volume and a new database, and still reads the cookie step 1's
 container issued, because both read one key ring.
 
-**On failure:** `2` means the new container had keys of its own — `test-env.csx` did not mount the shared
+**On failure:** `2` means the new container had keys of its own: `test-env.csx` did not mount the shared
 ring. That is this test's red case: before #411 every test container started with its own keys, and this
 step read `2`.
 
-### 3. A container with its own key ring cannot — once
+### 3. A container with its own key ring cannot, and logs it once
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-api-06-c --port 18108 --own-keys
@@ -106,7 +106,7 @@ dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-06-c
 `AntiforgeryValidationException`. The page renders both times.
 
 **On failure:** `0` on the first visit means the browser sent no cookie, so step 2's `0` proved nothing
-either — rerun from step 1. A non-zero second count means the cookie was not replaced.
+either: rerun from step 1. A non-zero second count means the cookie was not replaced.
 
 ### 4. Restore the browser to the shared key ring
 
@@ -134,9 +134,9 @@ until it reads `0`.
 ## Observed effect
 
 **Measured 2026-09-19** while designing #411's shared key ring. A container with its own keys, visited by a
-browser holding a cookie from any other, logs exactly one pair — `CryptographicException: The key {…}
+browser holding a cookie from any other, logs exactly one pair: `CryptographicException: The key {…}
 was not found in the key ring` and `AntiforgeryValidationException: The antiforgery token could not be
-decrypted` — with frames ending in `DefaultAntiforgery.GetCookieTokenDoesNotThrow`. The page renders
+decrypted`, with frames ending in `DefaultAntiforgery.GetCookieTokenDoesNotThrow`. The page renders
 normally, and the next visit logs nothing. The browser does not separate cookies by port, nor by a
 `*.localhost` host name, so no browser-side isolation keeps a provoking test from affecting the others:
 restoring the cookie in step 4 is the only way.

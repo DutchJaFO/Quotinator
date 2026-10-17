@@ -71,7 +71,7 @@ $before = Count-Thrown
 "before=$before"
 ```
 
-**Expected:** `before=0` — importing two well-formed files throws nothing.
+**Expected:** `before=0`, since importing two well-formed files throws nothing.
 
 ### 4. List, export, render the review page, and decide one row with no decisions
 
@@ -95,7 +95,7 @@ $refusal = '{}' | dotnet script scripts/testing/http.csx -- --method POST `
 answers `422`, and `refusalNamesQuoteText=True`.
 
 **On failure:** fewer than three rows reporting `quoteText`, or a decide that is not refused, means the
-reads did not exercise the conflict — the count in step 5 would then prove nothing.
+reads did not exercise the conflict; the count in step 5 would then prove nothing.
 
 ### 5. Count the exception lines after the reads
 
@@ -105,7 +105,7 @@ $after = Count-Thrown
 docker logs qt-import-28 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
 ```
 
-**Expected:** `after=0`, equal to `before` — listing, exporting, rendering the review page and refusing
+**Expected:** `after=0`, equal to `before`: listing, exporting, rendering the review page and refusing
 an undecided decide threw nothing.
 
 **On failure:** each line names the exception type and its id. `UnresolvedFieldConflictException` is

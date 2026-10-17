@@ -8,20 +8,20 @@
 ## Preconditions
 
 Nothing beyond the Fresh profile. This replaces the old flat `duplicates` count everywhere a seed or
-import operation reports back, and every surface it checks — seed preview, reseed, reset, import,
-import preview and the startup log — is reachable on a Fresh container.
+import operation reports back, and every surface it checks (seed preview, reseed, reset, import,
+import preview and the startup log) is reachable on a Fresh container.
 
 ## Determinism
 
 - **The shape is what is asserted, not the numbers.** One entry per configured source file, each with
   a `fileName` and an `entityTypes` object; the counts inside are data.
 - **The removed fields matter as much as the added ones.** `totalQuotes`, `uniqueQuotes` and
-  `crossFileDuplicates` must be absent — a response still carrying them means the old shape survived
+  `crossFileDuplicates` must be absent: a response still carrying them means the old shape survived
   somewhere.
-- **Every entity type must appear, named — not counted.** The set is
+- **Every entity type must appear, named rather than counted.** The set is
   `quotes`/`sources`/`characters`/`people`/`series`/`universes`/`stageDirections`/`soundCues`/`conversations`,
   and it replaced an original four. Assert the names, never the number: a count is a property of the
-  domain model rather than the dataset, but it still goes stale the moment a tenth type ships — and it
+  domain model rather than the dataset, but it still goes stale the moment a tenth type ships, and it
   goes stale the same way a migration number does, reading as a failure that gets "fixed" by editing
   the digit. A missing name is visible as a missing name; a new type simply is not in the list yet.
 
@@ -34,13 +34,13 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-import-19 --port 
 $base = "http://localhost:18619/api/v1"
 
 # The startup line writes each type as the human-readable plural it renders, which is deliberately not
-# the API's field name — `stage directions`, not `stageDirections`. Asserting the API spelling against
+# the API's field name: `stage directions`, not `stageDirections`. Asserting the API spelling against
 # the log reports three types missing that are plainly there; measured 2026-08-26.
 $expectedInLog = 'quotes', 'sources', 'characters', 'people', 'series', 'universes',
                  'stage directions', 'sound cues', 'conversations'
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
@@ -58,7 +58,7 @@ $preview.reports | Select-Object -First 1 | ForEach-Object {
 }
 ```
 
-**Expected:** `200` with a non-zero `reports` — one entry per configured source file, each with a
+**Expected:** `200` with a non-zero `reports`: one entry per configured source file, each with a
 `fileName` and an `entityTypes` object keyed by entity type (`Quote`, `Source`, …), each carrying
 `new`/`modified`/`blocked`/`discarded`/`pending`/`stale` counts.
 
@@ -97,7 +97,7 @@ $import = dotnet script scripts/testing/http.csx -- --method POST --url "$base/i
 "isArray=$($import.report -is [array])"
 ```
 
-**Expected:** `200` with a top-level `report` (singular — `isArray=False`, one file rather than an
+**Expected:** `200` with a top-level `report` (singular: `isArray=False`, one file rather than an
 array) alongside the existing `summary`/`conflicts`/`errors` fields, shaped like one entry from
 `reports`.
 
@@ -116,7 +116,7 @@ of whether the batch was applied.
 
 ### 7. Confirm the removed fields are actually absent
 
-On the seed-preview response specifically — an absence read by eye off a large JSON body is satisfied by
+On the seed-preview response specifically: an absence read by eye off a large JSON body is satisfied by
 default, so it is counted instead:
 
 ```powershell
@@ -125,14 +125,14 @@ $body = dotnet script scripts/testing/http.csx -- --url "$base/admin/database/se
 "replacements=$(([regex]::Matches($body, 'fileName|entityTypes')).Count)"
 ```
 
-**Expected:** `removed=0` — `totalQuotes`, `uniqueQuotes` and `crossFileDuplicates` are gone
-— and `replacements` is **non-zero**, since `fileName` and `entityTypes` are the fields that replaced
+**Expected:** `removed=0`, so `totalQuotes`, `uniqueQuotes` and `crossFileDuplicates` are gone,
+and `replacements` is **non-zero**, since `fileName` and `entityTypes` are the fields that replaced
 them.
 
 **The second count is the positive control, and without it the first proves nothing.** A pattern that
 cannot match anything reports `0` for a removed field exactly as a genuinely removed field does; only
 a field the same command *does* find separates them. `api-surface/04` shipped a removal check with no
-control and passed it for weeks on patterns that could never match — see the index's *A removed or
+control and passed it for weeks on patterns that could never match; see the index's *A removed or
 added feature needs its own proof, alongside the normal behaviour*.
 
 Reading the absence off the body by eye cannot fail either, which is why both are counted.
@@ -149,7 +149,7 @@ $log = docker logs qt-import-19 2>&1 | Out-String
 
 **Expected:** `statsLines` is non-zero, before anything is read off the line.
 
-**On failure:** `statsLines=0` means the line is absent entirely — wrong container, rotated log, never
+**On failure:** `statsLines=0` means the line is absent entirely: wrong container, rotated log, never
 emitted. Step 9 would then print nothing, and that silence is indistinguishable from a pass, so stop
 here rather than reading its empty output as a result.
 
@@ -161,7 +161,7 @@ $statsLine = ($log -split "`n" | Where-Object { $_ -match '\[Database - Stats\]'
 "missingTypes=[$(@($expectedInLog | Where-Object { $statsLine -notmatch [regex]::Escape($_) }) -join ',')]"
 ```
 
-**Expected:** `missingTypes=[]` — `[Database - Stats]` names every entity type, not just
+**Expected:** `missingTypes=[]`, so `[Database - Stats]` names every entity type, not just
 the original four. Reported as names rather than a count, so a tenth entity type shipping later reads
 as "not in the list yet" instead of a wrong number.
 

@@ -9,11 +9,11 @@
 
 Nothing beyond the Fresh profile.
 
-An `operationId` becomes part of the published OpenAPI spec, which a generated client can depend on —
+An `operationId` becomes part of the published OpenAPI spec, which a generated client can depend on, so
 renaming one is a breaking change. This test confirms the renames landed and the old values are gone
 everywhere, not just where they were edited.
 
-The spec must be fetched after startup has finished — a fetch during initialisation returns the wait
+The spec must be fetched after startup has finished: a fetch during initialisation returns the wait
 page, not the spec. The profile's readiness poll is what gates that.
 
 ## Determinism
@@ -39,7 +39,7 @@ page, not the spec. The profile's readiness poll is what gates that.
 dotnet script scripts/testing/test-env.csx -- create --name qt-api-04 --port 18104
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app
 that never became healthy.
@@ -54,14 +54,14 @@ $operations = foreach ($path in $spec.paths.PSObject.Properties) {
 "operations = $(@($operations).Count)"
 ```
 
-**Expected:** a non-zero count — 52 at the time of writing, but the assertion is "the spec parsed and
+**Expected:** a non-zero count, 52 at the time of writing, but the assertion is "the spec parsed and
 declares operations", not the figure.
 
 **On failure:** a fetch during initialisation returns the wait page, which is not JSON and fails to
 parse here rather than three steps later. Every check below reads `$operations`, so a zero would make
 each of them report an absence that is really a missing document. Stop.
 
-### 3. Count all four operationIds in one pass — the two new, and the two they replaced
+### 3. Count all four operationIds in one pass: the two new, and the two they replaced
 
 ```powershell
 foreach ($id in 'GetAllImportBatches', 'GetAllFileResources', 'GetImportBatches', 'GetFileResources') {
@@ -75,7 +75,7 @@ foreach ($id in 'GetAllImportBatches', 'GetAllFileResources', 'GetImportBatches'
 **The two `1`s are the positive control for the two `0`s**, and that is why all four are counted by
 one construction rather than in separate commands. A lookup that cannot match anything reports `0`
 for a removed name just as confidently as a genuinely removed name does, and only a name the same
-construction *does* find separates them — see the index's *A removed or added feature needs its own
+construction *does* find separates them; see the index's *A removed or added feature needs its own
 proof*.
 
 **On failure:** all four reading `0` means `$operations` is empty, not that the renames are missing.
@@ -108,7 +108,7 @@ $log = docker logs qt-api-04 2>&1 | Out-String
 "[Api - GetById]      $(([regex]::Matches($log, '\[Api - GetById\]')).Count)"
 ```
 
-**Expected:** one or more `[Api - GetQuoteById]`, and exactly `0` `[Api - GetById]` — the old,
+**Expected:** one or more `[Api - GetQuoteById]`, and exactly `0` `[Api - GetById]`: the old,
 already-mismatched tag.
 
 Both tags are counted together for the same reason step 3 counts all four operationIds: the absence of
@@ -124,8 +124,8 @@ matching *line* and would report `1` for any number of hits on the same line.
 "by id $(@($operations | Where-Object { $_.summary -cmatch ' by id$' }).Count)"
 ```
 
-**Expected:** the first count is non-zero — 11 at the time of writing, but the assertion is that
-GetById summaries exist and are found — and the second is exactly `0`. Every GetById summary reads
+**Expected:** the first count is non-zero, 11 at the time of writing, but the assertion is that
+GetById summaries exist and are found, and the second is exactly `0`. Every GetById summary reads
 `"X by ID"` with a capitalised `ID`.
 
 **This is asserted against the published spec rather than the rendered Scalar page**, and the change
@@ -134,7 +134,7 @@ same claim while running unattended; the previous step asked a person to open a 
 "a few" operations, which is neither repeatable nor able to fail on the ones they did not look at.
 
 The rendered page was confirmed once, during #339's full run: `/scalar/v1` was loaded in a browser,
-all 13 operation groups expanded, and the DOM read — 11 `X by ID` summaries, 0 lowercase. That
+all 13 operation groups expanded, and the DOM read: 11 `X by ID` summaries, 0 lowercase. That
 establishes Scalar does not transform the text. Nothing here needs to re-establish it every run.
 
 ## Observed effect

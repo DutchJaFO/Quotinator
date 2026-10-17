@@ -8,7 +8,7 @@
 ## Preconditions
 
 Character no longer has a `SourceId` column; a Character's Source links live in
-`Quotinator_CharacterSource` instead. **Matching remains per-Source in meaning** — only the mechanism
+`Quotinator_CharacterSource` instead. **Matching remains per-Source in meaning**: only the mechanism
 changed. Reusing a Character across Sources is #174's job, not this one's.
 
 Both halves must run: a brand-new Character on an existing Source creates exactly one new link, and the
@@ -17,14 +17,14 @@ same Character *name* under a *different* Source still creates a separate row.
 ## Determinism
 
 - **The link count is compared before and after**, and must increase by exactly 1. An absolute count
-  depends on the whole seeded dataset, so only the delta is asserted — which means the *before* reading
+  depends on the whole seeded dataset, so only the delta is asserted, which means the *before* reading
   is load-bearing, not preamble. Without it there is no delta to evaluate and the assertion cannot fail.
 - **Every count filters `IsDeleted = 0`.** Soft-deleted links are invisible to the endpoints but still
   present in the table, and would inflate both readings.
 - **Both readings depend on starting from a database this test has not run against before.** The second
   half asserts the Character count is exactly `2`; against leftovers it would find them already present,
   the delta would read `0`, and the failure would look like a defect in the mechanism rather than in the
-  setup. Creating the container and volume fresh in step 1 is what makes that impossible — it is not a
+  setup. Creating the container and volume fresh in step 1 is what makes that impossible: it is not a
   caution the reader has to remember.
 - **The second half is the one that can silently pass wrongly.** If cross-Source reuse were introduced
   prematurely, the Character count would stay at 1 and only an explicit `= 2` assertion catches it.
@@ -52,7 +52,7 @@ function Copy-Database($suffix) {
 }
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
@@ -67,12 +67,12 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$temp\smoke179-
   --sql "SELECT COUNT(*) AS LinksBefore FROM Quotinator_CharacterSource WHERE IsDeleted = 0"
 ```
 
-**Expected:** a `LinksBefore` figure — the value the delta below is measured against.
+**Expected:** a `LinksBefore` figure, the value the delta below is measured against.
 
 **On failure:** without this reading there is no delta to evaluate and step 4's assertion cannot fail.
 Stop.
 
-### 3. Import `smoke-179.json` — a new Character on the existing `Airplane!` Source
+### 3. Import `smoke-179.json`: a new Character on the existing `Airplane!` Source
 
 ```powershell
 $first = @'
@@ -99,7 +99,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$temp\smoke179-
 **Expected:** `LinksAfter` is exactly one greater than `LinksBefore`, and the join shows one row linking
 to `Airplane!`.
 
-### 5. Import `smoke-179b.json` — the same character name, different Source
+### 5. Import `smoke-179b.json`: the same character name, different Source
 
 ```powershell
 $second = @'
@@ -121,7 +121,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$temp\smoke179-
   --sql "SELECT COUNT(*) AS Characters FROM Quotinator_Character WHERE Name = 'Striker (Smoke Test)' AND IsDeleted = 0"
 ```
 
-**Expected:** `Characters` reads **2** — a second, separate Character row, each linked to its own
+**Expected:** `Characters` reads **2**: a second, separate Character row, each linked to its own
 Source. Per-Source matching genuinely survived the mechanism change rather than being silently reused
 across Sources.
 

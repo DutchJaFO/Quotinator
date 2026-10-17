@@ -11,8 +11,8 @@
 current build, with its data directory bind-mounted so the database file can be edited from the host.
 
 A review row outlives its batch when the batch row goes and its actions stay. A database that ran a
-build before #372 holds such rows permanently — a reseed there deleted `Import_Batch` and kept
-`Import_Action` — and nothing guarantees a future path will never do the same. No endpoint produces
+build before #372 holds such rows permanently (a reseed there deleted `Import_Batch` and kept
+`Import_Action`) and nothing guarantees a future path will never do the same. No endpoint produces
 the state today, so this test manufactures it: it stages a conflict, then deletes the batch row from the
 host with the container stopped. That is the only honest way to reach a state no endpoint creates, and
 it is why this behaviour has a live test as well as unit ones.
@@ -26,13 +26,13 @@ user-imports file that re-states a bundled quote's id with different text under 
 
 **The batch row is deleted with the container stopped.** SQLite's WAL sidecars belong to the process
 holding the file open, and editing it underneath a running container races that connection. Stop, edit,
-start — the order
+start, in the order
 [`../startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md`](../startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md)
 uses for the same reason.
 
 **Foreign keys are switched off for the delete, because that is how the real state arose.** A staged
 batch is referenced from `Import_FileResourceBatch`, so a plain `DELETE` fails with `FOREIGN KEY
-constraint failed` — found on this document's first run, which therefore never produced an orphan and
+constraint failed`, found on this document's first run, which therefore never produced an orphan and
 proved nothing. The pre-#372 `TruncateDataAsync` ran `PRAGMA foreign_keys = OFF` before deleting every
 batch and left those references dangling; step 2 does the same to one batch, so the state under test is
 the one a legacy database actually holds rather than an approximation of it.
@@ -46,7 +46,7 @@ batch's own `Name` and the alert's `fileName` are the same string, which is why 
 with the row gone, nothing else on the server still holds that name, so its presence on the page is
 evidence of where it was read from.
 
-**Count objects, not matching lines, and wrap a filtered result in `@(...)`** — see the index's *A count
+**Count objects, not matching lines, and wrap a filtered result in `@(...)`**: see the index's *A count
 is evidence only if the instrument counts the right thing*.
 
 ## Steps
@@ -74,7 +74,7 @@ $batchId = $payload.batchId
 
 **Expected:** `file=conflicting.json`, a real batch id, and `pending actions = 1`.
 
-**On failure:** `pending actions = 0` means the fixture staged nothing. Stop — every later step would
+**On failure:** `pending actions = 0` means the fixture staged nothing. Stop: every later step would
 pass against an empty page and prove nothing.
 
 ### 2. Remove the batch row, leaving its actions and its alert behind
@@ -97,7 +97,7 @@ catch { "batch lookup -> $($_.Exception.Response.StatusCode.value__)" }
 **Expected:** `OK — 1 row(s) affected.`, then `batch lookup -> 404` and `pending actions = 1`. That pair
 is the orphan: an action awaiting a decision whose parent row does not exist.
 
-**On failure:** `0 row(s) affected` means the id did not match and nothing was removed — the rest of the
+**On failure:** `0 row(s) affected` means the id did not match and nothing was removed, so the rest of the
 test would then be checking a perfectly healthy batch.
 
 ### 3. Confirm the review page names the file and offers only dismiss
@@ -116,7 +116,7 @@ $page = (Invoke-WebRequest "http://localhost:18627/import-review" -UseBasicParsi
 **Expected:** `names the file: True`, `shows the batch id: False`, `says batch is gone: True`,
 `offers Keep/Take: False`, `offers Dismiss: True`.
 
-`shows the batch id: False` is the assertion #303's fallback would fail — it rendered the id in the File
+`shows the batch id: False` is the assertion #303's fallback would fail: it rendered the id in the File
 column whenever the batch row was missing. `names the file: True` alone cannot tell the two builds
 apart only because the id and the name never both appear; the pair together can.
 
@@ -133,14 +133,14 @@ $notifications = (Invoke-WebRequest "http://localhost:18627/notifications" -UseB
 
 `names the file: True` is the control here: it proves the alert being inspected is on the page at all,
 so the other two are about that row rather than about an empty list. The state is what relays the fact
-to the operator — withdrawing the Decide button alone would leave an empty cell that reads exactly like a
+to the operator: withdrawing the Decide button alone would leave an empty cell that reads exactly like a
 row that never had an action.
 
 ### 5. Dismiss the row, and confirm its batch is discarded and its alert resolved
 
 **Browser, not `Invoke-WebRequest`.** The Dismiss control needs the Blazor circuit. Open
 `http://localhost:18627/import-review`, give the circuit a moment (a click issued immediately after
-navigating is silently swallowed — see
+navigating is silently swallowed; see
 [`20-pending-review-alert.md`](20-pending-review-alert.md) step 9), click **Dismiss** on the row, and
 take a screenshot of the result. Then:
 
@@ -157,13 +157,13 @@ $after = @((Invoke-RestMethod "http://localhost:18627/api/v1/notifications?pageS
 `pending actions = 0`; the batch's `Quote Modify` at `action status=Discarded` and its `Source Unchanged`
 at `action status=Applied`; and `alert isDismissed=True reason=resolved`.
 
-The `Source Unchanged` row is a plan-time no-op — the fixture restates a source already stored — and it
+The `Source Unchanged` row is a plan-time no-op (the fixture restates a source already stored) and it
 stays `Applied` because nothing was ever written for it, so a discard has nothing of it to undo
 ([#389](https://github.com/DutchJaFO/Quotinator/issues/389)). Before #389 that same row made the whole
 batch read as already applied: the click raised an error and changed nothing.
 
-Discarding settles the review as surely as deciding it would — the operator dealt with the batch by
-keeping none of it — so the alert records `resolved`, not a user's plain dismissal.
+Discarding settles the review as surely as deciding it would, since the operator dealt with the batch by
+keeping none of it, so the alert records `resolved`, not a user's plain dismissal.
 
 ### 6. Confirm the Status column still renders its states as words
 
@@ -176,8 +176,8 @@ $all = (Invoke-RestMethod "http://localhost:18627/api/v1/notifications?pageSize=
 "rows = $(@($all).Count)"
 ```
 
-**Expected:** the screenshot shows one badge per row and every badge carrying a word — the alert from
-step 5 reads **Done**, the others **Active** — and the page shows as many rows as `rows =` reports. An
+**Expected:** the screenshot shows one badge per row and every badge carrying a word: the alert from
+step 5 reads **Done**, the others **Active**, and the page shows as many rows as `rows =` reports. An
 empty badge, or a page that fails to render at all, is the failure this step exists to catch.
 
 ## Observed effect
@@ -202,21 +202,21 @@ the build of `806a0ab0` (the last commit before #369's first code change) via `g
 
 | Step | Assertion | Pre-work result |
 |---|---|---|
-| 2 | `batch lookup -> 404`, `pending actions = 1` | passes — the orphan is a database state, not something #369 creates |
-| 3 | `names the file: True` | **fails** — `False`; the File column shows the id |
-| 3 | `shows the batch id: False` | **fails** — `True` |
-| 3 | `says batch is gone: True` | **fails** — `False` |
-| 3 | `offers Keep/Take: False` | **fails** — `True`; both impossible decisions are offered |
-| 3 | `offers Dismiss: True` | **fails** — `False`; there is no such control |
-| 4 | `names the file: True` | passes — the control; the alert is on the page on both builds |
-| 4 | `state: no longer possible: True` | **fails** — `False`; the row reads Active |
-| 4 | `offers its Decide action: False` | **fails** — `True` |
-| 5 | Dismiss the row | **not reachable** — there is no Dismiss control to click |
+| 2 | `batch lookup -> 404`, `pending actions = 1` | passes: the orphan is a database state, not something #369 creates |
+| 3 | `names the file: True` | **fails**: `False`; the File column shows the id |
+| 3 | `shows the batch id: False` | **fails**: `True` |
+| 3 | `says batch is gone: True` | **fails**: `False` |
+| 3 | `offers Keep/Take: False` | **fails**: `True`; both impossible decisions are offered |
+| 3 | `offers Dismiss: True` | **fails**: `False`; there is no such control |
+| 4 | `names the file: True` | passes: the control; the alert is on the page on both builds |
+| 4 | `state: no longer possible: True` | **fails**: `False`; the row reads Active |
+| 4 | `offers its Decide action: False` | **fails**: `True` |
+| 5 | Dismiss the row | **not reachable**: there is no Dismiss control to click |
 
 Step 6 was not run against the canary: it guards the enum move #369 makes, which the pre-work build does
 not contain, so there is nothing there for it to fail on.
 
-The first canary run is not in this table because it was void — see *Determinism* on why step 2 now
+The first canary run is not in this table because it was void; see *Determinism* on why step 2 now
 switches foreign keys off. Container, image, bind mount and worktree removed afterwards.
 
 ## Cleanup

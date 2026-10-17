@@ -8,7 +8,7 @@
 ## Preconditions
 
 Beyond the Fresh profile: **request logging must be genuinely on**, which Fresh does not set.
-`Quotinator__LogRequests=true` **and** `Quotinator__LogLevel=debug` — request logging is Debug-only
+`Quotinator__LogRequests=true` **and** `Quotinator__LogLevel=debug`: request logging is Debug-only
 across every category (#244), so `LogRequests=true` alone registers the middleware without raising the
 level. That means its own container, since a configuration value is fixed at start.
 
@@ -18,13 +18,13 @@ level. That means its own container, since a configuration value is fixed at sta
   independently, and a test asserting only the response would have passed while the log still lied.
 - The happy path is re-run afterwards, so a fix that returns `422` unconditionally cannot pass.
 - **Request logging is confirmed working before anything is concluded from the log.** This is the
-  difference between a test that can fail and one that cannot: with the two variables unset — the
-  default, and the state of any container started from the plain profile — `docker logs` contains no
+  difference between a test that can fail and one that cannot: with the two variables unset, the
+  default, and the state of any container started from the plain profile, `docker logs` contains no
   `→` lines at all, so "no `→ 200` present" is satisfied by logging never having run. The first step
   therefore makes a request whose logged outcome is known and asserts that its line *appears*. Only
   then does the absence of a wrong line mean anything.
 - **The batch for the happy path is staged by this document**, via a preview of the suite's conflict
-  fixture — the same way [`03-batch-id-mode-alias.md`](03-batch-id-mode-alias.md) obtains one, so the
+  fixture, the same way [`03-batch-id-mode-alias.md`](03-batch-id-mode-alias.md) obtains one, so the
   apply has a decided action to write. Borrowing a batch from another test would make this unrunnable
   alone. Until #411 it previewed the curated file, which since #373 stages only already-applied no-ops.
 - **The log lines are counted with `[regex]::Matches`, not by matching lines.** Several `import/actions`
@@ -40,7 +40,7 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-import-11 --port 
 $base = "http://localhost:18611/api/v1"
 ```
 
-**Expected:** the health poll returns — the container is up, with both logging variables set.
+**Expected:** the health poll returns, so the container is up, with both logging variables set.
 
 ### 2. Prove request logging is actually emitting, before reading anything from the log
 
@@ -52,7 +52,7 @@ $log = docker logs qt-import-11 2>&1 | Out-String
 ([regex]::Matches($log, '→ 200')).Count
 ```
 
-**Expected:** **request logging is live** — the `→ 200` count is non-zero.
+**Expected:** **request logging is live**: the `→ 200` count is non-zero.
 
 **On failure:** if it is `0`, the two logging variables did not take effect and nothing below can be
 concluded from the log; that is a setup failure, not a result. Stop.
@@ -67,7 +67,7 @@ foreach ($action in 'apply', 'discard', 'reverse') {
 }
 ```
 
-**Expected:** all three bodyless calls return `422` with a `detail` naming the missing `batchId` —
+**Expected:** all three bodyless calls return `422` with a `detail` naming the missing `batchId`,
 **never** the generic "Numeric parameters..." message.
 
 ### 4. Read the status those same calls were logged with
@@ -79,7 +79,7 @@ $actionLines = (docker logs qt-import-11 2>&1 | Out-String) -split "`n" |
 "logged200=$(@($actionLines | Where-Object { $_ -match '→ 200' }).Count)"
 ```
 
-**Expected:** `logged422=3` and `logged200=0` — the `import/actions` lines report the status the client
+**Expected:** `logged422=3` and `logged200=0`: the `import/actions` lines report the status the client
 actually received.
 
 Counting them is the assertion: a single missing line would otherwise be invisible.
@@ -108,18 +108,18 @@ dotnet script scripts/testing/http.csx -- --method POST `
 
 ## Observed effect
 
-**Found live via manual Visual Studio testing (T1), not by this suite** — worth recording, because it
+**Found live via manual Visual Studio testing (T1), not by this suite**, worth recording, because it
 is a class of defect a status-code check alone does not surface.
 
 All three endpoints declared `batchId` as a required, non-nullable minimal-API parameter, so an omitted
 `batchId` threw `BadHttpRequestException` at the binding layer before the handler ever ran. The global
-safety net (`BadRequestExceptionHandler`) caught it and returned `422` — but with a message hard-coded
+safety net (`BadRequestExceptionHandler`) caught it and returned `422`, but with a message hard-coded
 to numeric parameters, actively wrong for a missing `batchId`.
 
 Separately, the completion log line for that same request read `→ 200`, not the `422` the client
 actually received. `Program.cs` registered `UseExceptionHandler()` before `RequestLoggingMiddleware`,
-so the exception unwound through the logging middleware's `finally` block — which reads
-`context.Response.StatusCode`, still the untouched default at that point — before the exception handler
+so the exception unwound through the logging middleware's `finally` block, which reads
+`context.Response.StatusCode`, still the untouched default at that point, before the exception handler
 further out ever set the real status.
 
 Fixed by declaring `batchId` as `string?` and validating it explicitly at the point of origin,

@@ -7,19 +7,19 @@
 
 ## Preconditions
 
-A Source discovered implicitly from a quote — no `sources[]` entry naming it — previously never carried
+A Source discovered implicitly from a quote, with no `sources[]` entry naming it, previously never carried
 a date, even when the resolving quote had one.
 
 > ### A gap recorded here was fixed, and this document said otherwise for three weeks
 >
 > From 2026-07-31 until 2026-08-22 this test carried a "known open gap, not yet filed as its own
-> issue": that `PlanSourcesAsync` — the explicit `sources[]`-entry path — created a row with
+> issue": that `PlanSourcesAsync`, the explicit `sources[]`-entry path, created a row with
 > `Date = NULL` and no later quote ever backfilled it. It named `Frozen` and `Jurassic Park` as
 > reproductions and told the reader to expect `NULL` for them.
 >
 > **Re-verified 2026-08-22 against a real database: both carry dates.** `Frozen` is `2013`,
-> `Jurassic Park` is `1993`. Something between #191 and now closed it — `#190`'s Optional-aware
-> `ResolveAgainst` is the most likely candidate — and nobody noticed, because the expectation was
+> `Jurassic Park` is `1993`. Something between #191 and now closed it, `#190`'s Optional-aware
+> `ResolveAgainst` being the most likely candidate, and nobody noticed, because the expectation was
 > written as prose rather than run as a check.
 >
 > That is the more useful finding than the gap ever was: **a test that tells you to expect a failure
@@ -30,19 +30,19 @@ a date, even when the resolving quote had one.
 
 - **Copy the `-wal` and `-shm` sidecars** alongside `quotinatordata.db`. `DatabaseInitializer` runs in
   WAL mode and SQLite does not auto-checkpoint recent writes back into the main file until the WAL
-  passes its size threshold or every connection closes — and the app holds one open. A `.db`-only copy
+  passes its size threshold or every connection closes, and the app holds one open. A `.db`-only copy
   can silently omit real, committed data. **Confirmed live 2026-08-04**: a batch-links count read `3`
   instead of the correct `4` from a bare copy, and matched once the sidecars were included.
   `sqlite3` is not present in the image, so `PRAGMA wal_checkpoint` via `docker exec` is not an
-  option — copying the sidecars is the only fix that does not need a Dockerfile change. Their copies
+  option: copying the sidecars is the only fix that does not need a Dockerfile change. Their copies
   are allowed to fail, because a cleanly stopped database has already checkpointed and removed them.
 - **Assert the relationship, not the totals.** `have_date` must be non-zero and a large majority of
-  `sources` — before the fix it was always `0`, which is the fact this establishes. The absolute
+  `sources`. Before the fix it was always `0`, which is the fact this establishes. The absolute
   figures are data and move with the dataset (`439/479` when #191 shipped, `423/461` on 2026-08-22);
   do not write either into the expectation. If the ratio drops sharply, investigate what changed.
 - **A Source with no date is not necessarily a failure.** `vilaboim_movie-quotes.json` carries
-  `"date": null` for every entry, and titles appearing only there — Citizen Kane, Annie Hall, Chinatown
-  — have no date available in any bundled file. Check whether a date exists upstream before treating a
+  `"date": null` for every entry, and titles appearing only there (Citizen Kane, Annie Hall, Chinatown)
+  have no date available in any bundled file. Check whether a date exists upstream before treating a
   `NULL` as a defect.
 - The container is **stopped** before copying, so the file is not being written mid-copy.
 
@@ -55,12 +55,12 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-import-10 --port 
 $base = "http://localhost:18610/api/v1"
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
 
-### 2. Read path — confirm the seeded date surfaces
+### 2. Read path: confirm the seeded date surfaces
 
 This does not re-exercise the fix:
 
@@ -71,7 +71,7 @@ $airplane | Select-Object -First 1 source, date
 ```
 
 **Expected:** a non-zero `items`, `withoutDate=0`, and a `date` of `1980`. This Source already exists
-from seeding, so the call confirms the read path only — it does not by itself re-exercise
+from seeding, so the call confirms the read path only: it does not by itself re-exercise
 `ResolveSourceAsync`.
 
 ### 3. Count the Sources carrying a date, against a fresh seed
@@ -92,7 +92,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
 
 **Expected:** `have_date` is non-zero and a large majority of `sources`.
 
-### 4. Cross-check `Airplane!` — a title with no `sources[]` entry
+### 4. Cross-check `Airplane!`: a title with no `sources[]` entry
 
 This is the implicit-discovery path this fixes:
 
@@ -101,9 +101,9 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
   --sql "SELECT Title, Type, Date FROM Quotinator_Source WHERE Title = 'Airplane!' AND IsDeleted = 0"
 ```
 
-**Expected:** `Airplane!` returns `Date = 1980` — the implicit-discovery path this fixed.
+**Expected:** `Airplane!` returns `Date = 1980`, the implicit-discovery path this fixed.
 
-### 5. Cross-check `Jurassic Park` — a title with a date-less explicit entry
+### 5. Cross-check `Jurassic Park`: a title with a date-less explicit entry
 
 This is the gap described in Preconditions:
 
@@ -115,7 +115,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
 **Expected:** `Jurassic Park` returns `Date = 1993`. It was previously documented here as expected
 `NULL`; see the note in Preconditions.
 
-### 6. Cross-check `Frozen` — the other title the fixed gap named
+### 6. Cross-check `Frozen`: the other title the fixed gap named
 
 ```powershell
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" `
@@ -126,12 +126,12 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
 
 This step exists because the expectation did not, until 2026-08-23: the document asserted `Frozen`'s
 date with no query for `Frozen` anywhere in it. That is the same fault its own Preconditions note
-describes — an expectation written as prose is not verified by anything — reproduced one paragraph
+describes (an expectation written as prose is not verified by anything) reproduced one paragraph
 below the warning about it.
 
 ## Observed effect
 
-**Measured 2026-08-22** on a real seeded database: `423` of `461` sources carried a date — recorded as an
+**Measured 2026-08-22** on a real seeded database: `423` of `461` sources carried a date, recorded as an
 observation, not as an expectation for the next run. The shortfall was titles present only in
 `vilaboim_movie-quotes.json`, which supplies `"date": null` throughout, so there was no date anywhere
 to inherit: missing upstream data rather than a defect in this path.

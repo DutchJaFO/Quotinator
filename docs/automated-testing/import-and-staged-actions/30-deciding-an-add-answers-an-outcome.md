@@ -11,8 +11,8 @@ A container of this test's own, seeded at first start from a user-imports folder
 base file, then a file whose every quote is held for a different reason, with its own rule file. Two
 deltas from the Fresh profile:
 
-- `Quotinator__IncludeDefaultSources=false` — the database holds only this test's content.
-- `Quotinator__AutoPurgeUserImportActions=false` — the setting defaults to `true`, which deletes an
+- `Quotinator__IncludeDefaultSources=false`, so the database holds only this test's content.
+- `Quotinator__AutoPurgeUserImportActions=false`, since the setting defaults to `true`, which deletes an
   applied user batch's actions and would leave no applied Add to decide.
 
 The test never stops its container.
@@ -21,7 +21,7 @@ The test never stops its container.
 
 - **Every quote id is written in the files**, so each action is found by the id it was staged for.
 - **Each held quote is held for exactly one reason**, following the unit test that stages it:
-  - a second date — two TV quotes from one title under two dates (`ResolveSourceAsync_ReviewPolicy_SecondDateForAKnownTitle_StagesPending`);
+  - a second date, two TV quotes from one title under two dates (`ResolveSourceAsync_ReviewPolicy_SecondDateForAKnownTitle_StagesPending`);
   - a Keep rule matching nothing stored (`Seed_WithAKeepRuleMatchingABrandNewQuote_StagesPendingForReviewRatherThanApplyingOrIgnoring`);
   - the same text and source as a stored quote (`GetPagedAsync_BlockedCollisionAgainstAnExistingQuote_DoesNotCrash`);
   - the same text and source as another quote in its file (`PlanAsync_TwoQuotesWithTheSameTextAndSourceInOneFile_StagesTheSecondBlocked`).

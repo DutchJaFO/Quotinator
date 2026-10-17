@@ -7,7 +7,7 @@
 
 ## Preconditions
 
-Nothing beyond the Fresh profile — the capture happens during startup, so what this test inspects *is*
+Nothing beyond the Fresh profile: the capture happens during startup, so what this test inspects *is*
 the profile's own first boot, and a container that has not finished seeding has nothing to inspect.
 
 `Quotinator.Tools.DbInspector` (read-only) is used for the provenance checks that need a raw SQL join.
@@ -21,10 +21,10 @@ the profile's own first boot, and a container that has not finished seeding has 
   alone can read a database that is missing everything this test just wrote.
 - **Fresh container, first boot only.** The `origin=system` count and the `prunedCount: 0` result both
   depend on exactly one startup having happened. A reused volume gives a second captured version per
-  file and breaks both — which is why the profile recreates its volume rather than reusing one.
+  file and breaks both, which is why the profile recreates its volume rather than reusing one.
 - **The bundled file names are illustrative.** Check the captured rows against `manifest.json` rather
   than against the list this document happens to name.
-- **The batch-link figures are relationships that hold whatever the bundled file set contains** — do
+- **The batch-link figures are relationships that hold whatever the bundled file set contains**: do
   not substitute the count you happen to observe.
 - **On the detail endpoint the three agreeing is the assertion; the value they agree on is data.**
 
@@ -36,7 +36,7 @@ the profile's own first boot, and a container that has not finished seeding has 
 dotnet script scripts/testing/test-env.csx -- create --name qt-db-01 --port 18301
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app
 that never became healthy.
@@ -66,7 +66,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
   --sql "SELECT Id, FileName, Origin, HomeDirectoryKey, LineEnding, EndsWithTrailingNewline, Converter, ConverterOptions FROM Import_FileResource WHERE IsDeleted = 0 ORDER BY FileName"
 ```
 
-The two sidecar copies are allowed to fail — a database whose WAL has already been checkpointed has no
+The two sidecar copies are allowed to fail: a database whose WAL has already been checkpointed has no
 `-wal` file, and that is not an error. `2>$null` keeps that from reading as one.
 
 **Expected:** one row per bundled source file plus `manifest.json` itself, each with `Origin = System`
@@ -75,12 +75,12 @@ and `HomeDirectoryKey = sources`. At the time of writing that is
 `quotinator-series-universe.json` and `vilaboim_movie-quotes.json`.
 `NikhilNamal17_popular-movie-quotes.json` shows `Converter = basic-json-array` with its full
 `ConverterOptions` JSON; `vilaboim_movie-quotes.json` shows `Converter = regex-array` with its own
-options; the other three — `manifest.json` included — show `NULL` for both, having no `converter` entry
+options; the other three (`manifest.json` included) show `NULL` for both, having no `converter` entry
 in the manifest.
 
 ### 4. Confirm `manifest.json` links to every batch it drove
 
-Not just the two whose files were never redirected to the download cache — the #251 follow-up bug in
+Not just the two whose files were never redirected to the download cache: the #251 follow-up bug in
 `SeedBatch.SourceDirectory`:
 
 ```powershell
@@ -100,7 +100,7 @@ $resources | Select-Object fileName, origin, homeDirectoryKey, linkedBatchCount 
 ```
 
 **Expected:** each item carries `homeDirectoryKey` (`sources` for bundled rows) and `linkedBatchCount`,
-and the final line reports `0` — the list shape does **not** include `linkedBatchIds`, which belongs to
+and the final line reports `0`: the list shape does **not** include `linkedBatchIds`, which belongs to
 the detail endpoint only.
 
 ### 6. Reject an unknown `origin`
@@ -118,7 +118,7 @@ $system = (Invoke-RestMethod "http://localhost:18301/api/v1/import/file-resource
 "system=$(@($system).Count) allBundled=$(@($resources).Count) other=$(@($system | Where-Object { $_.origin -ne 'system' }).Count)"
 ```
 
-**Expected:** `system` equals `allBundled` from step 5 and `other` is `0` — on a fresh container every
+**Expected:** `system` equals `allBundled` from step 5 and `other` is `0`: on a fresh container every
 captured row is bundled, so nothing is `user` or `upload` origin.
 
 ### 8. Fetch one file resource's detail
@@ -193,7 +193,7 @@ function Count-Crlf($bytes) {
 "crlf=$(Count-Crlf $crlfBytes) original=$(Count-Crlf $originalBytes)"
 ```
 
-**Expected:** `crlf` is non-zero and `original` is `0` — the override introduced `0d0a` sequences into
+**Expected:** `crlf` is non-zero and `original` is `0`: the override introduced `0d0a` sequences into
 a file captured as bare `LF`. The original is counted alongside as the positive control: without it, a
 non-zero count could just as easily mean the file always had CRLF.
 
@@ -235,10 +235,10 @@ dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:
 (dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18301/api/v1/import/file-resources/prune" --expect 200 | ConvertFrom-Json).prunedCount
 ```
 
-**Expected:** `0` — nothing to prune, since each bundled file has only one captured version after a
+**Expected:** `0`: nothing to prune, since each bundled file has only one captured version after a
 single startup.
 
-**On failure:** a non-zero `prunedCount` means more than one startup wrote captured versions — a reused
+**On failure:** a non-zero `prunedCount` means more than one startup wrote captured versions, a reused
 volume rather than a prune defect, see Determinism. Start again from a fresh volume rather than
 recording this as a result.
 

@@ -27,7 +27,7 @@ Nothing beyond the Fresh profile. The malformed file this test uploads is one it
 dotnet script scripts/testing/test-env.csx -- create --name qt-api-05 --port 18105
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** stop. Every step below reads this container's log.
 
@@ -51,7 +51,7 @@ dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:
   --file "$env:TEMP\qt-malformed.json" --duplicate-resolution review --expect 422
 ```
 
-**Expected:** `422` — the upload is rejected as invalid JSON.
+**Expected:** `422`: the upload is rejected as invalid JSON.
 
 ### 4. Read the thrown line
 
@@ -65,8 +65,8 @@ $after = ([regex]::Matches($log, '\[Runtime - Exception\]')).Count
 **Expected:** `after` is greater than `before`, and the upload's lines are `ERR` lines each carrying an
 8-character hexadecimal id: one naming `JsonReaderException`, `System.Text.Json`'s own subclass of
 `JsonException`, and one or more naming `QuoteImportValidationException`, the check-then-throw #398
-removes. Repeats of that second type share a single id — one exception object, notified once per throw
-and once per rethrow — so count distinct ids rather than lines.
+removes. Repeats of that second type share a single id, one exception object, notified once per throw
+and once per rethrow, so count distinct ids rather than lines.
 
 **On failure:** if `after` equals `before`, nothing logged the throw. Confirm the thrown-exception
 handler is subscribed before the host builder is created.
@@ -79,7 +79,7 @@ $quiet = ([regex]::Matches((docker logs qt-api-05 2>&1 | Out-String), '\[Runtime
 "after=$after quiet=$quiet"
 ```
 
-**Expected:** `healthy`, and `quiet` equal to `after` — a request that throws nothing adds no line.
+**Expected:** `healthy`, and `quiet` equal to `after`: a request that throws nothing adds no line.
 
 ## Observed effect
 

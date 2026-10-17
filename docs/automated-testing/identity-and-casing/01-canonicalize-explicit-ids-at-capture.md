@@ -7,7 +7,7 @@
 
 ## Preconditions
 
-Nothing beyond the Fresh profile — but the profile's own first boot is **under test here**, not merely
+Nothing beyond the Fresh profile, but the profile's own first boot is **under test here**, not merely
 setup for the import below, which is why the log check is the first step rather than an afterthought.
 
 The bundled curated file's own Conversations reference StageDirections and SoundCues by id. #209's fix
@@ -22,7 +22,7 @@ would have broken those references if left incomplete, so a seed completing with
   that originally returned 404.
 - **A fixture already in canonical form cannot fail.** Until #339's full run these ids were lowercase
   and near-digit-only (`f6000002-0000-4000-8000-000000000002`, one hex letter in 32), so "canonicalized
-  at capture" was indistinguishable from "stored verbatim" — the test passed identically with
+  at capture" was indistinguishable from "stored verbatim": the test passed identically with
   canonicalization removed. Hex letters in mixed case are what give the assertion something to
   transform; see the index's *A count is evidence only if the instrument counts the right thing* for
   the same failure in its counting form.
@@ -37,7 +37,7 @@ would have broken those references if left incomplete, so a seed completing with
 dotnet script scripts/testing/test-env.csx -- create --name qt-id-01 --port 18201
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app
 that never became healthy.
@@ -49,7 +49,7 @@ $log = docker logs qt-id-01 2>&1 | Out-String
 ([regex]::Matches($log, 'SQLite Error 19')).Count
 ```
 
-**Expected:** `0` — the container's seed produced no `SQLite Error 19`.
+**Expected:** `0`: the container's seed produced no `SQLite Error 19`.
 
 **On failure:** any other number is a failure, and it is the first step for a reason: a non-zero count
 means the seed is what broke, so the assertions below would be reporting on a database that was never
@@ -83,7 +83,7 @@ $source = dotnet script scripts/testing/http.csx -- `
 $source.id
 ```
 
-**Expected:** `200`, and the id echoed back **lowercase** — `f6abcde2-0000-4000-8000-00000000abc2`,
+**Expected:** `200`, and the id echoed back **lowercase**, `f6abcde2-0000-4000-8000-00000000abc2`,
 canonicalized per ADR 012's system-wide convention, rather than the uppercase form the file carried.
 
 ### 5. Fetch the quote and confirm its Source join still resolves
@@ -92,7 +92,7 @@ canonicalized per ADR 012's system-wide convention, rather than the uppercase fo
 (Invoke-RestMethod "http://localhost:18201/api/v1/quotes/f6abcde1-0000-4000-8000-00000000abc1").source
 ```
 
-**Expected:** `209 Smoke Test Film`, resolved through the Quote→Source join — proving the fix did not
+**Expected:** `209 Smoke Test Film`, resolved through the Quote→Source join, proving the fix did not
 break the join in order to make the masterdata lookup work.
 
 ## Observed effect
@@ -101,7 +101,7 @@ Partially established: a clean seed emitting no `SQLite Error 19` is an observed
 above. What the container logs during the import itself has not been captured.
 
 **The original failure this replaced:** a file-authored explicit id reached storage in whatever raw
-casing the file used, never canonicalized. A `Guid`-typed lookup — which force-uppercases — then
+casing the file used, never canonicalized. A `Guid`-typed lookup, which force-uppercases, then
 silently failed to find a non-canonically-stored row, even though the same row resolved fine via a
 join.
 

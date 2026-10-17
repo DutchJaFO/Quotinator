@@ -7,7 +7,7 @@
 
 ## Preconditions
 
-A staged batch holding both an action awaiting a decision and a plan-time no-op — step 2 produces one by
+A staged batch holding both an action awaiting a decision and a plan-time no-op: step 2 produces one by
 previewing the shared conflict fixture under `review`.
 
 ## Determinism
@@ -15,7 +15,7 @@ previewing the shared conflict fixture under `review`.
 - **The batch comes from the shared conflict fixture, not from the curated file.** This test used to
   preview `data/sources/quotinator-curated.json`, which a fresh container has already seeded. Since the
   planner began recording content that is already stored as an `Unchanged` no-op (#373), that preview
-  stages every action `Applied` and nothing awaiting a decision — measured 2026-09-10 as 37 actions, all
+  stages every action `Applied` and nothing awaiting a decision, measured 2026-09-10 as 37 actions, all
   `Unchanged`, and a discard that answered `422`. `scripts/testing/stage-import-conflict.csx` writes a
   file re-stating a bundled quote's id with different text, the fixture
   [`20-pending-review-alert.md`](20-pending-review-alert.md) uses for the same reason; previewed here, it
@@ -28,13 +28,13 @@ previewing the shared conflict fixture under `review`.
   `Discarded`, and from one that refuses the whole batch as already applied (#389). A batch holding only
   one kind cannot tell those apart.
 - **Each action is followed by its own `id` from before to after**, and every listing is scoped to that
-  specific `batchId` — so other batches in the database cannot affect the result, and one row cannot pass
+  specific `batchId`, so other batches in the database cannot affect the result, and one row cannot pass
   for another.
 - **The count matters as much as the status**: "every awaiting action shows `Discarded`" is satisfied
   vacuously by an empty list, so a discard that hard-deleted the rows, or a `batchId` filter matching
   nothing, would otherwise read as a pass.
 - **The quote count is compared before and after rather than asserted as a value.** Creation is
-  deferred to apply time, so a discarded batch never touched the domain tables at all — and that claim
+  deferred to apply time, so a discarded batch never touched the domain tables at all, and that claim
   needs a domain read to mean anything. Comparing the count keeps it true whatever the dataset holds.
 
 ## Steps
@@ -46,7 +46,7 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-import-04 --port 
 $base = "http://localhost:18604/api/v1"
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
@@ -62,7 +62,7 @@ $batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base
 $batchId
 ```
 
-**Expected:** the response carries a `batchId` — the readings below are scoped to it.
+**Expected:** the response carries a `batchId`: the readings below are scoped to it.
 
 The fixture's `manifest.json` plays no part here: the file is posted directly, and its policy comes from
 `--duplicate-resolution`.
@@ -78,11 +78,11 @@ $quotesBefore = (Invoke-RestMethod "$base/version").database.quotes
 "actions=$($before.Count) awaiting=$($awaiting.Count) noOps=$($noOps.Count) quotes=$quotesBefore"
 ```
 
-**Expected:** `awaiting` and `noOps` both at least `1` — measured as `Quote Modify Pending` and
-`Source Unchanged Applied` — and the quote count recorded for comparison.
+**Expected:** `awaiting` and `noOps` both at least `1`, measured as `Quote Modify Pending` and
+`Source Unchanged Applied`, plus the quote count recorded for comparison.
 
 **On failure:** `awaiting=0` means discard has nothing to mark, and `noOps=0` means the batch can no
-longer tell a correct discard from one that stamps every row. Either way, stop — this is a staging
+longer tell a correct discard from one that stamps every row. Either way, stop: this is a staging
 problem, not a discard result.
 
 ### 4. Discard the batch
@@ -109,7 +109,7 @@ $quotesAfter = (Invoke-RestMethod "$base/version").database.quotes
 ```
 
 **Expected:** `sameCount=True`; every awaiting action now `Discarded` and every no-op still `Applied`,
-each reading `N of N` with the counts from step 3; and `unchanged=True` — nothing was deleted, and the
+each reading `N of N` with the counts from step 3; and `unchanged=True`: nothing was deleted, and the
 domain tables were never touched.
 
 A no-op is left as recorded because nothing was ever written for it, so a discard has nothing of it to
@@ -127,12 +127,12 @@ the #369 image this issue started from, tagged `quotinator:canary389`, in a cont
 
 | Step | Assertion | Pre-work result |
 |---|---|---|
-| 3 | `awaiting` and `noOps` both at least `1` | passes — `Quote Modify Pending`, `Source Unchanged Applied`; staging is not what #389 changes |
-| 4 | `204` | **fails** — `422`; the no-op made the batch read as already applied |
-| 5 | `sameCount=True` | passes — a refused discard deletes nothing |
-| 5 | awaiting now `Discarded`, `1 of 1` | **fails** — `0 of 1`; the pending action was left `Pending` |
-| 5 | no-ops still `Applied`, `1 of 1` | passes — nothing touched it, on either build |
-| 5 | `unchanged=True` | passes — the control; discard never writes a domain row |
+| 3 | `awaiting` and `noOps` both at least `1` | passes: `Quote Modify Pending`, `Source Unchanged Applied`; staging is not what #389 changes |
+| 4 | `204` | **fails**: `422`; the no-op made the batch read as already applied |
+| 5 | `sameCount=True` | passes: a refused discard deletes nothing |
+| 5 | awaiting now `Discarded`, `1 of 1` | **fails**: `0 of 1`; the pending action was left `Pending` |
+| 5 | no-ops still `Applied`, `1 of 1` | passes: nothing touched it, on either build |
+| 5 | `unchanged=True` | passes: the control; discard never writes a domain row |
 
 The document as it stood before this rewrite could not have served as a canary: previewing the curated
 file stages nothing but no-ops, so it failed on the fixed build too. Container and fixture directory

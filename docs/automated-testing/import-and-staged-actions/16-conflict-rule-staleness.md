@@ -4,24 +4,24 @@
 **Environment:** Fresh
 **Deterministic:** yes
 **Traces to:** #153
-**Fully green after:** [#347](https://github.com/DutchJaFO/Quotinator/issues/347) — step 3's
+**Fully green after:** [#347](https://github.com/DutchJaFO/Quotinator/issues/347): step 3's
 evaluation line does not exist until then, so that reading is inconclusive; every other reading passes
 
 ## Preconditions
 
 Each field a `ConflictResolutionRule` governs records its own `recordedIncomingValue`: the value that
 field's incoming side held when the rule was authored (ADR 023). When that no longer matches the current
-staging run's real incoming value, the rule is never silently reapplied — the action stages `Stale`. A
+staging run's real incoming value, the rule is never silently reapplied: the action stages `Stale`. A
 field with no recorded value at all stages `Stale` too, since it can never be confirmed fresh.
 
 The entry-level `existingRecord`/`incomingRecord` snapshots are documentation only and are not read by
-the matching logic — `existingRecord` has never been (#374), and `incomingRecord` stopped being read
+the matching logic; `existingRecord` has never been (#374), and `incomingRecord` stopped being read
 when #420 moved the value onto the field it governs.
 
 Beyond the Fresh profile: **a reseed is required; the profile's own first boot cannot exercise this.**
 A brand-new database only ever stages `Add` actions, because nothing exists yet to conflict with.
 `POST /admin/database/reseed` re-plans every bundled file against the now-populated database and
-genuinely exercises the `Modify`/rule path — the same thing a real redeployment against an
+genuinely exercises the `Modify`/rule path, the same thing a real redeployment against an
 already-seeded volume does. This test issues that reseed itself, in the steps below.
 
 ## Determinism
@@ -55,7 +55,7 @@ $key  = @{'X-Api-Key' = 'smoketest'}
 $base = "http://localhost:18616/api/v1"
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
@@ -66,7 +66,7 @@ never became healthy.
 (Invoke-RestMethod "$base/version").database
 ```
 
-**Expected:** non-zero counts — the container is no longer working through its multi-file seed, so a
+**Expected:** non-zero counts: the container is no longer working through its multi-file seed, so a
 reseed re-plans against a populated database rather than an empty one.
 
 ### 3. Reseed, then list the stale actions
@@ -95,7 +95,7 @@ file, each rendering `stale=0`; a line states that rule staleness was **evaluate
 rules; `increased=True`; and `stale=0`.
 
 **The purge traces are compared before and after, not against the batch count.** The first boot
-already purged one set, so after a reseed the total is *two* rounds — measured `4` then `8` on
+already purged one set, so after a reseed the total is *two* rounds, measured `4` then `8` on
 2026-08-26 against four bundled files. An equality with the seed-batch count holds only on a fresh boot,
 which is [`17`](17-source-alias-staleness.md)'s step 2, not this one. What this step needs is that the
 reseed's own action rows existed and were removed, and the delta states exactly that.
@@ -110,13 +110,13 @@ its own establishes nothing:
 | Evaluation line present | The mechanism never compared the rules at all |
 
 **`stale=0` in the report cannot carry the last one.** It is produced identically by *compared the
-shipped rules, none had drifted* and by *never compared anything* — a count of zero is not evidence
+shipped rules, none had drifted* and by *never compared anything*: a count of zero is not evidence
 that something looked.
 
-**On failure:** `reportLines=0` means the reseed did not re-plan — a setup failure, not a staleness
+**On failure:** `reportLines=0` means the reseed did not re-plan, a setup failure, not a staleness
 result; stop. A missing evaluation line means the mechanism's own execution is unobservable, so neither
 the report nor the empty list can establish whether it ran. That is the application's gap rather than
-this document's — see the index's *When the expected situation does not occur*, cause 3, and
+this document's; see the index's *When the expected situation does not occur*, cause 3, and
 [#347](https://github.com/DutchJaFO/Quotinator/issues/347), which this test remains blocked on.
 
 ### 4. Make staleness fire, and confirm it does
@@ -197,7 +197,7 @@ offered the curated file's own. This is also what establishes that staleness sti
 moved the recorded value onto the field it governs, which step 3's empty list cannot show.
 
 **Step 3 live-verified 2026-07-26 against a genuine, pre-existing data bug this mechanism caught on its
-first real run — not a contrived fixture.**
+first real run, not a contrived fixture.**
 
 `nikhilnamal17-conflict-rules.json`'s Zootopia rule (`entityId: 10e3fb48-…`, governing `quoteText`
 with `Keep`) had its snapshot recorded with a straight apostrophe (`Life's`), while the real bundled

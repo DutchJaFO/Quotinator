@@ -12,12 +12,12 @@ rather than the profile's named volume, so the host can see the database files d
 once, in place.
 
 The changelog database is a file beside the main database. What this verifies is that **file-backed
-storage is what ships and what serves reads** — a feature, checkable immediately.
+storage is what ships and what serves reads**, a feature, checkable immediately.
 
 ## Determinism
 
 **Assert on the positive line, never on the absence of the negative one.** The About page renders
-identically whichever source served it, because the JSON fallback does its job — which is exactly why
+identically whichever source served it, because the JSON fallback does its job, which is exactly why
 this defect survived a full T2 pass unnoticed. An absent fallback warning was originally treated as the
 decisive signal, but absence proves nothing: until this was fixed, the empty-database fallback logged
 nothing at all, so a silently-fallen-back read and a healthy one produced identical output. Only a
@@ -25,12 +25,12 @@ positive *"the database answered"* statement distinguishes them.
 
 **The importer and reader counts must match.** They report the same unit deliberately, so
 `refreshed N entries` and `served N entries` are directly comparable; a read reporting fewer than the
-import wrote means it was served a partial or stale copy. **Compare the two numbers to each other —
+import wrote means it was served a partial or stale copy. **Compare the two numbers to each other,
 neither is predicted**, since the changelog grows with every release.
 
 > **A sixteen-minute wait used to sit here and was removed (developer direction, 2026-08-19.)** It slept
 > past the one observed failure at +13 minutes and re-read. The reasoning was that no shorter check
-> could see the defect — but the mechanism behind that 13 minutes was never established, because the fix
+> could see the defect, but the mechanism behind that 13 minutes was never established, because the fix
 > removed the dependency rather than explaining the timer. **An interval with no basis in an understood
 > mechanism tests nothing**: it is not derived, so a regression failing at 40 minutes would sail past it,
 > and a green result buys confidence it has not earned. A test verifies a feature or a reliable
@@ -60,7 +60,7 @@ function Count-Thrown { @(docker logs qt-notif-07 2>&1 | Select-String -SimpleMa
 
 ### 2. Confirm the changelog file exists alongside `quotinatordata.db`
 
-**The file must exist alongside `quotinatordata.db`** — an in-memory database leaves nothing on disk:
+**The file must exist alongside `quotinatordata.db`**: an in-memory database leaves nothing on disk:
 
 ```powershell
 Get-ChildItem $dataDir -Filter *.db | Select-Object Name, Length
@@ -80,11 +80,11 @@ $log -split "`n" | Select-String -Pattern 'Changelog - (Init|Import|Read)'
 ```
 
 **Expected:** `[Changelog - Import] refreshed N entries across 3 language(s)` appears, and so does
-`[Changelog - Read] served N entries from the database` — the positive statement that the database
+`[Changelog - Read] served N entries from the database`, the positive statement that the database
 itself answered. **The two counts match each other**; the value itself is data. The three languages
 are asserted, because that is the shipped set rather than a content count.
 
-`fallbacks=0` — no `falling back to the JSON-backed changelog service` line appears at any point. That
+`fallbacks=0`, so no `falling back to the JSON-backed changelog service` line appears at any point. That
 is the weaker half of the assertion and is why the positive line above is read first: an absent warning
 is produced identically by a healthy read and by the silent fallback this test exists to catch.
 
@@ -102,14 +102,14 @@ $after = ([regex]::Matches((docker logs qt-notif-07 2>&1 | Out-String), 'entries
 ```
 
 **Expected:** `/about` returns `200`, `changelogEntries` is non-zero, `increased=True`, and
-`fallbacks=0`. **There is deliberately no REST endpoint here** — changelog content is surfaced only on
+`fallbacks=0`. **There is deliberately no REST endpoint here**: changelog content is surfaced only on
 the About page (`Components/Pages/About.razor`), so that is what must be read. The count of
 `entries from the database` grew as a result of that request, which is what ties the page render to the
 database rather than to the fallback.
 
 ### 5. Confirm the file survives a restart with its content intact
 
-**The file must survive a restart with its content intact** — it is rebuilt from the bundled JSON at
+**The file must survive a restart with its content intact**: it is rebuilt from the bundled JSON at
 every startup, so this confirms the rebuild is idempotent rather than duplicating rows:
 
 ```powershell
@@ -126,8 +126,8 @@ Get-ChildItem $dataDir -Filter quotinatorchangelog.db | Select-Object Name, Leng
 ImportLines | ForEach-Object { $_.Line }
 ```
 
-**Expected:** `thrown=0` before the restart, then the file still present, and two `refreshed N entries` lines listed —
-the first start's and the restart's — reporting the same entry count, as step 3 did. No duplication.
+**Expected:** `thrown=0` before the restart, then the file still present, and two `refreshed N entries` lines listed,
+the first start's and the restart's, reporting the same entry count, as step 3 did. No duplication.
 
 **The log is polled for the second line, for at most 60 s.** Health answers before the post-restart
 import has logged, so reading the log straight after it lists only the first start's line. Polling waits
@@ -140,7 +140,7 @@ larger than the first is the duplication this step exists for.
 
 Well established, and the failure is the instructive part. Thirteen minutes after a clean import of 126
 entries, every read failed with `no such table: Changelog_Entry` and fell back to the JSON service
-permanently, with no process restart in between — the changelog database was a shared-cache in-memory
+permanently, with no process restart in between: the changelog database was a shared-cache in-memory
 instance held open by a keep-alive connection.
 
 **Nothing was user-visible, because the JSON fallback works exactly as designed.** That is why it went
@@ -174,4 +174,4 @@ dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-07 --bind 
 Remove-Item $dataDir -Recurse -Force -ErrorAction SilentlyContinue
 ```
 
-**Expected:** `new=0` — counted from after step 5's restart, whose own shutdown lines stay in the log.
+**Expected:** `new=0`, counted from after step 5's restart, whose own shutdown lines stay in the log.

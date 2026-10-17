@@ -12,7 +12,7 @@ every healthy boot and carries translations of its own, so the subject exists wi
 
 ## Determinism
 
-- **The subject is one notification identified by a known cause** — the announcement, selected by
+- **The subject is one notification identified by a known cause**: the announcement, selected by
   `metadataKind -eq 'announcement'`. No step counts notifications or reads `items[0]`: how many exist
   depends on which producers exist and what the changelog flags for the running version, and which one
   sorts first moves with them.
@@ -21,14 +21,14 @@ every healthy boot and carries translations of its own, so the subject exists wi
   language. Selecting the same notification by `metadataKind` in each language detects that without
   depending on how many others are present.
 - **Every `.Count` is taken through `@(…)`.** PowerShell 5.1 gives a single `PSCustomObject` no `Count`
-  property, so an unwrapped count prints blank for exactly one match — the expected result here.
+  property, so an unwrapped count prints blank for exactly one match, the expected result here.
 - **`pageSize=0` on every listing**, so the selection searches the whole set rather than the first page.
 - **`?lang=` and `Accept-Language` are set explicitly in every request.** A request setting neither
   resolves against the container's own culture, and the result would depend on the host.
 - **Comparing the Dutch body against the English one is what separates a translation from a labelled
   fallback.** Every field can read correctly while the join matched nothing and `COALESCE` fell through
   to the original with the `CASE` still reporting `nl`; no single field reveals that disagreement.
-- **Never assert a migration number or schema version** — the tables arrive in whatever migration the
+- **Never assert a migration number or schema version**: the tables arrive in whatever migration the
   current build assigns them.
 
 ## Steps
@@ -72,7 +72,7 @@ $fr = Get-Announcement 'fr'
 
 **Expected:** every value `True`.
 
-**On failure:** `present=False` means a reader in an untranslated language sees no notification at all —
+**On failure:** `present=False` means a reader in an untranslated language sees no notification at all:
 the join is excluding rows instead of falling back, which is a harder failure than a missing translation.
 
 ### 4. A translated language returns different text
@@ -87,7 +87,7 @@ $nl = Get-Announcement 'nl'
 **Expected:** every value `True`.
 
 **On failure:** `translated=False` means no translation row was written; `bodyDiffers=False` with
-`translated=True` means the projection's two halves disagree — see `Determinism`.
+`translated=True` means the projection's two halves disagree; see `Determinism`.
 
 ### 5. `?lang=` outranks `Accept-Language`
 
@@ -133,8 +133,8 @@ unrelated reason.
 
 A notification stores its text once, in the language its producer wrote it in, and the API renders that
 text into whichever language a caller asks for. A caller asking for a language the notification has no
-translation for receives the original text and is told so — `language` reports `en`, `isTranslated`
-reports `false` — rather than receiving an empty body or a language label that does not match the words.
+translation for receives the original text and is told so (`language` reports `en`, `isTranslated`
+reports `false`) rather than receiving an empty body or a language label that does not match the words.
 The Blazor surfaces make the same request using the interface's own culture, so a user reading the site
 in Dutch sees Dutch notification text with English as the visible fallback.
 
@@ -158,7 +158,7 @@ Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-Read the log before the stop, per the index's *Read the log before the application stops* — expect nothing:
+Read the log before the stop, per the index's *Read the log before the application stops*, expecting nothing:
 
 ```powershell
 docker logs qt-notif-08 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'

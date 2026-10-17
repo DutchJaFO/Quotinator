@@ -18,7 +18,7 @@ content back, and that it then stops being active.
 ## Determinism
 
 **The seed must have finished before the reset runs.** A reset against a half-seeded database still
-produces an empty database, so the test would pass for the wrong reason — it would never have
+produces an empty database, so the test would pass for the wrong reason: it would never have
 established that content was there to lose. The wait polls the quote count for a non-zero value rather
 than sleeping for a duration.
 
@@ -27,7 +27,7 @@ depends on which producers are present and what the bundled changelog flags for 
 both of which move every milestone. Every count here filters on `metadataKind` of `reseedRecommended`.
 
 **Count only *active* recommendations, not every row carrying that kind.** `GET /notifications` returns
-the full history, dismissed rows included — resolving the condition dismisses the row, it does not
+the full history, dismissed rows included, since resolving the condition dismisses the row, it does not
 delete it. A count that ignores `isDismissed` therefore never falls back to zero, and step 3 fails
 against a working application. Found on this document's first run, where the reseed had correctly
 dismissed the row (`isDismissed: true`) while the count still read `1`.
@@ -38,22 +38,22 @@ response about what a match is.
 
 **Re-wrap in `@(...)` at the call site, not only inside the helper.** PowerShell 5.1 unrolls a
 single-element array on return, so `$rec = Get-ReseedRecommendations` yields a bare `PSCustomObject`
-with no `Count` property, and `$rec.Count` prints empty — for exactly one match, which is this test's
+with no `Count` property, and `$rec.Count` prints empty, for exactly one match, which is this test's
 expected result. Measured here on the first run: step 2 reported an empty count while the notification
 was present and correct.
 
 **Every count in this document is wrapped, not just the ones observed failing.** The zero case prints
-`0` from the unwrapped form, so three of the four sites looked fine while being equally broken — step 4
+`0` from the unwrapped form, so three of the four sites looked fine while being equally broken; step 4
 then reported empty on the first clean run, after step 2 had already been fixed in isolation. The rule
 is the wrap, not the site.
 
 **Quote counts are read, never predicted.** The number of bundled quotes changes when a source file is
 updated; what this test asserts is that the count is non-zero before the reset, zero after it, and
-non-zero again after the reseed — facts the operation itself establishes.
+non-zero again after the reseed, facts the operation itself establishes.
 
 **The count comes from `/quotes`' own `totalCount`, not from `/health`.** `/health` reports
 `{"status":"healthy"}` and nothing else, so a gate written against a quote count there is never
-satisfied — and it does not fail, it hangs, which is the failure mode
+satisfied, and it does not fail, it hangs, which is the failure mode
 [`04`](04-upgrade-does-not-duplicate-the-legacy-notification.md) already records for a gate that cannot
 become true. Found here the same way, while first running this document.
 
@@ -100,7 +100,7 @@ $rec | Select-Object -First 1 | ForEach-Object { "type=$($_.type) title=$($_.tit
 
 Both halves matter. A zero quote count alone would also be true if Reset had reseeded and failed; a
 recommendation alone would not prove Reset left the database empty. Together they are the condition
-#304 exists to surface — and the recommendation is the whole point, because Reset must not reseed on
+#304 exists to surface, and the recommendation is the whole point, because Reset must not reseed on
 the caller's behalf.
 
 ### 3. Run the recommendation, and confirm it resolves the condition
@@ -117,7 +117,7 @@ Invoke-RestMethod -Method Post -Headers $headers `
 
 This is the positive control the failure above needs: it proves the remedy the notification names
 actually resolves the condition, rather than being advice nobody checked. It also proves the dismiss is
-wired to the plain endpoint and not only to the notification action — an undismissed recommendation
+wired to the plain endpoint and not only to the notification action: an undismissed recommendation
 would stay active and silently suppress every later occurrence.
 
 ### 4. Confirm the resolved recommendation records that it was done, not declined
@@ -130,8 +130,8 @@ $all = (Invoke-RestMethod "http://localhost:19510/api/v1/notifications?pageSize=
 
 **Expected:** `isDismissed=True dismissReason=resolved`.
 
-A notification stops being active for two very different reasons — the user set it aside, or the thing
-it described was actually dealt with — and before #304 both were stored as nothing but `IsDismissed`.
+A notification stops being active for two very different reasons, the user set it aside, or the thing
+it described was actually dealt with, and before #304 both were stored as nothing but `IsDismissed`.
 The page therefore told a user who had just run the reseed that they had dismissed it. `resolved` here
 is what the *Done* label is rendered from; `dismissed` would mean the reason was never recorded and the
 display is back to guessing.
@@ -149,12 +149,12 @@ Invoke-RestMethod -Method Post -Headers $headers `
 
 The recommendation describes a condition that can recur, not an event that happened once. A dedupe
 comparing against dismissed rows would report `0` here and leave the operator with an empty database
-and no notice — which is the defect the active-only dedupe exists to prevent, and the only step in this
+and no notice, which is the defect the active-only dedupe exists to prevent, and the only step in this
 document that can catch it.
 
 ## Observed effect
 
-**Measured 2026-08-30** against `quotinator:local` — the values below come from a clean run of the document
+**Measured 2026-08-30** against `quotinator:local`: the values below come from a clean run of the document
 exactly as written, on a fresh container, after the corrections above:
 
 | Step | Observed |
@@ -171,7 +171,7 @@ only the second reset distinguishes them.
 **Proven red before it was proven green.** The same steps were run against a build from the commit
 immediately before #304's first feature commit (`46577c38`, via a throwaway worktree and a
 `quotinator:pre304` image), and the document fails there exactly where it should: the reset empties the
-database — `quotes after reset = 0` — and **`recommendations after reset = 0`** where step 2 requires
+database (`quotes after reset = 0`) and **`recommendations after reset = 0`** where step 2 requires
 `1`. Step 4's field does not exist on that build at all. Both were then torn down (container, image,
 worktree). Without this the document proves only that something happens, not that it would have caught
 the absence it was written for.
@@ -201,7 +201,7 @@ Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-Read the log before the stop, per the index's *Read the log before the application stops* — expect nothing:
+Read the log before the stop, per the index's *Read the log before the application stops*, expecting nothing:
 
 ```powershell
 docker logs qt-notif-10 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'

@@ -11,8 +11,8 @@
 current build, created with `--env Quotinator__AdminApiKey=t2-372`.
 
 Reseed's one job is importing the designated files from the two origins. This proves it adds what is
-missing, leaves alone what is already correct, raises a decision where content disagrees, and — the
-part no unit test can settle — that data the operator added themselves survives a reseed.
+missing, leaves alone what is already correct, raises a decision where content disagrees, and, the
+part no unit test can settle, that data the operator added themselves survives a reseed.
 
 ## Determinism
 
@@ -55,7 +55,7 @@ than against a literal, since bundled content changes over time.
 
 ### 2. Import a quote that no source file describes
 
-**There is no `POST /quotes`** — the v1 API is read-only for quote content, and the first draft of this
+**There is no `POST /quotes`**: the v1 API is read-only for quote content, and the first draft of this
 document assumed otherwise. Running it returned `405`, which is what a canary is for. `POST /import` is
 the supported write path, and it suits the fixture better anyway: the quote arrives through the same
 pipeline a reseed uses, so nothing about it is special except that no *designated* file describes it.
@@ -90,17 +90,17 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:19522/api/v1/i
 **Expected:** an `imported: 1` summary, and `quotes after import` one greater than the baseline.
 
 **Three shape requirements, each found by running this against a real container.** The wrapper object
-(`{ "quotes": [ … ] }`) is required — a bare array returns `422`. `id`, `genres` and `translations` are
+(`{ "quotes": [ … ] }`) is required, since a bare array returns `422`. `id`, `genres` and `translations` are
 required by `schemas/source-flat.schema.json` even though the first draft omitted them. And the id is
 stated rather than generated, so later steps can address the quote directly without a search.
 
 **`http.csx`, not `Invoke-RestMethod -Form` and not `curl.exe`.** This project's shell is Windows
-PowerShell 5.1, which has no `-Form` parameter — that is PowerShell 7+. The first draft reached for
+PowerShell 5.1, which has no `-Form` parameter: that is PowerShell 7+. The first draft reached for
 `curl.exe`; the suite's own guard rejected it, and rightly, since `scripts/testing/http.csx` exists for
 exactly this gap and keeps every document on one HTTP idiom.
 
 **This row is the entire test.** If the import shape has changed and this step cannot land a quote,
-stop — every assertion below becomes unfalsifiable, and a run that skips this step passes while proving
+stop: every assertion below becomes unfalsifiable, and a run that skips this step passes while proving
 nothing.
 
 ### 3. Reseed, and confirm the local quote survives
@@ -123,7 +123,7 @@ Invoke-RestMethod -Method Post -Headers $headers `
 **Expected:** `local quote survived reseed: True`, and `quotes after reseed` still one greater than the
 baseline.
 
-**On failure:** if the quote is gone, the reseed is still deleting before it imports — the defect this
+**On failure:** if the quote is gone, the reseed is still deleting before it imports, the defect this
 issue exists to remove. The row count alone will look correct in that case, because the bundled content
 is restored identically; only the missing local quote reveals it.
 
@@ -157,17 +157,17 @@ foreach ($r in $reports) {
 }
 ```
 
-**Expected:** every entity type the file contains is listed — not `Quote` alone — with `incoming`
+**Expected:** every entity type the file contains is listed, not `Quote` alone, with `incoming`
 matching the number that arrived, `unchanged` accounting for them, and `modified` at `0`.
 
 **Two failures hide here, and the second is the one that costs time.** A quote already stored is
 reported as *modified*, which claims a write that never happened. Every other entity type produces no
-action at all and vanishes from the report entirely — so a reader comparing this against the cold start
+action at all and vanishes from the report entirely, so a reader comparing this against the cold start
 sees seven entity types become one, and goes looking for a bug in entity handling that does not exist.
 
 ### 5. Remove a bundled quote and confirm the reseed repairs only that
 
-**There is no endpoint that deletes a quote** — `DELETE /quotes/{id}` answers `405`, which this step
+**There is no endpoint that deletes a quote**: `DELETE /quotes/{id}` answers `405`, which this step
 called until #411. The removal is constructed instead: a soft delete written into a copy of the database
 while the container is stopped, the way *Notifications list, dismiss, render, and drive their action*
 constructs rows no producer makes. Read the log first; the stop logs exceptions of its own:
@@ -197,7 +197,7 @@ Invoke-RestMethod -Method Post -Headers $headers `
 previous value after the reseed; `victim back: True`; and `local quote still present: True`.
 
 **Both halves are required.** A reseed that wiped everything and reimported would also land on the
-right total — the local quote is what says the repair was surgical rather than wholesale.
+right total: the local quote is what says the repair was surgical rather than wholesale.
 
 ### 6. Confirm import batches survive
 
@@ -233,8 +233,8 @@ Run 2026-09-02 against `quotinator:local` at `3e9bb19c`, in container `qt-reseed
 
 | Step | Assertion | Pre-work result |
 |---|---|---|
-| 3 | `local quote survived reseed: True` | **fails** — `False`; `799` quotes after the reseed, having been `800` before it, and `0` search hits |
-| 6 | import batches survive | **fails** — `5` before, `4` after |
+| 3 | `local quote survived reseed: True` | **fails**: `False`; `799` quotes after the reseed, having been `800` before it, and `0` search hits |
+| 6 | import batches survive | **fails**: `5` before, `4` after |
 
 **Step 4's report assertions, run 2026-09-02 against the post-#372, pre-#373 build.** Both failures
 visible in one output:
@@ -250,18 +250,18 @@ vilaboim_movie-quotes.json:
    Quote  incoming=0 new=0 modified=99 unchanged=0
 ```
 
-`quotinator-curated.json` reported seven entity types on its cold start and reports one here — the
+`quotinator-curated.json` reported seven entity types on its cold start and reports one here: the
 Characters, People, Sources, Conversations, StageDirections and SoundCues all arrived and matched, and
 say nothing. The thirteen quotes that changed nothing are counted as modified. `incoming` and
 `unchanged` read `0` throughout because #373 has not populated them yet.
 
 **Steps 1, 2, 4 and 5 are not expected to fail on the pre-work build.** Step 1 establishes a baseline
 and step 2 creates the fixture. Steps 4 and 5 assert counts, and truncate-and-reimport lands on exactly
-the right totals — which is the whole reason step 3 exists and why its assertion hangs on a row the
+the right totals, which is the whole reason step 3 exists and why its assertion hangs on a row the
 files cannot re-create. A count is not evidence here; the locally authored quote is.
 
 **Two draft defects were found by running it, both of which would have made the document unexecutable
-rather than merely wrong.** `POST /quotes` does not exist — the v1 API is read-only for quote content —
+rather than merely wrong.** `POST /quotes` does not exist, the v1 API being read-only for quote content,
 and `Invoke-RestMethod -Form` is PowerShell 7+, unavailable in this project's 5.1 shell. Neither is
 visible from reading; both surfaced on the first real run, which is the argument for writing the
 document before the code rather than after.

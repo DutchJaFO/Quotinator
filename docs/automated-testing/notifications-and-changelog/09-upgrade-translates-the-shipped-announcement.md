@@ -9,7 +9,7 @@
 
 Beyond the profile: the prior side is the **published `ghcr.io/dutchjafo/quotinator:1.8.3` tag**, not
 the milestone base image. That version wrote the operation-id-rename announcement in English with no
-translation table to put anything else in, which is the state this upgrade has to repair — the base
+translation table to put anything else in, which is the state this upgrade has to repair: the base
 image already has the repair in it and would prove nothing.
 
 Two containers over one bind-mounted directory the document creates and removes: `qt-notif-09-183`
@@ -17,7 +17,7 @@ publishes no port and is waited on by its own log, then `qt-notif-09-current` pu
 
 ## Determinism
 
-- **The subject is one notification identified by a known cause** — the announcement, selected by
+- **The subject is one notification identified by a known cause**: the announcement, selected by
   `metadataKind -eq 'announcement'`. Nothing counts notifications: how many exist depends on which
   producers ran and what the changelog flags for the running version.
 - **The upgrade must be the thing that adds the translations**, so step 2 confirms the released
@@ -25,7 +25,7 @@ publishes no port and is waited on by its own log, then `qt-notif-09-current` pu
   backfill working from the translations having been there all along.
 - **The original English text must survive unchanged.** Each producer's content hash is taken over it,
   so a backfill that rewrote it would leave the notification unrecognisable to the dedupe and it would
-  re-announce — a failure that appears one boot later, which is why step 6 restarts.
+  re-announce, a failure that appears one boot later, which is why step 6 restarts.
 - **Every count is scoped to the announcement, never taken over a whole table.** Other producers write
   their own notifications and their own translations, so an unscoped count answers a different question
   than the one being asked and grows whenever a producer is added.
@@ -55,8 +55,8 @@ while (-not (docker logs qt-notif-09-183 2>&1 | Select-String -SimpleMatch 'Quot
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-09-183 --bind $dataDir
 ```
 
-**Expected:** the released image reaches `Quotinator ready`, `thrown=0` — read before the stop, per the
-index's *Read the log before the application stops* — and the container is removed, leaving its
+**Expected:** the released image reaches `Quotinator ready`, `thrown=0`, read before the stop, per the
+index's *Read the log before the application stops*, and the container is removed, leaving its
 database in `$dataDir`.
 
 ### 2. Confirm the released database has the announcement and no translations
@@ -68,11 +68,11 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotin
   --sql "SELECT COUNT(*) AS TranslationTable FROM sqlite_master WHERE type='table' AND name='System_NotificationTranslation'"
 ```
 
-**Expected:** `Announcements` is `1`, and `TranslationTable` is `0` — the released schema has no
+**Expected:** `Announcements` is `1`, and `TranslationTable` is `0`: the released schema has no
 translation table at all.
 
 **The column is `Message` here, not `Body`.** v1.8.3 predates the rename, so a query naming `Body` fails
-with `no such column` — which reads as a broken step rather than as the schema difference it is. Steps
+with `no such column`, which reads as a broken step rather than as the schema difference it is. Steps
 after the upgrade use `Body`, because by then the rename has run.
 
 **On failure:** `0` announcements means there is nothing for the upgrade to translate, and every check
@@ -111,7 +111,7 @@ $en = Get-Announcement 'en'; $nl = Get-Announcement 'nl'; $de = Get-Announcement
 **Expected:** every value `True`.
 
 **On failure:** `allDiffer=False` with the language flags `True` means no translation rows were written
-and each read fell through to the original while still echoing the requested language — the backfill did
+and each read fell through to the original while still echoing the requested language: the backfill did
 not match the announcement row.
 
 ### 5. The English text was not moved or rewritten
@@ -121,7 +121,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotin
   --sql "SELECT COUNT(*) AS Announcements FROM System_Notification WHERE Body LIKE '%GetAllImportBatches%'"
 ```
 
-**Expected:** `1` — the original row, still carrying the text the released build wrote.
+**Expected:** `1`, the original row, still carrying the text the released build wrote.
 
 ### 6. A second boot does not re-announce
 
@@ -140,7 +140,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotin
 translated language each with `Cnt` = `1`.
 
 **The count is scoped to the announcement by joining its notification.** Other producers write
-translations of their own — the what's-new notification has a row per language too — so an unscoped
+translations of their own (the what's-new notification has a row per language too) so an unscoped
 `GROUP BY Language` over the whole table returns 2 per language on a correct run and reads as the
 backfill having duplicated. Measured: it does exactly that.
 
@@ -180,5 +180,5 @@ Remove-Item -Recurse -Force $dataDir
 ```
 
 **Expected:** `new=0`. Counted from `$afterRestart`, not from zero: the restart in step 6 is a stop, and
-its own shutdown lines stay in the log — two, one per listening port, measured 2026-09-22 — so a
+its own shutdown lines stay in the log, two, one per listening port, measured 2026-09-22, so a
 cumulative count would report them as if this run had thrown.

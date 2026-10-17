@@ -20,7 +20,7 @@ reseed confirm afresh.
 
 **The first seed must have finished before the reseed runs.** A reseed racing the initial seed would
 confirm files the test never established were clean, so the wait polls the quote count for a non-zero
-value rather than sleeping for a duration — the same gate
+value rather than sleeping for a duration, the same gate
 [`10`](10-reseed-recommendation-and-action.md) uses.
 
 **Count this confirmation, never the total number of notifications.** How many notifications exist
@@ -37,7 +37,7 @@ ignored `isDismissed` could never fall back and would pass whatever happened.
 single-line JSON, so a line-based match reports `1` however many copies exist; and PowerShell 5.1
 unrolls a single-element array on return, so a bare `$x.Count` prints empty for exactly one match.
 Both failure modes are recorded on [`10`](10-reseed-recommendation-and-action.md), which found them the
-hard way — every count here is wrapped, including the ones expected to be zero.
+hard way, and every count here is wrapped, including the ones expected to be zero.
 
 **The number of files is read, never predicted.** How many bundled files apply cleanly depends on the
 manifest and on whether a file's conflicts are fully resolved by its rule file, both of which change
@@ -61,7 +61,7 @@ function Get-Confirmations {
 while ((Get-QuoteCount) -lt 1) { Start-Sleep 2 }
 "quotes seeded = $(Get-QuoteCount)"
 "confirmations after first seed = $(@(Get-Confirmations).Count)"
-@(Get-Confirmations) | ForEach-Object { "  $($_.title) — $($_.body)" }
+@(Get-Confirmations) | ForEach-Object { "  $($_.title): $($_.body)" }
 ```
 
 **Expected:** a non-zero `quotes seeded`, and one confirmation per bundled file that applied cleanly,
@@ -69,7 +69,7 @@ each naming its own file.
 
 **Inverted 2026-09-02, and the step got stronger for it.** It previously expected
 `confirmations after first seed = 0`, on the grounds that the startup modal's aggregate summary already
-covered a fresh install. It does not — that summary carries no file names, no origin, and no
+covered a fresh install. It does not: that summary carries no file names, no origin, and no
 added-versus-updated split, and it is shown after a reseed too, where the confirmations are written
 anyway. The finding that forced this: two runs against an empty database, identical per-file reports,
 four confirmations from the UI and none at startup.
@@ -79,7 +79,7 @@ recorded: `= 0` passes against a build with no producer at all, so it proved not
 depended on step 2 to give it meaning. A presence assertion cannot pass that way.
 
 **Step 2 changes with it.** Confirmations now already exist when it runs, and dedupe means an
-unchanged reseed adds none — so "at least 1" would be satisfied by this step's own rows. Step 2
+unchanged reseed adds none, so "at least 1" would be satisfied by this step's own rows. Step 2
 therefore dismisses them before reseeding, which is what keeps its count attributable to the reseed.
 
 ### 2. Reseed, and confirm each cleanly-applied file
@@ -109,7 +109,7 @@ least 1, every row reporting `type=success` (the API serializes the type in lowe
 
 **The dismissal is what keeps this step meaningful, and it was added 2026-09-02 with step 1's
 inversion.** Once cold start writes confirmations too, `at least 1` is satisfied by rows step 1 already
-produced — so a build whose reseed path wrote nothing at all would still pass. Clearing them first
+produced, so a build whose reseed path wrote nothing at all would still pass. Clearing them first
 means the count can only come from the reseed. This is the same behaviour
 `DatabaseInitializerTests.Reseed_AfterDismissal_WritesTheConfirmationAgain` asserts at unit level,
 exercised here against a real reseed.
@@ -129,7 +129,7 @@ $counts | Where-Object { $_.incoming -gt 0 } | ForEach-Object {
 }
 ```
 
-**Expected:** `resolvedToExisting total` is **non-zero**, and every listed row's own parts add up —
+**Expected:** `resolvedToExisting total` is **non-zero**, and every listed row's own parts add up:
 `incoming = added + modified + unchanged + resolvedToExisting + skipped`.
 
 Both halves are needed, for the same reason as everywhere else in this suite: a non-zero count alone is
@@ -139,7 +139,7 @@ that produced no actions at all.
 **Measured 2026-09-09 against a freshly built image:** one confirmation reports
 `resolvedToExisting = 21` where the pre-fix run reported `modified = 21` for the same file.
 
-**Canary, 2026-09-08, against a pre-fix image built from `18418c29`:** red —
+**Canary, 2026-09-08, against a pre-fix image built from `18418c29`:** red,
 `resolvedToExisting total = 0`, because the field did not exist and those rows were counted as
 `modified`. The assertion cannot pass without the fix.
 
@@ -152,18 +152,18 @@ $payload.counts | ForEach-Object { "$($_.entityType): incoming=$($_.incoming) ad
 ```
 
 **Expected:** a non-empty `file`, at least one non-quote `entityType` line, and no line reading
-`incoming=0` — a type the file did not touch is omitted rather than stored as a row of zeros.
+`incoming=0`: a type the file did not touch is omitted rather than stored as a row of zeros.
 
 **`added=0 modified=0` is expected here, not a failure.** This step once required that no line read
 that way, which held only while a reseed deleted before importing. Since #372 and #373 a reseed of
 unchanged content imports into what is already stored, so every row lands in `unchanged` or
-`resolvedToExisting` and a touched type legitimately reports zero adds and zero modifications —
+`resolvedToExisting` and a touched type legitimately reports zero adds and zero modifications,
 measured 2026-09-22: `Quote: incoming=97 … unchanged=76`. Whether a type was touched is `incoming`,
 which is what this step now reads.
 
 **Do not require `Quote` on every file.** Measured on this document's first run: of the four bundled
 files, `quotinator-series-universe.json` reports `Source: added=69` and carries no `Quote` line at all.
-That file is also the clearest evidence for why the breakdown exists — under the quote-only counts this
+That file is also the clearest evidence for why the breakdown exists: under the quote-only counts this
 issue replaced, it would have confirmed itself as "0 added, 0 updated", reporting a silent no-op for a
 file that had just added 69 Sources.
 
@@ -202,7 +202,7 @@ Invoke-RestMethod -Method Post -Headers $headers `
 
 This is the positive control step 4 needs. Without it, "does not duplicate" is indistinguishable from
 "only ever writes once", and a confirmation the operator had dealt with would silently suppress every
-later reseed — the failure mode dedupe-while-active exists to avoid.
+later reseed, the failure mode dedupe-while-active exists to avoid.
 
 ### 6. Confirm the reseed's own dismissal did not sweep them away
 
@@ -218,8 +218,8 @@ place that shows is a live call where both run in order.
 
 ### 7. Confirm all four seeding variants, from real configuration
 
-Steps 1–6 only ever exercise one of the four states seeding can be in. Which files a reseed sees comes
-from configuration and from what is on disk, and neither is reachable from a unit test — a unit test
+Steps 1 to 6 only ever exercise one of the four states seeding can be in. Which files a reseed sees comes
+from configuration and from what is on disk, and neither is reachable from a unit test: a unit test
 hands the initializer a batch list directly, so it can never prove that
 `Quotinator__IncludeDefaultSources=false` actually produces an empty one, nor that a file dropped in
 `{dataDir}/imports/` becomes a user-imports batch.
@@ -227,7 +227,7 @@ hands the initializer a batch list directly, so it can never prove that
 Each variant gets its own container, because the state is fixed at startup.
 
 **Each variant needs its own bind directory, not just its own container.** `destroy` deliberately
-leaves a bind directory in place — *"Its bind directory is this test's own to delete"* — so two
+leaves a bind directory in place, *"Its bind directory is this test's own to delete"*, so two
 variants pointed at one directory share a **database**, and the second starts with the first's quotes
 and notifications already in it. That is the opposite of what this step is for.
 
@@ -250,7 +250,7 @@ function ReseedAndCount($name, $port, $extra) {
   $key = @{ "X-Api-Key" = "t2-302" }
   dotnet script scripts/testing/test-env.csx -- create --name $name --port $port `
     --image quotinator:local --env Quotinator__AdminApiKey=t2-302 @extra
-  # Seeding finishes before the ready banner, and every start logs it — including one with no files.
+# Seeding finishes before the ready banner, and every start logs it, including one with no files.
   while (-not (docker logs $name 2>&1 | Select-String -SimpleMatch 'Quotinator ready')) { Start-Sleep 1 }
   # Dismiss what the cold start wrote, so what is counted next is attributable to the reseed alone.
   @(Confirmations $port) | ForEach-Object {
@@ -292,37 +292,37 @@ Measured 2026-09-22 before the dismissal was added: `11b` 10 and `11c` 2, agains
 **`11d` must show the same file name twice, once per origin.** Copying a bundled file into `imports/`
 is the ordinary way a user customises one, so both directories hold `quotinator-curated.json`; the two
 confirmations are told apart by `origin`, not by name. Both carry the same seven-type breakdown: the
-bundled copy applied that content first, so the user copy's rows are all unchanged — reported, not
+bundled copy applied that content first, so the user copy's rows are all unchanged: reported, not
 omitted, since the file did touch those types.
 
 **Read `origin` from the payload, not the count alone.** Before `origin` existed, these two rows were
-distinguishable only by their breakdowns happening to differ — two same-named files that both applied
+distinguishable only by their breakdowns happening to differ, two same-named files that both applied
 nothing shared an identity, and the second was silently suppressed. That is the defect this variant
 found, and asserting only the total would not have caught it.
 
 The zero is as load-bearing as the others. A reseed with nothing configured must be a clean no-op that
-still answers `200` — not an error, and not a confirmation reporting that nothing happened. And `11c`
+still answers `200`, not an error, and not a confirmation reporting that nothing happened. And `11c`
 is what proves the confirmation is not a bundled-content feature: the clean-apply branch it is written
 from sits immediately after an auto-purge step that *does* branch on origin, so origin is live in this
 code path.
 
 **On failure:** if `11c` reports `0`, check the imports directory actually reached `/data/imports`
-inside the container before concluding the producer is origin-gated — a bind mount that did not land
+inside the container before concluding the producer is origin-gated: a bind mount that did not land
 looks identical from the API.
 
 **If `11d` reports six rather than five, check the bind directory before anything else.** Found
 2026-09-02 while re-running this document for #302's reopening: `11c` and `11d` shared one bind
-directory, so `11d` inherited `11c`'s database — it started with quotes already present, skipped
+directory, so `11d` inherited `11c`'s database: it started with quotes already present, skipped
 cold-start seeding entirely, and its reseed's five landed on top of `11c`'s one. The symptom is a
 sixth row, `quotinator-curated.json origin=User counts=7`, which no single run produces; the
 container log confirms it by showing a reseed with no cold-start seeding before it. The product was
-correct throughout. This was latent before the reopening for the same reason step 1 was weak — with
+correct throughout. This was latent before the reopening for the same reason step 1 was weak: with
 cold start silent there was simply less to leak.
 
 ### 8. Confirm they reach the startup modal after a restart
 
 `/notifications` is only one of the two surfaces an active notification appears on. The other is the
-startup popup on the home page, which is shown once per process run — so a reseed cannot populate it in
+startup popup on the home page, which is shown once per process run, so a reseed cannot populate it in
 the run that performed the reseed, and this step needs a restart.
 
 The modal is server-rendered, so its content is in the HTML of `/` and needs no browser automation.
@@ -352,7 +352,7 @@ name present.
 shutdown lines of its own; a count taken across it reports them as thrown. See the index's *Read the
 log before the application stops*.
 
-**Negative control — dismiss every confirmation, restart, and confirm the modal drops them:**
+**Negative control, dismiss every confirmation, restart, and confirm the modal drops them:**
 
 ```powershell
 @(Get-Confirmations) | ForEach-Object {
@@ -375,10 +375,10 @@ against a page that renders every notification ever written, or against a substr
 appear somewhere else in the markup.
 
 **The control was "a container that has never reseeded" until 2026-09-02, and #302's reopening
-invalidated it** — a fresh install now confirms each file it seeds, so that container is no longer in
+invalidated it**: a fresh install now confirms each file it seeds, so that container is no longer in
 the state the control needed. Dismissal produces that state instead, and targets the named failure mode
 more directly: an active-only query that is not actually filtering is exactly what shows a dismissed
-row. Note the restart — the modal renders once per process run, so the dismissal must precede one.
+row. Note the restart: the modal renders once per process run, so the dismissal must precede one.
 
 **On failure:** check `/notifications` first. If the confirmations are there but not in the modal, the
 fault is in the modal's own active-notification query, not in this issue's producer.
@@ -406,12 +406,12 @@ Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only u
 
 | Step | Assertion | Pre-work result |
 |---|---|---|
-| 1 | `confirmations after first seed = 0` | **passes — and that is a weakness, see below** |
-| 2 | `confirmations after reseed >= 1` | **fails** — `0`, no producer exists |
+| 1 | `confirmations after first seed = 0` | **passes, and that is a weakness, see below** |
+| 2 | `confirmations after reseed >= 1` | **fails**: `0`, no producer exists |
 
 **Step 1 passes on a build with no feature at all, because it asserts an absence.** It cannot
 distinguish "correctly suppressed on the first seed" from "this was never built", so on its own it is
-not evidence of anything — the same trap `docs/testing-policy.md` records for negative/absence
+not evidence of anything, the same trap `docs/testing-policy.md` records for negative/absence
 assertions generally. Step 2 is what gives step 1 its meaning: only once confirmations are known to
 appear on a reseed does their absence on a first seed say something. **Do not reorder or drop step 2**
 believing step 1 covers the behaviour.
@@ -421,12 +421,12 @@ Container, image and worktree removed afterwards.
 ### Step 1's own canary, after the 2026-09-02 inversion
 
 The weakness above was resolved by removing the behaviour, not by strengthening the assertion around
-it. Step 1 now asserts a presence, so it has a red of its own — and unlike the original it needed no
+it. Step 1 now asserts a presence, so it has a red of its own, and unlike the original it needed no
 worktree, because the gate was still in place on `HEAD` at the moment the inverted step was written:
 
 | Step | Assertion | Result against the gated build |
 |---|---|---|
-| 1 | one confirmation per cleanly-applied file at cold start | **fails** — `quotes seeded = 799`, `confirmations after first seed = 0` |
+| 1 | one confirmation per cleanly-applied file at cold start | **fails**: `quotes seeded = 799`, `confirmations after first seed = 0` |
 
 That is the T1 finding reproduced exactly: the seeding ran, four files applied, and nothing was said.
 

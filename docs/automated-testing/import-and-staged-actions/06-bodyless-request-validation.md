@@ -7,7 +7,7 @@
 
 ## Preconditions
 
-Nothing beyond the Fresh profile. No file, no `Content-Type`, no `batchId` — the absence *is* the
+Nothing beyond the Fresh profile. No file, no `Content-Type`, no `batchId`: the absence *is* the
 input.
 
 ## Determinism
@@ -30,7 +30,7 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-import-06 --port 
 $base = "http://localhost:18606/api/v1"
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
@@ -43,7 +43,7 @@ $bodyless = dotnet script scripts/testing/http.csx -- --method POST --url "$base
 $bodyless.detail
 ```
 
-**Expected:** `422`, `hasDetail=True` and `hasTraceId=True`, with a `detail` naming the missing input —
+**Expected:** `422`, `hasDetail=True` and `hasTraceId=True`, with a `detail` naming the missing input:
 "you must provide either a file… or a batchId", paraphrased per locale. **Not** a bare `400` with no
 `detail` at all.
 
@@ -57,7 +57,7 @@ $unknown.detail
 ```
 
 **Expected:** `404` (unknown batch) even with zero body and no `Content-Type`, proving `batchId` mode
-never attempts to read the request body — again with its own `detail`.
+never attempts to read the request body, again with its own `detail`.
 
 ## Observed effect
 
@@ -79,11 +79,11 @@ Naming an unknown `batchId` returns an RFC 9110 one:
 ```
 
 **The `detail` text is what an operator actually sees**, and it is specific to the missing input rather
-than generic — which is the whole point of the `422`-over-`400` distinction this test exists for. Both
+than generic, which is the whole point of the `422`-over-`400` distinction this test exists for. Both
 carry a `traceId`, so a report of either can be tied back to its request in the log.
 
 **If this regresses to a bare `400`**, `POST /import`'s handler is binding `IFormFile`/`[FromForm]`
-parameters automatically again instead of reading `HttpRequest` manually — see `ImportEndpoints.cs`'s
+parameters automatically again instead of reading `HttpRequest` manually; see `ImportEndpoints.cs`'s
 `HandleImportFromRequestAsync`.
 
 ## Canary

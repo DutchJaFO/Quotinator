@@ -12,8 +12,8 @@ than the profile's named volume, so the file can be edited from the host while t
 run on three images in turn against the same database:
 
 1. the published `ghcr.io/dutchjafo/quotinator:1.8.3`, which creates the released baseline;
-2. `quotinator:data-v8`, built from `54bab6f7^` — the last commit whose Data schema stops before the
-   what's-new backfill (migration 10) — which migrates that baseline to v8;
+2. `quotinator:data-v8`, built from `54bab6f7^`, the last commit whose Data schema stops before the
+   what's-new backfill (migration 10), which migrates that baseline to v8;
 3. the current build, which replays everything from 9 onwards over it.
 
 The Constrained defect is **a state, not a flag**: what's-new rows in the pre-backfill shape, sitting in
@@ -25,16 +25,16 @@ convention that wrote those rows: a `version` key present meant a tagged release
 unreleased section.
 
 **Only databases carrying rows from an unreleased build are affected, so the state has to be
-constructed** — a current database will never contain one naturally. The v8 image supplies one row of
+constructed**: a current database will never contain one naturally. The v8 image supplies one row of
 that shape on its own; step 2 adds three more whose outcomes differ.
 
 ## Determinism
 
-**The database reaches the backfill by being upgraded to a schema that stops short of it — never by
+**The database reaches the backfill by being upgraded to a schema that stops short of it, never by
 rolling the schema counter back.** Until 2026-09-22 this document deleted `System_SchemaVersion` rows
 from a fully migrated database so the backfill would replay. That only works while every migration
-after the backfill can run a second time, and it stopped working once migrations 12, 16 and 19 — plain
-`ALTER TABLE … ADD COLUMN`, which SQLite cannot make idempotent — landed after it. Measured as written:
+after the backfill can run a second time, and it stopped working once migrations 12, 16 and 19, plain
+`ALTER TABLE … ADD COLUMN`, which SQLite cannot make idempotent, landed after it. Measured as written:
 two deletes replayed `version 20 → 22` and the injected row came back unchanged, reading exactly like a
 broken backfill; enough deletes to reach 10 would replay those `ADD COLUMN`s, fail, restore the backup
 and leave the app at `503`. An intermediate image has neither problem: nothing replays twice, and every
@@ -42,7 +42,7 @@ later migration runs once, in order, as it would on a real upgrade.
 
 **`54bab6f7^` is pinned because the schema it stops at is history, not a moving target.** Migrations
 are append-only, so the commit before the backfill was added stays the commit before the backfill.
-Only consolidation could move it — the tell is step 1's `applying … (version 3 → N)` line showing an
+Only consolidation could move it: the tell is step 1's `applying … (version 3 → N)` line showing an
 `N` other than one below the backfill's own version.
 
 **Three injected rows, because each backfill outcome needs its own evidence:**
@@ -54,19 +54,19 @@ Only consolidation could move it — the tell is step 1's `applying … (version
 | *Injected: states its own* | `{"version":"1.8.5","releaseState":"Unreleased"}` | unchanged | the backfill adds a missing key and never overwrites one |
 
 **The third row is the one that distinguishes, and it has to contradict the convention to do so.** A
-row with no `version` and `Unreleased` — what this document used before — reads the same whether the
+row with no `version` and `Unreleased`, which this document used before, reads the same whether the
 backfill added the key or overwrote it, so it proved nothing about `json_insert`. With a `version`
 present, an overwrite would turn it into `Released`.
 
 **The injected rows' `Metadata` is a JSON literal, so their SQL goes through a file.** Windows
-PowerShell 5.1 strips double quotes out of an argument on its way to a native process — a here-string
-included — so passing the statement inline would store `{version:1.8.4}`. See the index's *Every
+PowerShell 5.1 strips double quotes out of an argument on its way to a native process, a here-string
+included, so passing the statement inline would store `{version:1.8.4}`. See the index's *Every
 command is PowerShell*.
 
 - The container is **stopped** before the injection; writing to the database file underneath a
   running process is a different scenario.
 - **Read the log before every stop**, per the index's *Read the log before the application stops*.
-- **Do not assert which version the current build replays from beyond the one below the backfill** —
+- **Do not assert which version the current build replays from beyond the one below the backfill**:
   the upper end moves with every migration.
 
 ## Steps
@@ -97,12 +97,12 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotin
   --sql "SELECT MAX(Version) AS DataVersion FROM System_SchemaVersion"
 ```
 
-**Expected:** both starts report healthy — `reenter`'s own readiness poll establishes it — and both
+**Expected:** both starts report healthy, since `reenter`'s own readiness poll establishes it, and both
 reads `thrown=0`. The v8 build logs `applying 5 pending "Data" migration(s) (version 3 → 8)`, and
 `DataVersion` is `8`.
 
 **On failure:** a `DataVersion` other than one below the backfill's own version means the pinned commit
-no longer stops where this scenario needs it (see Determinism). Stop — the upgrade below would then be
+no longer stops where this scenario needs it (see Determinism). Stop: the upgrade below would then be
 testing something other than the backfill.
 
 ### 2. Inject the three pre-backfill rows
@@ -123,7 +123,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotin
 ```
 
 **Expected:** `OK — 3 row(s) affected.`, and the three rows read back exactly as the table in
-Determinism states them — **with their double quotes**. A fourth row, the v8 build's own
+Determinism states them, **with their double quotes**. A fourth row, the v8 build's own
 `What's new (unreleased)`, carries `{"version":null,…}` and no `releaseState`: the pre-backfill shape,
 written naturally.
 
@@ -147,15 +147,15 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotin
 
 - *Injected: tagged release* reads `{"version":"1.8.4","releaseState":"Released"}`.
 - *Injected: unreleased* reads `{"highlights":1,"releaseState":"Unreleased"}`.
-- *Injected: states its own* is **unchanged** — still `Unreleased` although it carries a `version`.
-- The v8 build's own row gains `"releaseState":"Unreleased"` — a JSON `null` version extracts as SQL
+- *Injected: states its own* is **unchanged**, still `Unreleased` although it carries a `version`.
+- The v8 build's own row gains `"releaseState":"Unreleased"`, since a JSON `null` version extracts as SQL
   `NULL`, so it counts as absent.
 
 A second `What's new (unreleased)` row, written by the current build with `releaseState` already
 present, is expected: its content hash differs from the v8 build's, because the unreleased changelog
 section it summarises has changed since. That is new content, not a re-announcement.
 
-**A `503 unhealthy` here is a failed replay, not a backfill defect** — the initializer restores its
+**A `503 unhealthy` here is a failed replay, not a backfill defect**: the initializer restores its
 pre-migration backup and the rows read exactly as they did in step 2. Check the health state before
 reading them.
 

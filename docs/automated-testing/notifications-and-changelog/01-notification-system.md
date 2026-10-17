@@ -9,11 +9,11 @@
 
 **Beyond the profile.** One container of this test's own (`qt-notif-01` / `qt-notif-01-data`),
 because the Action-button check runs a Reset that wipes the database it is started against.
-Seeding must be allowed to finish before anything is asserted — the notification a fresh container
+Seeding must be allowed to finish before anything is asserted: the notification a fresh container
 produces is written during startup, so an early read cannot tell "not produced" from "not yet".
 
 The Status-filter and Action-button checks additionally need four rows that no producer creates on its
-own — one `ActionRequired` row with `DismissTriggerKey = 'DatabaseReset'`, one already-expired row, one
+own: one `ActionRequired` row with `DismissTriggerKey = 'DatabaseReset'`, one already-expired row, one
 already-dismissed row, and one dismissed with reason `Obsolete`. Nothing has produced an obsolete
 notification since #372 stopped reseeds truncating batches, but databases that already hold one still
 have to read it correctly. Step 7 constructs them directly in `System_Notification`; this is the index's
@@ -24,7 +24,7 @@ surfaces.
 
 **Never assert a total notification count.** The number on a fresh container changes whenever a
 producer is added or the bundled changelog gains a notification-flagged highlight for the running
-version. **This expectation has already been wrong twice** — `0` before #312's producers existed, then
+version. **This expectation has already been wrong twice**: `0` before #312's producers existed, then
 `1` until the unreleased changelog carried a `notification` audience highlight.
 
 Assert the presence of the notification a *known cause* produces, which is what this test is actually
@@ -33,7 +33,7 @@ about. A count asserts something nobody intended and gets "fixed" by editing a d
 - **Waits for health, not a duration.**
 - The dismiss checks use a **fixed all-zero id** that cannot exist, so the `404` is about the id being
   absent rather than about any particular row's state.
-- The empty-state check requires dismissing **every** active row first — a fresh container is no longer
+- The empty-state check requires dismissing **every** active row first, since a fresh container is no longer
   empty, so the genuinely-zero-rows path is otherwise never exercised. It produces more than one
   notification now, so dismissing only the announcement leaves the page populated and the empty state
   unreached.
@@ -41,7 +41,7 @@ about. A count asserts something nobody intended and gets "fixed" by editing a d
   checkpoints and removes the `-wal`/`-shm` sidecars (measured), so copying the `.db` file out, editing
   it and copying it back cannot leave a stale sidecar behind for SQLite to recover from.
 - **The log is read before each stop, with the browser tab closed first.** Stopping logs exceptions of
-  its own — measured 2026-09-19, this document's one stop logged seven with a page still open — and a
+  its own. Measured 2026-09-19, this document's one stop logged seven with a page still open, and a
   page left open reconnects to the restarted container. Read afterwards, they would be counted as this
   test's.
 
@@ -56,12 +56,12 @@ $notifications = (dotnet script scripts/testing/http.csx -- --url "http://localh
 @($notifications | Where-Object { $_.title -match 'operation IDs were renamed' }).Count
 ```
 
-**Expected:** `200`, and `1` — the announcement about the renamed API operation IDs is present, the
+**Expected:** `200`, and `1`: the announcement about the renamed API operation IDs is present, the
 notification a fresh container is known to produce. Asserted by identity, never by a total: see
 Determinism for the two occasions a count was wrong here.
 
 **On failure:** an empty list means seeding had not finished writing the startup notification, not that
-no notification is produced — the two are indistinguishable from an early read (see Preconditions).
+no notification is produced: the two are indistinguishable from an early read (see Preconditions).
 Stop and let the container finish rather than reading the absence as a result.
 
 ### 2. Dismiss an unknown notification with no admin key
@@ -82,7 +82,7 @@ dotnet script scripts/testing/http.csx -- --method POST `
   --expect 404 --status
 ```
 
-**Expected:** `404` — no notification exists with that id. Taken with step 2, that separates "the key
+**Expected:** `404`, since no notification exists with that id. Taken with step 2, that separates "the key
 was rejected" from "the row was not found"; either alone could be produced by the other cause.
 
 ### 4. Confirm the OpenAPI spec carries the Notifications tag
@@ -96,12 +96,12 @@ $operations = foreach ($path in $spec.paths.PSObject.Properties) {
 "declaredTags=$((@($spec.tags).name | Sort-Object) -join ', ')"
 ```
 
-**Expected:** `taggedOperations` is non-zero — the notification endpoints are grouped under
+**Expected:** `taggedOperations` is non-zero: the notification endpoints are grouped under
 `Notifications` rather than falling into whatever group they would otherwise land in. Read from the
 operations' own `tags` arrays rather than matched as text, so the assertion cannot be satisfied by the
 word appearing somewhere unrelated in the document.
 
-**`declaredTags` includes `Notifications`.** It was missing until 2026-08-27 — the
+**`declaredTags` includes `Notifications`.** It was missing until 2026-08-27, when the
 constant existed and the operations carried it, but the spec's top-level `tags` array declared only the
 other six, so the group rendered with no description and no ordering. Found by reading the live spec
 during #339's PowerShell conversion, and fixed in the same issue.
@@ -109,13 +109,13 @@ during #339's PowerShell conversion, and fixed in the same issue.
 **The assertion for that now lives at unit tier**, where it belongs:
 `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` fetches the live
 `/openapi/v1.json` through the full pipeline and checks every tag an operation carries against the
-declared set — derived from the operations themselves, so a tag added to an endpoint and nowhere else
+declared set, derived from the operations themselves, so a tag added to an endpoint and nowhere else
 fails without anyone updating a list. This step prints the tags for context rather than re-asserting
 what a deterministic test already covers.
 
 ### 5. Render the notification pages, and assert on the DOM
 
-**This step needs a browser driver** — the pages are Blazor and the assertions are about what renders,
+**This step needs a browser driver**: the pages are Blazor and the assertions are about what renders,
 so an HTTP call cannot make them. They are stated as DOM reads so a driver can run them unattended, and
 so two runs check the same thing.
 
@@ -125,7 +125,7 @@ so two runs check the same thing.
 |---|---|
 | `/notifications` | `document.title` contains `Notifications`; `tbody tr` count is non-zero; the row text contains the #279 announcement's **body** (`Two REST API operation IDs were renamed`), since the table renders the message rather than the title |
 | `/` | body text contains the startup-success wording and the same announcement; `tbody tr` is non-zero |
-| both | no stack trace in the body text — `/at [A-Za-z.]+\(/` must not match — and no `503` |
+| both | no stack trace in the body text, so `/at [A-Za-z.]+\(/` must not match, and no `503` |
 
 **Capture a screenshot of each as evidence**, but never as the assertion: a screenshot nothing compares
 against records what happened without being able to fail. The DOM reads above are what fail.
@@ -148,7 +148,7 @@ $all = (Invoke-RestMethod "http://localhost:18501/api/v1/notifications?pageSize=
 
 **Expected:** each dismiss returns `200`, and then `stillActive=0` against a non-zero `total`.
 
-**`GET /notifications` returns dismissed rows too** — the API's default is unfiltered, while the
+**`GET /notifications` returns dismissed rows too**: the API's default is unfiltered, while the
 *page's* filter defaults to Active. Do not read a still-populated API response as a failed dismiss;
 read the flag, which is why both numbers are printed.
 
@@ -159,17 +159,17 @@ filter.*; `/` drops its Notifications section entirely rather than leaving an em
 stats block still renders.
 
 **Dismissing *every* active row is deliberate.** The empty state is only reachable with none left, and
-a fresh container now produces more than one — two when measured. Dismissing just the announcement, as
+a fresh container now produces more than one, two when measured. Dismissing just the announcement, as
 this step said until #339's full run, leaves the what's-new row behind and the empty state untested.
 
 ### 7. Insert the four rows no producer creates
 
 The Status-column, filter and Action-button checks need one `ActionRequired` row carrying a dismiss
 trigger, one already-expired row, one already-dismissed row and one dismissed as obsolete. Nothing in
-the application produces these, so the test constructs them — against a **stopped** container, since writing to a SQLite file
+the application produces these, so the test constructs them, against a **stopped** container, since writing to a SQLite file
 underneath a running process is a different scenario:
 
-First close the browser tab, so no page reconnects to the restarted container, and read the log — the
+First close the browser tab, so no page reconnects to the restarted container, and read the log: the
 stop below logs exceptions of its own (the index's *Read the log before the application stops*):
 
 ```powershell
@@ -184,10 +184,10 @@ $thrownSeen = 0
 Read-Thrown
 ```
 
-**Expected:** `thrown=0` — nothing in steps 1 to 6 threw.
+**Expected:** `thrown=0`, since nothing in steps 1 to 6 threw.
 
 **On failure:** a `CryptographicException` / `AntiforgeryValidationException` pair means the browser
-held a cookie from a container outside the suite's shared key ring — see
+held a cookie from a container outside the suite's shared key ring; see
 [*A cookie from another key ring is replaced on the first page, and logged only
 then*](../api-surface/06-a-cookie-from-another-key-ring-is-replaced.md), whose step 4 restores it.
 
@@ -212,11 +212,11 @@ $rows = (Invoke-RestMethod "http://localhost:18501/api/v1/notifications?pageSize
 @($rows | Where-Object { $_.title -like 'Smoke test*' }).Count
 ```
 
-**Expected:** `execute-sql.csx` reports `4 row(s) affected`, and the count reads `4` — all four rows
+**Expected:** `execute-sql.csx` reports `4 row(s) affected`, and the count reads `4`: all four rows
 are present and readable through the API.
 
 **Counted as objects, not as text matches.** The response is single-line JSON, so a line-counting match
-reports `1` however many rows exist — this step required `3` from exactly that shape until #339's full
+reports `1` however many rows exist, and this step required `3` from exactly that shape until #339's full
 run, and therefore failed on a correct setup every time. It is the second document in the suite to have
 carried this bug; see the index's *A count is evidence only if the instrument counts the right thing*.
 
@@ -225,7 +225,7 @@ throwaway container installing `sqlite3` over the network. It is this project's 
 and it removes a network dependency from the middle of a test.
 
 **On failure:** a SQL error means the rows were never created, and every assertion in step 8 then
-reads an unchanged page. That is a setup failure, not a result — stop.
+reads an unchanged page. That is a setup failure, not a result: stop.
 
 A CHECK-constraint rejection here is worth reading rather than working around: `Type`,
 `DismissTriggerKey` and `DismissReason` are constrained to their enum's current members, so a failure
@@ -233,18 +233,18 @@ means the enum moved and this fixture needs updating with it.
 
 ### 8. Check the status column, the status filter, and the Action button
 
-With the four rows from step 7 in place, on `/notifications`. **Driver step**, like step 5 — every
+With the four rows from step 7 in place, on `/notifications`. **Driver step**, like step 5: every
 assertion is a DOM read or a click, and each is stated so a driver can perform it without judgement.
 
-**Expected — status column and default filter:** reading `tbody tr`, taking each row's message cell
-and status cell —
+**Expected, status column and default filter:** reading `tbody tr`, taking each row's message cell
+and status cell:
 
 - The page loads with the **Active** filter selected: exactly the `ActionRequired` row is listed, and
   its Action cell holds that action's own button, **Reset the database**.
 - Click **All**: every row is listed, the four constructed ones among them, and those four read
   `Active` (the action row), `Expired`, `Dismissed` and `No longer applicable`. **The undismissed row past
-  its `ExpiresAt` reads `Expired`, never `Active`** — that is the computed-status assertion. **The row
-  dismissed as obsolete reads `No longer applicable`, never `Dismissed`** — a notification whose subject
+  its `ExpiresAt` reads `Expired`, never `Active`**, which is the computed-status assertion. **The row
+  dismissed as obsolete reads `No longer applicable`, never `Dismissed`**: a notification whose subject
   no longer exists was neither dealt with nor set aside.
 - Click **Expired only**: exactly one row, the expired one.
 
@@ -253,14 +253,14 @@ row.
 
 - The row's buttons become **Confirm** and **Cancel**.
 - Click **Cancel**: the buttons revert to the single **Reset the database** button.
-- `(Invoke-RestMethod "http://localhost:18501/api/v1/version").database.quotes` is **unchanged** —
+- `(Invoke-RestMethod "http://localhost:18501/api/v1/version").database.quotes` is **unchanged**, since
   Cancel called nothing.
 
 **Action button, Confirm path.** Click **Reset the database**, then **Confirm**.
 
 - `(Invoke-RestMethod "http://localhost:18501/api/v1/version").database.quotes` drops to `0`, matching
   [`database-lifecycle/03-reset-is-a-full-wipe.md`](../database-lifecycle/03-reset-is-a-full-wipe.md).
-- `(Invoke-RestMethod "http://localhost:18501/api/v1/notifications?pageSize=0").items` is **empty** —
+- `(Invoke-RestMethod "http://localhost:18501/api/v1/notifications?pageSize=0").items` is **empty**, since
   Reset wipes `System_Notification` along with every other table.
 
 **The quote count is what makes Cancel and Confirm distinguishable.** Both leave the page looking
@@ -275,7 +275,7 @@ above, Cancel left `quotes` at `799`, and Confirm dropped it to `0` with `0` not
 Read-Thrown
 ```
 
-**Expected:** `thrown=0` — nothing since the restart threw, the reset included.
+**Expected:** `thrown=0`, since nothing since the restart threw, the reset included.
 
 ## Observed effect
 
@@ -315,5 +315,5 @@ dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-01
 Remove-Item .claude/temp/notif-01.db -ErrorAction SilentlyContinue
 ```
 
-If the Action button's **Confirm** path was exercised, the volume holds a wiped, post-Reset database —
+If the Action button's **Confirm** path was exercised, the volume holds a wiped, post-Reset database,
 which is why it is removed rather than kept.

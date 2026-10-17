@@ -8,7 +8,7 @@
 ## Preconditions
 
 Beyond the Fresh profile: the import below uploads `data/sources/quotinator-curated.json` from the
-repository itself, so the commands run from the repository root — the file comes from the working tree,
+repository itself, so the commands run from the repository root, since the file comes from the working tree,
 not from inside the container.
 
 `batchId`, `entityId`, `existingBatchId` and `recordId` are `string`-typed, not `Guid`-typed, so unlike
@@ -22,11 +22,11 @@ The import below uses `review` policy deliberately, so it produces pending actio
 
 **Read this before treating a pass as meaningful.** Freshly generated `Guid`s render lowercase from
 `GuidExtensions.ToCanonicalId()` regardless of the wrap under test, so **this run mainly confirms no
-regression** — it does not exercise the read-time fix itself.
+regression**: it does not exercise the read-time fix itself.
 
 The actual fix, rendering an *already-uppercase stored* value as lowercase, is proven at the SQLite
 integration tier by `ExistingBatchId_RoundTripsCorrectly`, which writes a deliberately mixed-case
-fixture directly — bypassing capture-time canonicalization — and reads it back through this exact
+fixture directly (bypassing capture-time canonicalization) and reads it back through this exact
 query path.
 
 A live run cannot easily manufacture pre-existing non-canonical data through the API alone, because
@@ -35,7 +35,7 @@ this test, and it is why the unit-tier test is the primary evidence here.
 
 **Every step below reports how many values it checked as well as how many were wrong.** A field that
 is absent, or a list that came back empty, otherwise reports zero offenders and reads exactly like a
-pass — the shape the index calls out under *A test that cannot be confirmed has failed*.
+pass, the shape the index calls out under *A test that cannot be confirmed has failed*.
 
 ## Steps
 
@@ -45,7 +45,7 @@ pass — the shape the index calls out under *A test that cannot be confirmed ha
 dotnet script scripts/testing/test-env.csx -- create --name qt-id-04 --port 18204
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app
 that never became healthy.
@@ -70,7 +70,7 @@ Test-Canonical @($import.batchId)
 Test-Canonical $import.pendingActionIds
 ```
 
-**Expected:** `202`, and both lines report `notLowercase=0` with a **non-zero** `checked` — the
+**Expected:** `202`, and both lines report `notLowercase=0` with a **non-zero** `checked`: the
 import's own `batchId`, and every id under `pendingActionIds`, are canonical.
 
 **On failure:** `checked=0` on the second line means the `review` policy staged nothing, so the reads
@@ -87,7 +87,7 @@ $action = (Invoke-RestMethod "http://localhost:18204/api/v1/import/actions?statu
 Test-Canonical @($action.batchId, $action.entityId, $action.existingBatchId)
 ```
 
-**Expected:** `notLowercase=0`, with `checked` counting the fields that are actually populated —
+**Expected:** `notLowercase=0`, with `checked` counting the fields that are actually populated:
 `existingBatchId` is legitimately null on an action with no prior batch, and is skipped rather than
 counted as a pass.
 
@@ -98,11 +98,11 @@ $entry = (Invoke-RestMethod "http://localhost:18204/api/v1/admin/audit?pageSize=
 Test-Canonical @($entry.recordId)
 ```
 
-**Expected:** `checked=1 notLowercase=0` — the `/admin/audit` response's `recordId` is canonical.
+**Expected:** `checked=1 notLowercase=0`: the `/admin/audit` response's `recordId` is canonical.
 
 ## Observed effect
 
-Not yet established. See Determinism for what a pass here does and does not demonstrate — that
+Not yet established. See Determinism for what a pass here does and does not demonstrate: that
 distinction matters more than the raw result.
 
 ## Canary

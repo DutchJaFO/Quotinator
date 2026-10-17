@@ -5,7 +5,7 @@
 **Deterministic:** yes
 **Traces to:** #382, #181
 
-**Pairs with [`23`](23-complete-row-blocks-only-on-a-real-write.md)**, which asserts the other half — a
+**Pairs with [`23`](23-complete-row-blocks-only-on-a-real-write.md)**, which asserts the other half: a
 `Complete` row whose resolution writes nothing must *not* block. The two are separate documents on
 purpose: each builds its own container and its own fixture, so neither can leave state that skews the
 other, and a failure names which half broke without the reader having to work out whether an earlier
@@ -28,7 +28,7 @@ never reads a bundled row, so a change to bundled content cannot make it pass or
 
 **Why the user-imports folder rather than `POST /import`.** `SqliteQuoteImportService` does not pass a
 `ConflictRuleLookup` to `ImportActionPlanner.PlanAsync` at all, so the `review` branch's resolution
-never runs on that path and a rule can never fire through it — measured, not assumed. Only
+never runs on that path and a rule can never fire through it, measured, not assumed. Only
 `QuotinatorDatabaseInitializer` supplies one, and `ManifestSeedPlanner.Plan` is directory-agnostic, so
 `{dataDir}/imports/` with its own `manifest.json` and `ruleFile` reaches the resolution branch.
 
@@ -40,15 +40,15 @@ never runs on that path and a rule can never fire through it — measured, not a
   listed and the final assertion reads an empty set.
 - **The container must be restarted after the files are copied in.** `SeedBatchesBuilder` only adds the
   user-imports batch when `Directory.Exists(importsDir)`, and `/data/imports` does not exist in a fresh
-  volume. A reseed issued before the restart reports `importing from 5 source file(s)` — the bundled
-  set only — and silently does nothing with the fixture. Step 3 asserts the file count for that reason.
+  volume. A reseed issued before the restart reports `importing from 5 source file(s)`, the bundled
+  set only, and silently does nothing with the fixture. Step 3 asserts the file count for that reason.
 - **The rules file starts empty and the rule is added only at step 5.** A `Keep` or `Replace` rule
   present during the initial Add has nothing on the existing side to resolve against, which holds the
   Add itself for review (`keepOrReplaceAgainstNothing`) and the fixture never lands. The rule must
   arrive after the row exists.
 - **The rule must name both sides exactly.** `existingRecord.quoteText` is the stored text and
   `incomingRecord.quoteText` the file's new text. A mismatch makes the rule `Stale`, and the action
-  stages `Stale` rather than `Blocked` — a different outcome that reads at a glance as a failure of the
+  stages `Stale` rather than `Blocked`, a different outcome that reads at a glance as a failure of the
   guard. See [`16`](16-conflict-rule-staleness.md).
 - **The row is made `Complete` with `keep`, not `replace`.** `keep` leaves the stored text exactly as
   the imports file has it, so at step 5 the only disagreement is the one the rule then resolves. A
@@ -58,7 +58,7 @@ never runs on that path and a rule can never fire through it — measured, not a
   content too; an unfiltered tally is satisfied by rows this test did not produce.
 - **Read the whole action list, never the count alone.** #374's accumulation guard makes `PlanAsync`
   skip any quote that already carries an unresolved (`Pending`, `Blocked` or `Stale`) action, so a
-  reseed can stage *nothing at all* for the row — which reads as `blocked=0`, indistinguishable from a
+  reseed can stage *nothing at all* for the row, which reads as `blocked=0`, indistinguishable from a
   guard that wrongly declined to block. Step 4 ends with its action applied, so nothing is outstanding
   when step 5 runs; the printed list is what proves it.
 - **This document is green both before and after #382.** It is a regression guard, not a red-then-green
@@ -122,7 +122,7 @@ dotnet script scripts/testing/http.csx -- --url "$base/health" --wait-for 200 --
 **Expected:** all three files listed, and the container restarts and answers health with `200`.
 
 **Wait for health before step 3.** `docker restart` returns when the process starts, not when it
-answers; a reseed sent straight after it fails with the connection closed — measured 2026-09-22 in
+answers; a reseed sent straight after it fails with the connection closed, measured 2026-09-22 in
 [*A `Complete` row is not blocked when the resolution writes nothing*](23-complete-row-blocks-only-on-a-real-write.md),
 which shares this step.
 
@@ -138,11 +138,11 @@ docker logs qt-import-24 2>&1 | Select-String 'reseed requested' | Select-Object
 (Invoke-RestMethod "$base/quotes/a2222382-0000-4000-8000-000000000002") | Select-Object quote, date, source
 ```
 
-**Expected:** the reseed line reads `importing from 6 source file(s)` — five bundled plus this test's
-own — and the quote reads back `Original fixture text.` with `date` `1999`.
+**Expected:** the reseed line reads `importing from 6 source file(s)`, five bundled plus this test's
+own, and the quote reads back `Original fixture text.` with `date` `1999`.
 
 **On failure:** `5 source file(s)`, or a `404` on the quote, means the user-imports batch was not seen
-— almost always the restart in step 2 not having happened. Stop.
+almost always the restart in step 2 not having happened. Stop.
 
 ### 4. Mark the row `Complete` without changing it
 
@@ -170,10 +170,10 @@ dotnet script scripts/testing/http.csx -- --method POST --url "$base/import/acti
 ```
 
 **Expected:** `ambiguous=quoteText`, the apply returns `200`, and the quote still reads
-`Original fixture text.` — `keep` wrote nothing, and the row is now `Complete`.
+`Original fixture text.`: `keep` wrote nothing, and the row is now `Complete`.
 
 **`completenessStatus` cannot be read back**: `GET /quotes/{id}` does not expose it, unlike every
-masterdata response. Step 5 is what proves the mark took effect — if it did not, its expected `Blocked`
+masterdata response. Step 5 is what proves the mark took effect: if it did not, its expected `Blocked`
 becomes `Decided`.
 
 ### 5. Add a `Replace` rule, change the file, and reseed
@@ -214,7 +214,7 @@ $acts | Select-Object status, actionType
 (Invoke-RestMethod "$base/quotes/a2222382-0000-4000-8000-000000000002").quote
 ```
 
-**Expected:** `blocked=1` — a `Blocked` / `Modify` action — and the quote still reads
+**Expected:** `blocked=1`, a `Blocked` / `Modify` action, and the quote still reads
 `Original fixture text.` The third text was never written.
 
 The rule resolves `quoteText` towards the incoming side, so the resolved payload differs from the
@@ -222,7 +222,7 @@ stored row and the apply genuinely would write. A row a human marked `Complete` 
 decision instead, which is what #181 existed to guarantee and what #382 deliberately kept.
 
 **On failure:** `blocked=1` missing, with a `Decided` or `Applied` action in its place, means a
-`Complete` row accepted a genuine overwrite — a more serious defect than the one #382 fixed.
+`Complete` row accepted a genuine overwrite, a more serious defect than the one #382 fixed.
 `blocked=0` with no new action at all means the row was never re-evaluated (see Determinism). A
 `Stale` action means the rule's recorded snapshot does not match both sides.
 

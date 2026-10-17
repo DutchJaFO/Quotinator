@@ -14,7 +14,7 @@ only what this test writes. The test brings its own two files and never stops th
 
 - **Two quotes, two conflicts.** The base file stores two quotes. The second file restates both under
   `review`: the first with its text in upper case and nothing else changed, the second with genuinely
-  different text — the control.
+  different text, the control.
 - **Every read is scoped to the conflicting batch's own `batchId`.**
 - **The control proves the reads work.** It reports `quoteText` before and after the fix; only the
   case-only quote's result changes.

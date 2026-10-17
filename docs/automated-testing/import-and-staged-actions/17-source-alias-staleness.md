@@ -4,7 +4,7 @@
 **Environment:** Fresh
 **Deterministic:** yes
 **Traces to:** #153
-**Fully green after:** [#347](https://github.com/DutchJaFO/Quotinator/issues/347) — the evaluation
+**Fully green after:** [#347](https://github.com/DutchJaFO/Quotinator/issues/347): the evaluation
 line in steps 2 and 3 does not exist until then, so those readings are inconclusive; every other
 reading passes
 
@@ -12,7 +12,7 @@ reading passes
 
 An alias is stale **only** when the Source its own `canonicalTitle`/`canonicalType` deterministically
 hashes to (`EntityIdentity.SourceId`, fixed at creation and never recomputed on a later Modify) already
-exists **under a different current title** — a genuine rename since the alias was authored.
+exists **under a different current title**, a genuine rename since the alias was authored.
 
 The distinction that matters: guiding the *first-ever* creation of a Source under its correct name is
 the alias doing its normal job, not staleness.
@@ -23,7 +23,7 @@ below.
 
 ## Determinism
 
-**Wait for the bundled seed to finish before checking** — same partial-seed caveat as
+**Wait for the bundled seed to finish before checking**, the same partial-seed caveat as
 [`16-conflict-rule-staleness.md`](16-conflict-rule-staleness.md). The profile's own readiness poll is
 what gates that.
 
@@ -45,7 +45,7 @@ $key  = @{'X-Api-Key' = 'smoketest'}
 $base = "http://localhost:18617/api/v1"
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
@@ -81,7 +81,7 @@ aliases; `purgedTraces` matches `seedBatches`; and both `pending` and `stale` re
 | `Purged` traces present | The action rows existed and were removed, leaving empty lists behind |
 | Evaluation line present | The mechanism never compared the aliases at all |
 
-**On failure:** a missing evaluation line makes this step inconclusive rather than passing — `stale=0`
+**On failure:** a missing evaluation line makes this step inconclusive rather than passing: `stale=0`
 in the report and an empty list are both produced equally by a mechanism that ran and found none and by
 one that never ran. See the index's *When the expected situation does not occur*, cause 3, and
 [#347](https://github.com/DutchJaFO/Quotinator/issues/347), which this test remains blocked on.
@@ -109,11 +109,11 @@ than a repeat of the first: the reseed's own lines are indistinguishable from fi
 by there being more of them.
 
 Every real bundled alias's canonical Source either already exists under its exact recorded title, or is
-being legitimately created for the first time. None has actually been renamed away — which is why zero
+being legitimately created for the first time. None has actually been renamed away, which is why zero
 is the correct result here, and why the log line rather than the zero is what proves the mechanism
 looked.
 
-**On failure:** as in step 2 — an unobservable evaluation makes both readings meaningless, and the
+**On failure:** as in step 2: an unobservable evaluation makes both readings meaningless, and the
 reseed's own status code is what separates "nothing was stale" from "the reseed never ran".
 
 ## Observed effect
@@ -125,7 +125,7 @@ tests alone.**
    distinguish a genuine rename from the alias's own legitimate job of guiding a first-ever creation.
    It flagged 7 real bundled aliases as stale purely because their canonical Source had not been created
    by an earlier file yet.
-2. A same-batch fix — checking `sourceIndex`, the batch's own in-memory Add cache — still needed the
+2. A same-batch fix, checking `sourceIndex`, the batch's own in-memory Add cache, still needed the
    id-based rewrite to fully clear a `SELECT *`-by-title query being unable to distinguish those same
    two cases when nothing had been indexed yet either.
 

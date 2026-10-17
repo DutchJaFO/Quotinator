@@ -4,7 +4,7 @@
 **Environment:** Fresh
 **Deterministic:** no
 **Traces to:** #280, #419
-**Fully green after:** [#438](https://github.com/DutchJaFO/Quotinator/issues/438) — step 1 asks
+**Fully green after:** [#438](https://github.com/DutchJaFO/Quotinator/issues/438): step 1 asks
 `/version` for `200` where its own prose says `503`, and never sends a browser `Accept`, so its
 `autoRefresh` assertion cannot hold; steps 2, 3 and 4 pass
 

@@ -5,7 +5,7 @@
 **Deterministic:** yes
 **Traces to:** #376
 
-**Pairs with [`26`](26-a-new-conflict-is-still-staged.md)**, which asserts the other half — a conflict
+**Pairs with [`26`](26-a-new-conflict-is-still-staged.md)**, which asserts the other half: a conflict
 this reseed is seeing for the first time must still be staged. The two are separate documents on
 purpose: each builds its own container and its own fixture, so neither can leave state that skews the
 other, and a failure names which half broke.
@@ -22,7 +22,7 @@ Beyond the Fresh profile: **nothing.** This test brings its own two files, dropp
 make it pass or fail.
 
 **Why the user-imports folder rather than `POST /import`.** The bundled corpus stages **zero**
-unresolved actions of any kind — measured, not assumed — so it cannot reach this state at all. And
+unresolved actions of any kind (measured, not assumed) so it cannot reach this state at all. And
 `SqliteQuoteImportService` does not pass a `ConflictRuleLookup` to `ImportActionPlanner.PlanAsync`, so
 the `review` branch's resolution never runs on the `POST /import` path either. Only
 `QuotinatorDatabaseInitializer` supplies one, and `ManifestSeedPlanner.Plan` is directory-agnostic:
@@ -33,7 +33,7 @@ the `review` branch's resolution never runs on the `POST /import` path either. O
 - **The disagreement has to live between two files.** A single file restating its own content produces
   `Unchanged` on every reseed. The first file's quote creates the Source with no date; the second
   file's `sources[]` entry declares one. The resulting `Pending` is never applied, so the stored row
-  keeps no date and the next reseed reaches the same conclusion again — which is exactly the accumulation
+  keeps no date and the next reseed reaches the same conclusion again, which is exactly the accumulation
   under test.
 - **`Quotinator__AutoPurgeUserImportActions=false` is mandatory, not tidiness.** It defaults to `true`,
   and a batch reaching zero *pending* actions has its `Import_Action` rows deleted. This test's rows
@@ -42,7 +42,7 @@ the `review` branch's resolution never runs on the `POST /import` path either. O
 - **The container must be restarted after the files are copied in, *and* then reseeded.** Two separate
   requirements, and missing the second is the easier mistake. `SeedBatchesBuilder` only adds the
   user-imports batch when `Directory.Exists(importsDir)`, and `/data/imports` does not exist in a fresh
-  volume — so the restart is what makes the batch exist at all. But startup seeding only runs against an
+  volume, so the restart is what makes the batch exist at all. But startup seeding only runs against an
   empty database, and the restart's database is not empty, so the restart alone imports nothing: the
   logs after it show no seeding line whatsoever. An explicit reseed is what actually reads the fixture.
   Found by running this document: without the reseed, step 3's Source lookup returns nothing and every
@@ -50,7 +50,7 @@ the `review` branch's resolution never runs on the `POST /import` path either. O
 - **Every listing is filtered to this test's own Source id.** The reseed stages actions for bundled
   content too; an unfiltered tally is satisfied by rows this test did not produce.
 - **Assert the relationship across three reseeds, never a single absolute count.** One reseed showing
-  `1` proves nothing — the defect is growth, so the claim is that the second and third passes report
+  `1` proves nothing: the defect is growth, so the claim is that the second and third passes report
   the same number as the first.
 
 ## Steps
@@ -119,7 +119,7 @@ dotnet script scripts/testing/http.csx -- --url "$base/health" --wait-for 200 --
 answers; a reseed sent straight after it fails with the connection closed.
 
 **The manifest lists the quotes file first.** Reversing the order makes the `sources[]` entry create
-the Source with its date, leaving nothing to disagree about — the fixture then asserts nothing.
+the Source with its date, leaving nothing to disagree about, and the fixture then asserts nothing.
 
 ### 3. Reseed, then confirm the fixture was picked up and find its Source id
 
@@ -131,10 +131,10 @@ $src = (Invoke-RestMethod "$base/masterdata/sources?pageSize=0").items |
 "id=$($src.id) date=$($src.date)"
 ```
 
-**Expected:** `seeding complete — 7 file(s) processed` — five bundled plus this test's two — and the
+**Expected:** `seeding complete: 7 file(s) processed`, five bundled plus this test's two, and the
 Source exists with `date` empty.
 
-**On failure:** `5 file(s) processed`, or no Source found, means the user-imports batch was not seen —
+**On failure:** `5 file(s) processed`, or no Source found, means the user-imports batch was not seen:
 either the restart in step 2 did not happen, or the reseed above was skipped. The restart alone is not
 enough: startup seeding only runs against an empty database. Every later step would then be asserting
 against bundled content. Stop.
@@ -152,7 +152,7 @@ $first = Unresolved $src.id
 "after cold start: $first"
 ```
 
-**Expected:** `after cold start: 1` — the declared date disagrees with the stored one and no rule
+**Expected:** `after cold start: 1`, since the declared date disagrees with the stored one and no rule
 covers it, so exactly one action awaits review.
 
 **On failure:** `0` means the disagreement never arose and the rest of the document asserts nothing.
@@ -171,7 +171,7 @@ $third  = Unresolved $src.id
 **Expected:** `1 -> 1 -> 1`. The conflict was reported once and every later reseed recognises it as
 already reported.
 
-**On failure:** `1 -> 2 -> 3` is the defect this document exists for — one fresh duplicate per reseed,
+**On failure:** `1 -> 2 -> 3` is the defect this document exists for: one fresh duplicate per reseed,
 piled on an action still awaiting review.
 
 ### 6. Confirm it was reported rather than silently skipped
@@ -182,14 +182,14 @@ piled on an action still awaiting review.
   Group-Object actionType | Select-Object Name, Count
 ```
 
-**Expected:** `AlreadyReported=2` — one per reseed — alongside `Modify=1`, `Add=1` and `Unchanged=2`
+**Expected:** `AlreadyReported=2`, one per reseed, alongside `Modify=1`, `Add=1` and `Unchanged=2`
 (the quotes file's own resolution of the same Source, which is not what this test asserts).
 
 Suppressing the duplicate must not make the row vanish from the report: `Incoming` is derived from the
 staged actions themselves, so staging nothing at all would drop it from the totals as well, and a
 shrinking total reads as content the file stopped mentioning.
 
-**On a pre-fix image there is no `AlreadyReported` group at all** — that kind did not exist — and the
+**On a pre-fix image there is no `AlreadyReported` group at all**, since that kind did not exist, and the
 `Modify` count is 3 rather than 1.
 
 ## Observed effect

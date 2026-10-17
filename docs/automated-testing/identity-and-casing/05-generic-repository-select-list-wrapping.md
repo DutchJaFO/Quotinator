@@ -7,12 +7,12 @@
 
 ## Preconditions
 
-Nothing beyond the Fresh profile — its first-boot seed of the bundled files is what populates every
+Nothing beyond the Fresh profile, whose first-boot seed of the bundled files is what populates every
 entity below, the curated file's Conversations, StageDirections and SoundCues included.
 
 **This test can therefore be blocked.** That content arrives through the application's own import
 path, so a defect there takes this test down with it even though the generic-repository queries may be
-perfectly intact. That is the second of the index's two honest resolutions, not the first — a skipped
+perfectly intact. That is the second of the index's two honest resolutions, not the first: a skipped
 run here reads as a known consequence of a broken import, not an unexplained gap.
 
 `RepositorySql.cs`'s generic queries (`SelectById`, `SelectByIds`, `SelectDeleted`,
@@ -40,7 +40,7 @@ hand-written `Sql.cs` queries do. This confirms the `SELECT *` removal did not b
 dotnet script scripts/testing/test-env.csx -- create --name qt-id-05 --port 18205
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app
 that never became healthy.
@@ -59,7 +59,7 @@ foreach ($path in $paths) {
 
 **Expected:** every endpoint reports a non-zero `items` and `notLowercase=0`.
 
-**On failure:** `items=0` is not a pass — it asserts nothing about column wrapping, and points at the
+**On failure:** `items=0` is not a pass: it asserts nothing about column wrapping, and points at the
 seed rather than at the queries under test (see Preconditions: this test can be blocked by a broken
 import). Stop; step 3 has no id to take.
 
@@ -78,7 +78,7 @@ $upperCall = dotnet script scripts/testing/http.csx -- --url "http://localhost:1
 "sameRecord=$($lowerCall.title -ceq $upperCall.title) bothLowercase=$(($lowerCall.id -ceq $sourceId) -and ($upperCall.id -ceq $sourceId))"
 ```
 
-**Expected:** both calls return `200`, `sameRecord=True`, and `bothLowercase=True` — the record's `id`
+**Expected:** both calls return `200`, `sameRecord=True`, and `bothLowercase=True`: the record's `id`
 renders lowercase regardless of the casing requested.
 
 **On failure:** if `$upper` equals `$sourceId`, the id drawn from the page happened to be all digits

@@ -7,7 +7,7 @@
 
 ## Preconditions
 
-Nothing beyond the Fresh profile — the batch is staged by the preview call in Steps.
+Nothing beyond the Fresh profile: the batch is staged by the preview call in Steps.
 
 ## Determinism
 
@@ -18,7 +18,7 @@ Nothing beyond the Fresh profile — the batch is staged by the preview call in 
   database belongs to something else and makes the result meaningless.
 - **The action statuses are read before and after, and that is the whole assertion.** `skip` means no
   domain row changes, so the status code alone cannot distinguish a working alias from a handler that
-  parses `batchId` and returns `200` without applying anything — which is precisely the regression this
+  parses `batchId` and returns `200` without applying anything, which is precisely the regression this
   test names. `ImportActionStatus.Applied` means "this action's write landed on the consumer's own
   tables", so the transition to it is the observable that a dead code path cannot fake.
 - **That transition is the assertion, not the status code.** `batchId` mode is a genuine alias for
@@ -27,8 +27,8 @@ Nothing beyond the Fresh profile — the batch is staged by the preview call in 
 - **`pageSize=0` is required on both readings**, so the comparison covers the whole batch however many
   actions it holds; a default-paged listing would compare two truncated samples of a larger one.
 - **The batch must hold an action that is not yet applied.** Content already stored stages as an
-  `Unchanged` no-op that reads `Applied` from the start (#373), so a batch made only of those — the
-  curated file re-imported, which this document used until #411 — reads `Applied` before the alias
+  `Unchanged` no-op that reads `Applied` from the start (#373), so a batch made only of those (the
+  curated file re-imported, which this document used until #411) reads `Applied` before the alias
   runs, and the comparison can no longer fail. The suite's conflict fixture stages its quote as a
   `Modify` the `skip` policy decides but does not apply.
 
@@ -41,7 +41,7 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-import-03 --port 
 $base = "http://localhost:18603/api/v1"
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
@@ -57,7 +57,7 @@ $batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base
 $batchId
 ```
 
-**Expected:** the response carries a `batchId` — the readings below are scoped to it.
+**Expected:** the response carries a `batchId`: the readings below are scoped to it.
 
 ### 3. Record the staged state before applying
 
@@ -67,7 +67,7 @@ $before | ForEach-Object { "$($_.entityType) $($_.actionType) $($_.status)" }
 "total=$(@($before).Count) notApplied=$(@($before | Where-Object { $_.status -ne 'Applied' }).Count)"
 ```
 
-**Expected:** `Quote Modify Decided` and `Source Unchanged Applied`, so `notApplied=1` — the quote's
+**Expected:** `Quote Modify Decided` and `Source Unchanged Applied`, so `notApplied=1`: the quote's
 decision is staged and not yet written.
 
 **On failure:** `notApplied=0` means nothing is left for the alias to apply, and step 5 would pass
@@ -90,7 +90,7 @@ $after | Group-Object status | Select-Object Count, Name
 "notApplied=$(@($after | Where-Object { $_.status -ne 'Applied' }).Count)"
 ```
 
-**Expected:** `notApplied=0` — every one of them reads `Applied` — and `sameTotal=True`: the number of
+**Expected:** `notApplied=0`, every one of them reads `Applied`, and `sameTotal=True`: the number of
 actions is unchanged between the two readings, so the alias applied the batch rather than staging a new
 one.
 

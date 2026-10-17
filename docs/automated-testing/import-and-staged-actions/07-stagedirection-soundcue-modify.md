@@ -10,17 +10,17 @@
 Both entities were Add-only before these issues. This proves a `Complete` row blocks a silent
 overwrite, and that a correctable row can be Modified, decided and reversed end to end.
 
-**A fixture needs at least one quote** — `POST /import` rejects a file with none, even when the quote
+**A fixture needs at least one quote**: `POST /import` rejects a file with none, even when the quote
 is irrelevant to what is being tested.
 
-**Two separate fixtures are required**, and this is the part that is easy to get wrong — see
+**Two separate fixtures are required**, and this is the part that is easy to get wrong; see
 Determinism.
 
 ## Determinism
 
 **`CompletenessGuard.ShouldBlock` is evaluated against the value a policy would actually *write*, not
 the raw incoming value.** So once a row is `Complete`, **every policy except `skip` blocks a genuine
-field change — `newest-wins` included.**
+field change, `newest-wins` included.**
 
 That makes the reversal half impossible to run against the rows used in the first half: re-running it
 there stages `Blocked` again rather than applying cleanly. It needs a **second, brand-new pair** that
@@ -30,7 +30,7 @@ Also load-bearing: **a `Modify`-only batch's reversal never touches `IsDeleted`.
 row's own `Add` does, which is why the second fixture must be a fresh add.
 
 The direct-apply path (`newest-wins`, nothing pending) sets `Import_Batch.Status` to `Applied`; the
-two-phase decide→apply path used in the first half does **not** — a known pre-existing gap, see
+two-phase decide→apply path used in the first half does **not**, a known pre-existing gap, see
 #171/#172's plan docs.
 
 **Each step names the fixture it uses**, because five imports run here and they differ only by which
@@ -54,12 +54,12 @@ $base = "http://localhost:18607/api/v1"
 $temp = "$PWD\.claude\temp"
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
 
-### 2. Import `smoke-171-172.json` — the initial add
+### 2. Import `smoke-171-172.json`: the initial add
 
 ```powershell
 $v1 = @'
@@ -84,7 +84,7 @@ dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
 **On failure:** without these rows there is nothing for the re-imports below to Modify, and every later
 step would be staging fresh adds instead. Stop.
 
-### 3. Re-import `smoke-171-172-v2.json` — the same ids with a changed `text`, under `review`
+### 3. Re-import `smoke-171-172-v2.json`: the same ids with a changed `text`, under `review`
 
 ```powershell
 $v2 = @'
@@ -117,7 +117,7 @@ staged, so the decide and apply below would be operating on an empty batch. Stop
 
 ### 4. Decide every action in the batch, then apply it
 
-The fixture's quote stages an action of its own, and `apply` is all-or-nothing — so the two under test
+The fixture's quote stages an action of its own, and `apply` is all-or-nothing, so the two under test
 are decided with their real choices, and anything else in the batch is decided too:
 
 ```powershell
@@ -136,16 +136,16 @@ dotnet script scripts/testing/http.csx -- --method POST --url "$base/import/acti
 ```
 
 **Expected:** `0` before the apply, then `200`. Both rows then carry the corrected text
-and `CompletenessStatus: Complete` — read back by step 8.
+and `CompletenessStatus: Complete`, read back by step 8.
 
 **The loop is there for anything else the batch stages.** A fixture needs at least one quote for
-`POST /import` to accept it. During #339's full run that quote staged a `Modify` of its own — three
-actions, where this step named two — and leaving it undecided made `apply` return `422`. Since #373 an
+`POST /import` to accept it. During #339's full run that quote staged a `Modify` of its own: three
+actions, where this step named two, and leaving it undecided made `apply` return `422`. Since #373 an
 unchanged quote stages as an `Unchanged` no-op instead, so today the loop decides nothing (measured
 2026-09-22: only the two named actions were pending). It stays, so a change to the fixture cannot leave
 `apply` refusing.
 
-### 5. Re-import `smoke-171-172-v3.json` — a third `text`, still under `review`
+### 5. Re-import `smoke-171-172-v3.json`: a third `text`, still under `review`
 
 The `Complete` rows must block it:
 
@@ -169,10 +169,10 @@ $third | Group-Object status | Select-Object Count, Name
 "blockedStageAndSound=$(@($third | Where-Object { $_.entityType -in 'StageDirection','SoundCue' -and $_.status -eq 'Blocked' }).Count)"
 ```
 
-**Expected:** the tally reads **`Blocked`, not `Pending`**, for both entities — `blockedStageAndSound=2`.
+**Expected:** the tally reads **`Blocked`, not `Pending`**, for both entities: `blockedStageAndSound=2`.
 A `Complete` row can no longer be silently overwritten.
 
-### 6. Import `smoke-171-172-addonly.json` — a fresh pair, for the reversal half
+### 6. Import `smoke-171-172-addonly.json`: a fresh pair, for the reversal half
 
 ```powershell
 $addOnly = @'
@@ -192,7 +192,7 @@ dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
   Select-Object id, text, completenessStatus
 ```
 
-**Expected:** a fresh pair added, still `NeedsReview` — never `Complete`, which is what makes the
+**Expected:** a fresh pair added, still `NeedsReview`, never `Complete`, which is what makes the
 reversal half runnable at all.
 
 ### 7. Single-shot re-import `smoke-171-172-addonly-v2.json` under `newest-wins`, then reverse it
@@ -238,7 +238,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
 ```
 
 **Expected:** the closing reads show the **`…000002`/`…000003` pair** still carrying `v2`'s
-corrected text with `CompletenessStatus: Complete` — `v3`'s text never landed — and the **`…000009`
+corrected text with `CompletenessStatus: Complete` (`v3`'s text never landed) and the **`…000009`
 pair** back at `Original text before correction.` / `Original sound before correction.`, the reversal
 undone.
 

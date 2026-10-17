@@ -6,7 +6,7 @@
 **Traces to:** #376
 
 **Pairs with [`25`](25-an-already-reported-conflict-does-not-accumulate.md)**, which asserts the other
-half — an already-reported conflict must not stage a duplicate. This document is the regression guard
+half: an already-reported conflict must not stage a duplicate. This document is the regression guard
 for that suppression: it must be **green on both the pre-fix and post-fix images**, because a fix that
 simply stopped staging unresolved actions would pass `25` perfectly and hide every new conflict.
 
@@ -19,7 +19,7 @@ the first time must still reach the review queue.
 Beyond the Fresh profile: **nothing.** This test brings its own files, dropped into
 `{dataDir}/imports/`, and asserts only against its own two Source ids.
 
-**Why the user-imports folder rather than `POST /import`** — see
+**Why the user-imports folder rather than `POST /import`**: see
 [`25`](25-an-already-reported-conflict-does-not-accumulate.md)'s own note. The reasoning is identical
 and is not repeated here.
 
@@ -30,11 +30,11 @@ and is not repeated here.
   staged" from "no suppression happened at all".
 - **Count distinct entities, not rows.** On a pre-fix image the already-known conflict duplicates as
   well, so the row count is `3` where the post-fix count is `2`. A row-count assertion therefore cannot
-  be green on both images — it would be measuring the accumulation rather than this document's own
+  be green on both images: it would be measuring the accumulation rather than this document's own
   question. Distinct entity ids is `2` on both.
-- **`Quotinator__AutoPurgeUserImportActions=false` is mandatory** — same reason as
+- **`Quotinator__AutoPurgeUserImportActions=false` is mandatory**, for the same reason as
   [`25`](25-an-already-reported-conflict-does-not-accumulate.md).
-- **The container must be restarted after the files are copied in, and then reseeded** — same two
+- **The container must be restarted after the files are copied in, and then reseeded**, the same two
   requirements as [`25`](25-an-already-reported-conflict-does-not-accumulate.md), for the same reason:
   the restart makes the user-imports batch exist, and only an explicit reseed actually reads it, since
   startup seeding runs against an empty database alone. Step 3 asserts the file count.
@@ -55,7 +55,7 @@ $temp = "$PWD\.claude\temp"
 
 **On failure:** stop rather than running the rest against an app that never became healthy.
 
-### 2. Write the fixture — two titles, one declared
+### 2. Write the fixture: two titles, one declared
 
 ```powershell
 New-Item -ItemType Directory -Force "$temp\376b-imports" | Out-Null
@@ -100,7 +100,7 @@ dotnet script scripts/testing/http.csx -- --url "$base/health" --wait-for 200 --
 **Expected:** the container restarts and answers health with `200`.
 
 **Wait for health before step 3.** `docker restart` returns when the process starts, not when it
-answers; a reseed sent straight after it fails with the connection closed — measured 2026-09-22, as in
+answers; a reseed sent straight after it fails with the connection closed, measured 2026-09-22, as in
 its pair *An already-reported conflict does not stage a duplicate on every reseed*.
 
 ### 3. Reseed, then confirm the fixture was picked up and capture both Source ids
@@ -114,9 +114,9 @@ $second = $all | Where-Object { $_.title -eq 'Quotinator 376b Second Film' }
 "first=$($first.id) second=$($second.id)"
 ```
 
-**Expected:** `seeding complete — 7 file(s) processed`, and both Sources exist.
+**Expected:** `seeding complete: 7 file(s) processed`, and both Sources exist.
 
-**On failure:** `5 file(s) processed` means the user-imports batch was not seen — either the restart in
+**On failure:** `5 file(s) processed` means the user-imports batch was not seen: either the restart in
 step 2 or the reseed above did not happen. Stop.
 
 ### 4. Confirm exactly one conflict is outstanding
@@ -132,7 +132,7 @@ function DistinctUnresolved {
 DistinctUnresolved
 ```
 
-**Expected:** `1` — only the first title has been declared with a date, so only it disagrees.
+**Expected:** `1`, since only the first title has been declared with a date, so only it disagrees.
 
 ### 5. Declare the second title too, and reseed
 
@@ -157,10 +157,10 @@ DistinctUnresolved
 is new and must reach the review queue.
 
 **Measured on both images**, which is what makes this a regression guard: `1 → 2` distinct on each.
-The underlying *row* counts differ — `1 → 3` pre-fix against `1 → 2` post-fix — which is the difference
+The underlying *row* counts differ, `1 → 3` pre-fix against `1 → 2` post-fix, which is the difference
 `25` exists to catch and precisely why this document counts entities instead.
 
-**On failure:** `1` means the check is over-reaching and suppressing a conflict nobody has seen — the
+**On failure:** `1` means the check is over-reaching and suppressing a conflict nobody has seen, the
 failure mode this document exists to catch, and one that `25` would not notice.
 
 ## Observed effect

@@ -7,14 +7,14 @@
 
 ## Preconditions
 
-This proves the **container-level wiring**, not the matching logic — that is already covered by unit
+This proves the **container-level wiring**, not the matching logic, which is already covered by unit
 tests. What is under test is whether `Quotinator__UnicodeAwareSearch` (or the HA add-on's
 `unicode_aware_search` option) actually reaches the running app and flips real query behaviour.
 
 No bundled or curated data contains a case-varying accented string, so the test imports a small
 throwaway fixture rather than relying on shipped content.
 
-Both halves must reach a successful import before their search assertion means anything — a failed
+Both halves must reach a successful import before their search assertion means anything: a failed
 import produces the same empty result as a correctly-unmatched search.
 
 ## Determinism
@@ -24,11 +24,11 @@ import produces the same empty result as a correctly-unmatched search.
   make the comparison meaningless.
 - **Same query, same fixture, one variable.** Only the env var differs between the two halves. That is
   what makes this a with-and-without comparison rather than two unrelated observations.
-- The query is percent-encoded (`CAF%C3%89`) — sending the raw accented character depends on shell
+- The query is percent-encoded (`CAF%C3%89`), since sending the raw accented character depends on shell
   and terminal encoding.
 - **The fixture is written as UTF-8 without a BOM.** `Set-Content` defaults to the system ANSI codepage
   in Windows PowerShell 5.1, which corrupts the accented title into something the search can never
-  match — and `Out-File -Encoding utf8` adds a BOM the JSON reader has no reason to tolerate. Both
+  match, and `Out-File -Encoding utf8` adds a BOM the JSON reader has no reason to tolerate. Both
   failures look exactly like the flag not working. Found the hard way while converting this document:
   a `Get-Content -Raw` / `Set-Content` round-trip over this very file turned every `é` into `Ã©`.
 - **Assert the fixture's presence, not a total.** The fixture is the only accented case-varying title
@@ -71,7 +71,7 @@ $off = Invoke-RestMethod "http://localhost:18103/api/v1/quotes/search?q=CAF%C3%8
 "status=$($off.status) matching=$($off.totalMatching)"
 ```
 
-**Expected:** `status=NoResults` and `matching=0` — the fixture's accented title is not matched,
+**Expected:** `status=NoResults` and `matching=0`: the fixture's accented title is not matched,
 proving default behaviour is unchanged.
 
 ### 3. Import the same fixture into a second container with the flag on
@@ -90,7 +90,7 @@ dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:
 
 **Expected:** `200`, as in step 1.
 
-**On failure:** stop, for the same reason as step 1 — an unimported fixture cannot be matched, and the
+**On failure:** stop, for the same reason as step 1: an unimported fixture cannot be matched, and the
 next step would report the flag as having no effect.
 
 ### 4. Repeat the same query with the flag on
@@ -101,10 +101,10 @@ $on = Invoke-RestMethod "http://localhost:19103/api/v1/quotes/search?q=CAF%C3%89
 @($on.items | Where-Object { $_.source -eq "Caf$([char]0xE9) de Flore" }).Count
 ```
 
-**Expected:** `status=Ok` and `1` — the fixture's own item is present. Asserted by identity rather than
+**Expected:** `status=Ok` and `1`: the fixture's own item is present. Asserted by identity rather than
 by a total, so a bundled source gaining an accented title later does not turn a correct result into a
 failure. The title is spelled `[char]0xE9` rather than as a literal accented character so the
-comparison cannot depend on how the console encoded the command — and note that PowerShell 5.1 has no
+comparison cannot depend on how the console encoded the command, and note that PowerShell 5.1 has no
 `` `u{…} `` escape, which would silently compare against the literal text `Cafu{e9}`.
 
 ## Observed effect

@@ -7,10 +7,10 @@
 
 ## Preconditions
 
-Nothing beyond the Fresh profile — both records under test arrive in this test's own import.
+Nothing beyond the Fresh profile: both records under test arrive in this test's own import.
 
 `Quotinator_ConversationLine` holds a real `FOREIGN KEY` to `Quotinator_Quote(Id)`. A line referencing
-a quote by an id whose casing does not match the quote's now-canonical form must still satisfy it —
+a quote by an id whose casing does not match the quote's now-canonical form must still satisfy it:
 the same bug class
 [`01-canonicalize-explicit-ids-at-capture.md`](01-canonicalize-explicit-ids-at-capture.md) covers for
 `StageDirectionId`/`SoundCueId`, now covering `QuoteId`.
@@ -31,7 +31,7 @@ the same bug class
 dotnet script scripts/testing/test-env.csx -- create --name qt-id-03 --port 18203
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app
 that never became healthy.
@@ -46,7 +46,7 @@ $before
 **Expected:** `0`. The profile's own seed produced no foreign-key violation.
 
 **On failure:** a non-zero count here means the seed itself is failing, and step 4's reading would be
-measuring that rather than this test's import. Stop — this is a profile problem, not a result.
+measuring that rather than this test's import. Stop: this is a profile problem, not a result.
 
 ### 3. Import a conversation line whose `quoteId` casing does not match its quote
 
@@ -75,7 +75,7 @@ $after = ([regex]::Matches((docker logs qt-id-03 2>&1 | Out-String), 'SQLite Err
 "$before -> $after"
 ```
 
-**Expected:** `0 -> 0` — unchanged from step 2.
+**Expected:** `0 -> 0`, unchanged from step 2.
 
 The status code alone is not the whole assertion: the log is where
 `SQLite Error 19: FOREIGN KEY constraint failed` would name itself, and comparing against step 2 is what
@@ -83,8 +83,8 @@ makes this specific to the import rather than to whatever the container did befo
 
 ## Observed effect
 
-Not yet established as a captured record. The failure mode is known and specific — a
-`SQLite Error 19` on import — but what a passing run emits has not been recorded.
+Not yet established as a captured record. The failure mode is known and specific, a
+`SQLite Error 19` on import, but what a passing run emits has not been recorded.
 
 ## Canary
 

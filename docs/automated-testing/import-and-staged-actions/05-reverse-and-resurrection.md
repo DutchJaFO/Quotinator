@@ -7,7 +7,7 @@
 
 ## Preconditions
 
-A genuinely `Applied` batch to reverse — the `newest-wins` import below produces one, returning `200`
+A genuinely `Applied` batch to reverse: the `newest-wins` import below produces one, returning `200`
 with nothing left pending.
 
 The out-of-order check at the end needs **at least one other batch applied after** the one being
@@ -26,7 +26,7 @@ precondition, not a given.
   `IsDeleted=1`.
 - **Count the search result, do not read it.** `/quotes/search` returns `200` with an empty `items`
   array and a `message` as ordinary behaviour when nothing matches, so an eyeballed response cannot tell
-  a successful resurrection from a reversal that deleted the rows for good — which is the failure the
+  a successful resurrection from a reversal that deleted the rows for good, which is the failure the
   re-import step exists to catch. **Read `totalMatching`**, the field that endpoint actually returns;
   `totalCount` belongs to the paginated list endpoints and is absent here.
 
@@ -39,7 +39,7 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-import-05 --port 
 $base = "http://localhost:18605/api/v1"
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
@@ -64,12 +64,12 @@ $batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base
 "batchId=$batchId fixtureQuotes=$(Fixture-Quotes)"
 ```
 
-**Expected:** `200` with nothing left pending — a genuinely `Applied` batch — a non-empty `batchId`,
+**Expected:** `200` with nothing left pending (a genuinely `Applied` batch), a non-empty `batchId`,
 which every step below is scoped to, and `fixtureQuotes=2`.
 
 **The batch must create something.** Until #411 this step imported the curated file, which since #373
 stages only `Unchanged` no-ops against a database seeded from it: 37 of them, measured 2026-09-22. The
-reversal then removed nothing — the curated quotes were still there before step 7 re-imported them — so
+reversal then removed nothing, since the curated quotes were still there before step 7 re-imported them, so
 the resurrection step could not fail. Two quotes of its own are new, so the reversal really removes
 them.
 
@@ -90,7 +90,7 @@ dotnet script scripts/testing/http.csx -- --method POST `
 "fixtureQuotes=$(Fixture-Quotes)"
 ```
 
-**Expected:** `200`, and `fixtureQuotes=0` — the reversal soft-deleted what the batch added.
+**Expected:** `200`, and `fixtureQuotes=0`: the reversal soft-deleted what the batch added.
 
 **On failure:** a non-zero count means the reversal removed nothing, and step 7 would read the same
 quotes back whether or not resurrection works. Stop.
@@ -102,7 +102,7 @@ quotes back whether or not resurrection works. Stop.
   Group-Object status | Select-Object Count, Name
 ```
 
-**Expected:** every action still reads `Applied` — see Determinism. A `Reversed` group would be the
+**Expected:** every action still reads `Applied`; see Determinism. A `Reversed` group would be the
 false expectation, not the pass.
 
 ### 6. Reverse the same batch again
@@ -114,7 +114,7 @@ dotnet script scripts/testing/http.csx -- --method POST `
 
 **Expected:** `404`: already reversed, treated as absent.
 
-### 7. Re-import after reversal — the resurrection path
+### 7. Re-import after reversal: the resurrection path
 
 ```powershell
 dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
@@ -123,18 +123,18 @@ dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
 Fixture-Quotes
 ```
 
-**Expected:** the re-import succeeds (**never a silent no-op**) and the count is `2` — the fixture's
+**Expected:** the re-import succeeds (**never a silent no-op**) and the count is `2`: the fixture's
 quotes are reachable again, against `0` after step 4. This is the resurrection fix proven live, rather than only by
 `ApplyResolvedActionAsync_ReAddAfterSoftDelete_ResurrectsSoftDeletedRow`.
 
 **The field is `totalMatching`, not `totalCount`.** `/quotes/search` returns its own shape, and this
-step read `totalCount` until #339's full run — a field that endpoint never emits, so the reading was
+step read `totalCount` until #339's full run, a field that endpoint never emits, so the reading was
 always empty and "non-zero" could never be satisfied. The resurrection check silently asserted nothing
 for as long as it was written that way. See the index's *A count is evidence only if the instrument
 counts the right thing*.
 
 **On failure:** a `totalMatching` of `0` is the failing case, and it arrives on a `200` response like
-any other. A *blank* reading is different again — that is the property not existing, so check the field
+any other. A *blank* reading is different again: that is the property not existing, so check the field
 name before concluding anything about the rows.
 
 ### 8. Confirm the soft-delete flag actually flipped back
@@ -158,12 +158,12 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
 `IsDeleted = 0`.
 
 Without this read there is nothing in the run that observes the reversal at all. The two sidecar copies
-are allowed to fail — a cleanly stopped database has neither file.
+are allowed to fail: a cleanly stopped database has neither file.
 
 ### 9. Find the oldest still-live batch
 
 There is no `GET /import-batches` listing endpoint (see Determinism), so the older batch id comes from
-the database copy taken above — the *oldest* still-live batch, which is by definition not the most
+the database copy taken above, the *oldest* still-live batch, which is by definition not the most
 recently applied one:
 
 ```powershell
@@ -180,7 +180,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
 **Expected:** a non-empty id, for a batch older than the one just reversed, and `LiveBatches` greater
 than `1`.
 
-**On failure:** **if `LiveBatches` is `1`, this step cannot run** — there is no *older* batch
+**On failure:** **if `LiveBatches` is `1`, this step cannot run**: there is no *older* batch
 to reverse, so LIFO has nothing to reject and a `422` would prove nothing. That is a precondition
 failure, not a result: the profile's own seed must have produced at least one batch before this test's
 import. The count is printed for exactly that reason.
@@ -192,7 +192,7 @@ dotnet script scripts/testing/http.csx -- --method POST `
   --url "$base/import/actions/reverse?batchId=$oldestBatchId" --expect 422 --status
 ```
 
-**Expected:** `422` — the strict LIFO stack rule: only the most recently applied batch still live may be
+**Expected:** `422`, the strict LIFO stack rule: only the most recently applied batch still live may be
 reversed, regardless of whether it shares any entities with the older one.
 
 ## Observed effect

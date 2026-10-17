@@ -7,24 +7,24 @@
 
 ## Preconditions
 
-Nothing beyond the Fresh profile — the quote under test is supplied by this test's own fixture, not by
+Nothing beyond the Fresh profile: the quote under test is supplied by this test's own fixture, not by
 the seed.
 
 `Quotes.Id` canonicalizes to lowercase, the same convention every other entity uses
-(`EntityIdentity.StableId`, `GuidExtensions.ToCanonicalId`) — this project's single settled id format
+(`EntityIdentity.StableId`, `GuidExtensions.ToCanonicalId`), this project's single settled id format
 after two prior revisions, recorded in ADR 012's revision history.
 
-Before #210's first pass, `GET /quotes/{id}` had **no case-insensitive read-side mitigation at all** —
+Before #210's first pass, `GET /quotes/{id}` had **no case-insensitive read-side mitigation at all**:
 the one fully-unmitigated gap of this kind found across the whole codebase.
 
 ## Determinism
 
 - **The fixture's id is deliberately uppercase** (`F0000210-…`). That is the whole point: capture-time
   canonicalization is only observable if the file supplies a non-canonical form.
-- **Both casings are then requested.** Testing only one proves half the behaviour — the lowercase call
+- **Both casings are then requested.** Testing only one proves half the behaviour: the lowercase call
   proves canonicalization, the uppercase call proves the case-insensitive read.
 - **The id comparison is `-ceq`.** `-eq` is case-insensitive in PowerShell, so with it this test would
-  report the canonical form as correct whichever casing came back — the one thing it exists to tell
+  report the canonical form as correct whichever casing came back, the one thing it exists to tell
   apart.
 
 ## Explicitly not covered here
@@ -34,7 +34,7 @@ the one fully-unmitigated gap of this kind found across the whole codebase.
 id-comparison, at unit-test tier: `SqlConstant_PassesIdCaseGuard` and `AssembledQuery_PassesIdCaseGuard`
 in both `Quotinator.Core.Tests` and `Quotinator.Data.Tests`, plus `RepositorySqlFactory_PassesIdCaseGuard`
 and `AllJoinStrategies_BuildSql_PassesIdCaseGuard` in `Quotinator.Data.Tests`. It is why
-`RepositorySql.cs`'s generic `SelectById`/`SoftDelete`/etc. are `LOWER()`-wrapped — see ADR 012's
+`RepositorySql.cs`'s generic `SelectById`/`SoftDelete`/etc. are `LOWER()`-wrapped; see ADR 012's
 system-wide lowercase revision for why `LOWER()` and not `UPPER()`.
 
 That guard needs no Docker verification: it is mechanical, it enumerates every query rather than a
@@ -42,13 +42,13 @@ maintained list, and a gap in it is a failing unit test.
 
 **It does not follow that the endpoints are covered, and the note this replaced claimed it did.**
 Verified 2026-08-22: the guard proves the SQL is wrapped; nothing proves each endpoint wires that
-query correctly — route binding, 404-versus-200, and for write paths the update itself. Eleven
+query correctly: route binding, 404-versus-200, and for write paths the update itself. Eleven
 endpoints take an `/{id}` route parameter and exactly two are exercised live in both casings: this one,
 and Source in
 [`05-generic-repository-select-list-wrapping.md`](05-generic-repository-select-list-wrapping.md).
 
 Three of the remainder do not share Source's generic-repository path and so are not covered by proxy
-either — Conversation (`Sql.Conversations.SelectForRead`), Captured import file
+either: Conversation (`Sql.Conversations.SelectForRead`), Captured import file
 (`SqliteFileResourceRepository`, its own `Sql.FileResources.SelectById`), and the notification dismiss
 endpoint (`Sql.Notifications.UpdateDismissById`, a *write* by id). Closing that is
 [#341](https://github.com/DutchJaFO/Quotinator/issues/341); it is not this test's job.
@@ -61,7 +61,7 @@ endpoint (`Sql.Notifications.UpdateDismissById`, a *write* by id). Closing that 
 dotnet script scripts/testing/test-env.csx -- create --name qt-id-02 --port 18202
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy, so the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app
 that never became healthy.
@@ -93,7 +93,7 @@ $lower = dotnet script scripts/testing/http.csx -- `
 $lower.id -ceq 'f0000210-0000-4000-8000-000000000210'
 ```
 
-**Expected:** `200`, and `True` — the response's own `id` field is the canonical **lowercase** form
+**Expected:** `200`, and `True`: the response's own `id` field is the canonical **lowercase** form
 regardless of the uppercase casing the file supplied.
 
 ### 4. Fetch the same quote by the file's own uppercase casing
@@ -106,7 +106,7 @@ $upper.id -ceq 'f0000210-0000-4000-8000-000000000210'
 $upper.quote -ceq $lower.quote
 ```
 
-**Expected:** `200`, and `True` twice — the same quote comes back, and its `id` is again rendered in
+**Expected:** `200`, and `True` twice: the same quote comes back, and its `id` is again rendered in
 the canonical lowercase form.
 
 Taken with the lowercase call, that proves capture-time canonicalization and the case-insensitive read
