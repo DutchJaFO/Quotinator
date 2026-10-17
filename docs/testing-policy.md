@@ -77,6 +77,55 @@ hold the file open), and see `DatabaseInitializerTests.cs` for the established p
 - Utility / helper functions
 - **Translation completeness**: `Quotinator.Api.Tests` verifies that all i18n language files have the same keys as the English baseline and no empty values. These tests must pass on every build.
 
+## A test states a scenario and asserts its outcome, so the data comes from the test
+
+**A test is a scenario someone chose, plus the outcome that scenario must produce** (developer,
+2026-10-17). The test supplies the input. That is what makes a failure informative: when the real
+system misbehaves, it points back at a scenario, and an unexpected result means the set of scenarios
+was incomplete or the method was lacking. Both are findings a person can act on.
+
+**Checking real data is the application's own validation, not the test.** The two have different jobs,
+and a guard that reads live content is doing the first while being counted as the second.
+
+**A test that reads live data at run time inverts the relationship, and fails in three ways that all
+look like success:**
+
+- **It passes over nothing.** A rule applied to a population that happens to be empty inspects zero
+  items and reports green.
+- **Its coverage is whatever the data held that day.** Going red against the cases present proves the
+  test noticed those cases. It says nothing about any case the data did not happen to contain.
+- **Correct-over-nothing and broken-so-it-inspects-nothing are the same green.** Where an empty
+  population is legitimate, no assertion on the live data can separate them. Only a supplied scenario
+  can.
+
+**The empty set is a scenario, not an obstacle.** Its correct outcome differs per rule: for most, an
+empty input means the data went missing and the test must fail loudly; for some, empty is the
+desirable state and the test must pass. Which one applies is a decision, so it is asserted against a
+supplied empty input rather than inferred from whether somebody remembered a non-empty check.
+
+**Worked example, #339.** Seven guards were written to hold the `docs/automated-testing/` template,
+and each read the documents straight off disk with no parameter to pass anything else. Measured
+2026-10-17:
+
+- One guard, over a population that was empty when it was written, passed having examined nothing. Its
+  red was then arranged by mutation, which *Red first means signatures first* below calls the recovery
+  rather than a substitute.
+- One guard cannot be validated from the tree even in principle: zero non-deterministic documents is a
+  legitimate state, so it must not assert a non-empty population, and working correctly over nothing
+  is indistinguishable from inspecting nothing.
+- The guards' own helper decides whether a line sits inside a fenced block by flipping a boolean on
+  every line starting with three backticks, while a second helper twenty lines away counts depth
+  because a nested fence defeats the toggle. The same file both knows the toggle is insufficient and
+  relies on it, and no scenario covers a document carrying a nested fence. Found by reading the code,
+  not by any run.
+
+The shape to use instead: the logic takes its input as a parameter, the scenarios are supplied
+documents covering conforming input, each violation, the shapes already known to fool it, and the
+empty set, and one thin test per guard applies the same logic to the real tree.
+
+*Narrower consequences of this rule appear below: see* Tests do not depend on external factors *and*
+Tests must not depend on bundled data to stay green.
+
 ## Every test proves the positive result as well as the negative
 
 A test that only asserts a failure passes against a build that fails everything. Whatever a test
@@ -292,6 +341,12 @@ day: eight notification endpoint tests passed only because another test's startu
 they read in the build output's shared data folder, and failed the first time they ran against their own.
 
 ## Tests must not depend on bundled data to stay green
+
+**This rule guards against a false red; the false green is the sharper half**, and it is covered above
+under *A test states a scenario and asserts its outcome*. Content that drifts can fail a test for
+reasons this project did not cause, which is what the rule below prevents. Content that drifts can
+also make a test pass while inspecting nothing, and no count of today's data can tell you that
+happened.
 
 **A unit test must not read `data/sources/` or `scripts/cache/` at run time.** Those files change when
 the outside world changes (a source is refreshed upstream, a curated file gains an entry) and a test
