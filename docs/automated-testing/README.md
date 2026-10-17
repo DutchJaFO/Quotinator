@@ -1095,6 +1095,71 @@ an entry needs; a happy-path-only test has nothing to contribute.
 
 ---
 
+## Observed effects awaiting measurement
+
+**49 of 75 documents describe their effect without having measured it.** Each row below names the
+quantity its next run must read, so the measurement is a specific act rather than a vague intention to
+look. A document leaves this list by recording `**Measured <date>**` in its own section, and
+`TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails if it does so while its row is still
+here, which is what keeps the list from outliving the gap.
+
+**This is the Knowledgebase's backlog, not a defect list.** Every document here is runnable and
+asserts what it should; what is missing is a reading an entry can quote.
+
+| Document | What its next run must measure |
+|---|---|
+| [api-surface/01-baseline.md](api-surface/01-baseline.md) | The log lines a healthy first boot writes between Kestrel binding and the seed completing |
+| [api-surface/02-pagination-contract.md](api-surface/02-pagination-contract.md) | The `totalCount` each of the three endpoints reports on a fresh seed, and the row count `pageSize=0` returns |
+| [api-surface/03-unicode-aware-search-toggle.md](api-surface/03-unicode-aware-search-toggle.md) | The `matching` figure each of the two containers returns for the same accented query |
+| [api-surface/04-endpoint-naming-and-operation-ids.md](api-surface/04-endpoint-naming-and-operation-ids.md) | The operation count in the published spec, and the `[Api - GetQuoteById]` line as emitted |
+| [api-surface/05-a-thrown-exception-is-logged.md](api-surface/05-a-thrown-exception-is-logged.md) | The `ERR` line the rejected upload writes, with its exception id |
+| [database-lifecycle/01-file-resource-capture-and-reconstruction.md](database-lifecycle/01-file-resource-capture-and-reconstruction.md) | The captured row count per bundled file, and the hash the reconstruction returns |
+| [database-lifecycle/02-audit-export-and-conflict-data-purge.md](database-lifecycle/02-audit-export-and-conflict-data-purge.md) | The row count the export header reports, and the purge traces per batch |
+| [database-lifecycle/03-reset-is-a-full-wipe.md](database-lifecycle/03-reset-is-a-full-wipe.md) | The row counts Reset returns, and the single self-trace row it leaves behind |
+| [identity-and-casing/01-canonicalize-explicit-ids-at-capture.md](identity-and-casing/01-canonicalize-explicit-ids-at-capture.md) | The id as echoed back, and what the container logs while resolving a file-authored explicit id |
+| [identity-and-casing/02-quote-id-case-insensitive-lookup.md](identity-and-casing/02-quote-id-case-insensitive-lookup.md) | What the container logs while resolving either casing |
+| [identity-and-casing/03-conversation-line-quote-id-fk-safety.md](identity-and-casing/03-conversation-line-quote-id-fk-safety.md) | The foreign-key violation count either side of the mismatched line |
+| [identity-and-casing/04-read-time-presentation-of-string-typed-ids.md](identity-and-casing/04-read-time-presentation-of-string-typed-ids.md) | The `checked` field count each of the three reads inspects |
+| [identity-and-casing/05-generic-repository-select-list-wrapping.md](identity-and-casing/05-generic-repository-select-list-wrapping.md) | The `items` and `checked` counts per generic-repository-backed endpoint |
+| [import-and-staged-actions/01-staged-action-review-workflow.md](import-and-staged-actions/01-staged-action-review-workflow.md) | The status tally after each stage: staged, decided, undone, applied |
+| [import-and-staged-actions/02-two-phase-decide-apply-reversal.md](import-and-staged-actions/02-two-phase-decide-apply-reversal.md) | The preview's own count, and the rows the reversal restores |
+| [import-and-staged-actions/03-batch-id-mode-alias.md](import-and-staged-actions/03-batch-id-mode-alias.md) | The staged state before the apply and after it |
+| [import-and-staged-actions/04-discard.md](import-and-staged-actions/04-discard.md) | The action states either side of the discard, and the refusal body when it is refused |
+| [import-and-staged-actions/05-reverse-and-resurrection.md](import-and-staged-actions/05-reverse-and-resurrection.md) | The `IsDeleted` flag either side of the resurrection |
+| [import-and-staged-actions/07-stagedirection-soundcue-modify.md](import-and-staged-actions/07-stagedirection-soundcue-modify.md) | The stored `text` after each of the three imports |
+| [import-and-staged-actions/08-person-modify-and-lowercase-id-reversal.md](import-and-staged-actions/08-person-modify-and-lowercase-id-reversal.md) | The stored `dateOfBirth` after each import, and the `IsDeleted` flip |
+| [import-and-staged-actions/09-character-source-many-to-many-identity.md](import-and-staged-actions/09-character-source-many-to-many-identity.md) | The baseline link count, and the delta each import produces |
+| [import-and-staged-actions/11-batch-id-validation-and-request-log-status.md](import-and-staged-actions/11-batch-id-validation-and-request-log-status.md) | The status the request log records for each of the three rejected calls |
+| [import-and-staged-actions/12-character-modify-and-explicit-id-on-add.md](import-and-staged-actions/12-character-modify-and-explicit-id-on-add.md) | The id stored for the explicit-uppercase Add, and the Source matched through a differently-cased title |
+| [import-and-staged-actions/13-bulk-decide-via-file-export-import.md](import-and-staged-actions/13-bulk-decide-via-file-export-import.md) | The round trip's own row counts in both wire formats, and the malformed row's report |
+| [import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md](import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md) | The pending, duplicate-Source and no-op counts a fresh seed leaves |
+| [import-and-staged-actions/17-source-alias-staleness.md](import-and-staged-actions/17-source-alias-staleness.md) | The pending and stale lists after the fresh seed and after the reseed |
+| [import-and-staged-actions/19-per-file-import-report.md](import-and-staged-actions/19-per-file-import-report.md) | The per-file, per-entity-type counts each of the five surfaces reports |
+| [import-and-staged-actions/20-pending-review-alert.md](import-and-staged-actions/20-pending-review-alert.md) | The alert count per file, and each alert's state after its resolution |
+| [import-and-staged-actions/21-reseed-preserves-existing-data.md](import-and-staged-actions/21-reseed-preserves-existing-data.md) | The quote count either side of each reseed, and the surviving batch list |
+| [import-and-staged-actions/22-season-attached-quote-served-through-the-api.md](import-and-staged-actions/22-season-attached-quote-served-through-the-api.md) | The Season reference as served by the list, by `GET /{id}`, and by search |
+| [import-and-staged-actions/23-complete-row-blocks-only-on-a-real-write.md](import-and-staged-actions/23-complete-row-blocks-only-on-a-real-write.md) | The action state and stored text after the reseed that writes nothing |
+| [import-and-staged-actions/24-complete-row-still-blocks-a-real-write.md](import-and-staged-actions/24-complete-row-still-blocks-a-real-write.md) | The blocked action count and the stored text after the `Replace` rule |
+| [import-and-staged-actions/25-an-already-reported-conflict-does-not-accumulate.md](import-and-staged-actions/25-an-already-reported-conflict-does-not-accumulate.md) | The unresolved count across the three seeds, and the `AlreadyReported` total |
+| [import-and-staged-actions/26-a-new-conflict-is-still-staged.md](import-and-staged-actions/26-a-new-conflict-is-still-staged.md) | The outstanding conflict count before the declaration and after it |
+| [import-and-staged-actions/27-orphaned-review-row-offers-only-dismiss.md](import-and-staged-actions/27-orphaned-review-row-offers-only-dismiss.md) | The controls the page offers, and the alert's state after the dismiss |
+| [import-and-staged-actions/28-review-throws-nothing.md](import-and-staged-actions/28-review-throws-nothing.md) | The exception line count before the reads and after them |
+| [import-and-staged-actions/29-a-case-only-change-is-shown-for-review.md](import-and-staged-actions/29-a-case-only-change-is-shown-for-review.md) | The refusal body, and the text stored after taking the incoming value |
+| [import-and-staged-actions/30-deciding-an-add-answers-an-outcome.md](import-and-staged-actions/30-deciding-an-add-answers-an-outcome.md) | The held reason each Add reports, and each refusal body |
+| [notifications-and-changelog/02-notification-metadata-and-provenance.md](notifications-and-changelog/02-notification-metadata-and-provenance.md) | The stored payload and its provenance, as read, with the date of the reading |
+| [notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md](notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md) | The version history after the upgrade from the intermediate state |
+| [notifications-and-changelog/05-legacy-notification-provenance.md](notifications-and-changelog/05-legacy-notification-provenance.md) | The order of the version-history rows, and the fresh database's absence of a released row |
+| [notifications-and-changelog/07-changelog-served-from-its-own-database.md](notifications-and-changelog/07-changelog-served-from-its-own-database.md) | The read path in use, and how long after health the import line appears |
+| [notifications-and-changelog/08-notification-text-resolves-per-language.md](notifications-and-changelog/08-notification-text-resolves-per-language.md) | The text each language returns for the same notification |
+| [notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md](notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md) | The text each language returns after the upgrade, and the English row either side |
+| [notifications-and-changelog/11-clean-reseed-confirmation.md](notifications-and-changelog/11-clean-reseed-confirmation.md) | The confirmation count per file, and the breakdown's own totals against its parts |
+| [notifications-and-changelog/12-running-action-state.md](notifications-and-changelog/12-running-action-state.md) | The badge text and the control set while the action runs, and the quote count after an interrupted run |
+| [notifications-and-changelog/13-notification-layout.md](notifications-and-changelog/13-notification-layout.md) | The computed `white-space`, the line-box count, and the dialog's height against a non-zero viewport |
+| [startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md](startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md) | The ordered log sequence the broken schema produces, with the date of the reading |
+| [startup-and-degradation/02-startup-backup-gating-and-storage-budget.md](startup-and-degradation/02-startup-backup-gating-and-storage-budget.md) | The backup count at each of the five checkpoints |
+
+---
+
 ## Where things live
 
 Test documents sit in a category subfolder, numbered per category with a stable slug,
@@ -1307,6 +1372,7 @@ Every test document follows this shape.
 
 **Smoke:** yes | no
 **Environment:** Fresh | Constrained | Upgraded
+**Deterministic:** yes | no
 **Traces to:** #NNN[, #NNN]
 **Fully green after:** #NNN: <which steps, and what they read as until then>   ← only when it applies
 
@@ -1321,7 +1387,8 @@ A document that needs nothing beyond its profile says so.
 
 ## Determinism
 
-Every variable the outcome depends on, and how each is pinned.
+Every variable the outcome depends on, and how each is pinned. A document whose `Deterministic:` field
+says `no` states here what varies, and why it cannot be pinned.
 
 ## Explicitly not covered here   ← only when it applies
 
@@ -1349,6 +1416,12 @@ container.
 What this circumstance actually produces: the log lines, health response, UI state and messages an
 operator would see. Distinct from the per-step expectations, which state only what must be true for a
 pass.
+
+A measured effect opens with `**Measured YYYY-MM-DD**` and the build it was read against. That one
+spelling, not `Captured`, `Live-verified`, `Executed` or `Re-measured`: a guard reads this field, and
+seven synonyms are seven things for it to miss. An effect stated without having been measured is
+listed under *Observed effects awaiting measurement* below, naming the quantity its next run must
+read.
 
 ## Canary
 
@@ -1434,7 +1507,36 @@ under a heading of its own invention. Three authors reaching for the same shape 
 rather than three mistakes. A document with nothing to exclude omits the section; one that has
 something uses this heading in this position.
 
-**This block is the authoritative list of what a document contains.** Three guards in
+**A measured effect and a stated one are different claims, and the suite can tell them apart**
+(developer direction, 2026-10-17). A section opening with the date it was read and the build it ran
+against is evidence. A section describing what the circumstance produces, written from the document's
+own steps without a run behind it, is a correct and useful statement that is not evidence, and nothing
+in sixty pages of prose makes the difference visible.
+
+So an unmeasured effect is listed under *Observed effects awaiting measurement*, and
+`TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` holds the two sides together. Adding a
+measurement to a document without removing its row fails, so the list can only shrink by someone doing
+the measuring, and it is never a note that quietly stops being true.
+
+**Measured 2026-10-17: 27 of 75 sections carried a date and 48 did not**, and the 48 already said so
+in prose, across four phrasings (*Not yet established*, *Not yet established as a captured record*,
+*Partially established*, *Well established*). Of the 27, seven different words introduced the date and
+one of those dates was a developer decision rather than a reading. That is the same improvisation the
+canary headings showed, in the field whose whole purpose is to be evidence, which is why the marker is
+one spelling and the gap is a list rather than a turn of phrase.
+
+**Each awaiting row names the quantity its next run must read**, because an effect that can be
+measured precisely should be, and a prose description of what an operator sees is not a number. *The
+queue does not grow* becomes *the unresolved count stays at its first-seed value across three
+reseeds*: the same claim, in a form a run can record and a later run can compare against.
+
+**Every document declares whether its results are deterministic.** Determinism is already this
+suite's rule and already has a section; the field is the test *saying* which it is, so a reader can
+tell a document that pins everything from one whose reading moves. Prefer determinism wherever it can
+be had, and where it genuinely cannot, say so in the field and name the variable in `## Determinism`
+rather than leaving a reader to discover it from a run that disagrees with the last one.
+
+**This block is the authoritative list of what a document contains.** Guards in
 `RepositoryStructureTests` read their expectations from it, parsing it for its headings and its header
 fields rather than carrying a list of their own:
 `EveryAutomatedTestingDocument_CarriesEverySectionTheTemplateDefines`,
