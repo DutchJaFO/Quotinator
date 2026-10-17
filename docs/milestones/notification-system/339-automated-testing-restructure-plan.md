@@ -1,6 +1,6 @@
 # #339: Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** Waiting for release
+**Status:** In progress (step 13)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 
@@ -510,6 +510,41 @@ documentation and guard tests. The one command text that changed is named in the
 
 ---
 
+### 13. Write every guard against example data, including the empty set
+
+**Status:** ⬜ Not started
+
+**The guards were only ever exercised against one snapshot of the live tree, so what they enforce is
+unestablished** (developer, 2026-10-17). Each went red against whatever the documents happened to
+contain that day and green once those cases were fixed. That demonstrates the guard noticed those
+cases; it says nothing about the rule holding over any document the tree did not happen to contain.
+This is the issue's own deliverable, so it is not done until the guards are.
+
+**Testing against the real tree is the application-side validation, not the test.** A unit test states
+a scenario and asserts the outcome, so a failure in the real tree points back at a scenario someone
+chose. A guard that only ever reads the real tree inverts that: it reports on today's content, and an
+unexpected result means the scenarios were never enumerated at all.
+
+**One guard cannot be validated against the tree even in principle.**
+`EveryNonDeterministicDocument_SaysWhatVaries` has no `IsNotEmpty` assertion and must not have one,
+since zero non-deterministic documents is a legitimate state. Working correctly over nothing and
+broken so that it inspects nothing produce the identical green. Only example data separates them.
+
+**And a concrete defect path is already visible in the guard code itself.** `SectionHeadings` tracks
+fenced blocks by flipping a boolean on any line starting with three backticks, while
+`ExtractDocumentTemplateBlock` counts depth, because a fence nested inside another defeats the toggle.
+The same file both knows the toggle is insufficient and relies on it, and no test covers a document
+carrying a nested fence. Found by reading the code after the developer's challenge, not by a run.
+
+What this step does:
+
+- Give the scanning logic its input instead of letting it find its own: the document set and the
+  template as parameters, so a test can hand it a scenario.
+- Cover each rule with example documents: conforming, each violation it exists to catch, the shapes
+  that have already fooled this logic once (a nested fence, a heading inside a code block), and the
+  empty set, whose correct outcome differs per guard and is therefore asserted rather than inferred.
+- Keep one thin test per guard over the real tree, which is where the live content belongs.
+
 ## Verification checklist
 
 | # | Status | Requirement | Method | Verification |
@@ -543,4 +578,6 @@ documentation and guard tests. The one command text that changed is named in the
 | 27 | ✅ | Every `Observed effect` either records a measurement against a named build, or is listed in the index as awaiting one | Unit test | `RepositoryStructureTests.EveryObservedEffect_IsMeasuredOrListedAsAwaitingMeasurement`, red against 61 unmeasured sections measured 2026-10-17, green over all 75 |
 | 28 | ✅ | The awaiting-measurement list names exactly the unmeasured documents, and says what each one's next run must measure | Unit test | `RepositoryStructureTests.TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments`, red while the index had no such list; its 49 rows now match, and adding a measurement without removing its row fails |
 | 29 | ✅ | Every document declares whether its results are deterministic | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_DeclaresWhetherItIsDeterministic`, red against all 75 before step 10; now 73 `yes` and 2 `no` |
-| 30 | ✅ | A document that declares itself non-deterministic says what varies | Unit test | `RepositoryStructureTests.EveryNonDeterministicDocument_SaysWhatVaries`, red by the step 9 mutation: `**What varies:**` removed from `startup-and-degradation/03`, the guard named that document, the line restored |
+| 30 | ❌ | A document that declares itself non-deterministic says what varies | Unit test | `RepositoryStructureTests.EveryNonDeterministicDocument_SaysWhatVaries`. The step 9 mutation is the only evidence it can fail, and `testing-policy.md` calls mutation the recovery rather than a substitute. Green again once step 13 proves it against example data |
+| 31 | ❌ | Each guard's rule is proven against example data, not against whatever the tree holds | Unit test | A test per rule over fixture documents: conforming, each violation, a nested fence, a heading inside a code block. Red before step 13, since the scanning logic takes no input today |
+| 32 | ❌ | Every guard states what it does with an empty document set, and asserts it | Unit test | Six guards must fail loudly on an empty set and one must pass, since zero non-deterministic documents is legitimate. Each asserted over a fixture rather than left to an `IsNotEmpty` someone remembered |
