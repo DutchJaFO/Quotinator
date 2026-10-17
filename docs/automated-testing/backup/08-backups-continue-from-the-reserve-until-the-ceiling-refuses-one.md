@@ -321,6 +321,25 @@ is only ever shown inside the reserve.
 refused outright in at least one sandboxed runner, which stops the whole step before any of it executes;
 `[System.IO.File]::Delete` is the same operation and matches the `::Create` two lines above it.
 
+## Canary
+
+**Step 2 is the control and says so in its own title.** Below the quota a backup is taken,
+`reserveInUse` is `False` and nothing is warned about. Every later step asserts a change against that
+reading, so a build that warned about everything or about nothing fails step 2 before it can
+accidentally satisfy steps 4 to 10.
+
+For the pre-fix form, build `4cfe1006`, the commit before step 8 of
+[#348](https://github.com/DutchJaFO/Quotinator/issues/348)'s plan, as `quotinator:canary348`, and run
+steps 3 to 6 against it. The reserve band is what #348 introduced, so `reserveInUse` has no meaning
+there: step 3 cannot report the band it names, and step 4's warning does not exist, which is what
+makes the band observable rather than merely configured.
+
+Steps 7 to 10 were reworked after the reserve bands were first measured and found wrong, so run them
+against the current build only; a pre-fix reading of a band that did not exist yet is not evidence
+about them.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

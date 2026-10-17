@@ -134,6 +134,19 @@ normally, and the next visit logs nothing. The browser does not separate cookies
 `*.localhost` host name, so no browser-side isolation keeps a provoking test from affecting the others:
 restoring the cookie in step 4 is the only way.
 
+## Canary
+
+The control is inside the run. Steps 2 and 3 differ only in whether the container shares the key ring:
+step 2 must read `0` and step 3 must read `2`. If sharing had no effect, step 2 would read `2` as well,
+and the document fails.
+
+A build before [#411](https://github.com/DutchJaFO/Quotinator/issues/411) is the pre-fix form, where
+every container generated a key ring of its own and step 2 reads `2`.
+
+**Step 4 is not a third reading of the same thing.** It is what the suite requires of any test that
+provokes the pair: end by restoring a cookie the shared ring can read, so the next browser-driven
+document does not log it and report it as its own.
+
 ## Cleanup
 
 Each step destroys its own container. The shared key ring, `.claude/temp/qt-keys`, stays: removing it

@@ -115,6 +115,21 @@ either — Conversation (`Sql.Conversations.SelectForRead`), Captured import fil
 endpoint (`Sql.Notifications.UpdateDismissById`, a *write* by id). Closing that is
 [#341](https://github.com/DutchJaFO/Quotinator/issues/341); it is not this test's job.
 
+## Canary
+
+Build the commit before [#210](https://github.com/DutchJaFO/Quotinator/issues/210)'s first code
+change, under a distinct tag, and run steps 2 to 4 against it.
+
+Step 3 must answer `404`. The fixture authors its id in uppercase and step 3 asks for the lowercase
+form, which is the lookup #210 made case-insensitive, so on that build the two spellings are different
+ids and the quote cannot be found.
+
+Step 4 is the control and is expected to pass there: asking in the file's own casing finds the row on
+either build, so a `404` in step 4 as well would mean the import failed rather than that the lookup is
+case-sensitive.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

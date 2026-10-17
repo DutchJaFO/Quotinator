@@ -172,6 +172,22 @@ There is no live check for the `SeedSystemContentAsync` extension point. No real
 table exists in production yet — it is proven only via test-only fixtures, see #156's plan doc — so
 nothing observable changes in a running container for that part.
 
+## Canary
+
+Build the commit before [#156](https://github.com/DutchJaFO/Quotinator/issues/156)'s first code
+change, under a distinct tag, and run steps 2 to 6 against it.
+
+Step 4 must read the full bundled quote count rather than `0`. That is exactly the behaviour #156
+removed: `OnResetAsync` called `SeedIfEmptyInternalAsync`, so a reset reimported the bundled content
+on the caller's behalf, and `CLAUDE.md`'s *Endpoint side-effect policy* records it as the defect.
+Step 5 must read more than Reset's own single self-trace row for the same reason.
+
+Step 2 is expected to pass there, and it is the control: both builds produce a normally seeded
+install, so step 4's reading is about what Reset did rather than about what the container started
+with.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

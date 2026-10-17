@@ -80,6 +80,21 @@ $quiet = ([regex]::Matches((docker logs qt-api-05 2>&1 | Out-String), '\[Runtime
 
 **Expected:** `healthy`, and `quiet` equal to `after` — a request that throws nothing adds no line.
 
+## Canary
+
+Build the commit before [#397](https://github.com/DutchJaFO/Quotinator/issues/397)'s first code
+change, under a distinct tag, and run steps 2 to 5 against it.
+
+Step 4 must read `after` equal to `before`. That is the defect this document exists for: an exception
+thrown where the application actually runs, and logged nowhere outside Visual Studio.
+
+Steps 2 and 5 are expected to pass on that build, and they are the control rather than a second
+assertion. A healthy startup and an ordinary request throw nothing on either build, which is what
+makes step 4's increase attributable to the upload instead of to whatever else the container was
+doing.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

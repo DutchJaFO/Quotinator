@@ -153,6 +153,23 @@ It is now `OpenApiSpecEndpointTests`, a `WebApplicationFactory` test that fetche
 `/openapi/v1.json` through the full pipeline and asserts the type via `JsonDocument` — so it runs
 deterministically in every `dotnet test` instead of requiring a live container.
 
+## Canary
+
+Build the commit before [#195](https://github.com/DutchJaFO/Quotinator/issues/195)'s first code
+change, under a distinct tag, and run steps 1 to 5 against it.
+
+Step 4 must read `50`, the default #195 replaced, which this document's own expectation already names.
+Step 2 is the other half: `CLAUDE.md`'s *Standard pagination contract* records #195's own pass finding
+`SystemAuditReader` and `SystemImportActionReader` translating `pageSize=0` into a literal `LIMIT 0`,
+so that build must return zero rows where this one returns every row. Confirm which of the two readers
+shows it rather than assuming both do.
+
+Steps 1 and 3 are expected to pass there. A non-zero total and a rejected oversized page size both
+predate #195, so they are the control that keeps step 4's reading attributable to the default rather
+than to a broken container.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

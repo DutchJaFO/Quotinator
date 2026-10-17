@@ -153,6 +153,23 @@ its remedy. That reset now answers:
 The operator is told the truth: this file cannot be backed up, so it cannot be reset in place either,
 and the way out is to replace it from outside the application.
 
+## Canary
+
+Build `4cfe1006`, the commit before step 8 of
+[#348](https://github.com/DutchJaFO/Quotinator/issues/348)'s plan, as `quotinator:canary348`, and run
+steps 2 to 5 against it. `backup/06` and `backup/07` already use that build, so the image is shared
+rather than built per document.
+
+Step 4 must answer `500` rather than `409`. That is the defect in this document's own title: the
+reset reached a database it could not read and failed raw, with no obstacle named and no remedy
+offered, so `obstacle`, `remedyCount` and the Knowledgebase address have nothing to carry them.
+
+Steps 2 and 3 are expected to behave the same on both builds, and they are the control. The file is
+34 bytes either way and the start degrades either way, so step 4's answer is about how the reset
+reports rather than about whether the database was actually broken.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

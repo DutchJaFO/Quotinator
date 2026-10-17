@@ -246,6 +246,24 @@ this newer endpoint. Fixed by switching to `HttpRequest request` and checking `b
 Until #411 this document staged its batches from the bundled curated file. Since #373 that file stages
 nothing against a database seeded from it, so step 2 answered `200` instead of `202`.
 
+## Canary
+
+Build the commit before [#163](https://github.com/DutchJaFO/Quotinator/issues/163)'s first code
+change, under a distinct tag, and run steps 3 to 8 against it. Exporting a staged batch, deciding it
+in a file and sending it back is what #163 added, so step 3's export answers `404` and the round trip
+has nowhere to start.
+
+**Step 5 is the unhappy half and is not optional**: a copy carrying one malformed row must be
+reported rather than partially applied. Steps 6, 7 and 8 are the same shape for an unknown format, a
+missing admin key, and a request with neither a `batchId` nor a body.
+
+**Step 2 has to stage a batch that genuinely has something to decide**, and that is what
+[#411](https://github.com/DutchJaFO/Quotinator/issues/411) repaired here: an already-stored file
+stages nothing, so the document answered `200` and never reached the round trip it exists for. A run
+whose step 2 reports nothing staged has not tested bulk decide, whatever steps 3 and 4 then report.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

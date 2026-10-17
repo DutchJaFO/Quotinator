@@ -151,6 +151,24 @@ row legitimately.
 Not yet established as a captured record. The ordering is the load-bearing observation — the two rows
 existing is weaker evidence than the 1.8.3 row sorting first.
 
+## Canary
+
+**Step 4 is the control, and it is half the claim rather than a tidy-up.** The same upgrade is run
+against a fresh database, which must not gain a `1.8.3` row. Only a database that really was v1.8.3
+earns one, so a build that stamped the version on everything would satisfy steps 1 to 3 and fail here.
+A run that stops at step 3 has proven the row appears, not that it means anything.
+
+For the pre-fix form, build the commit before
+[#312](https://github.com/DutchJaFO/Quotinator/issues/312)'s first code change, under a distinct tag,
+and run steps 2 and 3 against it: provenance is what #312 added, so the legacy row has none and step 3
+has no history to read.
+
+**This document pins `Directory.Build.props` while it runs, and its sibling `02` does not.** That is
+why the two disagree about whether the build reports `1.8.3`, and both are correct. Restore the file
+afterwards, or every later reading in the suite is against a version that was never released.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

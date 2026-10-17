@@ -242,6 +242,24 @@ endpoint reported success in that failing case too, so this tally is the only th
 Not yet established as a captured record. The `IsDeleted` flip is the load-bearing observation: the
 endpoint reported success in the failing case too, so the HTTP result alone never distinguished them.
 
+## Canary
+
+Build the commit before [#173](https://github.com/DutchJaFO/Quotinator/issues/173)'s first code
+change, under a distinct tag, and run steps 2 to 9 against it. A Person whose `dateOfBirth` changed
+could not be Modified before #173, so step 3 stages nothing.
+
+**Step 5 is the counterpart and must invert rather than repeat.** A third `dateOfBirth` against a row
+that is now `Complete` has to be blocked, so the document reads what step 5 staged instead of
+asserting that something was staged. Step 3 staging and step 5 refusing cannot both be satisfied by a
+build that treats every re-import the same way.
+
+Steps 6 and 7 carry the casing half: the Person is added with an uppercase id and reversed by a
+mixed-case one, which is where a case-sensitive comparison silently finds nothing. Step 9 then
+re-imports the same file unchanged and reads what that staged, which is the only way to tell a revived
+row from a fresh one.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

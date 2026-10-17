@@ -330,6 +330,25 @@ succeeded. On a degraded page the banner and its button vanish in place; on the 
 started-with-a-problem modal is replaced by the ready one, so the two surfaces agree without either
 being reloaded.
 
+## Canary
+
+Build the commit before [#350](https://github.com/DutchJaFO/Quotinator/issues/350)'s first code
+change, under a distinct tag, and run steps 2 to 7 against it.
+
+Step 3 must read `200` and `healthy`. That is #350's own title: a recorded version ahead of the build
+ran healthy instead of degrading, against a schema whose shape the application cannot know. With no
+degradation there is nothing for steps 5, 6 and 7 to read either, so the reason, the log line and the
+repair route all fail with it.
+
+**Step 1 is the control.** It leaves a healthy, fully migrated database, so step 3's reading is about
+the recorded overshoot rather than about a container that was broken before the version was touched.
+
+Step 7's own repair was changed after #350's first pass, when a repaired page reloaded rather than
+being told the state had changed. A pre-fix reading of the reload behaviour is not evidence about the
+current step, so run step 7 against the current build only.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

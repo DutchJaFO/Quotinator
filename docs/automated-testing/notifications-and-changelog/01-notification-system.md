@@ -290,6 +290,23 @@ Driving the ActionRequired row's **Run → Confirm** performed a full database r
 
 What the container logs while writing the startup notification has still not been recorded.
 
+## Canary
+
+Build the commit before [#278](https://github.com/DutchJaFO/Quotinator/issues/278)'s first code
+change, under a distinct tag, and run steps 1, 5, 6 and 8 against it. There is no notification system
+on that build, so the list endpoint answers `404`, the pages render no rows, and the status column,
+filter and Action button have nothing to show.
+
+**Step 4 has a different pre-fix build, and it is this issue's own.** The `Notifications` tag was used
+by its operations but never declared with a description until #339 added it, so the commit before that
+change publishes a spec where the tag renders bare and last. `OpenApiSpecEndpointTests` holds it now,
+which is why step 4 reads the published spec rather than trusting the source.
+
+Steps 2 and 3 are the control and pass on both builds: an unknown id rejected without a key and
+accepted with one is about the admin gate rather than about notifications existing.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

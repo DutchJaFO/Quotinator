@@ -122,6 +122,25 @@ remedies as `01`: replace the file, or restore an older backup.
 
 Before #348 this same call returned an unhandled `500`.
 
+## Canary
+
+Build `4cfe1006`, the commit before step 8 of
+[#348](https://github.com/DutchJaFO/Quotinator/issues/348)'s plan, as `quotinator:canary348`, and run
+steps 2 and 3 against it. The image is shared with `backup/01`, `06` and `07`.
+
+Step 3 must fail to report `409` with `obstacle=SourceUnreadable`. A truncated file is still a valid
+SQLite header, which is the distinction in this document's title: the unrecognisable case was handled
+before the half-size one was, so this build either answers `500` or accepts the reset.
+
+**Which of those two it does is the finding, and it decides what this document is worth.** A `500`
+means the refusal was missing; a `200` means a truncated database was wiped behind a success. Record
+the answer rather than treating either as the expected red.
+
+Step 2 is the control and reads the same on both builds: the file is half its original length and
+still megabytes, so the setup reached its premise regardless of how the reset then behaved.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

@@ -199,3 +199,26 @@ Remove-Item -Recurse -Force "$temp\376-imports"
 ```
 
 **Expected:** the container and its volume are gone.
+
+## Canary
+
+Build the commit before [#376](https://github.com/DutchJaFO/Quotinator/issues/376)'s first code
+change, under a distinct tag, and run steps 2 to 6 against it. The pre-fix readings are already stated
+beside the steps: there is no `AlreadyReported` group at all, because that kind did not exist, and the
+`Modify` count is `3` rather than `1`.
+
+**Step 6 is the control for step 5, and without it this document asserts an absence.** A count that
+never grows is what a working check produces, and also what a reseed that staged nothing at all
+produces. Step 6 confirms the conflict was reported rather than silently skipped, which is the
+difference between the two.
+
+**Steps 4 and 5 once printed nothing instead of `1`**, because `.Count` on a filtered result holding a
+single object returns blank in Windows PowerShell 5.1. Wrap every filtered result in `@(…)` before
+counting it: the one-row case is the most likely outcome of a well-targeted assertion, so the
+unwrapped form fails precisely when the test is working.
+
+**Step 3 reseeds only once the restarted application answers.** A reseed issued straight after
+`docker restart` fails with the connection closed, which reads as a defect in the behaviour under
+test.
+
+Remove the container, image and worktree afterwards.

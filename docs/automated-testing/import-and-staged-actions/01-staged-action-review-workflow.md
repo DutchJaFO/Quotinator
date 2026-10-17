@@ -167,6 +167,23 @@ a bug — step 8's count is what confirms it should not happen here.
 
 **Expected:** after a successful apply, one group — `Applied` — holding every action in the batch.
 
+## Canary
+
+Build the commit before [#154](https://github.com/DutchJaFO/Quotinator/issues/154)'s first code
+change, under a distinct tag, and run steps 2 to 10 against it. The staged decide and apply endpoints
+are what #154 completed, so step 5 has no listing to read and steps 6 to 9 have nothing to decide,
+undo or apply.
+
+**Step 3 asserts that the legacy conflicts machinery is gone, and step 2 is what stops that passing
+for the wrong reason.** An absence is also what a container with no import surface at all reports, so
+the staging endpoint is confirmed reachable first. On the pre-fix build step 3 inverts: the legacy
+machinery answers, which is the state this workflow replaced.
+
+Step 7 is the pair for step 6: a decision that can be made and then undone, rather than only made. A
+build that recorded decisions without being able to reverse them satisfies step 6 alone.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

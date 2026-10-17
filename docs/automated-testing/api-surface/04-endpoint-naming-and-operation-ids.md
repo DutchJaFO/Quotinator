@@ -141,6 +141,22 @@ establishes Scalar does not transform the text. Nothing here needs to re-establi
 Partially established: the log line is itself an observed effect and is asserted above. The rest of
 what the container emits while serving these requests has not been captured.
 
+## Canary
+
+Build the commit before [#279](https://github.com/DutchJaFO/Quotinator/issues/279)'s renames, under a
+distinct tag, and run steps 2 to 6 against it.
+
+Step 3 must invert: `GetImportBatches 1` and `GetAllImportBatches 0`, against `0` and `1` here, since
+#279 is what renamed them. Step 5 must read one or more `[Api - GetById]` and no
+`[Api - GetQuoteById]`.
+
+**Counting the old name beside the new one is itself the control, and it exists because the earlier
+form could not fail.** Three of this document's counts matched a pattern the pretty-printed spec never
+contained, so the removal half passed on every build including one where nothing had been renamed. A
+count of a name that is never confirmed against a build which has that name proves nothing.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

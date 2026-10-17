@@ -203,6 +203,27 @@ with `Keep`) had its snapshot recorded with a straight apostrophe (`Life's`), wh
 `NikhilNamal17_popular-movie-quotes.json` entry uses a curly one. A genuine drift between
 the rule's recorded assumption and reality, caught by the mechanism rather than by review.
 
+## Canary
+
+**Step 4 is the control, and this document could not fail before it existed.** Step 3 reads an empty
+stale list, which a working staleness check, a disabled one, a failed reseed and a regressed `status=`
+filter all produce alike. Step 4 makes staleness actually fire and confirms it, so step 3's emptiness
+becomes a statement about this seed rather than about whether the mechanism is alive at all.
+
+A run that reports step 3 green without step 4 has measured nothing.
+
+For the pre-fix form, build the commit before
+[#153](https://github.com/DutchJaFO/Quotinator/issues/153)'s first code change, under a distinct tag,
+and run step 4 against it: a rule whose recorded snapshot no longer matches reality is applied there
+rather than staged `Stale`, which is the defect.
+
+**Step 3's own reading stays inconclusive until [#347](https://github.com/DutchJaFO/Quotinator/issues/347)**,
+for the reason the `Fully green after:` field states: `stale=0` is produced identically by *compared
+the rules, none drifted* and by *never compared anything*, and nothing yet says which happened.
+
+Pin `Quotinator__AutoPurgeBundledImportActions` for every run. An empty list produced by auto-purge
+cannot be told from one produced by the behaviour under test.
+
 ## Cleanup
 
 ```powershell

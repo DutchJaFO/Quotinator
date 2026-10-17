@@ -128,6 +128,23 @@ across Sources.
 
 Not yet established as a captured record beyond the database reads.
 
+## Canary
+
+Build the commit before [#179](https://github.com/DutchJaFO/Quotinator/issues/179)'s first code
+change, under a distinct tag, and run steps 2 to 6 against it. A Character's Source links became
+per-Source in #179, so step 5's same-named Character on a second Source does not produce a second link
+there, and step 6 counts the Character rows differently.
+
+**Step 2 records the baseline and every later count is a delta against it.** The bundled dataset's own
+link count is not something this document may predict: it moves when a source file is updated or a
+converter changes, and an asserted total would then fail for a correct reason and be repaired by
+editing the number. A delta measured in the same run stays true whatever the dataset holds.
+
+So a run that starts at step 3 has no baseline to compare against and cannot report anything, even
+though every later step will appear to succeed.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

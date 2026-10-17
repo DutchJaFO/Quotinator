@@ -170,6 +170,22 @@ looks like success.
 
 and the quote count is unchanged: 799 before, 799 after.
 
+## Canary
+
+Build `4cfe1006`, the commit before step 8 of
+[#348](https://github.com/DutchJaFO/Quotinator/issues/348)'s plan, as `quotinator:canary348`, and run
+steps 2 to 4 against it.
+
+Step 3 must answer `200` and step 4 must then find the quotes gone. That pair is the defect this
+document's title names: the backup failed for want of room, the reset carried on regardless, and the
+caller was told it had succeeded. A `409` naming `DiskFilledDuringBackup` is what #348 added.
+
+**Step 2 is the precondition that makes the rest meaningful, and it is measured rather than assumed.**
+`roomForACopy=False` is established from the actual free space and the actual database size, so a run
+where the cap turned out to be generous enough fails there instead of silently testing nothing.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

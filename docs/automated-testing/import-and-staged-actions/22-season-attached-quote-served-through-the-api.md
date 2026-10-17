@@ -187,6 +187,23 @@ values with no divergence from what `quotinator-seasons.json` declares. The one 
 surfaced (Preconditions) was fixed before this document's own steps were captured as passing; the
 `500` above is preserved in the document because it is the reason this test exists, not despite it.
 
+## Canary
+
+Build the commit before [#375](https://github.com/DutchJaFO/Quotinator/issues/375)'s first code
+change, under a distinct tag, and run steps 2 to 6 against it. A quote from a multi-season series had
+no way to say which season it came from before #375, so step 2 has no seasons to serve and step 3's
+episode Source carries no Season reference.
+
+**Step 6 reads the link at the database level, and that is what the API steps cannot establish.** A
+response that omits the reference and a response built from a link that was never written look the
+same from outside, so the row is read directly as well.
+
+Steps 3 and 4 are the same reference through two routes, the list and `GET /{id}`, which is where a
+resolver wired into one and not the other shows up. Step 5 reaches it through search, a third path
+again.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

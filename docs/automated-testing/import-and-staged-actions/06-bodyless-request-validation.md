@@ -85,6 +85,23 @@ carry a `traceId`, so a report of either can be tied back to its request in the 
 parameters automatically again instead of reading `HttpRequest` manually — see `ImportEndpoints.cs`'s
 `HandleImportFromRequestAsync`.
 
+## Canary
+
+Build the commit before [#154](https://github.com/DutchJaFO/Quotinator/issues/154)'s first code
+change, under a distinct tag, and run steps 2 and 3 against it. Both must answer the framework
+binder's bare `400` with no actionable message, which is the reply this document exists to keep from
+returning.
+
+**This document has to be live, and a `WebApplicationFactory` test cannot replace it.** Real Kestrel
+and `TestServer` treat a request with no body at all differently, so the in-process form would assert
+something the deployed application never does.
+
+Steps 2 and 3 are a pair rather than a repetition: no body at all, and no body while naming an
+unknown `batchId`. The second is what distinguishes a handler that validates its input from one that
+rejects everything bodyless before looking.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

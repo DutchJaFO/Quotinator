@@ -124,6 +124,23 @@ The original defect: a batch applied entirely through the staged flow never had 
 every caller. Check it was not bypassed by a new caller of `ApplyBatchAsync` or `TryApplyBatchAsync`
 added elsewhere.
 
+## Canary
+
+Build the commit before [#177](https://github.com/DutchJaFO/Quotinator/issues/177)'s first code
+change, under a distinct tag, and run steps 2 to 7 against it. Reversing a batch that was applied
+through the staged path is what #177 added, so step 7 refuses it there.
+
+**Step 6 previews the reversal before step 7 performs it, and the pair is the control.** A preview
+that reports nothing to undo and a reversal that undoes nothing read alike from the outside, so the
+preview's own count is what makes step 7's result attributable. Step 4 plays the same role earlier:
+every action decided, and then confirmed that none is left, rather than inferring it from the apply
+succeeding.
+
+Steps 2 and 5 are expected to pass on both builds, since staging and applying predate #177. They are
+what keeps step 7's refusal about reversal rather than about a batch that never applied.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

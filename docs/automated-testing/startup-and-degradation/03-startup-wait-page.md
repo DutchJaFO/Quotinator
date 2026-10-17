@@ -149,6 +149,29 @@ the run.
 The `200` with `text/html` for a reset is the whole of what this issue removes: an API caller was told
 its write had succeeded, handed a web page, and nothing had been written.
 
+## Canary
+
+Build the commit before [#280](https://github.com/DutchJaFO/Quotinator/issues/280)'s first code
+change, under a distinct tag, and run steps 1, 3 and 4 against it.
+
+Step 4 must read `kestrelFirst=False`, and step 1's three surfaces must refuse the connection outright
+rather than answering `503`. Binding Kestrel before initialisation runs is what #280 added, and the
+difference between *no answer* and *an answer that says wait* is this document's whole subject.
+
+Step 2 belongs to [#419](https://github.com/DutchJaFO/Quotinator/issues/419) and needs its own
+pre-fix build, the commit before #419's first code change: there a write issued during the startup
+window is not refused, so the reset does not answer `503` with `application/problem+json` and a
+`Retry-After`.
+
+Step 3 is the control on both builds: once seeding completes the application must be healthy and
+report a version, so a run that never reaches ready has not tested the window at all.
+
+**Step 1 does not pass on the current build either**, for the reason the `Fully green after:` field
+states. That is [#438](https://github.com/DutchJaFO/Quotinator/issues/438)'s to resolve, and until it
+does, a canary run cannot distinguish step 1's two failures from each other.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

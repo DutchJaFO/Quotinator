@@ -114,6 +114,22 @@ Live-verified 2026-07-25. The `MergedFields` value is the load-bearing observati
 response is unchanged either way, so only the audit trail distinguishes a rule that applied from one
 that did not.
 
+## Canary
+
+**Steps 1 and 2 are each other's control, which is why this document edits the rule file twice.** Step
+1 removes the rule and the conflict must return; step 2 restores it as `Replace` and the merge must be
+recorded. A lookup that had cached its decision satisfies neither, and a lookup that always re-read but
+always resolved the same way satisfies only one. The claim is the pair.
+
+For the pre-fix form, build the commit before
+[#181](https://github.com/DutchJaFO/Quotinator/issues/181)'s first code change, under a distinct tag:
+there step 1's conflict does not return, because the decision was taken from a cache rather than from
+the file as it then stood.
+
+**Build the canary under its own tag and rebuild `quotinator:local` from the reverted file afterwards.**
+This document mutates a bundled rule file and rebuilds the image, so a canary that reused the shared
+tag would leave the mutation baked in for every document that runs next.
+
 ## Cleanup
 
 ```powershell

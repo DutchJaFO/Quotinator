@@ -203,6 +203,23 @@ the volume writable, or fix the permissions on it — and then restart.
 this setup exercises `NotificationReader`'s missing-table fix and `DatabaseStatsSummary`'s
 degraded-skip fix together — which is what the test is for.
 
+## Canary
+
+Build the commit before [#293](https://github.com/DutchJaFO/Quotinator/issues/293)'s first code
+change, under a distinct tag, and run steps 2 to 4 against it.
+
+Steps 3 and 4 must fail: the degraded pages are what #293 made survivable, so on that build reading
+`/`, `/stats` and the Blazor pages during a migration failure does not produce a rendered page. Record
+what it produces instead, since an unhandled error and a blank response are different defects.
+
+**Step 2 is the precondition and the control, and this document was rewritten because an earlier
+technique could not reach it.** `sqliteError14` must be non-zero: a `--read-only` root leaves `/data`
+writable and the migration succeeds, so the failure state is reached by denying `/data` itself with a
+migration pending. A run reporting a healthy start has not reached the premise, and steps 3 and 4 then
+say nothing whichever way they read.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

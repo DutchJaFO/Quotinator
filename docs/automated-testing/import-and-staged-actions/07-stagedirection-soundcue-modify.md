@@ -245,6 +245,24 @@ undone.
 
 Not yet established as a captured record beyond the database reads asserted above.
 
+## Canary
+
+Build the commit before [#171](https://github.com/DutchJaFO/Quotinator/issues/171)'s first code
+change, under a distinct tag, and run steps 2 to 8 against it. A StageDirection or SoundCue whose
+`text` changed could not be Modified before #171 and
+[#172](https://github.com/DutchJaFO/Quotinator/issues/172), so step 3 stages nothing for the changed
+pair and step 4 has nothing to decide.
+
+**Step 5 is the opposite assertion and needs the same build to mean anything.** Once a row is
+`Complete` a third `text` must be blocked rather than applied, so a build that staged everything and a
+build that staged nothing are distinguished only by running both steps. Step 3 staging and step 5
+refusing is the pair.
+
+Steps 6 to 8 are the reversal half, and step 8 reads the pre-correction text back rather than counting
+rows: a reversal that deleted both versions also changes the count.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

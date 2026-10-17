@@ -1354,7 +1354,8 @@ pass.
 
 How this document is proven able to fail: a build from the commit before the issue in `Traces to`,
 run against these same steps, naming which step reads what on that build. Or, where no pre-fix build
-applies, the positive control this run produces for itself. A procedure, never a verdict.
+applies, the positive control this run produces for itself. Where the canary has been run, the
+reading it produced, named against the commit it ran on. Never this document's own pass or fail.
 
 ## Cleanup
 
@@ -1393,7 +1394,8 @@ described its setup in prose, in a single file nobody read end to end.
 A test whose `Preconditions` cannot be confirmed, or whose `Determinism` cannot be pinned, is a finding
 about the test. Report it rather than writing the document anyway.
 
-**`Canary` is required of every document, and it carries a procedure rather than a verdict.**
+**`Canary` is required of every document, and it carries a procedure, plus the reading a canary run
+produced where one has been run.**
 [`testing-policy.md`](../testing-policy.md)'s *A feature is covered when both outcomes, both extremes,
 and a canary exist* requires one of every T2 document, and until this section existed the template had
 nowhere to put it: twelve documents improvised one under eleven different headings, five of them
@@ -1412,10 +1414,16 @@ Two forms, and the section says which one applies:
   produced by the test itself.
 
 **A document whose canary has never been run still states the canary it needs.** That is the same rule
-this index already applies to a missing observation and to a document's own verdict: the specification
-says what must be done and what a pass looks like, and what a particular run found belongs to the run.
-Writing "not yet run" here would be a status line, true on the day it is written and silently wrong
-afterwards.
+this index already applies to a missing observation: the specification says what must be done and what
+a pass looks like. Writing "not yet run" here would be a status line, true on the day it is written
+and silently wrong afterwards.
+
+**A recorded canary reading is not the verdict this index forbids.** *This test currently fails* is a
+claim about the current build and goes stale the moment anything changes, which is why it belongs to a
+run and not to a document. The reading a canary produced is a claim about a named commit, and that
+commit does not change, so it stays true and is the strongest form this field takes. Twelve documents
+carry one already. Name the commit and the image tag, so the reading can be reproduced rather than
+taken on trust.
 
 **Where neither form can be stated, that is a finding about the document**, and it is reported rather
 than resolved by writing a canary nobody can run.

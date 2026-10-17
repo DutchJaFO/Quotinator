@@ -153,6 +153,22 @@ Well established for the failure: `no such column: Application`, terminating sta
 changelog database had already initialised — which is what made the log look healthy up to the point it
 died.
 
+## Canary
+
+Build the commit before [#312](https://github.com/DutchJaFO/Quotinator/issues/312)'s first code
+change, under a distinct tag, and run steps 3 and 4 against it. The version history is what #312
+added, so step 4 has nothing to read there.
+
+**The point of this document is the starting state, not the destination**, and that is where its own
+control lies. Steps 1 and 2 land the database one migration past the released baseline rather than on
+it, so a build that only handles an upgrade from the last release fails here while passing its sibling
+`02`. A run that skips step 2 tests the same path `02` already covers.
+
+Never assert the migration's number. Step 2 applies the migration that first creates
+`System_AppVersion` by what it does, since a number goes stale whenever any milestone adds one.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 Read the log before the stop, per the index's *Read the log before the application stops*:

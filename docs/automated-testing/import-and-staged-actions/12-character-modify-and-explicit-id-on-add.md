@@ -245,6 +245,24 @@ so the assertion could never fail — the casing is the entire subject here.
 Not yet established as a captured record. The id that lands in the database is the load-bearing
 observation for the explicit-id half — the import reported success in the failing case too.
 
+## Canary
+
+Build the commit before [#175](https://github.com/DutchJaFO/Quotinator/issues/175)'s first code
+change, under a distinct tag, and run steps 2 to 8 against it. The widened Character schema is what
+#175 added, so step 3's correction by id stages nothing and step 5 has no ambiguous field to decide.
+
+**Step 7 is the half that only a live run reaches**, an explicit uppercase id on an Add, and step 8 is
+the case-insensitive Source match. Where casing is the subject, the comparison has to be case
+sensitive: a check written with the default comparison matches the correctly-cased row and reports a
+duplicate that does not exist, which this document's own `AIRPLANE!` fixture has already produced
+once.
+
+**Run the canary in a container of its own, never a second time in the same one.** Step 5 leaves the
+Character `Complete` permanently, so a repeat run reaches step 6 with the block already in place and
+cannot tell that from the behaviour it is asserting.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

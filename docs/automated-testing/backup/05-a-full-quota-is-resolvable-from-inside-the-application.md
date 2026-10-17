@@ -217,6 +217,23 @@ most likely to take: the read-only mount that degraded their startup is the same
 removal they were just told to perform. The writer now reports a typed outcome instead of throwing, and
 the endpoint answers `409` naming the condition and its remedy.
 
+## Canary
+
+Build the commit before [#349](https://github.com/DutchJaFO/Quotinator/issues/349)'s first code
+change, under a distinct tag, and run steps 2 to 7 against it.
+
+Steps 5, 6 and 7 must answer `404`. Listing, deleting and downloading a backup are the endpoints #349
+added, and this document's title is the claim they establish: that a full folder can be resolved from
+inside the application instead of by reaching into the volume. Without them the only remedy is a shell
+on the host, which is the state #349 ended.
+
+Steps 2 to 4 belong to [#348](https://github.com/DutchJaFO/Quotinator/issues/348) and are expected to
+pass on that build. They are the control: the folder genuinely reached its ceiling and the reset
+genuinely refused, so the `404`s in steps 5 to 7 are about the missing remedy rather than about a
+container that never got into the state.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

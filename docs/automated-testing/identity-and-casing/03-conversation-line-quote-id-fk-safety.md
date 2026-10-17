@@ -85,6 +85,23 @@ makes this specific to the import rather than to whatever the container did befo
 Not yet established as a captured record. The failure mode is known and specific — a
 `SQLite Error 19` on import — but what a passing run emits has not been recorded.
 
+## Canary
+
+Build the commit before [#210](https://github.com/DutchJaFO/Quotinator/issues/210)'s first code
+change, under a distinct tag, and run steps 2 to 4 against it.
+
+Step 4 must read a non-zero count of `SQLite Error 19`. The conversation line's `quoteId` is authored
+in a casing its quote does not use, and until #210 canonicalized ids at capture the foreign key had
+nothing to match.
+
+**Step 2 is what makes step 4's zero mean anything, and this document cannot be run without it.**
+Step 4 asserts an absence, so a container whose own seed had already logged a foreign-key violation
+would report a non-zero count that the fixture did not cause, and a build where the error is never
+logged at all would report zero for the wrong reason. Step 2 establishes the starting count on the
+same container, and the assertion is the delta.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

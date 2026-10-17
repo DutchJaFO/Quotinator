@@ -174,6 +174,21 @@ What's new (unreleased)   {"releaseState":"Unreleased","contentHash":"9042E675"}
 The first line is the distinguishing observation: a row whose `version` would make it `Released` kept
 the `Unreleased` it already stated.
 
+## Canary
+
+Build the commit before [#312](https://github.com/DutchJaFO/Quotinator/issues/312)'s first code
+change, under a distinct tag, and run step 3 against it. Backfilling a row written before the release
+state existed is what #312 added, so on that build the injected rows either stay as they are or are
+announced again, which is the pair this document separates.
+
+**A degraded start imitates a broken backfill exactly, and this document has already been misread
+that way once.** A rollback that empties the schema counter makes the replay fail on an existing
+table, after which the initializer restores its backup and degrades, and the rows then look
+un-backfilled for a reason that has nothing to do with the backfill. So confirm the start is healthy
+before reading step 3, and treat a degraded start as a setup failure rather than as the red.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

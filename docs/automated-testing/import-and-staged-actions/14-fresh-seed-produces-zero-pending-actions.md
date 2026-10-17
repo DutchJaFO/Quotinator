@@ -316,6 +316,29 @@ legitimate outcome; leaving it undecided is not.
 Not yet established as a captured record beyond the empty pending list, the two duplicate queries and
 the drift listing, which are the observations this test exists for.
 
+## Canary
+
+**Step 3 asserts an absence, and on its own it is the weakest shape this suite has.** Nothing left
+staged awaiting review is what a clean seed produces, and also what a seed that imported nothing, a
+broken staging path and a regressed status filter all produce. Steps 2 and 6 are what give it meaning:
+step 2 reads what the boot actually seeded, so the container is known to have content, and step 6
+requires every no-op resolution to be one somebody has accounted for, so an empty list is not accepted
+as self-explanatory.
+
+A run that reports step 3 green without step 2's non-zero reading has established nothing at all.
+
+For the pre-fix form, build the commit before
+[#181](https://github.com/DutchJaFO/Quotinator/issues/181)'s first code change, under a distinct tag,
+and run steps 2 to 4 against it: the bundled files do not all resolve cleanly there, so step 3 finds
+rows awaiting review and step 4 finds the duplicate Sources that went with them.
+
+**Step 5 cannot run**, for the reason the `Fully green after:` field states, and
+[#400](https://github.com/DutchJaFO/Quotinator/issues/400) owns it. Pin
+`Quotinator__AutoPurgeBundledImportActions` for every run: an empty list produced by auto-purge is
+indistinguishable from an empty list produced by the behaviour under test.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

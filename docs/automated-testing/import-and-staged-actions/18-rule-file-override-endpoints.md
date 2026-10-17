@@ -169,6 +169,24 @@ confirmed one should be filed as a data-quality follow-up per
 [`docs/workflow/source-verification.md`](../../workflow/source-verification.md), **not fixed inline as
 part of a test run.**
 
+## Canary
+
+Build the commit before [#153](https://github.com/DutchJaFO/Quotinator/issues/153)'s first code
+change, under a distinct tag, and run steps 2 to 7 against it. The override endpoints and the
+alias-candidate suggestion endpoint are what #153 added, so each answers `404` there.
+
+**Step 2 captures the bundled file's own rules before anything is generated, and step 5 compares
+against that capture.** Without the before-reading, step 5 would be asserting that some rules exist,
+which the bundled file already satisfies. The claim is that generating the override changed them, and
+only a delta can say so.
+
+**The merge half once asserted against a bundled file shipping zero rules**, which made it vacuous:
+nothing merged into nothing produces the same reading as a working merge. Step 3 stages a batch to
+generate from for that reason, rather than relying on whatever the file happens to carry.
+
+Step 6 repeats the `DELETE` after it has succeeded, which must still answer cleanly rather than
+failing on the second call.
+
 ## Cleanup
 
 ```powershell

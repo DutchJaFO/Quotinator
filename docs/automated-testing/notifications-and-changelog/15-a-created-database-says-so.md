@@ -141,6 +141,22 @@ whatsnew=1`**, with `databasecreated` absent, and the page carried no such row t
 browser instrument did locate the announcement row in that run (`control: true`, 7 rows), so the
 absence was the notification's and not the selector's.
 
+## Canary
+
+Build the commit before [#371](https://github.com/DutchJaFO/Quotinator/issues/371)'s first code
+change, under a distinct tag, and run steps 1 and 3 against it. A database created from scratch said
+nothing before #371, so step 1 finds no creation notification and step 3 has no row to render.
+
+**Steps 1 and 2 are a pair and neither is worth running alone.** Step 1 asserts the announcement
+appears on a cold start, step 2 asserts the same volume restarted does not announce it again. A build
+that announced on every boot satisfies step 1 and fails step 2; one that never announces fails step 1
+and passes step 2. Only together do they describe the behaviour.
+
+Step 3 also asserts an absence, that the row carries no action, so it states what the row does carry in
+the same breath rather than counting buttons and finding none.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

@@ -266,6 +266,26 @@ found by reading them rather than by any assertion.
 > the producer's hash then stops matching the migration-frozen one. That is what a content hash is for
 > — but it means a wording tweak is a user-visible change, not a cosmetic one.
 
+## Canary
+
+Build the commit before [#312](https://github.com/DutchJaFO/Quotinator/issues/312)'s first code
+change, under a distinct tag, and run steps 2 to 7 against it.
+
+Steps 3, 4 and 7 must find nothing to read: typed metadata, the append-only version history and the
+release each payload states are all what #312 introduced, so a row on that build carries title and
+body text and no provenance at all.
+
+**Step 6 is the one to watch, because it asserts that a path is dead and such a step has passed here
+for the wrong reason before.** Counted against a total it read the same number either way, with the
+real metadata-carrying announcement still present and structural dedupe suppressing the duplicate
+whether or not text matching was also alive. It now asserts by identity, with the structural row
+deleted in the same edit, which is what makes the textual path's death observable.
+
+Step 1 is the control on both builds: a genuine v1.8.3 database, so the readings are about the upgrade
+rather than about a database that was never in the released shape.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

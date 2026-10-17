@@ -97,6 +97,22 @@ one.
 
 Not yet established as a captured record.
 
+## Canary
+
+Build the commit before [#154](https://github.com/DutchJaFO/Quotinator/issues/154)'s first code
+change, under a distinct tag, and run steps 2 to 5 against it. Applying an already-staged batch by
+`batchId`, with no file re-uploaded, is the alias #154 added, so step 4 is not recognised there.
+
+**This document stages under `skip`, which leaves nothing pending, and that once made it unable to
+fail.** A correct apply and a handler that did nothing both end with an empty pending list, so the
+emptiness proves nothing on its own. Steps 3 and 5 are the repair: the staged state is recorded before
+the apply and read again afterwards, and the assertion is the change between them.
+
+So a run that skips step 3 cannot be completed by running step 5 harder. Without the before-reading
+there is no claim left to make.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

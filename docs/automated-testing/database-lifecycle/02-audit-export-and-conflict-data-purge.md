@@ -248,6 +248,21 @@ above.
 after a clear, because the endpoint had only ever cleared `Audit_Entry` — even though #249 treats both
 tables as one combined concern everywhere else.
 
+## Canary
+
+**The purge half is controlled inside the run**, by steps 5 and 7. They are the same seed with
+`Quotinator__AutoPurgeBundledImportActions` the only difference: step 5 must read `0` remaining
+actions and step 7 must read more than `0`. If auto-purge did nothing, step 5 would read what step 7
+reads, and the document fails. Step 6's trace count is what distinguishes *purged* from *never
+staged*, since an empty table is produced by both.
+
+**The export half needs a pre-fix build.** Build the commit before
+[#249](https://github.com/DutchJaFO/Quotinator/issues/249)'s first code change, under a distinct tag,
+and run steps 2, 3 and 4 against it: the date-range and export endpoints do not exist there, so each
+answers `404` rather than the header and the `422` cap this document asserts.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

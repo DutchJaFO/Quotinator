@@ -154,6 +154,22 @@ Dutch and German versions of it without the notification reappearing as new. Rea
 page in Dutch shows the Dutch text; reading it in English shows exactly what was there before the
 upgrade. A database that never ran v1.8.3 gains nothing, because the backfill matches no row there.
 
+## Canary
+
+Build the commit before [#319](https://github.com/DutchJaFO/Quotinator/issues/319)'s first code
+change, under a distinct tag, and run steps 3 to 6 against it. Translating a notification a released
+build already wrote is what #319 added, so step 4 returns the English text for every language.
+
+**Step 2 is the control and is read before the upgrade**: the released database has the announcement
+and no translations. Without it, step 4 succeeding would not establish that the upgrade did anything,
+since a database that already had translations would answer the same way.
+
+**Step 5 is a guard against the obvious wrong fix.** Translating the row must not move or rewrite its
+English text, so a build that achieved step 4 by replacing the original fails here. Step 6 is the
+same shape for a second boot, which must not announce again.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

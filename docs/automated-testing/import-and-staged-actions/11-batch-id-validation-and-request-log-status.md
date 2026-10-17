@@ -126,6 +126,23 @@ mirroring the numeric query parameter binding convention, and by moving `Request
 registration before `UseExceptionHandler()` so it wraps the exception handler rather than being wrapped
 by it.
 
+## Canary
+
+Build the commit before [#19](https://github.com/DutchJaFO/Quotinator/issues/19)'s first code change,
+under a distinct tag, and run steps 3 and 4 against it. The status the request log reports must be the
+one the caller received, and step 4 is where that build disagrees with itself: the call is rejected and
+the log records a success.
+
+**Step 2 is the control and says so in its own title.** It proves request logging is actually emitting
+before anything is read from the log, because a log that is switched off produces exactly the absence
+of a wrongly-logged status that a correct build produces. Every reading in step 4 rests on it, which is
+why the container raises its log level rather than hoping the line is there.
+
+Steps 5 and 6 are the happy path, and this document stages its own batch for them rather than reusing
+one another document left behind.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

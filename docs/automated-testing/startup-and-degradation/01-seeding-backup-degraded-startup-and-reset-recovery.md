@@ -222,6 +222,27 @@ what the assertions are made against.
    not observe that on its own. A first pass left the app reporting unhealthy forever after a
    successful Reset.
 
+## Canary
+
+Build the commit before [#254](https://github.com/DutchJaFO/Quotinator/issues/254)'s first code
+change, under a distinct tag, and run steps 3 to 7 against it.
+
+Step 4 must fail to report `503` with a populated reason. Degrading instead of crashing is what #254
+established, so on that build a broken schema takes the start down and there is no degraded surface to
+read: record whether the container exits or answers something other than a reasoned `503`, because the
+two are different failures.
+
+Steps 6 and 7 are the recovery half and must fail for a reason of their own: with no degraded state to
+clear, there is nothing for `MarkHealthy()` to recover from without a restart.
+
+**Step 2 is not this document's canary and belongs to a sibling.** Whether a healthy restart backs up
+is [#277](https://github.com/DutchJaFO/Quotinator/issues/277)'s gating, proven in
+[`02-startup-backup-gating-and-storage-budget.md`](02-startup-backup-gating-and-storage-budget.md). An
+earlier version of this document described the pre-#277 behaviour and argued it was deliberate, which
+is why the two are named separately here.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 Read the log before the stop, per the index's *Read the log before the application stops*. Every line

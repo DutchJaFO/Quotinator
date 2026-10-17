@@ -122,6 +122,19 @@ Not yet established. This document records what a pass requires; what the contai
 while serving these requests — its log lines and their shape — has not been captured. See
 [the index](../README.md#test-outcomes-feed-the-knowledgebase) for why that matters.
 
+## Canary
+
+No commit precedes this document's subject. Health, version, random and search are the application's
+oldest contract, so there is no pre-fix build to run, and the control is inside the run instead.
+
+It is already there: steps 4 to 7 assert presence and steps 8 and 9 assert absence, over the same
+endpoints in the same container. An endpoint answering nothing at all fails steps 4 to 7, and one
+matching everything fails steps 8 and 9. Neither failure can pass this document, which is what a
+canary has to establish.
+
+So the two halves are run together. A run that stops after step 7 has asserted only that the
+endpoints answer, not that they discriminate.
+
 ## Cleanup
 
 ```powershell

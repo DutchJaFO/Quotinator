@@ -110,6 +110,24 @@ an undecided decide threw nothing.
 **On failure:** each line names the exception type and its id. `UnresolvedFieldConflictException` is
 the defect this document exists for.
 
+## Canary
+
+Build the commit before [#370](https://github.com/DutchJaFO/Quotinator/issues/370)'s first code
+change, under a distinct tag, and run steps 2 to 5 against it. Step 5 must read a sharp increase: an
+expected import conflict was signalled by throwing, once per conflicted row per render, which is the
+defect #370 removed.
+
+**Steps 3 and 5 bracket the reads and the assertion is the delta, never the total.** A container's log
+carries whatever its own startup and any earlier step produced, so an absolute count says nothing. The
+before-reading is what makes the after-reading attributable to the list, export, render and decide in
+step 4.
+
+**Read the log before anything stops the container.** A stop logs a `SocketException` for each
+listening port and an `OperationCanceledException` for each connected page, and counted afterwards
+those arrive as if the reads had caused them.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

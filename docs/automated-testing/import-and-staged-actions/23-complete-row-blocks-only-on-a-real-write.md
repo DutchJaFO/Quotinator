@@ -197,6 +197,25 @@ an operator had to clear by hand for a change that was never going to be made.
 unresolved payload. `blocked=0` with *no* new action at all is a different failure: the row was never
 re-evaluated, which the printed action list is there to distinguish.
 
+## Canary
+
+Build the commit before [#382](https://github.com/DutchJaFO/Quotinator/issues/382)'s first code
+change, under a distinct tag, and run steps 2 to 5 against it. Step 5 must report the row blocked: a
+`Complete` row was blocked whatever the resolution did, and only a resolution that genuinely writes
+should block, which is what #382 established.
+
+**This document is one half of a pair and proves nothing alone.** Its sibling
+[`24-complete-row-still-blocks-a-real-write.md`](24-complete-row-still-blocks-a-real-write.md) is the
+other: a rule resolving to a different value must still be blocked. A build that never blocks passes
+this document and fails that one, so a run of this one on its own cannot tell a correct guard from a
+disabled one.
+
+**Step 3 is the control for the setup.** It confirms the fixture in `{dataDir}/imports/` was actually
+picked up, because a reseed that imported nothing also leaves nothing blocked, and step 5 would then
+read as a pass.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

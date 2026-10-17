@@ -148,6 +148,23 @@ unnoticed, and why this test asserts a positive statement rather than an absent 
 Neither Reset nor the pre-migration backup touches this file (developer decision, 2026-08-18): its
 contents are wholly derived from JSON shipped in the image, so nothing user-authored is ever at risk.
 
+## Canary
+
+Build the commit before [#309](https://github.com/DutchJaFO/Quotinator/issues/309)'s first code
+change, under a distinct tag, and run steps 2 to 5 against it. The changelog's own on-disk database is
+what #309 added, so step 2 finds no file beside `quotinatordata.db` and step 3 finds the JSON fallback
+serving every read.
+
+**Step 3 is why this document exists, and the regression it guards was silent and permanent once
+triggered.** A page served correctly from the fallback looks exactly like a page served correctly from
+the database, so step 4's rendered output cannot distinguish them and must not be relied on to. The
+read path has to be read directly.
+
+Step 5 is the other half: the file survives a restart with its content intact, which a fallback cannot
+demonstrate at all.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

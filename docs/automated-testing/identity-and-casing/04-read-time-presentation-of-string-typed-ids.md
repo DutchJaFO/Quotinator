@@ -104,6 +104,21 @@ Test-Canonical @($entry.recordId)
 Not yet established. See Determinism for what a pass here does and does not demonstrate — that
 distinction matters more than the raw result.
 
+## Canary
+
+Build the commit before [#210](https://github.com/DutchJaFO/Quotinator/issues/210)'s first code
+change, under a distinct tag, and run steps 2 to 4 against it.
+
+Every step must read a non-zero `notLowercase`, since wrapping each selected id column in `LOWER()` at
+read time is what #210 added, and the fixture stages its ids in a casing the files chose.
+
+**The `checked` count beside each `notLowercase` is the control, and it is the reason this document
+can fail at all.** `notLowercase=0` over zero inspected fields is what a broken reader, an empty
+response and a correct one all produce, so each step asserts a non-zero `checked` in the same breath.
+A run reporting `checked=0` anywhere has measured nothing, whatever `notLowercase` says.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

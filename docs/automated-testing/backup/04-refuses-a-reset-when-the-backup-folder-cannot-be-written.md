@@ -121,6 +121,23 @@ and the reset failed later with `SQLite Error 14` inside the table drop, an unha
 now writes and deletes a zero-byte probe file, which is the only way to answer the question it claims to
 answer.
 
+## Canary
+
+Build `4cfe1006`, the commit before step 8 of
+[#348](https://github.com/DutchJaFO/Quotinator/issues/348)'s plan, as `quotinator:canary348`, and run
+steps 2 and 3 against it.
+
+Step 2 must fail to report `409` with `obstacle=DestinationFileNotWritable`: an unwritable backup
+folder had no refusal of its own before #348. Record whether that build answers `500` or proceeds with
+the reset, since the two say different things about what was at risk.
+
+Step 3 is the half this document adds beyond its siblings, and it is where the second reading matters.
+The override is offered, taken, and must still be refused, because the directory the reset itself needs
+is the one that cannot be written. A build that accepted the override here would have wiped the
+database on the strength of an option that could not work.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

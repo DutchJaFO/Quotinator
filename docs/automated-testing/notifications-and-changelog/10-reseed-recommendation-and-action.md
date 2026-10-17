@@ -181,6 +181,23 @@ table, so the dismissed row from step 3 does not survive it. That is consistent 
 wipe, and it means this document cannot use "a dismissed row is still present" as evidence of anything
 after a reset.
 
+## Canary
+
+Build the commit before [#304](https://github.com/DutchJaFO/Quotinator/issues/304)'s first code
+change, under a distinct tag, and run steps 2 to 5 against it. The recommendation is what #304 added,
+so step 2 finds a reset that leaves an empty database and says nothing about it.
+
+**Step 4 exists because the distinction it reads was once unobservable outside the rendered page.** A
+resolved recommendation has to record that it was carried out rather than declined, and that state did
+not reach the response DTO until #304 corrected it, so a document asserting it against the API would
+have been impossible to write. Read it from the response, not from the page.
+
+Step 1 is the control: a seeded database with recorded contents, so step 2's emptiness is Reset's doing
+rather than a container that never seeded. Step 5 is the second half of the claim, that a condition
+resolved once recommends again when it recurs.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 Read the log before the stop, per the index's *Read the log before the application stops* — expect nothing:

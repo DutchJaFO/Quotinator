@@ -88,6 +88,22 @@ and there is nothing to case-flip. Take a different one rather than recording a 
 Not yet established. The responses are asserted above; nothing has been captured about what the
 container emits while serving them.
 
+## Canary
+
+Build the commit before [#210](https://github.com/DutchJaFO/Quotinator/issues/210)'s first code
+change, under a distinct tag, and run steps 2 and 3 against it.
+
+Step 2 must read a non-zero `notLowercase` on the endpoints backed by the generic repository, whose
+`SelectById`/`SelectPage` column lists #210 is what wrapped, and step 3's `bothLowercase` must read
+`False`.
+
+**The non-zero `items` requirement in step 2 is the control.** An endpoint returning an empty page
+reports `notLowercase=0` and tells you nothing, which is the same vacuous shape this suite keeps
+finding, so every endpoint in the sweep asserts both halves together. Step 3's `sameRecord=True` plays
+the same role for the two-casing lookup: without it, two `404`s would satisfy "both lowercase".
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

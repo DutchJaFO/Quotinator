@@ -135,6 +135,24 @@ observation, not as an expectation for the next run. The shortfall was titles pr
 `vilaboim_movie-quotes.json`, which supplies `"date": null` throughout, so there was no date anywhere
 to inherit: missing upstream data rather than a defect in this path.
 
+## Canary
+
+Build the commit before [#191](https://github.com/DutchJaFO/Quotinator/issues/191)'s first code
+change, under a distinct tag, and run steps 2 to 6 against it. A Source discovered from a quote
+carried no date before #191, so the three cross-checked titles come back date-less there.
+
+**The three cross-checks in steps 4, 5 and 6 are the point, and each covers a different path.**
+`Airplane!` has no `sources[]` entry at all, `Jurassic Park` has an explicit entry carrying no date,
+and `Frozen` is the other title the original gap named. A build that fixed only the first would pass a
+document that checked only the first.
+
+**Step 6 queries `Frozen` rather than stating its date.** This document once asserted a year for it
+with no query for that title anywhere, and separately told readers for three weeks to expect `NULL`
+dates that had been populated since. Both were prose rather than commands, which is why neither
+re-checked itself.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

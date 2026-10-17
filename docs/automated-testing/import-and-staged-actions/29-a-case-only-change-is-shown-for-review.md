@@ -99,6 +99,24 @@ $decided = (Invoke-RestMethod "$base/import/actions?batchId=$batchId&pageSize=0"
 
 **Expected:** `204`, then `status=Decided quoteText=SURELY YOU CANNOT BE SERIOUS.`
 
+## Canary
+
+Build the commit before [#409](https://github.com/DutchJaFO/Quotinator/issues/409)'s first code
+change, under a distinct tag, and run steps 2 to 5 against it. A quote held for review over a
+case-only text change showed nothing to decide there and was decided without being asked, so step 3
+lists the action with no field to resolve and step 4 does not refuse.
+
+**Steps 4 and 5 are the pair that makes this document evidence.** Step 4 decides the action with no
+decision supplied and must be refused; step 5 supplies the incoming text and must succeed. A build
+that refused everything passes step 4 and fails step 5, and one that accepted everything does the
+reverse.
+
+Casing is the subject here, so every comparison is case sensitive. The default comparison matches the
+differently-cased row and reports agreement where the whole point is a difference, which is how a
+case-only change came to look like nothing at all.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

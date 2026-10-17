@@ -199,6 +199,22 @@ reversed, regardless of whether it shares any entities with the older one.
 Not yet established as a captured record. The `IsDeleted=1` state on `Import_Batch` is the load-bearing
 observation, since no action status changes to signal the reversal.
 
+## Canary
+
+Build the commit before [#59](https://github.com/DutchJaFO/Quotinator/issues/59)'s first code change,
+under a distinct tag, and run steps 2 to 10 against it. Re-importing after a reversal to bring the
+rows back is the resurrection path #59 added, so step 7 leaves them deleted.
+
+**Step 8 reads the soft-delete flag directly, and that is what makes step 7 evidence.** A re-import
+that inserted fresh rows and a re-import that revived the originals both produce a non-zero count, so
+the flag has to be read rather than the total.
+
+Steps 6 and 10 are the negative half: reversing an already-reversed batch, and reversing out of order,
+must both be refused. A build that allowed either would pass steps 3 to 5 and still be wrong, so a run
+that stops at step 5 has tested only the happy direction.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

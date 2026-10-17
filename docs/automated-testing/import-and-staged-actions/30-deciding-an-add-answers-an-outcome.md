@@ -128,6 +128,24 @@ docker logs qt-import-30 2>&1 | Select-String -SimpleMatch '[Runtime - Exception
 
 **Expected:** `after=0`, equal to `before`.
 
+## Canary
+
+Build the commit before [#410](https://github.com/DutchJaFO/Quotinator/issues/410)'s first code
+change, under a distinct tag, and run steps 2 to 4 against it. Deciding a Quote Add answered `500`
+there rather than an outcome, so step 3 reports a server error and step 4 counts the exception it
+logged.
+
+**Step 2 is the control, and it asks why each Add is held rather than only that one exists.** A
+container with no held Adds produces no `500` either, so the run would report success having exercised
+nothing. Confirming the reason also distinguishes the Adds this document means from any other held row
+that happened to be present.
+
+Step 4 is a delta against the count taken before the decides, never an absolute total, and it is read
+before anything stops the container: a stop logs exceptions of its own for every listening port and
+connected page.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

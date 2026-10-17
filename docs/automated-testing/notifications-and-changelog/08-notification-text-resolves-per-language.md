@@ -137,6 +137,24 @@ reports `false` — rather than receiving an empty body or a language label that
 The Blazor surfaces make the same request using the interface's own culture, so a user reading the site
 in Dutch sees Dutch notification text with English as the visible fallback.
 
+## Canary
+
+Build the commit before [#319](https://github.com/DutchJaFO/Quotinator/issues/319)'s first code
+change, under a distinct tag, and run steps 2 to 7 against it.
+
+Steps 4 and 5 must fail: there are no translations on that build, so a translated language returns the
+original text and `?lang=` has nothing to outrank `Accept-Language` with.
+
+**Steps 3 and 6 pass on both builds, and that is their job.** Before #319 every language fell back, so
+step 3's fallback is not evidence of translation working, and step 6's rejection of a malformed code
+is about input validation. They are the control that keeps step 4 from reading as a success merely
+because something came back.
+
+Step 4 must compare the returned text, not merely assert that a response arrived. Two languages
+resolving to the same string is the defect, and a status code cannot see it.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 Read the log before the stop, per the index's *Read the log before the application stops* — expect nothing:

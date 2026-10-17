@@ -246,6 +246,23 @@ recording this as a result.
 Partially established. The provenance rows, batch-link counts and reconstructed bytes are all observed
 state and are asserted above. What the container logs during capture has not been captured itself.
 
+## Canary
+
+Build the commit before [#251](https://github.com/DutchJaFO/Quotinator/issues/251)'s first code
+change, under a distinct tag, and run steps 2 to 12 against it.
+
+Steps 3 and 4 must find no captured rows at all, and step 5's listing endpoint must answer `404`:
+capture and the endpoints that read it are what #251 and
+[#252](https://github.com/DutchJaFO/Quotinator/issues/252) added, so nothing on that build has
+provenance to report.
+
+Steps 12 and 13 carry a control of their own that does not need a second build. Step 12 reconstructs
+the file byte-for-byte and step 13 overrides the line ending, asserting `0d0a` sequences appear where
+step 12 found none. A reconstruction returning something unrelated to the captured bytes fails one or
+the other, so neither reading can pass alone.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

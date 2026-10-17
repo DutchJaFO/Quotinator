@@ -104,6 +104,22 @@ casing the file used, never canonicalized. A `Guid`-typed lookup — which force
 silently failed to find a non-canonically-stored row, even though the same row resolved fine via a
 join.
 
+## Canary
+
+Build the commit before [#209](https://github.com/DutchJaFO/Quotinator/issues/209)'s first code
+change, under a distinct tag, and run steps 2 to 5 against it.
+
+Step 4 must echo the id in the casing the file authored rather than the canonical lowercase form, since
+canonicalizing an explicit id at capture is what #209 added. Step 5 is the other half: with the id
+stored as authored, the Quote to Source join has to be checked on that build rather than assumed, and a
+resolved title there says the defect was presentation only while an unresolved one says the join broke
+too.
+
+Step 2 is expected to pass on both builds, and it is the control: a container whose own seed already
+logged `SQLite Error 19` cannot tell its noise from the fixture's.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

@@ -170,3 +170,23 @@ Remove-Item -Recurse -Force "$temp\376b-imports"
 ```
 
 **Expected:** the container and its volume are gone.
+
+## Canary
+
+**This document is the control for its sibling**
+[`25-an-already-reported-conflict-does-not-accumulate.md`](25-an-already-reported-conflict-does-not-accumulate.md),
+and the two are only evidence together. Document 25 requires an already-reported conflict not to be
+staged again; this one requires a conflict seen for the first time still to be staged. A check that
+suppressed everything passes 25 and fails here, which is the over-reach step 4's `On failure:` note
+names.
+
+For the pre-fix form, build the commit before
+[#376](https://github.com/DutchJaFO/Quotinator/issues/376)'s first code change, under a distinct tag,
+and run steps 3 to 5 against it. The underlying row counts read `1` to `3` there against `1` to `2`
+here, which is what document 25 exists to catch and exactly why this document counts entities rather
+than rows.
+
+So run both, in either order, in containers of their own. Running this one alone cannot distinguish a
+correct check from one that stages every conflict on every reseed.
+
+Remove the container, image and worktree afterwards.

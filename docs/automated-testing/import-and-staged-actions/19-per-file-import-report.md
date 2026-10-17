@@ -172,6 +172,24 @@ Observed 2026-08-26:
 Not yet established as a captured record. The startup log line is itself an observed effect and is
 asserted above.
 
+## Canary
+
+Build the commit before [#221](https://github.com/DutchJaFO/Quotinator/issues/221)'s first code
+change, under a distinct tag, and run steps 2 to 9 against it. Per-file, per-entity-type counts are
+what #221 added, so every surface reports a single total there and step 7's removed fields are still
+present.
+
+**Step 8 is the control and exists because step 9 reads a log line.** It confirms the startup line is
+there before anything is read from it, since a line that was never written and a line whose counts are
+wrong are the same absence to a reader.
+
+**Name the entity types, never count them.** This document once asserted "all nine entity types",
+which goes stale the moment a tenth exists, and separately compared the API's field names against a
+log line that writes human-readable plurals, reporting three types missing that were plainly present.
+A named type that is absent reads as a missing name; a count that is wrong reads as a broken test.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

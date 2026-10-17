@@ -128,6 +128,26 @@ tests alone.**
    id-based rewrite to fully clear a `SELECT *`-by-title query being unable to distinguish those same
    two cases when nothing had been indexed yet either.
 
+## Canary
+
+Build the commit before [#153](https://github.com/DutchJaFO/Quotinator/issues/153)'s first code
+change, under a distinct tag, and run steps 2 and 3 against it. An alias is stale only on a genuine
+rename and never on first creation, which is the distinction #153 drew, so that build reports
+staleness on creation too.
+
+**This document needs a step that makes an alias genuinely stale, and does not have one.** Steps 2 and
+3 both read lists that must be empty, on a fresh seed and after a reseed, so between them they cover
+two paths to the same absence and no path to the presence. Its sibling
+[`16-conflict-rule-staleness.md`](16-conflict-rule-staleness.md) gained exactly that case, and until
+this one does, a correct build and a staleness check that never runs read the same here.
+
+So the canary is the rename itself: rename the Source the alias resolves to, reseed, and require the
+alias to be reported stale. Until that step exists the document is run and reported as it stands,
+which is what the `Fully green after:` field means by inconclusive.
+
+Pin `Quotinator__AutoPurgeBundledImportActions` for every run, for the same reason step 2's emptiness
+needs it.
+
 ## Cleanup
 
 ```powershell

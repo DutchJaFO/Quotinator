@@ -196,6 +196,23 @@ document's own comparison meaningful: a broken log pattern would have produced `
 passed while measuring nothing. The count differing between the two runs, 28 then 29, is this build's
 own new migration, and the expectation tracked it without the document being edited.
 
+## Canary
+
+Build the commit before [#371](https://github.com/DutchJaFO/Quotinator/issues/371)'s first code
+change, under a distinct tag, and run steps 2 to 4 against it. Before #371 neither the migration
+record nor `System_SchemaVersion` could say anything beyond the fact that a numbered migration had
+applied, so step 2 finds no notification naming what any migration did.
+
+**Step 2 compares the notifications against the log rather than against a number this document
+states.** Migration counts move whenever any milestone adds one and are consolidated before a release,
+so the assertion is that every migration the log reports applying has a notification saying what it
+did, derived in the same run.
+
+Steps 2 and 4 are the pair: announced once per migration, and not again on a restart with nothing left
+to apply. Step 3's absence of a detail table is stated alongside what the row does render.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

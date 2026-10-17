@@ -225,6 +225,23 @@ decision instead, which is what #181 existed to guarantee and what #382 delibera
 `blocked=0` with no new action at all means the row was never re-evaluated (see Determinism). A
 `Stale` action means the rule's recorded snapshot does not match both sides.
 
+## Canary
+
+Build the commit before [#382](https://github.com/DutchJaFO/Quotinator/issues/382)'s first code
+change, under a distinct tag, and run steps 2 to 5 against it. Step 5 is expected to pass there, since
+a build that blocked every resolution blocks this one too.
+
+**That is why this document is the control rather than the subject, and why it must be run with its
+sibling** [`23-complete-row-blocks-only-on-a-real-write.md`](23-complete-row-blocks-only-on-a-real-write.md).
+Document 23 carries #382's own red; this one establishes that the narrowing did not go too far and
+turn the guard off altogether. Run either alone and a disabled guard or an indiscriminate one passes
+unnoticed.
+
+**Step 3 confirms the fixture was picked up**, for the same reason as in its sibling: a reseed that
+imported nothing leaves nothing blocked, and step 5's reading would then be about an empty import.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell

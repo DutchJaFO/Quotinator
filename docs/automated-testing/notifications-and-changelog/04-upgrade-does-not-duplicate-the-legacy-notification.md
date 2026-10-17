@@ -177,6 +177,24 @@ The upgrade logged `schema updated (data v27, app v9)` and no `[Runtime - Except
 it. It read `True` on both builds, which is what makes it evidence of row identity rather than of the
 fix.
 
+## Canary
+
+Build the commit before [#312](https://github.com/DutchJaFO/Quotinator/issues/312)'s first code
+change, under a distinct tag, and run steps 1 to 3 against it. Enriching the row a released build
+already wrote is what #312 added, so that build announces alongside it and step 2 sees two
+announcements where this one sees one enriched.
+
+**This document's own instrument could not report a duplicate, and the repair is the reason it can
+fail now.** It counted matching lines against a response that is single-line JSON, so a genuine
+duplicate still read `1` and the stated pass condition of "still `1`, not `2`" was unreachable in the
+failing direction. Count objects from a parsed response, never lines of text.
+
+Step 3's per-language check belongs to [#413](https://github.com/DutchJaFO/Quotinator/issues/413) and
+needs the commit before its first code change: there the body is one unbroken paragraph rather than
+the layout each language carries.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 Read the log before the stop, per the index's *Read the log before the application stops*:

@@ -111,6 +111,18 @@ comparison cannot depend on how the console encoded the command — and note tha
 Not yet established. The behavioural difference is asserted above; what the container logs while
 serving each half has not been captured.
 
+## Canary
+
+The control is inside the run, and it is why this document starts two containers rather than one.
+Steps 2 and 4 send the same query against the same fixture, and the only difference between them is
+`Quotinator__UnicodeAwareSearch`. If the flag never reached the query builder, step 4 would read
+`NoResults` exactly as step 2 does, and the document fails.
+
+A build before [#222](https://github.com/DutchJaFO/Quotinator/issues/222) is the pre-fix form: there
+`UNICODE_CONTAINS` does not exist, so step 3's container starts with the flag set and nothing reading
+it, and step 4 reads `NoResults`. The in-run control proves the same thing without a second image, so
+it is the one to run.
+
 ## Cleanup
 
 ```powershell

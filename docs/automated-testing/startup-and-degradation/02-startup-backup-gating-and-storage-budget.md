@@ -123,6 +123,21 @@ failure while actually being a lost environment.
 Partially established. The backup counts and the presence or absence of the `[Database - Backup]` line
 are observed state and are asserted above.
 
+## Canary
+
+Build the commit before [#277](https://github.com/DutchJaFO/Quotinator/issues/277)'s first code
+change, under a distinct tag, and run steps 1 to 4 against it.
+
+Step 2 must read a `[Database - Backup]` line and `backups=1`. Gating each action's backup on its own
+real-work signal is what #277 added, so on that build a healthy restart with no migration pending and
+no content to load backs up anyway, which is the waste this document exists to keep from returning.
+
+**Step 3 is the control, and it must read `backups=1` on both builds.** Reset backs up
+unconditionally, being the highest-risk operation, so a run where step 3 also reports zero has broken
+backups rather than working gating, and step 2's zero would mean nothing.
+
+Remove the container, image and worktree afterwards.
+
 ## Cleanup
 
 ```powershell
