@@ -889,6 +889,229 @@ public partial class RepositoryStructureTests
             + string.Join("\n", failures.Order()));
     }
 
+    /// <summary>
+    /// Every document's Observed effect section either records a measurement, or the document is
+    /// listed in the index as awaiting one, so a described effect is never mistaken for a measured one.
+    /// </summary>
+    /// <remarks>
+    /// Measured 2026-10-17: 27 of 75 sections carried a date and 48 did not, and the 48 said so in
+    /// prose across four phrasings. This field is the Knowledgebase's own source material, so the
+    /// difference between evidence and a correct description of what an operator would see has to be
+    /// mechanical rather than a matter of noticing which sections lack a date. See #339.
+    /// </remarks>
+    [TestMethod]
+    public void EveryObservedEffect_IsMeasuredOrListedAsAwaitingMeasurement()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        HashSet<string> awaiting = [.. LoadAwaitingMeasurementRows().Keys];
+        List<string> documents = FindAutomatedTestingDocuments();
+
+        Assert.IsNotEmpty(documents,
+            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
+
+        List<string> failures =
+        [
+            .. documents.Where(d => !IsObservedEffectMeasured(d) && !awaiting.Contains(d))
+                .Select(d => $"{d}: no '**Measured <date>**' marker, and not listed as awaiting one")
+        ];
+
+        Assert.IsEmpty(failures,
+            "An Observed effect section either records a measurement or is listed under the index's "
+            + "'Observed effects awaiting measurement', so a description is never read as evidence:\n"
+            + string.Join("\n", failures.Order()));
+    }
+
+    /// <summary>
+    /// The index's awaiting-measurement list names exactly the documents whose Observed effect carries
+    /// no measurement, and says for each what its next run must read.
+    /// </summary>
+    /// <remarks>
+    /// The forcing function: adding a measurement to a document without removing its row fails here,
+    /// so the list cannot outlive the gap it describes. Same shape as
+    /// <see cref="SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke"/>. See #339.
+    /// </remarks>
+    [TestMethod]
+    public void TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        Dictionary<string, string> awaiting = LoadAwaitingMeasurementRows();
+        List<string> documents = FindAutomatedTestingDocuments();
+
+        Assert.IsNotEmpty(documents,
+            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
+
+        List<string> unmeasured = [.. documents.Where(d => !IsObservedEffectMeasured(d)).Order()];
+        List<string> listed = [.. awaiting.Keys.Order()];
+        List<string> failures = [];
+
+        foreach (string stale in listed.Where(l => !unmeasured.Contains(l)))
+            failures.Add($"{stale}: listed as awaiting measurement, but its section now records one");
+
+        foreach (string missing in unmeasured.Where(u => !listed.Contains(u)))
+            failures.Add($"{missing}: carries no measurement and is not listed");
+
+        foreach (KeyValuePair<string, string> row in awaiting.Where(r => r.Value.Trim().Length == 0))
+            failures.Add($"{row.Key}: listed, but says nothing about what its next run must measure");
+
+        Assert.IsEmpty(failures,
+            "The index's awaiting-measurement list and the documents' own sections disagree. A row "
+            + "whose document has since been measured must be removed, and every row must name the "
+            + $"quantity its next run reads:\n{string.Join("\n", failures.Order())}");
+    }
+
+    /// <summary>
+    /// Every test document declares whether its results are deterministic.
+    /// </summary>
+    /// <remarks>
+    /// Determinism is already this suite's rule and already has a section; the field is the test
+    /// saying which it is, so a reading that moves between runs is declared rather than discovered.
+    /// Developer direction, 2026-10-17. See #339.
+    /// </remarks>
+    [TestMethod]
+    public void EveryAutomatedTestingDocument_DeclaresWhetherItIsDeterministic()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        List<string> documents = FindAutomatedTestingDocuments();
+
+        Assert.IsNotEmpty(documents,
+            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
+
+        List<string> failures = [];
+
+        foreach (string document in documents)
+        {
+            string text = File.ReadAllText(
+                Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
+
+            if (!DeterminismDeclaration().IsMatch(text))
+                failures.Add($"{document}: no '**Deterministic:** yes' or '**Deterministic:** no' field");
+        }
+
+        Assert.IsEmpty(failures,
+            "Every test document declares whether its results are deterministic, so a reading that "
+            + $"moves between runs is stated rather than found out:\n{string.Join("\n", failures.Order())}");
+    }
+
+    /// <summary>
+    /// A document declaring itself non-deterministic says in its Determinism section what varies.
+    /// </summary>
+    /// <remarks>
+    /// Without this, <c>Deterministic: no</c> is an admission with no content: the next reader learns
+    /// that the result moves and not what moves it. See #339.
+    /// </remarks>
+    [TestMethod]
+    public void EveryNonDeterministicDocument_SaysWhatVaries()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        List<string> failures = [];
+
+        foreach (string document in FindAutomatedTestingDocuments())
+        {
+            string text = File.ReadAllText(
+                Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
+
+            System.Text.RegularExpressions.Match declared = DeterminismDeclaration().Match(text);
+
+            if (!declared.Success || !declared.Groups["answer"].Value.Equals("no", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            System.Text.RegularExpressions.Match section = DeterminismSection().Match(text);
+
+            if (!section.Success || !section.Groups["body"].Value.Contains("**What varies:**", StringComparison.Ordinal))
+                failures.Add($"{document}: declares itself non-deterministic, with no '**What varies:**' line");
+        }
+
+        Assert.IsEmpty(failures,
+            "A document that declares itself non-deterministic names the variable in its Determinism "
+            + $"section:\n{string.Join("\n", failures.Order())}");
+    }
+
+    /// <summary>
+    /// True when the document's Observed effect section records a measurement with the one marker
+    /// spelling the index defines.
+    /// </summary>
+    private static bool IsObservedEffectMeasured(string document)
+    {
+        string text = File.ReadAllText(
+            Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
+
+        System.Text.RegularExpressions.Match section = ObservedEffectSection().Match(text);
+
+        return section.Success && MeasurementMarker().IsMatch(section.Groups["body"].Value);
+    }
+
+    /// <summary>
+    /// The index's awaiting-measurement rows, as document path to the quantity its next run must read.
+    /// </summary>
+    private static Dictionary<string, string> LoadAwaitingMeasurementRows()
+    {
+        string index = File.ReadAllText(Path.Combine(AutomatedTestingDir, "README.md"));
+
+        System.Text.RegularExpressions.Match section = AwaitingMeasurementSection().Match(index);
+
+        if (!section.Success)
+            return [];
+
+        Dictionary<string, string> rows = [];
+
+        foreach (string line in section.Value.Split('\n').Select(l => l.TrimEnd('\r')))
+        {
+            System.Text.RegularExpressions.Match link = MarkdownLinkTarget().Match(line);
+
+            if (!link.Success || !line.StartsWith('|'))
+                continue;
+
+            string[] cells = line.Trim('|').Split('|');
+
+            if (cells.Length < 2)
+                continue;
+
+            rows[link.Groups["target"].Value] = cells[1];
+        }
+
+        return rows;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\*\*Measured\s+\d{4}-\d{2}-\d{2}")]
+    private static partial System.Text.RegularExpressions.Regex MeasurementMarker();
+
+    /// <summary>A document's Observed effect section, up to the next top-level heading.</summary>
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"^## Observed effect\s*$(?<body>.*?)^## ",
+        System.Text.RegularExpressions.RegexOptions.Multiline
+        | System.Text.RegularExpressions.RegexOptions.Singleline)]
+    private static partial System.Text.RegularExpressions.Regex ObservedEffectSection();
+
+    /// <summary>A document's Determinism section, up to the next top-level heading.</summary>
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"^## Determinism\s*$(?<body>.*?)^## ",
+        System.Text.RegularExpressions.RegexOptions.Multiline
+        | System.Text.RegularExpressions.RegexOptions.Singleline)]
+    private static partial System.Text.RegularExpressions.Regex DeterminismSection();
+
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"^\*\*Deterministic:\*\*\s*(?<answer>yes|no)\s*$",
+        System.Text.RegularExpressions.RegexOptions.Multiline
+        | System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex DeterminismDeclaration();
+
+    /// <summary>
+    /// The awaiting-measurement section, from its own heading up to the next top-level heading.
+    /// </summary>
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"^## Observed effects awaiting measurement$.*?(?=^## )",
+        System.Text.RegularExpressions.RegexOptions.Multiline
+        | System.Text.RegularExpressions.RegexOptions.Singleline)]
+    private static partial System.Text.RegularExpressions.Regex AwaitingMeasurementSection();
+
     private const string AutomatedTestingRelativePath = "docs/automated-testing";
 
     private static readonly string AutomatedTestingDir =
