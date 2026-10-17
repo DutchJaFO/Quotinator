@@ -1,6 +1,6 @@
 # #339: Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (step 5)
+**Status:** In progress (step 6)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 
@@ -253,7 +253,7 @@ same step: quoted program output is evidence, not prose.
 
 ### 5. Give the other 63 documents the Canary section they need
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-17
 
 Each states the canary its own subject requires, in one of two forms, and says which applies:
 
@@ -267,6 +267,28 @@ Each states the canary its own subject requires, in one of two forms, and says w
 
 Where neither form can be stated for a document, that is a finding about the document and is recorded
 against the quality issues in scope above, not resolved by writing a canary that cannot be run.
+
+**All 75 documents now carry one**, measured: the presence guard's Canary failures are `0`, and the
+only remaining failures are steps 6 and 7's own. 1,091 lines added, none carrying an em or en dash.
+
+**The template's wording was corrected while this step ran, and the correction matters.** It said the
+section carries "a procedure, never a verdict", which read as forbidding exactly what the twelve
+existing sections do: record what a pre-fix build actually read. That is not the verdict the index
+forbids. *This test currently fails* is a claim about the current build and goes stale; the reading a
+canary produced is a claim about a named commit, which does not change. The template and its prose now
+say so, and name the commit and tag as part of the record.
+
+**Writing them surfaced two things worth keeping.**
+
+`17-source-alias-staleness` has no step that makes an alias genuinely stale: steps 2 and 3 both read
+lists that must be empty, so between them they cover two paths to the same absence and none to the
+presence. Its sibling `16` gained that case; this one has not. Per the index, its canary states the
+rename the document needs rather than a control it does not have, and the run reports it.
+
+Four documents are control pairs rather than independent tests, and now say so and link each other:
+`23` with `24` on whether a `Complete` row blocks, and `25` with `26` on whether a conflict is staged
+again. In each pair a build that answers one way for everything passes one document and fails the
+other, so either alone cannot tell a correct guard from a disabled one.
 
 ### 6. Fill the fifteen missing Observed effect and two missing Cleanup sections
 
@@ -343,7 +365,7 @@ per the boyscout rule.
 | 14 | ❌ | The sections appear in the order the template defines | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_OrdersItsSectionsAsTheTemplateDoes`, red 2026-10-17 against `api-surface/02` and `database-lifecycle/03`, which place their exclusions section after `## Observed effect` |
 | 15 | ❌ | No document carries a section the template does not define | Unit test | `RepositoryStructureTests.NoAutomatedTestingDocument_CarriesASectionTheTemplateDoesNotDefine`, red against the 13 off-template sections measured 2026-10-16 |
 | 16 | ✅ | The guards read their expectations from the index's template block, so template and guard cannot drift | Live | Removing `## Canary` from the template block took the presence guard's 75 Canary failures to 0 while its 15 `## Observed effect` failures stayed, 2026-10-17; the block was restored byte-identical |
-| 17 | ❌ | The template defines a Canary section, required of every document, carrying a procedure rather than a verdict | Live | The index's template block states it, its position, and both forms; no document states a pass or fail in it |
+| 17 | ✅ | The template defines a Canary section, required of every document, carrying a procedure and any reading a canary run produced | Live | The index's template block states it, its position and both forms; all 75 documents carry one, and none states its own current pass or fail |
 | 18 | ❌ | The template defines the exclusions section, and the three off-template sections use it | Live | `api-surface/02`, `database-lifecycle/03` and `identity-and-casing/02` carry `## Explicitly not covered here` in the defined position |
 | 19 | ❌ | Test outcomes are recorded as Knowledgebase material by an `Observed effect` section on every document | Unit test | Row 13's guard covers the presence half; #333 requirement 6 states the sweep |
 | 20 | ✅ | Test resources sit beside the document; test scripts sit in `scripts/testing/` | Live | `scripts/testing/` holds the five suite scripts; no `.csx` anywhere under `docs/` |
