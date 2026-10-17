@@ -312,7 +312,7 @@ at startup before any request — which are the defect above rather than anythin
 provokes. It also keeps its own key ring rather than the suite's shared one, which `test-env.csx`
 never mounts over a read-only `/data`.
 
-## Canary — run red against the build before #303
+## Canary
 
 Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*. Run against
 `2f30f15d` (#303's last commit before its first `feat`) via `git worktree add` and

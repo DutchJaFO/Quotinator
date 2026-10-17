@@ -160,7 +160,7 @@ that owned the run: the notification is now permanently unrunnable, with no Run 
 back. That is the failure mode a stored column would have had, and this step is what keeps the
 in-memory choice honest if anyone later persists it.
 
-## Canary: this document was run red before it was run green
+## Canary
 
 Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*: run against
 the finished build, this document establishes that something happens, not that it would have caught the

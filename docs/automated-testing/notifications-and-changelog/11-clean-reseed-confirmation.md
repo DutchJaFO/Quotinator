@@ -382,7 +382,7 @@ row. Note the restart — the modal renders once per process run, so the dismiss
 **On failure:** check `/notifications` first. If the confirmations are there but not in the modal, the
 fault is in the modal's own active-notification query, not in this issue's producer.
 
-## Canary — run red against the build before #302
+## Canary
 
 Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*. Run against
 `aed54b2d` (#302's last commit before its first `feat`) via `git worktree add` and

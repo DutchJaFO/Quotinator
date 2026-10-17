@@ -132,18 +132,6 @@ migration took first), `migrated=True`, and the log read finds nothing.
 **This step is the remedy proven**, and the positive control: every step above asserts a refusal, and a
 build refusing every migration would satisfy them all without this one.
 
-## Canary: run red against the build before #348's migration refusal
-
-Run 2026-09-26 against `4cfe1006`, the commit before step 8 of #348's plan, as `quotinator:canary348`:
-
-| Step | Assertion | Canary |
-|---|---|---|
-| 1 | the prior release records a version | passes: `before=5` |
-| 2 | the start degrades, naming the obstacle and the entry | **fails**: the migration ran and the start was healthy |
-| 3 | the degraded page links the entry | **fails**: no link |
-| 4 | the recorded version is unchanged | **fails**: `refused=9`, migrated with no backup taken |
-| 5 | the remedied start takes a backup | **fails**: `backups=0`, nothing was left to migrate |
-
 ## Observed effect
 
 **Measured 2026-09-26** against `quotinator:local`, upgrading from `1.8.3`.
@@ -165,6 +153,18 @@ with #348.
 **The first canary run found a fault in this document.** It read the recorded version with
 `execute-sql.csx`, which prints a row count for a query rather than its value, so comparing two such lines
 reported `unchanged=True` having measured nothing. The version is now read from `GET /api/v1/version`.
+
+## Canary
+
+Run 2026-09-26 against `4cfe1006`, the commit before step 8 of #348's plan, as `quotinator:canary348`:
+
+| Step | Assertion | Canary |
+|---|---|---|
+| 1 | the prior release records a version | passes: `before=5` |
+| 2 | the start degrades, naming the obstacle and the entry | **fails**: the migration ran and the start was healthy |
+| 3 | the degraded page links the entry | **fails**: no link |
+| 4 | the recorded version is unchanged | **fails**: `refused=9`, migrated with no backup taken |
+| 5 | the remedied start takes a backup | **fails**: `backups=0`, nothing was left to migrate |
 
 ## Cleanup
 

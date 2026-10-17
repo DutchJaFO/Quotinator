@@ -300,27 +300,6 @@ Genre-Count
 old backups; done by hand here, it brings back the option that keeps a restore point, and that option
 loads the content.
 
-## Canary: run red against the build before #348's startup reporting
-
-Run 2026-09-26 against `4cfe1006`, the commit before step 8 of #348's plan, as `quotinator:canary348`,
-through steps 4 (steps 5 to 7 click controls that build does not have).
-
-**This canary ran the Reset-based setup this document no longer uses** (#423). Its three substantive
-reds are about reporting, not about how the refusal was reached, so they hold as written; the row below
-that reads `quotes=0` is the one whose evidence the re-base changes. Re-running the canary needs an
-image built from `4cfe1006` and has not been done since.
-
-| Step | Assertion | Canary |
-|---|---|---|
-| 2 | the content load is refused | passes, on that build's own Reset-based setup: `quotes=0` |
-| 2 | the refusal is logged | **fails**: that build words the line `seeding refused — no backup could be taken`, since reworded |
-| 3 | one `backuprefused` notification | **fails**: `found=0` |
-| 3 | it offers exactly the options that can run | **fails**: nothing to offer them |
-| 4 | both surfaces render the row and the Knowledgebase link | **fails**: `found=False` on both |
-
-Step 3 is the substantive red: that build refused the load and told nobody, the defect this document
-exists to catch. Step 2's log line fails there on wording alone.
-
 ## Observed effect
 
 **Re-measured 2026-10-10** against `quotinator:local`, on the genre re-seed setup #423 moved this
@@ -370,6 +349,27 @@ waited on after it had left the view, and a leftover filler that made the next c
 the absolute ceiling, not the 90% operating quota.** A 95% filler leaves it room in the reserve, and the
 content loads. The notification's options consult the operating quota, so the two can disagree between
 90% and 100%. This document fills to the ceiling, where both refuse.
+
+## Canary
+
+Run 2026-09-26 against `4cfe1006`, the commit before step 8 of #348's plan, as `quotinator:canary348`,
+through steps 4 (steps 5 to 7 click controls that build does not have).
+
+**This canary ran the Reset-based setup this document no longer uses** (#423). Its three substantive
+reds are about reporting, not about how the refusal was reached, so they hold as written; the row below
+that reads `quotes=0` is the one whose evidence the re-base changes. Re-running the canary needs an
+image built from `4cfe1006` and has not been done since.
+
+| Step | Assertion | Canary |
+|---|---|---|
+| 2 | the content load is refused | passes, on that build's own Reset-based setup: `quotes=0` |
+| 2 | the refusal is logged | **fails**: that build words the line `seeding refused — no backup could be taken`, since reworded |
+| 3 | one `backuprefused` notification | **fails**: `found=0` |
+| 3 | it offers exactly the options that can run | **fails**: nothing to offer them |
+| 4 | both surfaces render the row and the Knowledgebase link | **fails**: `found=False` on both |
+
+Step 3 is the substantive red: that build refused the load and told nobody, the defect this document
+exists to catch. Step 2's log line fails there on wording alone.
 
 ## Cleanup
 

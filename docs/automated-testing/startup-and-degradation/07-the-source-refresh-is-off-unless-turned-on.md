@@ -78,7 +78,7 @@ unset, seeded from the five bundled files, and logged no refresh line and no req
 turned on, both downloadable sources logged `updated "<file>" from "<url>"`. Neither container logged an
 exception.
 
-## Canary: run red against the build before #424
+## Canary
 
 Built from `29b55805` (the commit before #424's first code change) as `quotinator:canary424`, via
 `git worktree add` and `docker build`, 2026-09-27:

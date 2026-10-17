@@ -118,7 +118,7 @@ undo. Stamping it `Discarded` would record the rejection of a change that never 
 
 Not yet established as a captured record.
 
-## Canary — run red against the build before #389
+## Canary
 
 Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*. Run against
 the #369 image this issue started from, tagged `quotinator:canary389`, in a container of its own

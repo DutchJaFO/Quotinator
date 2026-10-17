@@ -355,7 +355,7 @@ The log read before the stop shows what the read-only directory provokes: `IOExc
 `SqliteException` from startup, and the `CryptographicException` behind the `500`. That is this
 environment's expected output, not shutdown noise and not a new finding.
 
-## Canary: run red before any implementation existed
+## Canary
 
 Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*. Unlike
 #302's, #303's and #367's canaries (each of which needed a `git worktree` and a second image build

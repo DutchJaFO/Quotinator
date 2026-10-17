@@ -209,7 +209,7 @@ $batches | Select-Object -First 5 | ForEach-Object { "  $($_.id)  type=$($_.type
 **Expected:** the batches from the first seed are still listed. A reseed that removed them would
 invalidate every review alert naming one, which is what #303's alerts do.
 
-## Canary — run red against the build before #372
+## Canary
 
 Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*. Written at
 step 1 of the issue, so `HEAD` was still the pre-work build and no worktree or second image was needed.

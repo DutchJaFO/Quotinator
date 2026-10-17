@@ -113,7 +113,7 @@ That error code differs from the original incident's `SQLite Error 14: 'unable t
 because `--read-only`'s full write-denial hits a different syscall than the real profile's
 lock-denial would. Same class of failure, different code; an exact match is not expected.
 
-## Confirming this test would have caught the original bug
+## Canary
 
 Not required on every run — a one-time gut-check when this document itself changes.
 

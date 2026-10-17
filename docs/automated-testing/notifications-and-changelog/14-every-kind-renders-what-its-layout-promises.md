@@ -495,23 +495,6 @@ Read-Thrown
 
 **Expected:** only the restart's own two shutdown lines.
 
-## Canary: run red against the build before #308
-
-Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*. Built from
-`69c01776` (the commit before #308's first feature commit) as `quotinator:canary308c` via
-`git worktree add` and `docker build`, 2026-09-23:
-
-| Step | Assertion | Pre-work result |
-|---|---|---|
-| 1 | four kinds from the cold start | **fails**, three: `announcement`, `importreviewpending`, `whatsnew` |
-| 2 | each row has a `.notification-body` cell | **fails**: `0` of `3` rows; the class does not exist |
-| 2 | a title element distinct from the body | **fails**: `0` title elements |
-| 2 | a detail control for the kinds carrying counts | **fails**: `0` dialogs and `0` expanders, for any kind |
-| 2 | the review row's button names its action | **fails**: the only labels are `Run` and `Dismiss` |
-
-Every per-kind assertion depends on markup that build does not emit, so the document cannot pass there
-by accident. Container, image, bind directory and worktree removed afterwards.
-
 ## Observed effect
 
 **Measured 2026-09-24**, against an image built from this branch, and captured this time as well as
@@ -545,6 +528,23 @@ browser left every Blazor circuit half-open: thirteen captures against one conta
 would have been generating for itself, in the middle of the log the document reads for real exceptions.
 `capture-page.csx` now closes the browser over the protocol instead. Re-measured on a container of its
 own: `0` before three captures and `0` after.
+
+## Canary
+
+Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*. Built from
+`69c01776` (the commit before #308's first feature commit) as `quotinator:canary308c` via
+`git worktree add` and `docker build`, 2026-09-23:
+
+| Step | Assertion | Pre-work result |
+|---|---|---|
+| 1 | four kinds from the cold start | **fails**, three: `announcement`, `importreviewpending`, `whatsnew` |
+| 2 | each row has a `.notification-body` cell | **fails**: `0` of `3` rows; the class does not exist |
+| 2 | a title element distinct from the body | **fails**: `0` title elements |
+| 2 | a detail control for the kinds carrying counts | **fails**: `0` dialogs and `0` expanders, for any kind |
+| 2 | the review row's button names its action | **fails**: the only labels are `Run` and `Dismiss` |
+
+Every per-kind assertion depends on markup that build does not emit, so the document cannot pass there
+by accident. Container, image, bind directory and worktree removed afterwards.
 
 ## Cleanup
 

@@ -179,7 +179,7 @@ $all = (Invoke-RestMethod "http://localhost:18627/api/v1/notifications?pageSize=
 step 5 reads **Done**, the others **Active** — and the page shows as many rows as `rows =` reports. An
 empty badge, or a page that fails to render at all, is the failure this step exists to catch.
 
-## Canary — run red against the build before #369
+## Canary
 
 Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*. Run against
 the build of `806a0ab0` (the last commit before #369's first code change) via `git worktree add` and
