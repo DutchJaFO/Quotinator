@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 350, 367, 369, 370, 371, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 423, 424],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 339, 348, 349, 350, 367, 369, 370, 371, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 423, 424],
     "highlights": [
       "Wanneer Quotinator een database aantreft die door een nieuwere versie van zichzelf is geschreven, gaat hij niet langer verder alsof er niets aan de hand is. Hij kan niet weten wat die nieuwere versie heeft gewijzigd, dus start hij beperkt, zegt dat met zoveel woorden en toont niets uit die database in plaats van cijfers waarvoor hij niet kan instaan. Elke pagina die je nog kunt bereiken biedt de uitweg: bouw de database opnieuw op volgens de indeling van deze versie, waarbij verdwijnt wat erin staat, of zet een back-up terug die is gemaakt voordat de versie vooruitliep.",
       "Quotinator vertelt nu wat het bij het opstarten met je database heeft gedaan. Een database die voor je is aangemaakt zegt dat, met de schemaversie waarop hij is aangemaakt, zodat je weet dat er niets te bewaren was. Een update die een bestaande database heeft gewijzigd meldt elke wijziging apart en vertelt wat die deed in plaats van alleen het nummer. Een gewone herstart, waarbij geen van beide gebeurde, blijft stil.",
@@ -86,7 +86,9 @@
       "`Serilog` bijgewerkt van 4.3.0 naar 4.4.0",
       "`github/codeql-action` bijgewerkt van 4.37.7 naar 4.37.9 (alleen CI)",
       "`Quotinator:AutoUpdateSources` staat nu standaard op `false`, en de optie `auto_update_sources` van beide add-ons standaard uit: de meegeleverde bronbestanden worden in plaats daarvan met de hand bijgewerkt en vastgelegd (issue #424)",
-      "Elke host voor geautomatiseerde tests start nu met het bijwerken van bronnen en de meegeleverde bronnen uitgeschakeld en met een eigen gegevensmap, die wordt verwijderd wanneer de host stopt; een test die een schema nodig heeft, krijgt een voorbereide database: testonderhoud zonder gevolgen voor de applicatie (issue #424)"
+      "Elke host voor geautomatiseerde tests start nu met het bijwerken van bronnen en de meegeleverde bronnen uitgeschakeld en met een eigen gegevensmap, die wordt verwijderd wanneer de host stopt; een test die een schema nodig heeft, krijgt een voorbereide database: testonderhoud zonder gevolgen voor de applicatie (issue #424)",
+      "De geautomatiseerde testdocumenten van Quotinator volgen nu allemaal één vast sjabloon, vastgehouden door controles die de build laten falen zodra een document een onderdeel weglaat, de onderdelen in een andere volgorde zet, er zelf een verzint, een uitkomst vastlegt die nooit gemeten is, of niet vermeldt of zijn uitkomst herhaalbaar is: testonderhoud zonder gevolgen voor de applicatie (issue #339)",
+      "Elk geautomatiseerd testdocument vermeldt nu hoe is aangetoond dat het kan falen, en de documenten waarvan de vastgelegde uitkomst nooit echt gemeten is, staan op een lijst met het getal dat de volgende testronde moet aflezen: testonderhoud zonder gevolgen voor de applicatie (issue #339)"
     ],
     "fixed": [
       "Een database waarvan de vastgelegde schemaversie voorloopt op deze build laat de applicatie nu beperkt draaien in plaats van eruit te serveren. Die toestand werd eerder gelezen als een volledig schema met een verouderde teller, iets wat deze build onmogelijk kan vaststellen: de migraties die hij nooit heeft gezien kunnen van alles hebben toegevoegd, gewijzigd of verwijderd (issue #350)",

@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 350, 367, 369, 370, 371, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 423, 424],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 339, 348, 349, 350, 367, 369, 370, 371, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 423, 424],
     "highlights": [
       "When Quotinator finds a database written by a newer version of itself, it no longer carries on as though nothing were wrong. It cannot know what that newer version changed, so it starts in a limited state, says so plainly, and shows nothing out of that database rather than figures it cannot vouch for. Every page you can still reach offers the way out: rebuild the database at this version's own layout, which discards what it currently holds, or put back a backup taken before it moved ahead.",
       "Quotinator now tells you what it did to your database at startup. A database created for you says so, naming the schema version it was created at, so you know there was nothing to preserve. An update that changed an existing database reports each change separately, saying what it did rather than only its number. An ordinary restart, where neither happened, stays silent.",
@@ -79,7 +79,9 @@
       "`Serilog` updated from 4.3.0 to 4.4.0",
       "`github/codeql-action` updated from 4.37.7 to 4.37.9 (CI only)",
       "`Quotinator:AutoUpdateSources` now defaults to `false`, and both add-ons' `auto_update_sources` option to off: the bundled source files are refreshed by hand and committed instead (issue #424)",
-      "Every automated test host now starts with the source refresh and the bundled sources off and a data directory of its own, removed when the host stops, and a test that needs a schema is given a prepared database: test maintenance with no effect on the application (issue #424)"
+      "Every automated test host now starts with the source refresh and the bundled sources off and a data directory of its own, removed when the host stops, and a test that needs a schema is given a prepared database: test maintenance with no effect on the application (issue #424)",
+      "Quotinator's own automated test documents now all follow one template, held in place by guards that fail the build when a document leaves out a section, orders its sections differently, invents a section of its own, records an effect that was never measured, or does not say whether its result repeats: test maintenance with no effect on the application (issue #339)",
+      "Every automated test document now states how it was proven able to fail, and the documents whose recorded effect has never actually been measured are listed with the figure each one's next run has to read: test maintenance with no effect on the application (issue #339)"
     ],
     "fixed": [
       "A database whose recorded schema version is ahead of this build now leaves the application degraded instead of serving from it. The state was previously read as a complete schema behind a stale counter, which this build has no way to establish: the migrations it never saw may have added, altered or removed anything (issue #350)",

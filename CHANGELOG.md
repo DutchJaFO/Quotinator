@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-10-15 18:47 UTC]: do not edit by hand.*
+##### *GENERATED FILE [2026-10-17 19:26 UTC]: do not edit by hand.*
 
 # Changelog
 
@@ -80,6 +80,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `github/codeql-action` updated from 4.37.7 to 4.37.9 (CI only)
 - `Quotinator:AutoUpdateSources` now defaults to `false`, and both add-ons' `auto_update_sources` option to off: the bundled source files are refreshed by hand and committed instead (issue #424)
 - Every automated test host now starts with the source refresh and the bundled sources off and a data directory of its own, removed when the host stops, and a test that needs a schema is given a prepared database: test maintenance with no effect on the application (issue #424)
+- Quotinator's own automated test documents now all follow one template, held in place by guards that fail the build when a document leaves out a section, orders its sections differently, invents a section of its own, records an effect that was never measured, or does not say whether its result repeats: test maintenance with no effect on the application (issue #339)
+- Every automated test document now states how it was proven able to fail, and the documents whose recorded effect has never actually been measured are listed with the figure each one's next run has to read: test maintenance with no effect on the application (issue #339)
 
 ### Fixed
 - A database whose recorded schema version is ahead of this build now leaves the application degraded instead of serving from it. The state was previously read as a complete schema behind a stale counter, which this build has no way to establish: the migrations it never saw may have added, altered or removed anything (issue #350)

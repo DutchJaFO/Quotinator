@@ -1,6 +1,6 @@
 # #339: Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (step 12)
+**Status:** Waiting for release
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 
@@ -101,9 +101,16 @@ still runs as written are all test quality, and they are already parcelled out:
 [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in v1.9.0.
 
 **Out of scope: running the suite.** Every test runs at milestone close, which is the run scope's own
-answer. The per-issue scope requires executing every document an issue changed, and this issue changes
-no document's steps, commands, expectations or environment: it adds prose sections. That exception is
-stated here rather than assumed, and the conformance guards are what cover the change instead.
+answer. The per-issue scope requires executing every document an issue changed, and this issue adds
+prose sections rather than changing any document's steps, expectations or environment. That exception
+is stated here rather than assumed, and the conformance guards are what cover the change instead.
+
+**One command's text did change, and it is named rather than glossed over.** Step 11's dash pass
+reached four lines inside code fences, three of them PowerShell comments and one a display loop in
+`notifications-and-changelog/11` that prints each confirmation's title and body for a reader. Its
+separator went from a dash to a colon. No assertion parses that line: the step requires one
+confirmation per cleanly-applied file, each naming its own file, which the printed titles satisfy
+either way. So the exception above still holds in substance, and this is what it cost in fact.
 
 **In scope, as its own step and its own commit: 801 em and en dashes across 61 of the 76 files here**
 (developer decision, 2026-10-16). This issue touches all 75 documents, so the boyscout rule reaches
@@ -481,12 +488,23 @@ pre-existing code or quoted output. All 52 guards stayed green.
 
 ### 12. Confirm the guards green and the full test suite clean
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-17
 
-All three new guards green over 75 documents, the seven existing suite guards still green, and
-`dotnet build` plus `dotnet test` at 0 warnings and 0 errors per the Pre-Push Checklist. Any file this
-issue touches under `src/` or `tests/` goes into `.editorconfig`'s `IDE0008` and `IDE0090` scoped lists
-per the boyscout rule.
+All eleven suite guards green over 75 documents: the seven that existed before this replan, the three
+conformance guards from step 3, and the four measurement and determinism guards from step 9. `52`
+`RepositoryStructureTests` pass.
+
+`dotnet build --configuration Release` reports 0 warnings and 0 errors, and
+`dotnet test --configuration Release -m:1` reports 11 projects successful, 4,565 tests, 0 failures, 0
+warnings. Run after step 11's dash pass, so it covers the committed state.
+
+**No new `.editorconfig` entry was needed.** The only file this work touched under `src/` or `tests/`
+is `RepositoryStructureTests.cs`, which is already in both the `IDE0008` and `IDE0090` scoped lists,
+so explicit types and target-typed `new` applied to everything written here and the build proves it.
+
+**No further T2 pass is required by this work.** Nothing under `src/` changed after the replan: the
+OpenAPI tag fix that brought T2 into this issue is recorded as verified, and everything since is
+documentation and guard tests. The one command text that changed is named in the Scope section above.
 
 ---
 
@@ -513,7 +531,7 @@ per the boyscout rule.
 | 15 | ✅ | No document carries a section the template does not define | Unit test | `RepositoryStructureTests.NoAutomatedTestingDocument_CarriesASectionTheTemplateDoesNotDefine`, red against the 13 off-template sections measured 2026-10-16 |
 | 16 | ✅ | The guards read their expectations from the index's template block, so template and guard cannot drift | Live | Removing `## Canary` from the template block took the presence guard's 75 Canary failures to 0 while its 15 `## Observed effect` failures stayed, 2026-10-17; the block was restored byte-identical |
 | 17 | ✅ | The template defines a Canary section, required of every document, carrying a procedure and any reading a canary run produced | Live | The index's template block states it, its position and both forms; all 75 documents carry one, and none states its own current pass or fail |
-| 18 | ❌ | The template defines the exclusions section, and the three off-template sections use it | Live | `api-surface/02`, `database-lifecycle/03` and `identity-and-casing/02` carry `## Explicitly not covered here` in the defined position |
+| 18 | ✅ | The template defines the exclusions section, and the three off-template sections use it | Live | `api-surface/02`, `database-lifecycle/03` and `identity-and-casing/02` carry `## Explicitly not covered here` in the defined position; the ordering and off-template guards both confirm it |
 | 19 | ✅ | Test outcomes are recorded as Knowledgebase material by an `Observed effect` section on every document | Unit test | Row 13's guard reports no document missing the section; #333 requirement 6 states the sweep. The fifteen written here carry no measured date, since none was run for them |
 | 20 | ✅ | Test resources sit beside the document; test scripts sit in `scripts/testing/` | Live | `scripts/testing/` holds the five suite scripts; no `.csx` anywhere under `docs/` |
 | 21 | ✅ | ADR 010 revised in place; `CLAUDE.md`'s Developer Context bullet matches | Live | ADR 010's Decision section states the subfolder rule and the unverified-verifier rule; `CLAUDE.md` states it identically |
@@ -522,7 +540,7 @@ per the boyscout rule.
 | 24 | ✅ | Every OpenAPI tag an endpoint uses is declared with a non-empty description, and the rule is recorded | Unit test | `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription`; ADR 020, its README row, its `.slnx` entry, and `CLAUDE.md`'s *Endpoint groups* section |
 | 25 | ✅ | This issue carries no dependency on another milestone | Live | No `Depends on:` header here; `overview.md`'s dependency map and Order of operations row for #339 name no blocker |
 | 26 | ✅ | No file in the suite carries an em or en dash, except where it is quoted program output | Live | A `Select-String` over every `docs/automated-testing/**/*.md`, read as UTF-8, for a character class of U+2013 and U+2014, returns 7 hits, each inside an inline code span reproducing what a build emitted. 780 replaced from the 787 present 2026-10-17 |
-| 27 | ❌ | Every `Observed effect` either records a measurement against a named build, or is listed in the index as awaiting one | Unit test | `RepositoryStructureTests.EveryObservedEffect_IsMeasuredOrListedAsAwaitingMeasurement`, red against the fifteen undated sections step 6 wrote |
-| 28 | ❌ | The awaiting-measurement list names exactly the unmeasured documents, and says what each one's next run must measure | Unit test | `RepositoryStructureTests.TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments`, red while the index has no such list; adding a measurement without removing its row fails |
-| 29 | ❌ | Every document declares whether its results are deterministic | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_DeclaresWhetherItIsDeterministic`, red against all 75 before step 10 |
-| 30 | ❌ | A document that declares itself non-deterministic says what varies | Unit test | `RepositoryStructureTests.EveryNonDeterministicDocument_SaysWhatVaries`, red by the mutation named in step 9 if no document answers `no` |
+| 27 | ✅ | Every `Observed effect` either records a measurement against a named build, or is listed in the index as awaiting one | Unit test | `RepositoryStructureTests.EveryObservedEffect_IsMeasuredOrListedAsAwaitingMeasurement`, red against 61 unmeasured sections measured 2026-10-17, green over all 75 |
+| 28 | ✅ | The awaiting-measurement list names exactly the unmeasured documents, and says what each one's next run must measure | Unit test | `RepositoryStructureTests.TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments`, red while the index had no such list; its 49 rows now match, and adding a measurement without removing its row fails |
+| 29 | ✅ | Every document declares whether its results are deterministic | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_DeclaresWhetherItIsDeterministic`, red against all 75 before step 10; now 73 `yes` and 2 `no` |
+| 30 | ✅ | A document that declares itself non-deterministic says what varies | Unit test | `RepositoryStructureTests.EveryNonDeterministicDocument_SaysWhatVaries`, red by the step 9 mutation: `**What varies:**` removed from `startup-and-degradation/03`, the guard named that document, the line restored |
