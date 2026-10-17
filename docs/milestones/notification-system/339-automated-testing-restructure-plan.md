@@ -1,6 +1,6 @@
 # #339: Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (step 6)
+**Status:** In progress (step 7)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 
@@ -292,7 +292,7 @@ other, so either alone cannot tell a correct guard from a disabled one.
 
 ### 6. Fill the fifteen missing Observed effect and two missing Cleanup sections
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-17
 
 `## Observed effect` is the field the issue's requirement 14 exists for, the Knowledgebase material
 #333 sweeps, so its absence in 15 documents is a delivered requirement that drifted back out. Each
@@ -304,9 +304,23 @@ The two documents with no `## Cleanup`, `import-and-staged-actions/25` and `26`,
 Both move that command out of `## Steps` and into `## Cleanup`, where a reader looking for how to
 return the machine to a clean state will find it.
 
+**The presence guard is green: no document is missing any section the template defines.** The two
+remaining failures are step 7's, and 227 lines were added with no em or en dash.
+
+**None of the fifteen claims a measurement, and that is deliberate.** Every `Observed effect` section
+already in the suite opens with a measured date against a named build, because it was written from a
+run. These fifteen were not, and inventing a date would have turned the Knowledgebase's own source
+material into fabricated evidence.
+
+So they state what the circumstance produces, drawn from what the document's own steps assert and the
+behaviour the traced issue replaced, with no date and no quoted output the document does not already
+quote. An undated statement of what an operator sees stays true; a dated one is the stronger claim and
+is added when a run actually measures it. Neither form goes stale, which is why no "not yet measured"
+note was written either.
+
 ### 7. Bring the three off-template sections onto the defined heading
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-17
 
 `api-surface/02` and `database-lifecycle/03` keep their content under step 2's
 `## Explicitly not covered here` heading and move it to the defined position.
@@ -314,12 +328,116 @@ return the machine to a clean state will find it.
 thing and takes the same heading; its content already names the unit tests that cover the guard and
 the endpoint gap they do not, which is [#341](https://github.com/DutchJaFO/Quotinator/issues/341).
 
-### 8. Remove every em and en dash from the suite
+All three guards went green on this step: 48 of 48 passing, 0 warnings. Presence, order and the
+defined-section set hold across all 75 documents.
+
+### 8. Extend the template so a measurement and a determinism claim are both stated
+
+**Status:** ✅ Done, 2026-10-17
+
+Three additions, all from developer direction on 2026-10-17 after step 6 wrote fifteen undated
+`Observed effect` sections.
+
+**An `Observed effect` either records a measurement or is listed as awaiting one.** A measured section
+names the date and the build it was read against, which sixty already do. The fifteen that state the
+effect without having measured it are listed in the index instead, so the difference is visible and
+countable rather than a matter of reading sixty sections and noticing which ones lack a date.
+
+**Where an effect can be measured precisely, the document says what to measure.** A prose description
+of what an operator sees is not the same as a number, and the fifteen awaiting entries each name the
+quantity and where it is read, so the next run records a figure instead of re-describing the
+behaviour.
+
+**Every document declares whether its results are deterministic**, as a `**Deterministic:**` header
+field beside `Smoke:` and `Environment:`. Determinism is already the suite's rule and already has a
+section; what is missing is the test *saying* which it is, so a reader can tell a document that pins
+everything from one whose reading moves. A document answering `no` says in `## Determinism` what
+varies and why it cannot be pinned.
+
+**The marker is one spelling, `**Measured <date>**`, and settling that was the finding.** Seven words
+introduced a date across the suite, `Measured`, `Re-measured`, `Captured`, `Live-verified`,
+`Executed`, and two uses of lowercase `measured` and `live-verified` mid-sentence. A guard reading
+seven synonyms is a guard with six ways to miss, which is the same lesson the eleven canary headings
+taught. One of those dates was a developer decision rather than a reading, so the date alone was never
+a reliable signal either.
+
+### 9. Write the four guards for those claims, and confirm each red
+
+**Status:** ✅ Done, 2026-10-17
+
+| Test | Statement |
+|---|---|
+| `EveryObservedEffect_IsMeasuredOrListedAsAwaitingMeasurement` | Each `## Observed effect` records a measurement, or its document is in the index's awaiting list |
+| `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` | That list names exactly the unmeasured documents, and nothing else |
+| `EveryAutomatedTestingDocument_DeclaresWhetherItIsDeterministic` | Every document carries `**Deterministic:** yes` or `no` |
+| `EveryNonDeterministicDocument_SaysWhatVaries` | A document answering `no` states what varies in its `## Determinism` section |
+
+The second is the forcing function, and it is the same shape as
+`SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke`: two independent places that cannot drift. Adding
+a measurement to a document without removing its awaiting entry fails, so the bookkeeping cannot be
+skipped, and the list shrinks as runs land rather than being a note somebody has to remember.
+
+**Three were red against the tree as it stood**: 61 documents carried no measurement marker, the index
+had no awaiting list, and no document carried the new field. The presence guard from step 3 went red
+with them, which is the template-driven design working: a section added to the template becomes
+required of every document without anyone editing a test.
+
+**The fourth could not be red when written, and was proven by mutation instead.** With no document
+yet answering `no`, `EveryNonDeterministicDocument_SaysWhatVaries` had no subject. Once step 10 gave
+it two, `**What varies:**` was removed from `startup-and-degradation/03`, the guard failed naming that
+document, and the line was restored. The same technique as the ordering guard in step 3, and recorded
+rather than claimed.
+
+**Two SYSLIB1045 warnings were introduced and fixed in the same step**: two inline `Regex.Match` calls
+became `GeneratedRegex` partials, matching the file's existing idiom.
+
+### 10. Fill the determinism field and the awaiting-measurement list
+
+**Status:** ✅ Done, 2026-10-17
+
+`**Deterministic:**` on all 75 documents, read from each one's own `## Determinism` section rather
+than assumed. Most are `yes`: a fixed image and a pinned setting produce the same readings every run.
+The ones that are not are the point of the exercise, and the suite already knows two of them, the
+source-download path that has produced both failures and sub-second successes, and the startup window
+whose state is transient rather than pollable.
+
+The index's awaiting-measurement list carries one row per unmeasured document, naming the quantity the
+next run must read.
+
+**Measured, and the figure is the finding: 61 of 75 documents carried no measurement.** Twelve of
+those were genuinely measured under another word and were normalised, leaving **49 documents, two
+thirds of the suite, whose `Observed effect` describes what an operator would see without any run
+behind it.** The `backup/` category is the exception, fully measured at 8 of 8. The `backup` work was
+done while this convention was being argued for, which is probably why.
+
+**The determinism answer is 73 `yes` and 2 `no`**, and finding the two was not a sweep. Candidates
+came from grepping every `## Determinism` section for admissions of variability, then reading each
+hit: `backup/01` and `backup/03` both turned out to *pin* their timing explicitly and say so, so they
+are `yes`. The two that genuinely vary are `api-surface/06`, whose step 1 accepts either `0` or `2`
+depending on what the browser pane already held, and `startup-and-degradation/03`, which observes a
+window that a fast machine can close before the first request lands.
+
+**Both `no` answers are bounded in the safe direction**, and their `**What varies:**` lines say so:
+missing the startup window fails the assertions rather than passing them, so the exposure is a false
+negative and never a false positive.
+
+**The first grep for variability matched every document in the suite**, because the pattern `race`
+is a substring of `Traces to:`. Re-run with word boundaries it matched eight. Worth recording because
+a 75-of-75 hit rate reads as a finding rather than as a broken pattern, and the only reason it did not
+become one is that the number was implausible.
+
+**The 75-document field insertion was a one-shot `.csx` in the scratchpad, not a committed script.**
+ADR 010 puts a bulk find-and-replace across many files in C# rather than a shell one-liner, and also
+says a verification script is kept only if something verifies with it. A script for an insertion that
+happens once meets the first rule and fails the second, so it ran from the scratchpad and was not
+committed.
+
+### 11. Remove every em and en dash from the suite
 
 **Status:** ⬜ Not started
 
 801 occurrences across 61 of the 76 files, measured 2026-10-16. Its own commit, placed after the
-content work so the two are separable in review, and after step 7 so the sections it rewrites are
+content work so the two are separable in review, and after step 10 so the sections it rewrites are
 already in their final shape.
 
 **Not a single substitution.** A dash here stands in for a colon, a parenthetical pair, or a sentence
@@ -332,7 +450,7 @@ or a rendered message reproduced in a document is evidence of what a build emitt
 punctuation makes the document claim something that build did not do. Found during step 4, where
 `backup/06`'s canary quotes a since-reworded log line whose dash is the very thing the row is about.
 
-### 9. Confirm the guards green and the full test suite clean
+### 12. Confirm the guards green and the full test suite clean
 
 **Status:** ⬜ Not started
 
@@ -361,13 +479,13 @@ per the boyscout rule.
 | 10 | ✅ | Every test creates and destroys its own container and volume, so any two can run concurrently | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_PublishesThePortsItUses_AndSharesNoneWithAnother` |
 | 11 | ✅ | No bash construct returns to the suite | Unit test | `RepositoryStructureTests.EveryAutomatedTestingCodeBlock_IsPowerShell` |
 | 12 | ✅ | The reliability rule is stated in the index and served by a Determinism field on every document | Live | Index carries the rule; row 13 covers the per-document half |
-| 13 | ❌ | Every document carries every section the template defines | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_CarriesEverySectionTheTemplateDefines`, red against the 92 missing sections measured 2026-10-16 |
-| 14 | ❌ | The sections appear in the order the template defines | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_OrdersItsSectionsAsTheTemplateDoes`, red 2026-10-17 against `api-surface/02` and `database-lifecycle/03`, which place their exclusions section after `## Observed effect` |
-| 15 | ❌ | No document carries a section the template does not define | Unit test | `RepositoryStructureTests.NoAutomatedTestingDocument_CarriesASectionTheTemplateDoesNotDefine`, red against the 13 off-template sections measured 2026-10-16 |
+| 13 | ✅ | Every document carries every section the template defines | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_CarriesEverySectionTheTemplateDefines`, red against the 92 missing sections measured 2026-10-16, green over all 75 |
+| 14 | ✅ | The sections appear in the order the template defines | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_OrdersItsSectionsAsTheTemplateDoes`, red 2026-10-17 against `api-surface/02` and `database-lifecycle/03`, which placed their exclusions section after `## Observed effect` |
+| 15 | ✅ | No document carries a section the template does not define | Unit test | `RepositoryStructureTests.NoAutomatedTestingDocument_CarriesASectionTheTemplateDoesNotDefine`, red against the 13 off-template sections measured 2026-10-16 |
 | 16 | ✅ | The guards read their expectations from the index's template block, so template and guard cannot drift | Live | Removing `## Canary` from the template block took the presence guard's 75 Canary failures to 0 while its 15 `## Observed effect` failures stayed, 2026-10-17; the block was restored byte-identical |
 | 17 | ✅ | The template defines a Canary section, required of every document, carrying a procedure and any reading a canary run produced | Live | The index's template block states it, its position and both forms; all 75 documents carry one, and none states its own current pass or fail |
 | 18 | ❌ | The template defines the exclusions section, and the three off-template sections use it | Live | `api-surface/02`, `database-lifecycle/03` and `identity-and-casing/02` carry `## Explicitly not covered here` in the defined position |
-| 19 | ❌ | Test outcomes are recorded as Knowledgebase material by an `Observed effect` section on every document | Unit test | Row 13's guard covers the presence half; #333 requirement 6 states the sweep |
+| 19 | ✅ | Test outcomes are recorded as Knowledgebase material by an `Observed effect` section on every document | Unit test | Row 13's guard reports no document missing the section; #333 requirement 6 states the sweep. The fifteen written here carry no measured date, since none was run for them |
 | 20 | ✅ | Test resources sit beside the document; test scripts sit in `scripts/testing/` | Live | `scripts/testing/` holds the five suite scripts; no `.csx` anywhere under `docs/` |
 | 21 | ✅ | ADR 010 revised in place; `CLAUDE.md`'s Developer Context bullet matches | Live | ADR 010's Decision section states the subfolder rule and the unverified-verifier rule; `CLAUDE.md` states it identically |
 | 22 | ✅ | `docs/smoke-tests.md` is removed and no reference to it resolves to nothing | Live | The file is gone; every remaining mention is an archival record in a closed issue's plan doc, each naming where the suite went |
@@ -375,3 +493,7 @@ per the boyscout rule.
 | 24 | ✅ | Every OpenAPI tag an endpoint uses is declared with a non-empty description, and the rule is recorded | Unit test | `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription`; ADR 020, its README row, its `.slnx` entry, and `CLAUDE.md`'s *Endpoint groups* section |
 | 25 | ✅ | This issue carries no dependency on another milestone | Live | No `Depends on:` header here; `overview.md`'s dependency map and Order of operations row for #339 name no blocker |
 | 26 | ❌ | No file in the suite carries an em or en dash | Live | A `Select-String` over every `docs/automated-testing/**/*.md`, read as UTF-8, for a character class of U+2013 and U+2014, returns nothing. 801 occurrences across 61 of 76 files measured 2026-10-16 |
+| 27 | ❌ | Every `Observed effect` either records a measurement against a named build, or is listed in the index as awaiting one | Unit test | `RepositoryStructureTests.EveryObservedEffect_IsMeasuredOrListedAsAwaitingMeasurement`, red against the fifteen undated sections step 6 wrote |
+| 28 | ❌ | The awaiting-measurement list names exactly the unmeasured documents, and says what each one's next run must measure | Unit test | `RepositoryStructureTests.TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments`, red while the index has no such list; adding a measurement without removing its row fails |
+| 29 | ❌ | Every document declares whether its results are deterministic | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_DeclaresWhetherItIsDeterministic`, red against all 75 before step 10 |
+| 30 | ❌ | A document that declares itself non-deterministic says what varies | Unit test | `RepositoryStructureTests.EveryNonDeterministicDocument_SaysWhatVaries`, red by the mutation named in step 9 if no document answers `no` |
