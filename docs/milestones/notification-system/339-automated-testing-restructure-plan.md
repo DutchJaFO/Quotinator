@@ -1,6 +1,6 @@
 # #339: Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (step 7)
+**Status:** In progress (step 12)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 
@@ -434,7 +434,7 @@ committed.
 
 ### 11. Remove every em and en dash from the suite
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-17
 
 801 occurrences across 61 of the 76 files, measured 2026-10-16. Its own commit, placed after the
 content work so the two are separable in review, and after step 10 so the sections it rewrites are
@@ -449,6 +449,35 @@ read, which is why this is a step rather than a sweep.
 or a rendered message reproduced in a document is evidence of what a build emitted, and editing its
 punctuation makes the document claim something that build did not do. Found during step 4, where
 `backup/06`'s canary quotes a since-reworded log line whose dash is the very thing the row is about.
+
+**780 replaced, 7 kept.** Measured before: 776 in prose, 4 inside code fences, 14 inside inline code
+spans. The fenced and inline figures came from a per-line backtick count, and that classification was
+wrong in both directions, which is the reason for reading each one rather than trusting it:
+
+- **The 4 "inside a fence" were authored prose**, three PowerShell comments and one output format
+  string. Every one was replaced. A classification that treats a fence as evidence would have left
+  them.
+- **Of the 14 "inside an inline span", 7 were prose** whose line happened to carry an odd number of
+  backticks, because a code span opened on an earlier line. The other 7 are the genuine quoted output,
+  five of them `execute-sql.csx`'s own `OK — N row(s) affected.`, one a quoted log-line format, and
+  one the since-reworded refusal line `backup/06`'s canary turns on.
+
+**The shapes, measured:** 737 of the 776 were a mid-sentence ` — `, 32 wrapped at end of line, 5
+continued at line start, and 2 were step ranges where "to" is the replacement. Each became a comma, a
+colon, a semicolon, a full stop or a parenthetical pair according to what its sentence was doing, and
+the end-of-line ones were read together with their continuation, since the right choice is not
+visible from the broken line alone.
+
+**Mechanics: every replacement was written out by hand and applied by line number.** A
+`.csx` in the scratchpad applied a tab-separated list of file, line and replacement text, refusing any
+row whose target line held no dash or whose replacement still held one, so a mistyped line number
+failed loudly instead of rewriting the wrong line. Twelve batches, grouped by category.
+
+**`backup/` needed nothing.** Its eight documents were already clean, having been written after #348
+removed the dashes from the files it touched, which is the boyscout rule working.
+
+A punctuation sweep afterwards found no damage: every `::`, ` :` and `,`-then-capital hit was
+pre-existing code or quoted output. All 52 guards stayed green.
 
 ### 12. Confirm the guards green and the full test suite clean
 
@@ -492,7 +521,7 @@ per the boyscout rule.
 | 23 | ✅ | A live-only issue has a Definition of done it can honestly tick | Live | `docs/workflow/issues.md` carries the live-only variant; no placeholder Expected-tests row is required |
 | 24 | ✅ | Every OpenAPI tag an endpoint uses is declared with a non-empty description, and the rule is recorded | Unit test | `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription`; ADR 020, its README row, its `.slnx` entry, and `CLAUDE.md`'s *Endpoint groups* section |
 | 25 | ✅ | This issue carries no dependency on another milestone | Live | No `Depends on:` header here; `overview.md`'s dependency map and Order of operations row for #339 name no blocker |
-| 26 | ❌ | No file in the suite carries an em or en dash | Live | A `Select-String` over every `docs/automated-testing/**/*.md`, read as UTF-8, for a character class of U+2013 and U+2014, returns nothing. 801 occurrences across 61 of 76 files measured 2026-10-16 |
+| 26 | ✅ | No file in the suite carries an em or en dash, except where it is quoted program output | Live | A `Select-String` over every `docs/automated-testing/**/*.md`, read as UTF-8, for a character class of U+2013 and U+2014, returns 7 hits, each inside an inline code span reproducing what a build emitted. 780 replaced from the 787 present 2026-10-17 |
 | 27 | ❌ | Every `Observed effect` either records a measurement against a named build, or is listed in the index as awaiting one | Unit test | `RepositoryStructureTests.EveryObservedEffect_IsMeasuredOrListedAsAwaitingMeasurement`, red against the fifteen undated sections step 6 wrote |
 | 28 | ❌ | The awaiting-measurement list names exactly the unmeasured documents, and says what each one's next run must measure | Unit test | `RepositoryStructureTests.TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments`, red while the index has no such list; adding a measurement without removing its row fails |
 | 29 | ❌ | Every document declares whether its results are deterministic | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_DeclaresWhetherItIsDeterministic`, red against all 75 before step 10 |
