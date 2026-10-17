@@ -1,6 +1,6 @@
 # #339: Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (step 4)
+**Status:** In progress (step 5)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 
@@ -229,11 +229,27 @@ one.
 
 ### 4. Normalise the twelve improvised canary sections
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-10-17
 
 Eleven `## Canary…` headings and `## Confirming this test would have caught the original bug` become
 `## Canary`. The detail the heading carried, which issue's pre-fix build and what it showed, moves into
 the section body, where it is readable rather than compressed into a title.
+
+**No body needed the heading's content moved into it.** All twelve already named their issue and their
+pre-fix commit in the opening sentence, so the headings were duplicating what the section said one line
+below. That is worth recording as the reason the eleven spellings cost nothing to retire.
+
+**Three sections also moved**, since they sat above `## Observed effect` where the template puts them
+below it: `backup/06`, `backup/07` and `notifications-and-changelog/14`.
+
+**Measured after the step**: the presence guard's Canary failures fell from 75 to 63, the off-template
+guard from 13 to 1, and the ordering guard stayed at 2. The remaining three failures are all step 7's
+work, so the counts moved by exactly the amount this step touched and nothing else.
+
+**One correction made in passing, which gives step 8 a rule.** `backup/06`'s canary table quotes the
+log line an older build wrote, `seeding refused — no backup could be taken`, and the row exists
+*because* that wording has since changed. Rewriting its dash was an error, caught and reverted in the
+same step: quoted program output is evidence, not prose.
 
 ### 5. Give the other 63 documents the Canary section they need
 
@@ -288,6 +304,11 @@ already in their final shape.
 break, and each reads differently once the character is gone. The five improvised canary headings step
 4 normalises are the easy case; a mid-sentence pair carrying a clause is not. Every replacement gets
 read, which is why this is a step rather than a sweep.
+
+**Quoted program output is left exactly as it is**, whatever it contains. A log line, a response body
+or a rendered message reproduced in a document is evidence of what a build emitted, and editing its
+punctuation makes the document claim something that build did not do. Found during step 4, where
+`backup/06`'s canary quotes a since-reworded log line whose dash is the very thing the row is about.
 
 ### 9. Confirm the guards green and the full test suite clean
 
