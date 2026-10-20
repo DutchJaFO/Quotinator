@@ -1367,7 +1367,11 @@ numbers here exist only to resolve references written before the split.
 
 Every test document follows this shape.
 
-```markdown
+The sample below is written as a four-backtick block because it carries a fence of its own. Three
+backticks would be ended by that inner fence's own closing line, since a closing fence cannot carry a
+language, which is both the CommonMark rule and how the block renders here. Do not shorten it.
+
+````markdown
 # <What this verifies>
 
 **Smoke:** yes | no
@@ -1433,7 +1437,7 @@ reading it produced, named against the commit it ran on. Never this document's o
 ## Cleanup
 
 How to return the machine to a clean state.
-```
+````
 
 **Each step carries its own expected result, and a failed step stops the run** (developer direction,
 2026-08-23). A single `Expected output` section at the end has three faults this shape removes:

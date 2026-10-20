@@ -308,7 +308,7 @@ public partial class RepositoryStructureTests
 
         List<string> linked =
         [
-            .. MarkdownLinkTarget().Matches(index)
+            .. AutomatedTestingSuite.MarkdownLinkTarget().Matches(index)
                 .Select(m => m.Groups["target"].Value)
                 .Where(t => t.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
                 .Where(t => !t.StartsWith("..", StringComparison.Ordinal))
@@ -342,7 +342,8 @@ public partial class RepositoryStructureTests
         {
             string directory = Path.GetDirectoryName(document)!;
 
-            foreach (System.Text.RegularExpressions.Match match in MarkdownLinkTarget().Matches(File.ReadAllText(document)))
+            foreach (System.Text.RegularExpressions.Match match in
+                AutomatedTestingSuite.MarkdownLinkTarget().Matches(File.ReadAllText(document)))
             {
                 string target = match.Groups["target"].Value;
 
@@ -450,7 +451,7 @@ public partial class RepositoryStructureTests
 
         List<string> listed =
         [
-            .. MarkdownLinkTarget().Matches(section.Value)
+            .. AutomatedTestingSuite.MarkdownLinkTarget().Matches(section.Value)
                 .Select(m => m.Groups["target"].Value)
                 .Where(t => t.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
                 .Distinct()
@@ -567,124 +568,12 @@ public partial class RepositoryStructureTests
         Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
             $"{AutomatedTestingRelativePath} does not exist.");
 
-        List<string> documents = [.. FindAutomatedTestingDocuments(), "README.md"];
-        List<string> failures = [];
-
-        foreach (string document in documents)
-        {
-            string[] lines = File.ReadAllLines(
-                Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
-
-            string? fenceLanguage = null;
-            int fenceStart = 0;
-            List<string> fenceLines = [];
-
-            for (int i = 0; i < lines.Length; i++)
-            {
-                if (!lines[i].StartsWith("```", StringComparison.Ordinal))
-                {
-                    if (fenceLanguage is not null) fenceLines.Add(lines[i]);
-                    continue;
-                }
-
-                if (fenceLanguage is null)
-                {
-                    fenceLanguage = lines[i][3..].Trim();
-                    fenceStart = i + 1;
-                    fenceLines = [];
-                    continue;
-                }
-
-                if (ShellFenceLanguages.Contains(fenceLanguage))
-                    failures.Add($"{document}:{fenceStart} — fence is ```{fenceLanguage}, not ```powershell");
-                else if (fenceLanguage == "powershell")
-                    failures.AddRange(UnixOnlyConstructs(document, fenceStart, fenceLines));
-
-                fenceLanguage = null;
-            }
-        }
+        List<string> failures = AutomatedTestingSuite.CodeBlocksThatAreNotPowerShell(
+            [.. LoadSuiteDocuments(), LoadSuiteIndex()]);
 
         Assert.IsEmpty(failures,
             "Every command in the T2 suite is PowerShell (ADR 010, and #339's own run):\n"
-            + string.Join("\n", failures.Order()));
-    }
-
-    private static readonly HashSet<string> ShellFenceLanguages =
-        new(StringComparer.OrdinalIgnoreCase) { "bash", "sh", "shell", "zsh" };
-
-    /// <summary>
-    /// Each entry pairs a construct no Windows PowerShell session provides with what to write instead,
-    /// so a failure tells the reader the fix rather than only the fault.
-    /// </summary>
-    private static readonly (string Construct, string Instead)[] UnixOnlyShellConstructs =
-    [
-        ("MSYS_NO_PATHCONV", "nothing — it is a Git Bash workaround with nothing to work around here"),
-        ("/dev/null",        "$null, or | Out-Null"),
-        ("curl ",            "Invoke-RestMethod, or scripts/testing/http.csx"),
-        ("curl.exe",         "Invoke-RestMethod, or scripts/testing/http.csx"),
-        ("grep",             "Select-String — and to count, [regex]::Matches(...).Count"),
-        ("cut -d",           "a property on the object ConvertFrom-Json returns"),
-        ("wc -l",            "Measure-Object, or .Count on a parsed response"),
-        ("; do",             "foreach (...) { ... }"),
-        ("; done",           "foreach (...) { ... }"),
-        ("<<'",              "a here-string: @'...'@"),
-    ];
-
-    /// <summary>
-    /// Constructs recognised only where a command can begin, because their spelling also occurs inside
-    /// ordinary text. Matching anywhere would flag <c># Wait until the app is healthy</c> as a shell
-    /// loop and <c>isDismissed </c> as <c>sed</c> — both measured — and a guard that fires on prose gets
-    /// worked around rather than obeyed.
-    /// </summary>
-    private static readonly (string Construct, string Instead)[] UnixOnlyShellCommands =
-    [
-        ("until", "http.csx --wait-for, or while (...) { Start-Sleep 1 }"),
-        ("export", "$env:NAME = 'value'"),
-        ("sed", "nothing — ADR 010 forbids it outright"),
-        ("awk", "nothing — ADR 010 forbids it outright"),
-    ];
-
-    /// <summary>
-    /// A fence carrying <c>sh -c</c> runs its payload inside a Linux container, so the Unix forms in it
-    /// are correct rather than left over — the exemption is the whole fence because a continuation
-    /// splits one such command across lines.
-    /// </summary>
-    private static IEnumerable<string> UnixOnlyConstructs(string document, int fenceStart, List<string> fenceLines)
-    {
-        if (fenceLines.Any(l => l.Contains("sh -c", StringComparison.Ordinal))) yield break;
-
-        for (int i = 0; i < fenceLines.Count; i++)
-        {
-            foreach ((string construct, string instead) in UnixOnlyShellConstructs)
-            {
-                if (fenceLines[i].Contains(construct, StringComparison.Ordinal))
-                    yield return $"{document}:{fenceStart + i} — `{construct.Trim()}` is not PowerShell; use {instead}";
-            }
-
-            string command = fenceLines[i].TrimStart();
-
-            foreach ((string construct, string instead) in UnixOnlyShellCommands)
-            {
-                if (command.StartsWith($"{construct} ", StringComparison.Ordinal))
-                    yield return $"{document}:{fenceStart + i} — `{construct}` is not PowerShell; use {instead}";
-            }
-
-            // `for` is the one shared spelling: PowerShell's own loop opens a parenthesis where bash's
-            // names a variable, so only the bash form is a finding.
-            if (command.StartsWith("for ", StringComparison.Ordinal) && !command.StartsWith("for (", StringComparison.Ordinal))
-                yield return $"{document}:{fenceStart + i} — bash `for … in` is not PowerShell; use foreach (...) {{ ... }}";
-
-            // Windows PowerShell 5.1 gives a single PSCustomObject no Count property, so a filter that
-            // matches exactly one row prints nothing where the test expects 1 — correct for zero rows
-            // and for two, blank for the one case a well-targeted assertion is most likely to produce.
-            if (fenceLines[i].Contains("Where-Object", StringComparison.Ordinal)
-                && fenceLines[i].Contains(".Count", StringComparison.Ordinal)
-                && !fenceLines[i].Contains("@(", StringComparison.Ordinal))
-            {
-                yield return $"{document}:{fenceStart + i} — a filtered .Count needs @(…) around it, "
-                    + "or it reports blank for exactly one match";
-            }
-        }
+            + string.Join("\n", failures));
     }
 
     /// <summary>
@@ -769,36 +658,13 @@ public partial class RepositoryStructureTests
         Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
             $"{AutomatedTestingRelativePath} does not exist.");
 
-        List<TemplateElement> required = [.. LoadTemplateElements().Where(e => !e.Optional)];
-
-        Assert.IsNotEmpty(required,
-            "The index's document template defines no required element, so no document can be "
-            + "checked against it.");
-
-        List<string> documents = FindAutomatedTestingDocuments();
-
-        Assert.IsNotEmpty(documents,
-            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
-
-        List<string> failures = [];
-
-        foreach (string document in documents)
-        {
-            string text = File.ReadAllText(
-                Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
-            List<string> headings = SectionHeadings(text);
-
-            if (!DocumentTitle().IsMatch(text))
-                failures.Add($"{document}: no '# ' title line");
-
-            foreach (TemplateElement element in required.Where(e => !DocumentCarries(text, headings, e)))
-                failures.Add($"{document}: missing '{element.Text}'");
-        }
+        List<string> failures = AutomatedTestingSuite.MissingTemplateElements(
+            LoadSuiteDocuments(), LoadSuiteTemplate());
 
         Assert.IsEmpty(failures,
             "Test documents must carry every element the index's document template defines, otherwise "
             + "the template is a suggestion and the next document written is free to omit whichever "
-            + $"part nothing checks:\n{string.Join("\n", failures.Order())}");
+            + $"part nothing checks:\n{string.Join("\n", failures)}");
     }
 
     /// <summary>
@@ -815,34 +681,15 @@ public partial class RepositoryStructureTests
         Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
             $"{AutomatedTestingRelativePath} does not exist.");
 
-        List<string> templateOrder = [.. LoadTemplateElements().Where(e => e.IsSection).Select(e => e.Text)];
-
-        Assert.IsNotEmpty(templateOrder,
-            "The index's document template defines no sections, so no order can be checked.");
-
-        List<string> documents = FindAutomatedTestingDocuments();
-
-        Assert.IsNotEmpty(documents,
-            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
-
-        List<string> failures = [];
-
-        foreach (string document in documents)
-        {
-            string text = File.ReadAllText(
-                Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
-
-            List<string> asWritten = [.. SectionHeadings(text).Where(templateOrder.Contains)];
-            List<string> asTemplated = [.. templateOrder.Where(asWritten.Contains)];
-
-            if (!asWritten.SequenceEqual(asTemplated))
-                failures.Add($"{document}: {string.Join(" | ", asWritten)}");
-        }
+        List<TemplateElement> template = LoadSuiteTemplate();
+        List<string> failures = AutomatedTestingSuite.SectionsOutOfTemplateOrder(
+            LoadSuiteDocuments(), template);
 
         Assert.IsEmpty(failures,
             "Test documents must order their sections as the document template does. Each line below "
-            + $"is a document's own order:\n{string.Join("\n", failures.Order())}\n\n"
-            + $"The template's order: {string.Join(" | ", templateOrder)}");
+            + $"is a document's own order:\n{string.Join("\n", failures)}\n\n"
+            + "The template's order: "
+            + string.Join(" | ", template.Where(e => e.IsSection).Select(e => e.Text)));
     }
 
     /// <summary>
@@ -860,33 +707,14 @@ public partial class RepositoryStructureTests
         Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
             $"{AutomatedTestingRelativePath} does not exist.");
 
-        HashSet<string> defined =
-            [.. LoadTemplateElements().Where(e => e.IsSection).Select(e => e.Text)];
-
-        Assert.IsNotEmpty(defined,
-            "The index's document template defines no sections, so every section would read as undefined.");
-
-        List<string> documents = FindAutomatedTestingDocuments();
-
-        Assert.IsNotEmpty(documents,
-            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
-
-        List<string> failures = [];
-
-        foreach (string document in documents)
-        {
-            string text = File.ReadAllText(
-                Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
-
-            foreach (string heading in SectionHeadings(text).Where(h => !defined.Contains(h)))
-                failures.Add($"{document}: '{heading}'");
-        }
+        List<string> failures = AutomatedTestingSuite.SectionsTheTemplateDoesNotDefine(
+            LoadSuiteDocuments(), LoadSuiteTemplate());
 
         Assert.IsEmpty(failures,
             "These sections are not defined by the index's document template. A section a document "
             + "genuinely needs is added to the template, so every document carries it; one invented "
             + $"per document is how the suite ended up with eleven spellings of the same thing:\n"
-            + string.Join("\n", failures.Order()));
+            + string.Join("\n", failures));
     }
 
     /// <summary>
@@ -905,22 +733,14 @@ public partial class RepositoryStructureTests
         Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
             $"{AutomatedTestingRelativePath} does not exist.");
 
-        HashSet<string> awaiting = [.. LoadAwaitingMeasurementRows().Keys];
-        List<string> documents = FindAutomatedTestingDocuments();
-
-        Assert.IsNotEmpty(documents,
-            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
-
-        List<string> failures =
-        [
-            .. documents.Where(d => !IsObservedEffectMeasured(d) && !awaiting.Contains(d))
-                .Select(d => $"{d}: no '**Measured <date>**' marker, and not listed as awaiting one")
-        ];
+        List<string> failures = AutomatedTestingSuite.EffectsNeitherMeasuredNorAwaiting(
+            LoadSuiteDocuments(),
+            AutomatedTestingSuite.AwaitingMeasurementRows(LoadSuiteIndex().Text));
 
         Assert.IsEmpty(failures,
             "An Observed effect section either records a measurement or is listed under the index's "
             + "'Observed effects awaiting measurement', so a description is never read as evidence:\n"
-            + string.Join("\n", failures.Order()));
+            + string.Join("\n", failures));
     }
 
     /// <summary>
@@ -938,29 +758,14 @@ public partial class RepositoryStructureTests
         Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
             $"{AutomatedTestingRelativePath} does not exist.");
 
-        Dictionary<string, string> awaiting = LoadAwaitingMeasurementRows();
-        List<string> documents = FindAutomatedTestingDocuments();
-
-        Assert.IsNotEmpty(documents,
-            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
-
-        List<string> unmeasured = [.. documents.Where(d => !IsObservedEffectMeasured(d)).Order()];
-        List<string> listed = [.. awaiting.Keys.Order()];
-        List<string> failures = [];
-
-        foreach (string stale in listed.Where(l => !unmeasured.Contains(l)))
-            failures.Add($"{stale}: listed as awaiting measurement, but its section now records one");
-
-        foreach (string missing in unmeasured.Where(u => !listed.Contains(u)))
-            failures.Add($"{missing}: carries no measurement and is not listed");
-
-        foreach (KeyValuePair<string, string> row in awaiting.Where(r => r.Value.Trim().Length == 0))
-            failures.Add($"{row.Key}: listed, but says nothing about what its next run must measure");
+        List<string> failures = AutomatedTestingSuite.AwaitingListDisagreements(
+            LoadSuiteDocuments(),
+            AutomatedTestingSuite.AwaitingMeasurementRows(LoadSuiteIndex().Text));
 
         Assert.IsEmpty(failures,
             "The index's awaiting-measurement list and the documents' own sections disagree. A row "
             + "whose document has since been measured must be removed, and every row must name the "
-            + $"quantity its next run reads:\n{string.Join("\n", failures.Order())}");
+            + $"quantity its next run reads:\n{string.Join("\n", failures)}");
     }
 
     /// <summary>
@@ -977,25 +782,11 @@ public partial class RepositoryStructureTests
         Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
             $"{AutomatedTestingRelativePath} does not exist.");
 
-        List<string> documents = FindAutomatedTestingDocuments();
-
-        Assert.IsNotEmpty(documents,
-            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
-
-        List<string> failures = [];
-
-        foreach (string document in documents)
-        {
-            string text = File.ReadAllText(
-                Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
-
-            if (!DeterminismDeclaration().IsMatch(text))
-                failures.Add($"{document}: no '**Deterministic:** yes' or '**Deterministic:** no' field");
-        }
+        List<string> failures = AutomatedTestingSuite.DocumentsNotDeclaringDeterminism(LoadSuiteDocuments());
 
         Assert.IsEmpty(failures,
             "Every test document declares whether its results are deterministic, so a reading that "
-            + $"moves between runs is stated rather than found out:\n{string.Join("\n", failures.Order())}");
+            + $"moves between runs is stated rather than found out:\n{string.Join("\n", failures)}");
     }
 
     /// <summary>
@@ -1011,106 +802,13 @@ public partial class RepositoryStructureTests
         Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
             $"{AutomatedTestingRelativePath} does not exist.");
 
-        List<string> failures = [];
-
-        foreach (string document in FindAutomatedTestingDocuments())
-        {
-            string text = File.ReadAllText(
-                Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
-
-            System.Text.RegularExpressions.Match declared = DeterminismDeclaration().Match(text);
-
-            if (!declared.Success || !declared.Groups["answer"].Value.Equals("no", StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            System.Text.RegularExpressions.Match section = DeterminismSection().Match(text);
-
-            if (!section.Success || !section.Groups["body"].Value.Contains("**What varies:**", StringComparison.Ordinal))
-                failures.Add($"{document}: declares itself non-deterministic, with no '**What varies:**' line");
-        }
+        List<string> failures =
+            AutomatedTestingSuite.NonDeterministicDocumentsNotNamingWhatVaries(LoadSuiteDocuments());
 
         Assert.IsEmpty(failures,
             "A document that declares itself non-deterministic names the variable in its Determinism "
-            + $"section:\n{string.Join("\n", failures.Order())}");
+            + $"section:\n{string.Join("\n", failures)}");
     }
-
-    /// <summary>
-    /// True when the document's Observed effect section records a measurement with the one marker
-    /// spelling the index defines.
-    /// </summary>
-    private static bool IsObservedEffectMeasured(string document)
-    {
-        string text = File.ReadAllText(
-            Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
-
-        System.Text.RegularExpressions.Match section = ObservedEffectSection().Match(text);
-
-        return section.Success && MeasurementMarker().IsMatch(section.Groups["body"].Value);
-    }
-
-    /// <summary>
-    /// The index's awaiting-measurement rows, as document path to the quantity its next run must read.
-    /// </summary>
-    private static Dictionary<string, string> LoadAwaitingMeasurementRows()
-    {
-        string index = File.ReadAllText(Path.Combine(AutomatedTestingDir, "README.md"));
-
-        System.Text.RegularExpressions.Match section = AwaitingMeasurementSection().Match(index);
-
-        if (!section.Success)
-            return [];
-
-        Dictionary<string, string> rows = [];
-
-        foreach (string line in section.Value.Split('\n').Select(l => l.TrimEnd('\r')))
-        {
-            System.Text.RegularExpressions.Match link = MarkdownLinkTarget().Match(line);
-
-            if (!link.Success || !line.StartsWith('|'))
-                continue;
-
-            string[] cells = line.Trim('|').Split('|');
-
-            if (cells.Length < 2)
-                continue;
-
-            rows[link.Groups["target"].Value] = cells[1];
-        }
-
-        return rows;
-    }
-
-    [System.Text.RegularExpressions.GeneratedRegex(@"\*\*Measured\s+\d{4}-\d{2}-\d{2}")]
-    private static partial System.Text.RegularExpressions.Regex MeasurementMarker();
-
-    /// <summary>A document's Observed effect section, up to the next top-level heading.</summary>
-    [System.Text.RegularExpressions.GeneratedRegex(
-        @"^## Observed effect\s*$(?<body>.*?)^## ",
-        System.Text.RegularExpressions.RegexOptions.Multiline
-        | System.Text.RegularExpressions.RegexOptions.Singleline)]
-    private static partial System.Text.RegularExpressions.Regex ObservedEffectSection();
-
-    /// <summary>A document's Determinism section, up to the next top-level heading.</summary>
-    [System.Text.RegularExpressions.GeneratedRegex(
-        @"^## Determinism\s*$(?<body>.*?)^## ",
-        System.Text.RegularExpressions.RegexOptions.Multiline
-        | System.Text.RegularExpressions.RegexOptions.Singleline)]
-    private static partial System.Text.RegularExpressions.Regex DeterminismSection();
-
-    [System.Text.RegularExpressions.GeneratedRegex(
-        @"^\*\*Deterministic:\*\*\s*(?<answer>yes|no)\s*$",
-        System.Text.RegularExpressions.RegexOptions.Multiline
-        | System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
-    private static partial System.Text.RegularExpressions.Regex DeterminismDeclaration();
-
-    /// <summary>
-    /// The awaiting-measurement section, from its own heading up to the next top-level heading.
-    /// </summary>
-    [System.Text.RegularExpressions.GeneratedRegex(
-        @"^## Observed effects awaiting measurement$.*?(?=^## )",
-        System.Text.RegularExpressions.RegexOptions.Multiline
-        | System.Text.RegularExpressions.RegexOptions.Singleline)]
-    private static partial System.Text.RegularExpressions.Regex AwaitingMeasurementSection();
 
     private const string AutomatedTestingRelativePath = "docs/automated-testing";
 
@@ -1129,142 +827,30 @@ public partial class RepositoryStructureTests
     ];
 
     /// <summary>
-    /// One element of the index's document template: a header field such as <c>**Smoke:**</c> or a
-    /// section heading such as <c>## Canary</c>.
-    /// </summary>
-    /// <param name="Text">The literal a document must carry.</param>
-    /// <param name="IsSection">
-    /// True for a section heading, false for a header field. Only sections carry an order.
-    /// </param>
-    /// <param name="Optional">
-    /// True where the template marks the element with its "only when it applies" note, as the
-    /// <c>Fully green after:</c> field and the exclusions section are.
-    /// </param>
-    private sealed record TemplateElement(string Text, bool IsSection, bool Optional);
-
-    /// <summary>
-    /// The elements the index's document template defines, in the order it states them.
+    /// The suite as it stands on disk, for the rules in <see cref="AutomatedTestingSuite"/> to read.
     /// </summary>
     /// <remarks>
-    /// Read from the index rather than hardcoded, so adding a section to the template is what makes
-    /// it required of every document. The template says so itself, under *Document template*.
+    /// Every guard below is the live half of its rule: it establishes that today's documents comply,
+    /// which is the application side of the question. What the rule itself enforces is established
+    /// against supplied documents in <see cref="AutomatedTestingSuiteTests"/>, because a tree that
+    /// happens to hold no violation says nothing about the rule, and a rule that reached no document
+    /// at all would report the same green. See #339 step 13.
     /// </remarks>
-    private static List<TemplateElement> LoadTemplateElements()
-    {
-        string index = File.ReadAllText(Path.Combine(AutomatedTestingDir, "README.md"));
-        List<TemplateElement> elements = [];
+    private static List<SuiteDocument> LoadSuiteDocuments() =>
+    [
+        .. FindAutomatedTestingDocuments().Select(d => new SuiteDocument(
+            d,
+            File.ReadAllText(
+                Path.Combine(AutomatedTestingDir, d.Replace('/', Path.DirectorySeparatorChar)))))
+    ];
 
-        foreach (string line in ExtractDocumentTemplateBlock(index))
-        {
-            bool optional = line.Contains("only when it applies", StringComparison.Ordinal);
+    /// <summary>The suite's index, under the path the rules report it as.</summary>
+    private static SuiteDocument LoadSuiteIndex() =>
+        new("README.md", File.ReadAllText(Path.Combine(AutomatedTestingDir, "README.md")));
 
-            System.Text.RegularExpressions.Match field = TemplateHeaderField().Match(line);
-            if (field.Success)
-            {
-                string name = field.Groups["name"].Value.Trim();
-                elements.Add(new($"**{name}:**", false, optional));
-                continue;
-            }
-
-            System.Text.RegularExpressions.Match section = SectionHeading().Match(line);
-            if (section.Success)
-            {
-                // The optional marker trails the heading text, so it is not part of the name.
-                string name = section.Groups["name"].Value.Split('←')[0].Trim();
-                elements.Add(new($"## {name}", true, optional));
-            }
-        }
-
-        return elements;
-    }
-
-    /// <summary>
-    /// The lines of the fenced sample under the index's <c>## Document template</c> heading.
-    /// </summary>
-    /// <remarks>
-    /// The sample is a markdown fence containing a nested PowerShell fence, so its end cannot be
-    /// found by the next fence line, and its own <c>## </c> headings mean it cannot be bounded by the
-    /// next top-level heading either. Depth is counted instead: a fence naming a language opens a
-    /// block, a bare fence closes the innermost one.
-    /// </remarks>
-    private static List<string> ExtractDocumentTemplateBlock(string index)
-    {
-        List<string> lines = [.. index.Split('\n').Select(l => l.TrimEnd('\r'))];
-
-        int heading = lines.FindIndex(l => l == "## Document template");
-        Assert.IsGreaterThanOrEqualTo(0, heading,
-            $"{AutomatedTestingRelativePath}/README.md has no '## Document template' section, so the "
-            + "template every document is held to cannot be read.");
-
-        int open = lines.FindIndex(heading, l => l.StartsWith("```markdown", StringComparison.Ordinal));
-        Assert.IsGreaterThan(heading, open,
-            "The index's '## Document template' section contains no ```markdown block.");
-
-        int depth = 1;
-        int close = -1;
-        for (int i = open + 1; i < lines.Count && close < 0; i++)
-        {
-            if (!lines[i].StartsWith("```", StringComparison.Ordinal))
-                continue;
-
-            if (lines[i].TrimEnd().Length > 3)
-                depth++;
-            else if (--depth == 0)
-                close = i;
-        }
-
-        Assert.IsGreaterThan(open, close,
-            "The index's document template block is never closed, so its elements cannot be read.");
-
-        return [.. lines[(open + 1)..close]];
-    }
-
-    /// <summary>
-    /// A document's own <c>## </c> headings, in order, ignoring anything inside a fenced code block so
-    /// a heading appearing in sample output is not read as a section of the document.
-    /// </summary>
-    private static List<string> SectionHeadings(string documentText)
-    {
-        List<string> headings = [];
-        bool inFence = false;
-
-        foreach (string line in documentText.Split('\n').Select(l => l.TrimEnd('\r')))
-        {
-            if (line.StartsWith("```", StringComparison.Ordinal))
-            {
-                inFence = !inFence;
-                continue;
-            }
-
-            if (!inFence && SectionHeading().IsMatch(line))
-                headings.Add(line.TrimEnd());
-        }
-
-        return headings;
-    }
-
-    private static bool DocumentCarries(string documentText, List<string> headings, TemplateElement element) =>
-        element.IsSection
-            ? headings.Contains(element.Text)
-            : documentText.Split('\n')
-                .Any(l => l.TrimStart().StartsWith(element.Text, StringComparison.Ordinal));
-
-    [System.Text.RegularExpressions.GeneratedRegex(@"^\*\*(?<name>[^*:]+):\*\*")]
-    private static partial System.Text.RegularExpressions.Regex TemplateHeaderField();
-
-    /// <summary>
-    /// A level-two heading. The <c>[^#]</c> keeps it from matching a <c>### </c> step heading.
-    /// </summary>
-    [System.Text.RegularExpressions.GeneratedRegex(@"^##\s+(?<name>[^#].*?)\s*$")]
-    private static partial System.Text.RegularExpressions.Regex SectionHeading();
-
-    [System.Text.RegularExpressions.GeneratedRegex(
-        @"^#\s+[^#\s].*$",
-        System.Text.RegularExpressions.RegexOptions.Multiline)]
-    private static partial System.Text.RegularExpressions.Regex DocumentTitle();
-
-    [System.Text.RegularExpressions.GeneratedRegex(@"\]\((?<target>[^)]+)\)")]
-    private static partial System.Text.RegularExpressions.Regex MarkdownLinkTarget();
+    /// <summary>The template the index defines, which every document is held to.</summary>
+    private static List<TemplateElement> LoadSuiteTemplate() =>
+        AutomatedTestingSuite.TemplateElements(LoadSuiteIndex().Text);
 
     /// <summary>
     /// A profile is defined by having its own section in the index, so the guard cannot drift from the
@@ -1286,10 +872,15 @@ public partial class RepositoryStructureTests
     private static partial System.Text.RegularExpressions.Regex NumberedStepHeading();
 
     /// <summary>
-    /// Matches the plain <c>**Expected:**</c> and the qualified <c>**Expected — …:**</c> form, which a
-    /// step uses when it carries more than one expectation or when the expectation needs labelling —
-    /// for instance as an original that is known to be unreachable.
+    /// Matches the plain <c>**Expected:**</c> and the one qualified form the suite uses,
+    /// <c>**Expected, status column and default filter:**</c>, which a step writes when it carries
+    /// more than one expectation or the expectation needs labelling.
     /// </summary>
+    /// <remarks>
+    /// The qualified form was spelled with an em dash until step 11 of #339 removed every dash from
+    /// the suite. The pattern never depended on the separator, so it kept matching, and this comment
+    /// went on describing a spelling no document had any more.
+    /// </remarks>
     [System.Text.RegularExpressions.GeneratedRegex(
         @"^\*\*Expected\b",
         System.Text.RegularExpressions.RegexOptions.Multiline)]
