@@ -1,6 +1,6 @@
 # #339: Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (step 13)
+**Status:** Waiting for release
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 
@@ -512,7 +512,7 @@ documentation and guard tests. The one command text that changed is named in the
 
 ### 13. Write every guard against example data, including the empty set
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 **The guards were only ever exercised against one snapshot of the live tree, so what they enforce is
 unestablished** (developer, 2026-10-17). Each went red against whatever the documents happened to
@@ -544,6 +544,44 @@ What this step does:
   that have already fooled this logic once (a nested fence, a heading inside a code block), and the
   empty set, whose correct outcome differs per guard and is therefore asserted rather than inferred.
 - Keep one thin test per guard over the real tree, which is where the live content belongs.
+
+**What this step produced.** `AutomatedTestingSuite` holds the eight rules as functions from a
+document set and a template to the failures in them; `AutomatedTestingSuiteTests` states 59 scenarios
+against documents the test writes; the eight guards in `RepositoryStructureTests` are now three lines
+each, loading the live tree and calling the rule. The template parser, the heading reader and the
+fence walk moved with them, so the suite has one scanner rather than three.
+
+**One scanner, because the two it replaced were each right about a different input.** The toggle read
+the index's own template sample wrong, since a fence nested in another flips it back. Depth counting
+read a document's quoted program output wrong, since the suite opens those blocks with a bare fence
+and depth counting takes a bare fence for a close. Both shapes are live here. The CommonMark rule is
+neither approximation: any fence line opens a block, and only a bare fence at least as long as the
+opening one closes it, because a closing fence cannot carry an info string
+([spec 0.31.2, example 147](https://spec.commonmark.org/0.31.2/#fenced-code-blocks), read 2026-10-20).
+
+**That rule also found a rendering defect in the index.** Its template sample opened with three
+backticks and contained a three-backtick PowerShell fence, so by the same rule the sample ended at
+that inner fence's closing line and everything below it, `## Observed effect` included, rendered as
+live markdown rather than as sample. The sample is now a four-backtick block, and the index says why.
+
+**Row 32 is implemented against seven guards failing on the empty set, not six.** The row was written
+expecting `EveryNonDeterministicDocument_SaysWhatVaries` to pass over an empty set, on the ground that
+zero non-deterministic documents is legitimate. Those are two different states: a set of documents in
+which none declares itself non-deterministic is legitimate and passes, which the rule is tested for;
+a set with no documents in it is the state that let this rule ship having inspected nothing. Letting
+it pass there would preserve the exact false green the step exists to remove, so every rule reports
+the empty set as a failure, and each rule answers "zero documents of my kind" separately.
+
+**Each of the 59 tests was proven able to fail, by mutation of the rule it covers** (2026-10-20), in
+six passes: the fence scanner reverted to a toggle (10 red, the nested-fence and template-reader
+tests among them); a bare fence made not to open a block (2 red, the quoted-output tests); the
+empty-set contracts removed (11 red, exactly the empty-set and empty-template tests); the section
+terminators reverted to requiring a following heading, the unclosed-fence branch removed and the
+renamed-row branch removed (4 red, one each); every rule made to report nothing (18 red, every test
+that names a violation); and every rule made to report a bogus failure (30 red, every test that
+asserts a document passes). Two fixtures were strengthened during this pass: an index with no
+template section and an index with no awaiting list each now carry a decoy a looser reader would
+pick up, so the two tests asserting "reads nothing" can fail.
 
 ## Verification checklist
 
@@ -578,6 +616,8 @@ What this step does:
 | 27 | ✅ | Every `Observed effect` either records a measurement against a named build, or is listed in the index as awaiting one | Unit test | `RepositoryStructureTests.EveryObservedEffect_IsMeasuredOrListedAsAwaitingMeasurement`, red against 61 unmeasured sections measured 2026-10-17, green over all 75 |
 | 28 | ✅ | The awaiting-measurement list names exactly the unmeasured documents, and says what each one's next run must measure | Unit test | `RepositoryStructureTests.TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments`, red while the index had no such list; its 49 rows now match, and adding a measurement without removing its row fails |
 | 29 | ✅ | Every document declares whether its results are deterministic | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_DeclaresWhetherItIsDeterministic`, red against all 75 before step 10; now 73 `yes` and 2 `no` |
-| 30 | ❌ | A document that declares itself non-deterministic says what varies | Unit test | `RepositoryStructureTests.EveryNonDeterministicDocument_SaysWhatVaries`. The step 9 mutation is the only evidence it can fail, and `testing-policy.md` calls mutation the recovery rather than a substitute. Green again once step 13 proves it against example data |
-| 31 | ❌ | Each guard's rule is proven against example data, not against whatever the tree holds | Unit test | A test per rule over fixture documents: conforming, each violation, a nested fence, a heading inside a code block. Red before step 13, since the scanning logic takes no input today |
-| 32 | ❌ | Every guard states what it does with an empty document set, and asserts it | Unit test | Six guards must fail loudly on an empty set and one must pass, since zero non-deterministic documents is legitimate. Each asserted over a fixture rather than left to an `IsNotEmpty` someone remembered |
+| 30 | ✅ | A document that declares itself non-deterministic says what varies | Unit test | `AutomatedTestingSuiteTests.NonDeterministicDocumentsNotNamingWhatVaries_*`: four tests covering a document that names its variable, one that declares `no` and says nothing, a set in which every document is deterministic, and a Determinism section that ends the document. `RepositoryStructureTests.EveryNonDeterministicDocument_SaysWhatVaries` holds the live tree to the same rule |
+| 31 | ✅ | Each guard's rule is proven against example data, not against whatever the tree holds | Unit test | `AutomatedTestingSuiteTests`, 59 tests over documents the test writes, covering all eight rules: conforming, each violation, a nested fence, a heading inside a code block, and a block opened by a bare fence. Each proven red by mutation, 2026-10-20, in the six passes step 13 records |
+| 32 | ✅ | Every guard states what it does with an empty document set, and asserts it | Unit test | `AutomatedTestingSuiteTests.*_FailsAnEmptyDocumentSet`, one per rule: all eight report the empty set as a failure. Removing the eight contracts turns exactly those tests, and the three empty-template ones, red. See step 13 for why all eight fail rather than seven, and `..._PassesASetInWhichEveryDocumentIsDeterministic` for the legitimate case that row originally meant |
+| 33 | ✅ | One scanner reads fenced code, by the CommonMark rule, so no rule is correct only for its own caller's input | Unit test | `AutomatedTestingSuite.FenceSpans` serves the template reader, the heading reader and the PowerShell guard. `SectionHeadings_IgnoresAHeadingInsideAFenceNestedInAnother` is red under a toggle; `SectionHeadings_IgnoresAHeadingInsideABlockOpenedByABareFence` is red under depth counting |
+| 34 | ✅ | The index's template sample renders as a sample, all the way to its last section | Live | The sample's own PowerShell fence ended a three-backtick block at its closing line, by [CommonMark 0.31.2](https://spec.commonmark.org/0.31.2/#fenced-code-blocks) example 147, leaving `## Observed effect`, `## Canary` and `## Cleanup` rendering as live index headings. It is now a four-backtick block, the index states why, and `DocumentTemplateBlock_ReadsNothingFromASampleThatIsNeverClosed` covers the open-block case |

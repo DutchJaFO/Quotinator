@@ -59,7 +59,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#329](https://github.com/DutchJaFO/Quotinator/issues/329) | Source refresh: no retry on a marginal connect, and sources download sequentially | Planning | T1 ⬜ T2 ⬜ | [329-source-refresh-retry-and-parallelism-plan.md](329-source-refresh-retry-and-parallelism-plan.md) |
 | [#330](https://github.com/DutchJaFO/Quotinator/issues/330) | File metadata: sidecar and database record for every file we create or inspect | Planning | T1 ⬜ T2 ⬜ | [330-file-metadata-sidecar-and-record-plan.md](330-file-metadata-sidecar-and-record-plan.md) |
 | [#331](https://github.com/DutchJaFO/Quotinator/issues/331) | Source refresh: conditional requests so an unchanged source is not re-downloaded | Planning | T1 ⬜ T2 ⬜ | [331-conditional-source-requests-plan.md](331-conditional-source-requests-plan.md) |
-| [#339](https://github.com/DutchJaFO/Quotinator/issues/339) | Restructure the T2 suite into docs/automated-testing/, one document per test | In progress | T1 ✅ T2 ✅ | [339-automated-testing-restructure-plan.md](339-automated-testing-restructure-plan.md) |
+| [#339](https://github.com/DutchJaFO/Quotinator/issues/339) | Restructure the T2 suite into docs/automated-testing/, one document per test | Waiting for release | T1 ✅ T2 ✅ | [339-automated-testing-restructure-plan.md](339-automated-testing-restructure-plan.md) |
 | [#348](https://github.com/DutchJaFO/Quotinator/issues/348) | Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable | Waiting for release | T1 ✅ T2 ✅ | [348-backup-outcomes-and-refusal-plan.md](348-backup-outcomes-and-refusal-plan.md) |
 | [#349](https://github.com/DutchJaFO/Quotinator/issues/349) | Admin endpoints to list, delete and report status for database backups | Waiting for release | T1 ✅ T2 ✅ | [349-backup-management-endpoints-plan.md](349-backup-management-endpoints-plan.md) |
 | [#350](https://github.com/DutchJaFO/Quotinator/issues/350) | A schema-version overshoot runs healthy instead of degrading, on a schema whose shape is unknown | Waiting for release | T1 ✅ T2 ✅ | [350-overshoot-must-degrade-plan.md](350-overshoot-must-degrade-plan.md) |
@@ -125,7 +125,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #329 ─── depends on #323, #325; blocks #324: Planning
 #330 ─── (none); blocks #331: Planning
 #331 ─── depends on #330: Planning
-#339 ─── (none); blocks #327, #328: In progress
+#339 ─── (none); blocks #327, #328: Waiting for release
 #348 ─── depends on #349; blocks #327: Waiting for release
 #349 ─── (none); soft-relates to #348: Waiting for release
 #350 ─── (none): Waiting for release
@@ -214,7 +214,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 39 | **#423** ✅ | Waiting for release |
 | 40 | **#371** ✅ | Waiting for release |
 | 41 | **#350** ✅ | Waiting for release |
-| 42 | **#339** 🚧 | In progress; the guards need proving against example data; before #327 and #328 |
+| 42 | **#339** ✅ | Waiting for release; before #327 and #328 |
 | 43 | **#327** 🚧 | In progress; after #339 |
 | 44 | **#328** | Planning; after #339 |
 | 45 | **#329** | Planning; before #324, which consumes its statistics |
