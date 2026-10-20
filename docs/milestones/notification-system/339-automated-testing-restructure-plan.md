@@ -21,6 +21,16 @@ document, mechanically rather than by review habit.
 record of the 27 steps that delivered the split is in git history; reproducing it here was 1,100 lines
 describing finished work, which left a reader unable to answer what to do next.
 
+**The rewrite dropped one outstanding commitment, found on 2026-10-20 while ticking the Definition of
+done.** The original plan's step 5 recorded that
+`EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument` was green vacuously when written, since
+no index link existed yet to point at a missing file, and it named the step that would owe the proof:
+*break one index link deliberately, confirm the test fails, restore it*. That step never ran, and the
+rewrite carried the row forward as ✅ without the citation. Both link guards have now been proven red
+against a deliberately repointed link, recorded in rows 3 and 4. Dropping a deferred red proof in a
+rewrite is the same failure as step 13's, one document later: a row that reads as verified because
+nobody re-read what it was waiting on.
+
 ---
 
 ## What the restructure delivered
@@ -589,8 +599,8 @@ pick up, so the two tests asserting "reads nothing" can fail.
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | `docs/automated-testing/` exists with one kebab-case subfolder per category | Live | Seven category folders, all kebab-case |
 | 2 | ✅ | One numbered document per existing section; no test dropped, merged or rewritten | Live | 43 documents from 44 sections; the index's mapping table resolves all 44 old numbers |
-| 3 | ✅ | An index carries the rules block, the living-checklist rule, and every test document | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_IsLinkedFromTheIndex`, `...EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument` |
-| 4 | ✅ | Cross-references between tests are links, not prose, and every link resolves | Unit test | `RepositoryStructureTests.EveryAutomatedTestingCrossReference_ResolvesToAnExistingDocument` |
+| 3 | ✅ | An index carries the rules block, the living-checklist rule, and every test document | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_IsLinkedFromTheIndex`, red 2026-08-22 on an empty folder; `...EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument`, red 2026-10-20 against an index row pointing at `api-surface/01-baseline-renamed.md`, restored after |
+| 4 | ✅ | Cross-references between tests are links, not prose, and every link resolves | Unit test | `RepositoryStructureTests.EveryAutomatedTestingCrossReference_ResolvesToAnExistingDocument`, red 2026-10-20 against `backup/04`'s link to `startup-and-degradation/04` repointed at a file that does not exist, restored after |
 | 5 | ✅ | Every test is marked in or out of the smoke set, and the index's set cannot drift from the documents | Unit test | `RepositoryStructureTests.SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` |
 | 6 | ✅ | The index states the three run scopes as the authoritative definition | Live | Index names per-issue T2, milestone close and release; `release-verification.md`'s T2 tier points at it rather than restating it |
 | 7 | ✅ | The numbering scheme is recorded; each filename carries a number and a stable slug | Live | Index states per-category numbering; every filename matches `NN-slug.md` |
