@@ -66,7 +66,7 @@ public partial class RepositoryStructureTests
     }
 
     /// <summary>
-    /// No PackageReference anywhere in the solution may carry an inline Version attribute — every
+    /// No PackageReference anywhere in the solution may carry an inline Version attribute: every
     /// package version is declared centrally in Directory.Packages.props (#320).
     /// </summary>
     /// <remarks>
@@ -99,7 +99,7 @@ public partial class RepositoryStructureTests
     }
 
     /// <summary>
-    /// Quotinator.Data must not reach Quotinator.Core, directly or transitively — ADR 004's
+    /// Quotinator.Data must not reach Quotinator.Core, directly or transitively. That is ADR 004's
     /// domain-agnostic invariant, and the edge ADR 018 narrows to "only projects that are already
     /// domain-agnostic" (#304).
     /// </summary>
@@ -120,7 +120,7 @@ public partial class RepositoryStructureTests
 
         // Positive controls first: "Data does not reach Core" and "this walk never matches anything"
         // produce the same result, so the run has to show the instrument finding something. The second
-        // is reachable only by recursion — Core references Changelog through Data, never directly — so
+        // is reachable only by recursion (Core references Changelog through Data, never directly), so
         // together they prove both that a match is possible and that the transitive walk works.
         Assert.IsTrue(ReferencesProject(dataProject, "Quotinator.Changelog", []),
             "Positive control failed: Quotinator.Data references Quotinator.Changelog directly, so the "
@@ -135,18 +135,18 @@ public partial class RepositoryStructureTests
         Assert.IsFalse(ReferencesProject(dataProject, "Quotinator.Core", chain),
             "Quotinator.Data reaches Quotinator.Core, which breaks its domain-agnostic invariant "
             + "(ADR 004) and ADR 018's dependency edge. A Core type Data needs is a signal to invert "
-            + $"the dependency — declare the contract in Data and let Core implement it:\n  {string.Join("\n  → ", chain)}");
+            + $"the dependency. Declare the contract in Data and let Core implement it:\n  {string.Join("\n  → ", chain)}");
     }
 
     /// <summary>
-    /// The walk above finds a forbidden reference when one exists, and reports none when it does not —
+    /// The walk above finds a forbidden reference when one exists, and reports none when it does not,
     /// proven against project files this test writes itself, since the real repository cannot supply the
     /// violating case (a Quotinator.Data → Quotinator.Core reference is circular and fails restore
     /// before any test runs).
     /// </summary>
     /// <remarks>
     /// Without this, <see cref="QuotinatorData_DoesNotReferenceQuotinatorCore"/> is an assertion that
-    /// something is absent with nothing establishing the instrument could have found it — the shape
+    /// something is absent with nothing establishing the instrument could have found it: the shape
     /// `docs/automated-testing/README.md` calls out as passing just as confidently when the mechanism is
     /// broken. A walker that stopped recursing, or matched nothing at all, fails here and passes there.
     /// </remarks>
@@ -235,7 +235,7 @@ public partial class RepositoryStructureTests
 
     /// <summary>
     /// Every Markdown file under docs/ must be listed in Quotinator.slnx, so it is visible in Visual
-    /// Studio Solution Explorer — the place these documents are actually read.
+    /// Studio Solution Explorer, the place these documents are actually read.
     /// </summary>
     /// <remarks>
     /// ADR 018 shipped without its solution entry (commit 7d70708 added the file and its README index
@@ -272,7 +272,7 @@ public partial class RepositoryStructureTests
     /// </summary>
     /// <remarks>
     /// The emptiness assertion is load-bearing, not defensive. "Every document is linked" is vacuously
-    /// true over zero documents, so without it this test would pass green on a missing or empty folder —
+    /// true over zero documents, so without it this test would pass green on a missing or empty folder,
     /// the exact state it exists to catch. See #339.
     /// </remarks>
     [TestMethod]
@@ -347,7 +347,7 @@ public partial class RepositoryStructureTests
             {
                 string target = match.Groups["target"].Value;
 
-                // Only relative links to another Markdown file are this test's concern — an anchor,
+                // Only relative links to another Markdown file are this test's concern. An anchor,
                 // an absolute URL, or a link out to source/ADRs is somebody else's problem.
                 if (!target.EndsWith(".md", StringComparison.OrdinalIgnoreCase)) continue;
                 if (target.Contains("://", StringComparison.Ordinal)) continue;
@@ -373,7 +373,7 @@ public partial class RepositoryStructureTests
     /// because it has its own section, so a document naming something the index never defined fails,
     /// and so does a document naming nothing at all. See #339, where splitting a single-file suite into
     /// one document per test silently dropped the Baseline section that had started the container for
-    /// all of them — 21 of 43 documents were left driving a port nothing published.
+    /// all of them: 21 of 43 documents were left driving a port nothing published.
     /// </remarks>
     [TestMethod]
     public void EveryAutomatedTestingDocument_NamesAKnownEnvironmentProfile()
@@ -408,7 +408,7 @@ public partial class RepositoryStructureTests
 
             if (!declared.Success)
             {
-                failures.Add($"{document} — no **Environment:** field");
+                failures.Add($"{document}: no **Environment:** field");
                 continue;
             }
 
@@ -417,7 +417,7 @@ public partial class RepositoryStructureTests
                 | StringSplitOptions.RemoveEmptyEntries))
             {
                 if (!profiles.Contains(named, StringComparer.OrdinalIgnoreCase))
-                    failures.Add($"{document} — '{named}' is not a profile the index defines");
+                    failures.Add($"{document}: '{named}' is not a profile the index defines");
             }
         }
 
@@ -432,7 +432,7 @@ public partial class RepositoryStructureTests
     /// yes, so the set a smoke pass runs cannot drift from what the documents claim.
     /// </summary>
     /// <remarks>
-    /// The index previously listed the set by title only, which no guard could check — and it said so,
+    /// The index previously listed the set by title only, which no guard could check, and it said so,
     /// carrying a note that the two could disagree. Linking each row makes the claim verifiable. See
     /// #339.
     /// </remarks>
@@ -481,7 +481,7 @@ public partial class RepositoryStructureTests
     /// </summary>
     /// <remarks>
     /// Replaces a single trailing "Expected output" section, which reported a failure many commands too
-    /// late and forced positional references — "the first call" — that a reader could only resolve by
+    /// late and forced positional references ("the first call") that a reader could only resolve by
     /// counting commands across several code blocks. See #339.
     /// </remarks>
     [TestMethod]
@@ -504,7 +504,7 @@ public partial class RepositoryStructureTests
 
             if (text.Contains("\n## Expected output", StringComparison.Ordinal))
             {
-                failures.Add($"{document} — still has a trailing '## Expected output' section");
+                failures.Add($"{document}: still has a trailing '## Expected output' section");
                 continue;
             }
 
@@ -513,7 +513,7 @@ public partial class RepositoryStructureTests
 
             if (steps.Count == 0)
             {
-                failures.Add($"{document} — no numbered '### N. …' steps");
+                failures.Add($"{document}: no numbered '### N. …' steps");
                 continue;
             }
 
@@ -525,7 +525,7 @@ public partial class RepositoryStructureTests
                 int end   = i + 1 < steps.Count ? steps[i + 1].Index : text.Length;
 
                 if (!ExpectedResultLine().IsMatch(text[start..end]))
-                    failures.Add($"{document} — step '{steps[i].Groups["title"].Value.Trim()}' has no expected result");
+                    failures.Add($"{document}: step '{steps[i].Groups["title"].Value.Trim()}' has no expected result");
 
                 // Numbers must read 1..N. Inserting a step and renumbering the rest by hand is exactly
                 // where a duplicate or a gap creeps in, and a reader following the document cannot tell
@@ -535,7 +535,7 @@ public partial class RepositoryStructureTests
 
                 if (actual != expected)
                     failures.Add(
-                        $"{document} — step '{steps[i].Groups["title"].Value.Trim()}' is numbered "
+                        $"{document}: step '{steps[i].Groups["title"].Value.Trim()}' is numbered "
                         + $"{actual} where {expected} was expected");
             }
         }
@@ -546,7 +546,7 @@ public partial class RepositoryStructureTests
     }
 
     /// <summary>
-    /// Every runnable code block in the T2 suite — the index included — is PowerShell, and carries no
+    /// Every runnable code block in the T2 suite, the index included, is PowerShell, and carries no
     /// construct that only a Unix shell provides.
     /// </summary>
     /// <remarks>
@@ -557,8 +557,8 @@ public partial class RepositoryStructureTests
     /// was rewritten to <c>C:/Program Files/Git/data</c>. Without a guard the next document written here
     /// is written in whatever its author last had in a terminal, which is how that state arose.
     ///
-    /// Only fenced code is checked. Prose naming a construct is a record of a past defect — several such
-    /// records are load-bearing in the index — and banning the word rather than the command would delete
+    /// Only fenced code is checked. Prose naming a construct is a record of a past defect, several such
+    /// records being load-bearing in the index, and banning the word rather than the command would delete
     /// them. A fence containing <c>sh -c</c> is exempt for the same reason in reverse: what follows runs
     /// inside a Linux container, where a Unix shell is the only shell there is.
     /// </remarks>
@@ -582,8 +582,8 @@ public partial class RepositoryStructureTests
     /// </summary>
     /// <remarks>
     /// A suite sharing one container is sequential by construction and needs a restore step between
-    /// every pair to stay honest — coupling wearing a cleanup label. Per-test containers remove it, and
-    /// a colliding host port would quietly put it back. See #339.
+    /// every pair to stay honest, which is coupling wearing a cleanup label. Per-test containers
+    /// remove it, and a colliding host port would quietly put it back. See #339.
     /// </remarks>
     [TestMethod]
     public void EveryAutomatedTestingDocument_PublishesThePortsItUses_AndSharesNoneWithAnother()
@@ -617,7 +617,7 @@ public partial class RepositoryStructureTests
             ];
 
             foreach (string port in used.Except(published).Order())
-                failures.Add($"{document} — talks to localhost:{port} but never publishes it");
+                failures.Add($"{document}: talks to localhost:{port} but never publishes it");
 
             foreach (string port in published.Order())
             {
@@ -625,10 +625,10 @@ public partial class RepositoryStructureTests
                 // without anything complaining: `docker run -p 181031:8080` just fails at runtime, and
                 // a uniqueness check alone is perfectly happy with it.
                 if (!int.TryParse(port, out int number) || number is < 1 or > 65535)
-                    failures.Add($"{document} — {port} is not a TCP port (the maximum is 65535)");
+                    failures.Add($"{document}: {port} is not a TCP port (the maximum is 65535)");
 
                 if (publishedBy.TryGetValue(port, out string? owner))
-                    failures.Add($"{document} — publishes {port}, already published by {owner}");
+                    failures.Add($"{document}: publishes {port}, already published by {owner}");
                 else
                     publishedBy[port] = document;
             }
@@ -964,13 +964,15 @@ public partial class RepositoryStructureTests
             "addon/CHANGELOG.md does not exist.");
     }
 
-    /// <summary>data/quotes.json must not exist on disk — replaced by per-source files in data/sources/ (#61).</summary>
+    /// <summary>
+    /// data/quotes.json must not exist on disk: per-source files in data/sources/ replaced it (#61).
+    /// </summary>
     [TestMethod]
     public void DataQuotesJson_DoesNotExistOnDisk()
     {
         string path = Path.Combine(RepoRoot, "data", "quotes.json");
         Assert.IsFalse(File.Exists(path),
-            "data/quotes.json still exists on disk — it should have been deleted in #61.");
+            "data/quotes.json still exists on disk; it should have been deleted in #61.");
     }
 
     /// <summary>data/quotes.json must not be referenced in Quotinator.slnx.</summary>
@@ -1016,7 +1018,7 @@ public partial class RepositoryStructureTests
     /// Each bundled source's converter plugin, run against a committed copy of its raw upstream
     /// format, produces schema-valid output whose entry IDs exactly match the current baseline in
     /// data/sources/. Replaces the historical seed.csx-based version of this test (removed alongside
-    /// scripts/seed.csx/sources.json) — runs the converter in-process instead of shelling out to
+    /// scripts/seed.csx/sources.json): it runs the converter in-process instead of shelling out to
     /// dotnet-script, so it no longer needs that tool installed to run in CI.
     /// </summary>
     [TestMethod]
@@ -1097,7 +1099,7 @@ public partial class RepositoryStructureTests
     /// <summary>
     /// #302: neither initializer may make a DI-suppliable service dependency optional. A
     /// <c>IService? dep = null</c> parameter backed by <c>?? new Service()</c> turns "nobody registered
-    /// this" into "here is a second, unmanaged instance" — silently, and only in whichever environment
+    /// this" into "here is a second, unmanaged instance", silently, and only in whichever environment
     /// forgot to register it.
     /// <para>
     /// Found by the developer while reviewing this issue's own plan, which had proposed copying exactly
@@ -1108,7 +1110,7 @@ public partial class RepositoryStructureTests
     /// <para>
     /// Deliberately scoped to constructors. Optional interface-typed <b>method</b> parameters
     /// (<c>IUnitOfWork? unitOfWork = null</c>, <c>IDbTransaction? transaction = null</c>) are ambient
-    /// context a caller may legitimately omit, not injected dependencies — 78 of them exist and all are
+    /// context a caller may legitimately omit, not injected dependencies: 78 of them exist and all are
     /// correct.
     /// </para>
     /// </summary>
@@ -1140,7 +1142,7 @@ public partial class RepositoryStructureTests
 
     /// <summary>
     /// #369: every enum in a source project lives in an <c>Enums/</c> folder (ADR 016), whatever file would
-    /// otherwise declare it — a Blazor code-behind nesting a display type, or a helper keeping its outcome
+    /// otherwise declare it: a Blazor code-behind nesting a display type, or a helper keeping its outcome
     /// type beside it. Neither is a reason; a reason is stated at the declaration, and then this test is
     /// where it gets recorded.
     /// </summary>
