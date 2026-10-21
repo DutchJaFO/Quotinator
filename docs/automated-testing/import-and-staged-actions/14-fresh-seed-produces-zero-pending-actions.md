@@ -176,6 +176,13 @@ Developer rule, 2026-09-08: *tests should not rely on bundled data to stay green
 the feature smoke test that exists purely to be aware of changes in the external data that may affect
 our rules.* Unit tests therefore use fixtures; this step watches the real thing.
 
+**This step is the developer's own to run, like T1.** It invokes `dotnet run` against
+`src/Quotinator.Api`, and `CLAUDE.md` forbids an AI assistant from running that for its own
+verification: a port or process clash with a Visual Studio instance has already caused a real IIS
+Express outage needing a reboot. The `--convert` form binds nothing, but the prohibition is on the
+command rather than on the argument, so the assistant runs every other step here and reports this one
+as the developer's. Recorded 2026-10-21, when #327's full run reached it.
+
 ```powershell
 $manifest = Get-Content data/sources/manifest.json -Raw | ConvertFrom-Json
 foreach ($entry in $manifest.sources | Where-Object { $_.converter -and $_.github }) {
@@ -187,9 +194,14 @@ foreach ($entry in $manifest.sources | Where-Object { $_.converter -and $_.githu
 
   $regen = (Get-Content $out -Raw | ConvertFrom-Json)
   $live  = (Get-Content "data/sources/$($entry.file)" -Raw | ConvertFrom-Json)
-  $liveByKey = @{}; foreach ($q in $live.quotes ?? $live) { $liveByKey["$($q.quote) $($q.source)"] = $q.date }
 
-  $drift = foreach ($q in ($regen.quotes ?? $regen)) {
+  # Windows PowerShell 5.1 has no ?? operator: both shapes are read explicitly instead.
+  $liveQuotes  = if ($null -ne $live.quotes)  { $live.quotes }  else { $live }
+  $regenQuotes = if ($null -ne $regen.quotes) { $regen.quotes } else { $regen }
+
+  $liveByKey = @{}; foreach ($q in $liveQuotes) { $liveByKey["$($q.quote) $($q.source)"] = $q.date }
+
+  $drift = foreach ($q in $regenQuotes) {
     $k = "$($q.quote) $($q.source)"
     if ($liveByKey.ContainsKey($k) -and $liveByKey[$k] -ne $q.date) {
       "  $($q.source): checked-in=$($liveByKey[$k]) upstream=$($q.date)"
@@ -201,6 +213,12 @@ foreach ($entry in $manifest.sources | Where-Object { $_.converter -and $_.githu
 ```
 
 **Expected:** `0 diverging date(s)` for every file.
+
+**`??` was a parse error here until 2026-10-21, so the block never ran at all.** Null-coalescing is
+PowerShell 7; Windows PowerShell 5.1, which is what this project's shell is, rejects the whole block
+before its first statement, so the step failed with a syntax error rather than reporting divergences.
+Same class as the shapes `startup-and-degradation/03` carried, and what
+`project_powershell_edition_is_5_1` exists to catch.
 
 **A divergence is not a converter bug: it means a correction was put somewhere that does not survive.**
 `Quotinator:AutoUpdateSources` is off by default (#424), so a container seeds the checked-in copy. Turned
