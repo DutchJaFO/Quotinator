@@ -225,8 +225,16 @@ cannot run from it. `/about` reading `1` is not a failure, but it means that pag
 which is a change worth knowing about.
 
 ```powershell
-"quotes before: $((Invoke-RestMethod 'http://localhost:18406/api/v1/version').database.quotes)"
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/health" --expect 503 --status
 ```
+
+**The quote count cannot be read here, and that is the contract working rather than a gap.** This line
+read `(Invoke-RestMethod '.../api/v1/version').database.quotes` until 2026-10-21, when #428 stopped
+that endpoint reporting counts on a degraded database: it answers `503` with `status: degraded` and no
+`database` block, since zeroes read off a database the initializer could not vouch for are
+indistinguishable from a genuinely empty one. No endpoint serves a count while degraded, by the index
+rule *A degraded application is not expected to answer from its database*, so `/health` is what
+separates the two outcomes below: still `503` after Cancel, `200` after Confirm.
 
 Then open `http://localhost:18406/` and, against the modal:
 
@@ -243,7 +251,8 @@ return { before, armed, afterCancel: [...modal().querySelectorAll('button')].map
 ```
 
 **Expected:** `before` is `Reset the database, Continue`, `armed` is `Confirm, Cancel, Continue`, and
-`afterCancel` returns to `before`. The quote count is unchanged: Cancel called nothing.
+`afterCancel` returns to `before`. `/health` still reads `503`: Cancel called nothing, so the overshoot
+is still there. Measured 2026-10-21, all three button sets exactly as above.
 
 Then click **Reset the database** and **Confirm**. The banner clears itself, in place, with no page
 reload:

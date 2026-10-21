@@ -104,13 +104,25 @@ reason and the link.
 ### 4. Confirm nothing was migrated
 
 ```powershell
-$refused = Schema-Version
-"refused=$refused unchanged=$($refused -eq $before)"
 docker logs qt-backup-07 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-07 --bind $dataDir
+
+# The container is gone first, so nothing holds the file while it is read.
+$rows = dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
+  --sql "SELECT MAX(Version) AS Recorded FROM System_ConsumerSchemaVersion"
+$refused = [int](($rows | Select-Object -Skip 1 | Where-Object { $_ -match '\d' } | Select-Object -First 1).Trim())
+"refused=$refused unchanged=$($refused -eq $before)"
 ```
 
 **Expected:** `unchanged=True`, and the log read finds nothing.
+
+**The version is read from the file here, not from the API, and that is the stronger reading.** This
+step called `Schema-Version`, which asks `/api/v1/version`, until 2026-10-21. #428 stopped that
+endpoint reporting the `database` block on a degraded start, and step 2 of this document establishes
+exactly that state, so the call now answers `503` and the reading throws. The claim being made is about
+what the file holds after a refused migration, so asking the file is what the claim actually needs;
+`database-lifecycle/03` and `import-and-staged-actions/14` already read a database this way. Steps 1
+and 5 keep the API reading, because the container is healthy in both.
 
 **On failure:** a changed version with step 2 reporting a refusal means part of the migration ran before
 it was refused, which is the partial state the refusal exists to prevent.
