@@ -85,10 +85,22 @@ docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'Database - Backup'
 "backups=$(@(docker exec qt-startup-02 ls /data/backups 2>$null).Count)"
 ```
 
-**Expected:** `new=0` before the restart: counted from step 2's restart, whose own shutdown lines stay
-in the log, then a `[Database - Backup]` line, and `backups=2`. Content-seed has real work to do again
-(Quotes are empty) even though the schema itself needed no migration. **This is the exact case a
-`MigrationApplied`-based gate was found to miss**, and the reason the gate is not based on it.
+**Expected:** `new=0` before the restart, counted from step 2's restart whose own shutdown lines stay
+in the log; **no new `[Database - Backup]` line from this restart**, so the only one in the log is
+step 3's Reset; and `backups=1`, unchanged.
+
+**This step asserted the opposite until 2026-10-21, and the application is right rather than the
+document.** It expected a backup and `backups=2`, on the premise that "content-seed has real work to do
+again (Quotes are empty)". Startup seeds only a database it *created*, not one that merely holds no
+rows, so the empty database a Reset leaves behind is not re-seeded: nothing is written, nothing is at
+risk, and no backup is taken. Measured that day: one backup pair in the whole container log, at the
+Reset, and the restart one second later logging only `schema is up to date`, with `quotes` staying `0`.
+
+That is #156's intent holding. An operator who resets to start fresh with their own content is not
+made to re-accept the bundled dataset, and a restart that re-seeded would hand it back to them. The
+historical point the old wording carried still stands and is worth keeping: the gate is **not** based
+on `MigrationApplied`, which would have missed a content load that had real work to do. What changed
+is that this particular restart no longer has any.
 
 ### 5. Reset again with the backup budget already exceeded
 
@@ -97,16 +109,25 @@ in the log, then a `[Database - Backup]` line, and `backups=2`. Content-seed has
 dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-02 --port 18402 `
   --env Quotinator__MaxBackupStorageGb=0
 
+$completedBefore = @(docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'reset complete').Count
+
 dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18402/api/v1/admin/database/reset" --expect 409
 docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'reset refused'
 "backups=$(@(docker exec qt-startup-02 ls /data/backups 2>$null).Count)"
-"quotes still present = $((Invoke-RestMethod 'http://localhost:18402/api/v1/quotes?page=1&pageSize=1').totalCount)"
+"reset ran = $(@(docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'reset complete').Count -gt $completedBefore)"
 ```
 
 **Expected:** `new=0`, then `409` with `backupObstacle` `BudgetExceeded` and remedies naming the backup
-endpoints and the quota setting; a `reset refused: no backup could be taken` warning, not an
-exception; `backups=2`: unchanged from step 4; and a non-zero quote count, because the refused reset
-changed nothing.
+endpoints and the quota setting; a `reset refused: no backup could be taken` line, logged at `ERR`,
+not an exception; `backups=1`, unchanged from step 4; and `reset ran = False`, because the refusal
+stopped before the destructive step.
+
+**`reset ran` replaced a quote count on 2026-10-21, and the replacement is the point.** This step read
+"a non-zero quote count, because the refused reset changed nothing", which stopped working when step 4
+stopped re-seeding: the count is already `0` when this step runs, so `0` before and `0` after cannot
+tell a refused reset from one that ran. An assertion that cannot fail is worse than a wrong one. The
+`reset complete` line is written only on the path that rebuilds, so counting it before and after
+distinguishes the two outcomes whatever the database holds.
 
 **Reset refuses rather than proceeding without a backup.** This step expected `200` with the backup
 skipped until the full-quota work changed Reset to refuse whenever no backup can be taken, unless the
