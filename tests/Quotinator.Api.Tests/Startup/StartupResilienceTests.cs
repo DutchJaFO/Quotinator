@@ -144,6 +144,56 @@ public class StartupResilienceTests
     }
 
     /// <summary>
+    /// <c>/version</c> does not call itself ready on a database that could not be opened.
+    /// </summary>
+    /// <remarks>
+    /// #419 gated this endpoint while startup is still running, for a reason that applies just as much
+    /// once startup has finished badly: a caller could otherwise reach for it as a readiness endpoint
+    /// in <c>/health</c>'s place. It stays exempt from
+    /// <see cref="Api.Middleware.DatabaseHealthGateMiddleware"/> per #263, so the operator can still see
+    /// which build is running; being reachable is not the same as being ready, and <c>/health</c> is
+    /// reachable while unhealthy for exactly the same reason. Found by a T2 run against a corrupt
+    /// database, 2026-10-21, which read <c>200</c> with <c>"status":"ready"</c>. See #327.
+    /// </remarks>
+    [TestMethod]
+    public async Task Startup_DatabaseFileCorrupt_VersionDoesNotReportReady()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase();
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync(VersionRoute, TestContext.CancellationToken);
+        string body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.DoesNotContain("\"status\":\"ready\"", body, StringComparison.OrdinalIgnoreCase,
+            "the application reported itself ready while /health reported the database unopenable, so a "
+            + "caller polling this endpoint would act on a readiness it does not have");
+    }
+
+    /// <summary>
+    /// <c>/version</c> serves no database counts while the database could not be read.
+    /// </summary>
+    /// <remarks>
+    /// The sharper half, and the one a caller cannot defend itself against: every count read as
+    /// <c>0</c> on a database that failed to open, which is indistinguishable from a genuinely empty
+    /// one. Developer direction, 2026-10-21: with health reporting a problem, no endpoint that queries
+    /// the database is expected to return sane results. See #327, and the suite index's
+    /// <em>A degraded application is not expected to answer from its database</em>.
+    /// </remarks>
+    [TestMethod]
+    public async Task Startup_DatabaseFileCorrupt_VersionServesNoDatabaseCounts()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase();
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync(VersionRoute, TestContext.CancellationToken);
+        string body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.DoesNotContain("\"database\"", body, StringComparison.OrdinalIgnoreCase,
+            "counts read off a database that could not be opened are not counts, and a caller has no "
+            + "way to tell them from a genuinely empty database");
+    }
+
+    /// <summary>
     /// #350: a recorded schema version ahead of this build means the migrations this build never saw
     /// may have added, altered or removed anything, so the schema's shape is unknown and serving quote
     /// content from it is a foot gun. It degrades like every other startup fault in this class.
@@ -295,6 +345,7 @@ public class StartupResilienceTests
     }
 
     private const string HealthRoute = "/api/v1/health";
+    private const string VersionRoute = "/api/v1/version";
     private const string RandomQuoteRoute = "/api/v1/quotes/random";
 
     /// <summary>

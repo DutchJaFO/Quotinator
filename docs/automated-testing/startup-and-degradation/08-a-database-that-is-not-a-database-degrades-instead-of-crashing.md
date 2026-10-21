@@ -142,12 +142,13 @@ instead of the degraded form, which is the same failure wearing a `200`.
 
 ```powershell
 foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/stats', '/api/v1/notifications', '/api/v1/masterdata/sources') {
+                  '/api/v1/stats', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/version') {
   dotnet script scripts/testing/http.csx -- --url "http://localhost:18408$path" --expect 503 --status
 }
 ```
 
-**Expected:** `503` from every one of the six.
+**Expected:** `503` from every one of the seven.
 
 **With health reporting a problem, no endpoint that reads the database is expected to return sane
 results, so each one is gated rather than left to answer from a database it could not open**
@@ -215,26 +216,39 @@ replaced with 34 bytes of text.
 
 The process stays up and `/health` reports `503`. `/`, `/stats` and `/notifications` each return `200`,
 `/openapi/v1.json` returns `200`, the home page carries *started with a problem*, and no page matches
-`at [A-Za-z.]+\(`. Every data-serving endpoint is gated: `/api/v1/quotes`, `/api/v1/quotes/random`,
-`/api/v1/quotes/search`, `/api/v1/stats`, `/api/v1/notifications` and
-`/api/v1/masterdata/sources` all answer `503`.
+`at [A-Za-z.]+\(`. Every database-reading endpoint is gated: `/api/v1/quotes`,
+`/api/v1/quotes/random`, `/api/v1/quotes/search`, `/api/v1/stats`, `/api/v1/notifications`,
+`/api/v1/masterdata/sources` and `/api/v1/version` all answer `503`.
 
-**`GET /api/v1/version` is the one database-reading endpoint that is not gated, and that is a finding
-rather than a property of this scenario.** Measured on both this document's state and
-[`09`](09-a-truncated-database-degrades-instead-of-crashing.md)'s: `200`, with `"status":"ready"` and a
-`database` block reporting every count as `0`. A caller cannot tell an empty database from one that
-could not be opened, and `status: ready` is false while `/health` says otherwise.
+**`GET /api/v1/version` reached that list by being a defect this document found.** On the build this
+document was first written against it answered `200` with `"status":"ready"` and a `database` block
+reporting every count as `0`, so a caller could neither tell an empty database from an unopenable one
+nor see that the application was not ready. [`03`](03-startup-wait-page.md) records the rule that
+broke, from #419: the endpoint is gated *while starting* precisely because "a caller could otherwise
+reach for it as a readiness endpoint in `/health`'s place", and during startup it does answer `503`.
+The gate existed and the degraded state was not behind it. It now answers
+`503 {"status":"degraded","version":...,"environment":...}` with no `database` block, and it still
+answers `200` when healthy, measured in step 7.
 
-[`03`](03-startup-wait-page.md) records the rule this breaks, from #419: `/version` is gated *while
-starting* precisely because "a caller could otherwise reach for it as a readiness endpoint in
-`/health`'s place". Measured the same day as a control: during startup it answers `503` with the
-*"Quotinator is starting up"* problem-details body, no `status`, no `database` block. So the gate
-exists and works, and the degraded state is not behind it.
+**Six admin endpoints answer an unhandled `500` in this state, and this document does not assert
+them.** Measured 2026-10-21, each returning a bare *"An error occurred while processing your request"*
+and a trace id: `GET /api/v1/admin/database/seed/preview`, `GET /api/v1/admin/audit`,
+`GET /api/v1/admin/audit/date-range`, `GET /api/v1/admin/audit/export`,
+`POST /api/v1/admin/database/reseed` and `DELETE /api/v1/admin/audit`. The admin surface is exempt
+from the health gate so it can be the recovery route, which is why step 6 asserts the reset reaches its
+handler; these six reach theirs and throw, and two of them are writes.
 
-This document deliberately asserts nothing about `/version`, in either direction. Asserting the `200`
-would write a defect into the suite as though it were the contract, and asserting a `503` would fail
-against the build this document was measured on. Step 5 asserts the six endpoints whose gating holds
-now and would still hold after a fix.
+Correct in the same run, which is what shows the fault is specific rather than the surface being
+broken: `POST /api/v1/admin/backups/create` answers `409`, and `GET /api/v1/admin/backups` and
+`/backups/status` answer `200` off the filesystem. `POST /api/v1/admin/sources/refresh` answers `200`,
+having really fetched from GitHub, since it writes files and never reads the database.
+
+That is the same defect class #348 removed from `POST /admin/database/reset`, which returned an
+unhandled `500` for its own reason until it was taught to refuse with a stated obstacle, and the
+endpoints carrying #348's preflight are exactly the ones answering correctly.
+[#453](https://github.com/DutchJaFO/Quotinator/issues/453) owns the fix: narrowing the gate's exemption
+to the reset and the backup category, which is the repair route an operator can actually use. ADR 022
+governs it, since a condition the code has already detected is being thrown rather than returned.
 
 **Recovery route, and whether it can succeed.** Reachable: `POST /api/v1/admin/database/reset` reaches
 its handler and answers `409 Conflict` rather than being gated away by the `503`. **Not workable as

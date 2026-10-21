@@ -140,12 +140,13 @@ the same failure wearing a `200`.
 
 ```powershell
 foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/stats', '/api/v1/notifications', '/api/v1/masterdata/sources') {
+                  '/api/v1/stats', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/version') {
   dotnet script scripts/testing/http.csx -- --url "http://localhost:18409$path" --expect 503 --status
 }
 ```
 
-**Expected:** `503` from every one of the six.
+**Expected:** `503` from every one of the seven.
 
 **With health reporting a problem, no endpoint that reads the database is expected to return sane
 results** (developer direction, 2026-10-21). A truncated database is the sharper case for this rule
@@ -214,11 +215,15 @@ The process stays up and `/health` reports `503`. `/`, `/stats` and `/notificati
 rather than one standing in for both: the faults differ at the SQLite boundary, and only the recipe
 proves which one was provoked.
 
-**`GET /api/v1/version` is not gated here either**, answering `200` with `"status":"ready"` and every
-`database` count at `0`. The finding is recorded once, in
-[`08`](08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md)'s Observed effect, with
-#419's rule and the startup-state control that shows the gate exists. This document asserts nothing
-about it, in either direction, for the same reason.
+**`GET /api/v1/version` answers `503` here too**, with `"status":"degraded"` and no `database` block.
+It did not when these documents were written: it answered `200` with `"status":"ready"` and every
+count at `0`, and
+[`08`](08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md)'s Observed effect records
+that finding once, with #419's rule and the startup-state control behind it.
+
+**The three admin endpoints that answer an unhandled `500` in this state** are recorded there too, for
+the same reason: one finding, one place, rather than the same paragraph in both documents drifting
+apart.
 
 **Recovery route, and whether it can succeed.** Reachable: `POST /api/v1/admin/database/reset` reaches
 its handler and answers `409 Conflict`. **Not workable as offered**: the reset refuses, handing back a

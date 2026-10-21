@@ -384,15 +384,28 @@ halves of one contract, which is why
 [`08`](startup-and-degradation/08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md)
 and [`09`](startup-and-degradation/09-a-truncated-database-degrades-instead-of-crashing.md) assert both.
 
-**One endpoint currently breaks this, and the rule is written as the rule rather than as the
-behaviour.** `GET /api/v1/version` answers `200` with `"status":"ready"` and every count at `0` on a
-database that could not be opened, measured 2026-10-21 on both documents' states.
-[`03`](startup-and-degradation/03-startup-wait-page.md) records the rule it breaks, from #419: that
-endpoint is gated *while starting* precisely because a caller could otherwise reach for it as a
-readiness endpoint in `/health`'s place, and during startup it does answer `503`. So the gate exists
-and the degraded state is not behind it. Until that is settled, a document asserts nothing about
-`/version` in either direction: asserting the `200` would write the gap into the suite as the contract,
-and asserting a `503` would fail against the build it was measured on.
+**Writing the rule down immediately found two things, which is the argument for having it.**
+
+`GET /api/v1/version` answered `200` with `"status":"ready"` and every count at `0` on a database that
+could not be opened. [`03`](startup-and-degradation/03-startup-wait-page.md) records the rule that
+broke, from #419: the endpoint is gated *while starting* precisely because a caller could otherwise
+reach for it as a readiness endpoint in `/health`'s place, and during startup it does answer `503`. The
+gate existed and the degraded state was not behind it. Fixed 2026-10-21: it answers `503` with
+`status: degraded`, the version and the environment, and no database block, while still answering `200`
+when healthy. It stays exempt from the degraded gate, as `/health` does, because reachable is not the
+same as ready.
+
+**Six admin endpoints still answer an unhandled `500` while degraded**, measured the same day:
+`GET /api/v1/admin/database/seed/preview`, `GET /api/v1/admin/audit` and its `date-range` and `export`
+forms, `POST /api/v1/admin/database/reseed`, and `DELETE /api/v1/admin/audit`. The admin surface is
+exempt from the gate so it can be the recovery route, and these six reach their handlers and throw, two
+of them being writes. No document asserts them, in either direction, for the reason this rule's own
+history shows: asserting the `500` would write a defect in as the contract, and asserting anything else
+would fail against the build it was measured on. The same defect class #348 removed from
+`POST /admin/database/reset`, and
+[#453](https://github.com/DutchJaFO/Quotinator/issues/453) owns the fix: the gate's exemption narrows
+to the reset and the backup category, which together are the repair routes, so every other admin path
+answers the gate's `503`.
 
 ### Import behaviour is proven at every origin, not just the convenient one
 

@@ -855,9 +855,21 @@ app.MapGet(ApiRoutes.Health, (Quotinator.Api.Startup.DatabaseHealthState dbHealt
    .WithSummary("Health check")
    .WithDescription("Returns the current health status of the API. While startup database initialisation is still running, returns a distinct \"starting\" status (503) so callers can tell that apart from a genuine failure; once complete, reports \"healthy\" (200) or \"unhealthy\" (503) depending on whether initialisation succeeded.");
 
-app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDatabaseInitializer db, Quotinator.Api.Startup.StartupPhaseState startupPhase) =>
+// #327: three states, and only one of them may report counts. The database block is read straight off
+// IDatabaseInitializer, which answers 0 for everything when initialisation failed, so serving it on a
+// degraded start hands the caller zeroes indistinguishable from a genuinely empty database. The status
+// is the other half: #419 gated this endpoint while starting because "a caller could otherwise reach
+// for it as a readiness endpoint in /health's place", and that reasoning does not stop applying once
+// startup has finished badly. It stays exempt from DatabaseHealthGateMiddleware (#263) so an operator
+// can still see which build is running, exactly as /health stays reachable while reporting unhealthy:
+// reachable is not the same as ready.
+app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDatabaseInitializer db, Quotinator.Api.Startup.DatabaseHealthState dbHealth, Quotinator.Api.Startup.StartupPhaseState startupPhase) =>
     !startupPhase.IsComplete
-        ? Results.Ok(new { status = "starting", version = vs.Version })
+        ? Results.Json(new { status = "starting", version = vs.Version }, statusCode: StatusCodes.Status503ServiceUnavailable)
+        : !dbHealth.IsHealthy
+        ? Results.Json(
+            new { status = "degraded", version = vs.Version, environment = env.EnvironmentName },
+            statusCode: StatusCodes.Status503ServiceUnavailable)
         : Results.Ok(new
         {
             status      = "ready",
@@ -881,7 +893,7 @@ app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDat
    .WithName("Version")
    .WithTags(ApiTags.System)
    .WithSummary("API version")
-   .WithDescription("Returns the running version, environment, and database schema version with row counts. While startup database initialisation is still running, returns only {\"status\":\"starting\",\"version\":...}; the environment/database fields don't exist yet.");
+   .WithDescription("Returns the running version, environment, and database schema version with row counts, with status \"ready\" (200). Reports only the version and environment, and no database fields, whenever the database is not usable: status \"starting\" while startup initialisation is still running, or \"degraded\" when it failed, both 503. Counts are never reported in those states, because a failed initialisation reads every count as zero and a caller cannot tell that apart from an empty database; poll /api/v1/health for readiness rather than this endpoint.");
 
 app.MapQuoteEndpoints();
 app.MapAdminEndpoints();
