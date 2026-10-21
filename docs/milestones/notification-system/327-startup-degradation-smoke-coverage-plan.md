@@ -201,79 +201,119 @@ displayed in this session, so the page never composites frames. The document sta
 assertions as DOM reads and those all passed, so the document's own requirement is met, but this is
 not visual confirmation and is not recorded as such.
 
-### 7. Write the degradation contract into the corrupt-database document
+### 7. Scope cross-check: #348 delivered both scenarios, and the developer chose separate documents anyway
 
-**Status:** ⬜ Not started
+**Status:** ✅ Decided 2026-10-21
 
-Process stays alive; `/health` reports unhealthy rather than being unreachable; the Blazor pages render
-degraded UI rather than 500; the OpenAPI surface stays reachable.
+The second time this issue's own scope had to be re-read against what another issue shipped, and the
+same method found it: read the delivered documents, not the issues that describe them. #348's
+[`backup/01`](../../automated-testing/backup/01-refuses-a-reset-when-the-source-cannot-be-read.md) and
+[`backup/02`](../../automated-testing/backup/02-refuses-a-reset-when-the-database-is-truncated.md)
+already provoke exactly the two faults requirement 6 names, each with its own container, bind directory
+and port, asserting no migration number, and both prove the named remedy resolves the fault. Both carry
+`Traces to: #348, #327`.
 
-### 8. State the recovery route, and whether it can actually succeed
+What neither asserts is two clauses of requirement 3: the degraded pages and the OpenAPI surface.
+Measured 2026-10-21 before proposing anything, since the clauses had to be measured wherever they
+landed: in both states `/health` is `503`, `/`, `/stats` and `/notifications` are `200`,
+`/openapi/v1.json` is `200`, and the reset refuses with `409 SourceUnreadable`.
 
-**Status:** ⬜ Not started
+**The developer chose separate documents in `startup-and-degradation/`, per requirement 2 as written**,
+over adding the two clauses to `backup/01` and `backup/02` the way step 6 added them to `05`. The two
+pairs therefore provoke the same state and assert different contracts: `backup/01` and `02` assert the
+Reset path, `08` and `09` assert the startup contract, and each document's
+*Explicitly not covered here* names the other so neither reads as the whole story.
 
-An unwritable data directory cannot be repaired by a Reset: a Reset writes too. #326 added a distinct
-failure reason for exactly that, because the generic one misdirects the operator. A corrupt database is
-the opposite case: a Reset both is reachable and would work, which is a different claim and must be
-stated as one.
+### 8. Write `08` and `09`, and run both end to end
 
-"Reachable" and "would succeed" are different claims. #326's own test asserts only that the admin
-request reaches its handler rather than being answered by the health gate.
+**Status:** ✅ Written and run 2026-10-21, all seven steps of each
 
-### 9. Make each scenario independent
+[`08`](../../automated-testing/startup-and-degradation/08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md)
+(a file that is not a database) and
+[`09`](../../automated-testing/startup-and-degradation/09-a-truncated-database-degrades-instead-of-crashing.md)
+(a real database cut in half), ports 18408 and 18409, each on its own bind directory.
 
-**Status:** ⬜ Not started
+Seven steps each: seed, sabotage with the sabotage confirmed, start and confirm it degraded rather than
+died, the degraded pages and the spec, every database-reading endpoint gated, the recovery route
+reachable and what it offers, and the remedy applied with a `200` to prove it works.
 
-Each creates, seeds, and destroys its own container, volume and port, and depends on no state another
-one left behind. #339's `EveryAutomatedTestingDocument_PublishesThePortsItUses_AndSharesNoneWithAnother`
-enforces the port half mechanically.
+**`docker inspect -f '{{.State.Running}}'` is the never-crash assertion**, and it is in step 3 beside
+the `503` rather than inferred from the `503` answering at all. Both read `true`.
 
-### 10. Assert no migration number or schema version anywhere
+**Running them found two things the writing did not.** `docker inspect` prints lowercase `true`, not
+`True`, so both documents' step 3 said the wrong thing until the run corrected them. And a regex
+holding a backslash cannot sit inside an interpolated PowerShell string: `"$($body -match 'at
+[A-Za-z.]+\(')"` is a parse error on the escaped parenthesis in Windows PowerShell 5.1, not a failed
+match. Both documents assign the pattern to its own variable, and both record the reason in
+*Determinism*.
 
-**Status:** ⬜ Not started
+### 9. Assert the gating rule the developer added mid-issue
 
-The suite's existing rule. Counts move whenever any milestone adds a migration, and a hardcoded number
-goes stale on its own and gets "fixed" by editing the number rather than by anyone checking what
-happened.
+**Status:** ✅ Measured and asserted 2026-10-21
 
-This bites hardest on the overshoot document, whose whole subject is a version counter. It states the
-relationship, recorded version exceeds known migrations, never the two numbers.
+**"When health indicates a problem then we should not expect sane results from any other endpoint that
+queries the database"** (developer direction, 2026-10-21). This arrived while `08` was being written
+and it is now step 5 of each document: `/api/v1/quotes`, `/api/v1/quotes/random`,
+`/api/v1/quotes/search`, `/api/v1/stats`, `/api/v1/notifications` and `/api/v1/masterdata/sources`,
+all asserted `503`, all measured `503` in both states.
 
-### 11. Fill in #339's template fields and register both documents in the index
+It is also an index rule rather than two documents' private habit, under
+*A degraded application is not expected to answer from its database*: the pages and the recovery
+surface are the deliberate exceptions, and a document asserts both halves.
 
-**Status:** ⬜ Not started
+**It immediately found a defect, which is why it is a rule worth having.** `GET /api/v1/version`
+answers `200` with `"status":"ready"` and every count at `0` on a database that could not be opened,
+measured on both documents' states. `03`'s step 1 records the rule it breaks, from #419: that endpoint
+is gated *while starting* precisely because "a caller could otherwise reach for it as a readiness
+endpoint in `/health`'s place". Measured the same day as the control, during startup it answers `503`
+with the *"Quotinator is starting up"* problem-details body, carrying no `status` and no `database`
+block. So the gate exists and works, and the degraded state is not behind it.
 
-Including Determinism, step 2's measurements are exactly what that field records, the environment
-profile, and the per-step expected results. The index's category table and the guard tests that keep it
-from drifting are part of this step, not a follow-up to it.
+**Neither document asserts anything about `/version`, in either direction**, and both say so.
+Asserting the `200` would write the gap into the suite as though it were the contract, which is this
+issue's own founding defect; asserting a `503` would fail against the build they were measured on. The
+finding is recorded in `08`'s Observed effect and in the index rule, and belongs to its own issue
+rather than to this one: gating an endpoint is an application change, not test coverage. It carries no
+row in the verification checklist below for that reason, since a row this issue cannot close is a row
+that makes the plan hold its own approval gate.
 
-### 12. Propose the smoke-set designation
+### 10. Fix `03`, whose step 1 command asserted the opposite of its own expectation
 
-**Status:** ⬜ Partly done, `06` proposed as `Smoke: no` from its own run; the other two follow when they exist
+**Status:** ✅ Fixed 2026-10-21
 
-Deferred to after the runs by developer decision (2026-08-27), rather than proposed up front: the
-question is whether either failure is basic enough that its breaking would invalidate other results,
-and the runs are what answer that. Every document carries a `Smoke:` value regardless: the field cannot
-be left blank, since the template check and `SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` both
-require it.
+Found while checking whether any existing document contradicted the new gating rule, which is the
+check #327 exists to make. `03`'s step 1 Expected says *"`/version` returns `503`. It is gated like
+everything else (#419)"*, while its own command read `--expect 200` and then parsed `.status` off the
+response. The step could not pass: the command and the expectation above it asserted opposite things.
 
-**`06`: proposed `no`, with the run behind it.** The smoke set answers *does this container
-fundamentally work*, and a test belongs in it when its failure would invalidate most other results.
-`06`'s run showed the opposite: the application is entirely healthy under an overshoot, `/health` at
-`200`, quote endpoints serving normally, so nothing else in the suite depends on this test passing. It
-also needs a hand-built state (a stopped container plus a SQL insert) that no other test's setup
-produces, which is the shape of a targeted scenario rather than a baseline check. Matches `01`, `02`,
-`04` and `05`, all `no`; only `03` (the wait page) is in the set for this category.
+The prose is the correct half, confirmed by measurement, so the command now reads `--expect 503
+--status` and the `.status` parse is gone. The document records what it used to say and that #327 found
+it, so the next reader sees a corrected contradiction rather than a silent edit.
 
-### 13. Run the new documents and the smoke set
+**This is the same defect class as #293 and #294**, the pair whose contradiction created this issue: a
+document asserting an outcome the build does not produce. It survived #339's template work because
+nothing mechanical reads a step's command against its stated expectation, and nothing can.
+
+### 11. Propose the smoke designation
+
+**Status:** ⬜ Proposed, awaiting the developer's decision
+
+**Both `08` and `09`: proposed `no`.** The smoke set answers *does this container fundamentally work*,
+and a test belongs in it when its failure would invalidate most other results. Neither qualifies: each
+needs a hand-sabotaged database file that no other test's setup produces, and a healthy container is
+unaffected by whether either passes. Matches `01`, `02`, `04`, `05` and `06`, all `no`; only `03`, the
+wait page, is in the set for this category.
+
+Both documents already carry `Smoke: no`, since the field cannot be left blank and
+`SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` holds the index's table to it.
+
+### 12. Run the category and the smoke set
 
 **Status:** ⬜ Not started
 
 Per the index's *When to run what*: at the end of an issue, the designated smoke set plus the tests
-relevant to this issue. Relevant here means all of `startup-and-degradation/`, since `05` changes and
-the two new documents sit beside it.
-
----
+relevant to this issue. Relevant here is all of `startup-and-degradation/`, since `03` changed and `08`
+and `09` are new.
 
 ## Verification checklist
 
@@ -281,15 +321,17 @@ the two new documents sit beside it.
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | The obsolete section and its `--read-only`-forces-a-failure technique are gone, with a note recording why it stopped working | Live | Delivered by #339; re-confirmed here rather than assumed. `05`'s *"What this replaced"* section is present, and the technique appears nowhere as a way to force a failure. Re-read 2026-08-27 |
 | 2 | ✅ | #294's test still uses `--read-only` and still asserts success | Live | `04` is unchanged by this issue and still asserts a healthy upgrade under a read-only root filesystem |
-| 3 | ❌ | Each scenario is a separate document in `startup-and-degradation/` | Live | `05` (delivered by #339), plus the two this issue adds |
-| 4 | ❌ | Every degrading scenario asserts process alive, `/health` unhealthy, pages 200, OpenAPI reachable | Live | **`05`: all four verified live 2026-08-27**, `503 unhealthy`, `/` + `/stats` + `/notifications` at 200, `/openapi/v1.json` at 200. Stays ❌ until the corrupt-database document exists and asserts the same four |
-| 5 | ❌ | Each scenario states the reachable recovery route and whether it can succeed | Live | **`05` done**: its Observed effect states the route is reachable but a Reset cannot fix it, and step 2 asserts the reason names `Restore write access`, confirmed `True` live. Stays ❌ until the other documents do the same |
-| 6 | ❌ | Scenarios are independent, own container, volume, port, seed and teardown | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_PublishesThePortsItUses_AndSharesNoneWithAnother` covers the port half; the rest by reading each document's `create`/`destroy` pair |
-| 7 | ❌ | Corrupt/truncated database scenario reaches its failure state | Live | Confirmed degraded by a step that checks it, not inferred from the recipe |
+| 3 | ✅ | Each scenario is a separate document in `startup-and-degradation/` | Live | `05` (delivered by #339), `08` and `09`, the latter two written and run end to end 2026-10-21. The developer chose separate documents over adding the clauses to `backup/01` and `02`, recorded in step 7 |
+| 4 | ✅ | Every degrading scenario asserts process alive, `/health` unhealthy, pages 200, OpenAPI reachable | Live | All three verified live. `05` 2026-08-27; `08` and `09` 2026-10-21, each reading `docker inspect` `true` beside the `503` so the never-crash half is asserted rather than inferred, then `/`, `/stats`, `/notifications` and `/openapi/v1.json` all `200` |
+| 5 | ✅ | Each scenario states the reachable recovery route and whether it can succeed | Live | `05`: reachable, and a Reset cannot fix it. `08` and `09`: the reset reaches its handler and answers `409`, so reachable but not workable as offered, and step 7 of each proves the remedy it names by returning the container to `200` |
+| 6 | ✅ | Scenarios are independent, own container, volume, port, seed and teardown | Unit test | `EveryAutomatedTestingDocument_PublishesThePortsItUses_AndSharesNoneWithAnother` green over 18408 and 18409; each document creates, seeds, sabotages and destroys its own container and bind directory, read in its Steps and Cleanup |
+| 7 | ✅ | Corrupt/truncated database scenario reaches its failure state | Live | Confirmed by a step rather than inferred: step 2 of each reads the sabotaged file back (34 bytes; 4,689,920 to 2,344,960) and step 3 ends the run on `--expect 503`, so steps 4 to 6 cannot pass against a healthy container |
 | 8 | ✅ | Overshoot scenario asserts healthy plus the overshoot notification, not the degraded contract | Live | [`06`](../../automated-testing/startup-and-degradation/06-schema-version-ahead-of-the-application.md), run end to end 2026-08-27: `/health` `200`, `found=True`, `type=actionrequired`, `bodyNamesTheRemedy=True`, and the detection line in the log |
-| 9 | ❌ | No scenario asserts a migration number or schema version | Live | `06` holds: it inserts `MAX(Version) + 1` rather than a literal, and the versions in its Observed effect are marked as observed output, not assertions. Stays ❌ until the other two documents exist |
+| 9 | ✅ | No scenario asserts a migration number or schema version | Live | `06` inserts `MAX(Version) + 1` rather than a literal; `08` and `09` assert no version or migration count anywhere, their only numbers being the sabotaged file sizes, which are readings rather than assertions |
 | 10 | ✅ | In-process cases extend `StartupResilienceTests`, and each is shown able to fail | Unit test | `Startup_DatabaseFileCorrupt_EntersDegradedStateInsteadOfCrashing`, `Startup_DatabaseFileCorrupt_HealthReportsUnhealthyRatherThanBeingUnreachable`, `Startup_SchemaVersionAheadOfApplication_StaysHealthyAndSurfacesTheOvershoot`, 12/12 green. Two shown able to fail by negative control; the first is a regression guard nothing can provoke on demand, recorded as such in step 5 rather than implied |
-| 11 | ❌ | Each new document carries #339's template fields including Determinism and its smoke designation | Unit test | `EveryAutomatedTestingDocument_NamesAKnownEnvironmentProfile`, `EveryAutomatedTestingStep_CarriesItsOwnExpectedResult`, `EveryAutomatedTestingCodeBlock_IsPowerShell`, plus a field check against the template |
-| 12 | ❌ | Both documents are linked from the index and every link resolves | Unit test | `EveryAutomatedTestingDocument_IsLinkedFromTheIndex`, `EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument`, `EveryAutomatedTestingCrossReference_ResolvesToAnExistingDocument` |
-| 13 | ❌ | The smoke designation is proposed from what the runs showed, and approved | Live | Proposal recorded in step 11 with the run that justifies it; developer decision recorded here |
+| 11 | ✅ | Each new document carries #339's template fields including Determinism and its smoke designation | Unit test | The eight template guards green over both, 52/52 in `RepositoryStructureTests` 2026-10-21, including the section set, their order, the environment profile, the per-step expected results, the PowerShell check, the determinism field and the measured Observed effect |
+| 12 | ✅ | Both documents are linked from the index and every link resolves | Unit test | `EveryAutomatedTestingDocument_IsLinkedFromTheIndex`, `EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument` and `EveryAutomatedTestingCrossReference_ResolvesToAnExistingDocument` green; both added to the index category table and to `Quotinator.slnx`, which `DocsMarkdownFiles_OnDisk_AreAllInSlnx` caught as missing first |
+| 13 | ❌ | The smoke designation is proposed from what the runs showed, and approved | Live | `06` approved `no`. `08` and `09` proposed `no` in step 11 with the reasoning from their runs: each needs a hand-sabotaged file no other setup produces, and a healthy container is unaffected by either. Awaiting the developer |
 | 14 | ✅ | The scope change is recorded on the GitHub issue, so the spec reflects what #327 actually delivered | Live | Comment posted 2026-08-27 covering both scope changes, what #339 delivered, and the split into #348/#349 |
+| 15 | ✅ | A degraded application answers no database read, and every degrading document asserts it | Live | Developer direction 2026-10-21, now an index rule under *A degraded application is not expected to answer from its database*. Step 5 of `08` and `09` asserts six endpoints at `503`, all six measured `503` in both states |
+| 16 | ✅ | No existing document in this category contradicts the gating rule | Live | Checked across the suite. `03`'s step 1 did, asserting `--expect 200` where its own Expected said `503` per #419, so the step could not pass; corrected to `--expect 503 --status` 2026-10-21, with what it used to say recorded in the document |
