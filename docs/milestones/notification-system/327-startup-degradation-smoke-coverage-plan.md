@@ -309,11 +309,64 @@ Both documents already carry `Smoke: no`, since the field cannot be left blank a
 
 ### 12. Run the category and the smoke set
 
-**Status:** ⬜ Not started
+**Status:** ✅ All 17 documents run 2026-10-21, against `quotinator:local` at `80324161`
 
-Per the index's *When to run what*: at the end of an issue, the designated smoke set plus the tests
-relevant to this issue. Relevant here is all of `startup-and-degradation/`, since `03` changed and `08`
-and `09` are new.
+Per the index's *When to run what*: the designated smoke set plus everything relevant to this issue,
+which is all of `startup-and-degradation/` since `03` changed and `08` and `09` are new. Seventeen
+documents, every step of each, with one exception recorded below.
+
+**Thirteen passed outright**: `startup-and-degradation/` 01, 04, 05, 07, 08, 09, and the smoke
+documents `api-surface/01`, `api-surface/02`, `database-lifecycle/03`,
+`import-and-staged-actions/01`, `import-and-staged-actions/19`, `notifications-and-changelog/01`,
+`notifications-and-changelog/07`.
+
+**Four needed repair, and not one of them was an application defect.** Three were documents asserting
+what the build does not do, which is this issue's own subject arriving from the other direction, and
+one was the blast radius of #428's fix landing earlier the same day.
+
+**`02`, steps 4 and 5.** Step 4 expected a backup on the restart after a Reset and `backups=2`; the
+whole container log holds one backup pair, the Reset's own, and the restart logged only `schema is up
+to date`. Startup seeds a database it *created*, not one that merely holds no rows, so the empty
+database a Reset leaves is not re-seeded, nothing is written and nothing is at risk. That is #156's
+intent holding, so the document was corrected rather than the application. Step 5 then fell with it:
+its witness was "a non-zero quote count, because the refused reset changed nothing", and the count is
+already `0`, so it could not tell a refusal from a reset that ran. It now counts `reset complete`
+lines, which only the rebuilding path writes.
+
+**`03`, step 1, a second unreachable expectation after the one found before this sweep.** It wanted
+`autoRefresh=True` from the HTML wait page, while `StartupWaitMiddleware.WantsHtml` looks for
+`text/html` in the Accept header and `http.csx` sent none, so the request received problem details and
+no meta refresh. The page was never at fault: with the header it answers `503`,
+`text/html; charset=utf-8`, 664 bytes, refresh present. `http.csx` gained `--accept`, and the step now
+reads `autoRefresh=True`. Step 2's accessors were PowerShell 7 shapes that resolve to nothing in 5.1,
+so the step printed two blanks and read as a pass; corrected to `$r.ContentType` and
+`$r.Headers['Retry-After']`, which measure `application/problem+json` and `2`.
+
+**`06` step 7 and `backup/07` step 4, both broken by #428's fix.** Each read a database value from
+`/api/v1/version` while the container was degraded, which that endpoint now correctly refuses. Found by
+reading every `api/v1/version` use in the suite once `06` threw; `backup/03`'s two reads are healthy on
+both sides and unaffected. `06` now separates Cancel from Confirm on `/health`, the only channel that
+answers while degraded, and `backup/07` reads the recorded version out of the database file with
+`DbInspector`, which is the stronger instrument for a claim about what the file holds. Everything else
+in both steps passed, `06`'s modal repair included: `resetButtons=1` on the four interactive pages and
+`0` on `/about`, the three button sets exactly as specified, and after Confirm `/health` `200`,
+`quotes` `0` and the thrown count unchanged, so no reload and none of #445's WebSocketExceptions.
+
+**`14` step 5 is the one exception, and it is the developer's to run.** It invokes `dotnet run` against
+`src/Quotinator.Api`, which `CLAUDE.md` forbids an assistant from running, and it used `??`, which
+Windows PowerShell 5.1 rejects as a parse error so the block never ran at all. The `??` is fixed and
+the step is now marked the developer's, like T1. Steps 1 to 4 pass; step 6 was run far enough to read
+`resolvedToExisting = 25`, and its classification assertions were **not** evaluated.
+
+**Two documents will need rewording when #453 lands**, neither wrong today. `06` step 4 probes
+`seed/preview` as a proxy for the admin surface being reachable, measured `200` with real data in the
+overshoot state because the database is readable there; #453 gates it. `01` step 5 explains its `401`
+by the gate exempting `/api/v1/admin/*` entirely, which stops being the reason.
+
+**One correction to an earlier record:** `scripts/testing/capture-page.csx` drives headless Edge and
+does produce real screenshots in an assistant's session. `05`'s note that none was possible was about
+the Browser pane, not this script; `06` and `notifications-and-changelog/01` wrote thirteen between
+them during this sweep.
 
 ## Verification checklist
 
@@ -331,7 +384,8 @@ and `09` are new.
 | 10 | ✅ | In-process cases extend `StartupResilienceTests`, and each is shown able to fail | Unit test | `Startup_DatabaseFileCorrupt_EntersDegradedStateInsteadOfCrashing`, `Startup_DatabaseFileCorrupt_HealthReportsUnhealthyRatherThanBeingUnreachable`, `Startup_SchemaVersionAheadOfApplication_StaysHealthyAndSurfacesTheOvershoot`, 12/12 green. Two shown able to fail by negative control; the first is a regression guard nothing can provoke on demand, recorded as such in step 5 rather than implied |
 | 11 | ✅ | Each new document carries #339's template fields including Determinism and its smoke designation | Unit test | The eight template guards green over both, 52/52 in `RepositoryStructureTests` 2026-10-21, including the section set, their order, the environment profile, the per-step expected results, the PowerShell check, the determinism field and the measured Observed effect |
 | 12 | ✅ | Both documents are linked from the index and every link resolves | Unit test | `EveryAutomatedTestingDocument_IsLinkedFromTheIndex`, `EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument` and `EveryAutomatedTestingCrossReference_ResolvesToAnExistingDocument` green; both added to the index category table and to `Quotinator.slnx`, which `DocsMarkdownFiles_OnDisk_AreAllInSlnx` caught as missing first |
-| 13 | ❌ | The smoke designation is proposed from what the runs showed, and approved | Live | `06` approved `no`. `08` and `09` proposed `no` in step 11 with the reasoning from their runs: each needs a hand-sabotaged file no other setup produces, and a healthy container is unaffected by either. Awaiting the developer |
+| 13 | ❌ | The smoke designation is proposed from what the runs showed, and approved | Live | `06` approved `no`. `08` and `09` proposed `no` in step 11 with the reasoning from their runs, and the runs in step 12 bear it out: a healthy container is unaffected by either, and each needs a hand-sabotaged file no other setup produces. Awaiting the developer |
 | 14 | ✅ | The scope change is recorded on the GitHub issue, so the spec reflects what #327 actually delivered | Live | Comment posted 2026-08-27 covering both scope changes, what #339 delivered, and the split into #348/#349 |
 | 15 | ✅ | A degraded application answers no database read, and every degrading document asserts it | Live | Developer direction 2026-10-21, now an index rule under *A degraded application is not expected to answer from its database*. Step 5 of `08` and `09` asserts six endpoints at `503`, all six measured `503` in both states |
 | 16 | ✅ | No existing document in this category contradicts the gating rule | Live | Checked across the suite. `03`'s step 1 did, asserting `--expect 200` where its own Expected said `503` per #419, so the step could not pass; corrected to `--expect 503 --status` 2026-10-21, with what it used to say recorded in the document |
+| 17 | ✅ | The category and the smoke set are run, and every document that cannot pass is repaired rather than left | Live | Step 12: all 17 documents run 2026-10-21, 13 passing outright. `02`, `03`, `06` and `backup/07` repaired and each repair re-run to green; `14` step 5 marked the developer's, with its PowerShell 7 syntax fixed. Build clean and 4,626 tests green afterwards |
