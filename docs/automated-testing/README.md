@@ -369,6 +369,31 @@ Found live in #348: all four of that category's documents were green, and all fo
 green against a build that refused every reset, because not one contained a passing case. The general
 form of the rule is in [`docs/testing-policy.md`](../testing-policy.md)'s *Every test proves the
 positive result as well as the negative*.
+### A degraded application is not expected to answer from its database
+
+**When `/health` reports a problem, no endpoint that reads the database is expected to return sane
+results** (developer direction, 2026-10-21). A document that provokes a degraded state asserts that
+those endpoints are gated, and never asserts a value read out of one. A `200` carrying zeroes is worse
+than a `503`, because the caller cannot tell an empty database from one that failed to open.
+
+The Blazor pages are the deliberate exception, and they are not a counter-example: they answer `200`
+because they render a *degraded form that says so*, which is the never-crash contract. The recovery
+surface is the other exception, for the same reason: `/openapi/v1.json` and the admin endpoints have to
+stay reachable or there is no way out. Asserting that a page renders and that an API refuses are two
+halves of one contract, which is why
+[`08`](startup-and-degradation/08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md)
+and [`09`](startup-and-degradation/09-a-truncated-database-degrades-instead-of-crashing.md) assert both.
+
+**One endpoint currently breaks this, and the rule is written as the rule rather than as the
+behaviour.** `GET /api/v1/version` answers `200` with `"status":"ready"` and every count at `0` on a
+database that could not be opened, measured 2026-10-21 on both documents' states.
+[`03`](startup-and-degradation/03-startup-wait-page.md) records the rule it breaks, from #419: that
+endpoint is gated *while starting* precisely because a caller could otherwise reach for it as a
+readiness endpoint in `/health`'s place, and during startup it does answer `503`. So the gate exists
+and the degraded state is not behind it. Until that is settled, a document asserts nothing about
+`/version` in either direction: asserting the `200` would write the gap into the suite as the contract,
+and asserting a `503` would fail against the build it was measured on.
+
 ### Import behaviour is proven at every origin, not just the convenient one
 
 Content reaches the database by three routes, and `FileResourceOrigin` names them because they are not
@@ -1225,6 +1250,8 @@ The five this suite runs on:
 | 05 | [Degraded pages survive a migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) | no |
 | 06 | [A recorded schema version ahead of the build degrades and says why](startup-and-degradation/06-schema-version-ahead-of-the-application.md) | no |
 | 07 | [The source refresh is off unless it is turned on, and still works when it is](startup-and-degradation/07-the-source-refresh-is-off-unless-turned-on.md) | no |
+| 08 | [A database that is not a database degrades instead of crashing](startup-and-degradation/08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md) | no |
+| 09 | [A truncated database degrades instead of crashing](startup-and-degradation/09-a-truncated-database-degrades-instead-of-crashing.md) | no |
 
 ### `backup/`
 
