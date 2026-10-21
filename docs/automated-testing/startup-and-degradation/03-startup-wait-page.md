@@ -50,8 +50,7 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-startup-03 --port
 Start-Sleep 1
 
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/api/v1/health" --expect 503
-$version = dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/api/v1/version" --expect 200 | ConvertFrom-Json
-"version status=$($version.status) hasDatabase=$($version.PSObject.Properties.Name -contains 'database')"
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/api/v1/version" --expect 503 --status
 
 $page = dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/" --expect 503 | Out-String
 "autoRefresh=$([bool]($page -match '(?i)<meta[^>]+http-equiv\s*=\s*.refresh'))"
@@ -63,7 +62,11 @@ $page = dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/
 - `/health` returns `503` with `{"status":"starting"}`
 - `/version` returns `503`. It is gated like everything else (#419): it cannot report complete version
   information or a ready state before startup finishes, and a caller could otherwise reach for it as a
-  readiness endpoint in `/health`''s place
+  readiness endpoint in `/health`''s place. Measured 2026-10-21: `503` with the problem-details body
+  *"Quotinator is starting up"*, carrying no `status` field and no `database` block, which is what
+  step 3 then contrasts against. **Until that date this step's command read `--expect 200` and then
+  parsed `.status` off the response**, so the command asserted the opposite of the expectation above it
+  and the step could not pass. Found while #327 added `08` and `09` to this category
 - `/` returns `503` carrying the self-contained HTML wait page, with `autoRefresh=True` and
   `externalAssets=0`: it refreshes itself and pulls in nothing from outside. Never a hang, never a raw
   error, and never a `200` for a page the caller did not ask for
