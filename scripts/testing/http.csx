@@ -31,6 +31,11 @@
 //                         environment sets). --no-key omits the header entirely, which is how a test
 //                         asserts that an admin endpoint rejects an unauthenticated call
 //   --no-key              Send no X-Api-Key header
+//   --accept <type>       Value for the Accept header. No Accept header is sent without it, which is
+//                         not the same as "anything": content negotiation that looks for text/html
+//                         finds nothing, so a document asserting on the HTML a browser would get has
+//                         to say so. Found by #327's full run, where startup-and-degradation/03
+//                         expected the HTML wait page from a request that could never ask for it
 //   --file   <path>       Upload this file as the multipart "file" field
 //   --duplicate-resolution <mode>
 //                         Adds the import "settings" multipart field as
@@ -170,6 +175,9 @@ HttpRequestMessage Build()
 
     if (!Flag("--no-key"))
         built.Headers.Add("X-Api-Key", Value("--api-key") ?? "smoketest");
+
+    if (Value("--accept") is string accept)
+        built.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(accept));
 
     return built;
 }

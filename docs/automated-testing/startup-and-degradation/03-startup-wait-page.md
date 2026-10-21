@@ -52,7 +52,7 @@ Start-Sleep 1
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/api/v1/health" --expect 503
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/api/v1/version" --expect 503 --status
 
-$page = dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/" --expect 503 | Out-String
+$page = dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/" --accept text/html --expect 503 | Out-String
 "autoRefresh=$([bool]($page -match '(?i)<meta[^>]+http-equiv\s*=\s*.refresh'))"
 "externalAssets=$(([regex]::Matches($page, '(?i)(src|href)\s*=\s*["'']https?://')).Count)"
 ```
@@ -69,7 +69,12 @@ $page = dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/
   and the step could not pass. Found while #327 added `08` and `09` to this category
 - `/` returns `503` carrying the self-contained HTML wait page, with `autoRefresh=True` and
   `externalAssets=0`: it refreshes itself and pulls in nothing from outside. Never a hang, never a raw
-  error, and never a `200` for a page the caller did not ask for
+  error, and never a `200` for a page the caller did not ask for. **`--accept text/html` is what makes
+  this request a browser's**, and without it the step cannot pass: `StartupWaitMiddleware.WantsHtml`
+  looks for `text/html` in the Accept header, `http.csx` sent none until #327 gave it `--accept`, and
+  the request therefore received `application/problem+json` with no meta refresh in it. Measured
+  2026-10-21: `autoRefresh=False` without the flag, and with it `503`, `text/html; charset=utf-8`,
+  664 bytes, refresh present, `externalAssets=0`
 
 **On failure:** a `200` from `/health` means seeding finished before the requests landed: the window
 was missed rather than the wait page being broken (see Determinism). Stop and re-run; do not lengthen
@@ -87,11 +92,11 @@ try {
   "reset during startup = 200 UNEXPECTED"
 } catch {
   $r = $_.Exception.Response
-  "reset during startup = $([int]$r.StatusCode)  contentType=$($r.Content.Headers.ContentType)  retryAfter=$($r.Headers.RetryAfter)"
+  "reset during startup = $([int]$r.StatusCode)  contentType=$($r.ContentType)  retryAfter=$($r.Headers['Retry-After'])"
 }
 
 try { Invoke-RestMethod "http://localhost:18403/api/v1/quotes/random" -Headers $api -TimeoutSec 20 }
-catch { "GET json during startup = $([int]$_.Exception.Response.StatusCode)  contentType=$($_.Exception.Response.Content.Headers.ContentType)" }
+catch { "GET json during startup = $([int]$_.Exception.Response.StatusCode)  contentType=$($_.Exception.Response.ContentType)" }
 ```
 
 **Expected:** both report `503`. The reset carries `application/problem+json` and a `Retry-After`; the
@@ -107,6 +112,12 @@ everybody.
 
 **On failure:** a `200` from either means the window was missed, as in step 1. A `503` carrying
 `text/html` for the JSON request means the refusal ignores `Accept`.
+
+**The property names are the Windows PowerShell 5.1 ones**, `$r.ContentType` and
+`$r.Headers['Retry-After']`. `Invoke-RestMethod`'s exception carries an `HttpWebResponse` in 5.1, so
+the PowerShell 7 shapes this step used until 2026-10-21, `$r.Content.Headers.ContentType` and
+`$r.Headers.RetryAfter`, resolve to nothing: the step printed two blank values and read as a pass.
+Measured the same day, with the 5.1 forms: `application/problem+json` and `2`.
 
 ### 3. Re-read health and version after seeding completes
 
