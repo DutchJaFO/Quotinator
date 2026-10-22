@@ -66,15 +66,19 @@ $page = dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/
   *"Quotinator is starting up"*, carrying no `status` field and no `database` block, which is what
   step 3 then contrasts against. **Until that date this step's command read `--expect 200` and then
   parsed `.status` off the response**, so the command asserted the opposite of the expectation above it
-  and the step could not pass. Found while #327 added `08` and `09` to this category
+  and the step could not pass. Found by
+  [#441](https://github.com/DutchJaFO/Quotinator/issues/441) on 2026-10-10, items 4 and 5, which
+  recorded the same reading; corrected here while #327 ran this category, having re-found it rather
+  than read the issue first
 - `/` returns `503` carrying the self-contained HTML wait page, with `autoRefresh=True` and
   `externalAssets=0`: it refreshes itself and pulls in nothing from outside. Never a hang, never a raw
   error, and never a `200` for a page the caller did not ask for. **`--accept text/html` is what makes
   this request a browser's**, and without it the step cannot pass: `StartupWaitMiddleware.WantsHtml`
-  looks for `text/html` in the Accept header, `http.csx` sent none until #327 gave it `--accept`, and
-  the request therefore received `application/problem+json` with no meta refresh in it. Measured
-  2026-10-21: `autoRefresh=False` without the flag, and with it `503`, `text/html; charset=utf-8`,
-  664 bytes, refresh present, `externalAssets=0`
+  looks for `text/html` in the Accept header and `http.csx` sent none, so the request received
+  `application/problem+json` with no meta refresh in it. **[#441](https://github.com/DutchJaFO/Quotinator/issues/441)
+  prescribed this fix on 2026-10-10**, measuring exactly what the flag now produces; the flag itself
+  was added 2026-10-21. Measured both ways: `autoRefresh=False` without it, and with it `503`,
+  `text/html; charset=utf-8`, 664 bytes, refresh present, `externalAssets=0`
 
 **On failure:** a `200` from `/health` means seeding finished before the requests landed: the window
 was missed rather than the wait page being broken (see Determinism). Stop and re-run; do not lengthen
@@ -115,9 +119,14 @@ everybody.
 
 **The property names are the Windows PowerShell 5.1 ones**, `$r.ContentType` and
 `$r.Headers['Retry-After']`. `Invoke-RestMethod`'s exception carries an `HttpWebResponse` in 5.1, so
-the PowerShell 7 shapes this step used until 2026-10-21, `$r.Content.Headers.ContentType` and
-`$r.Headers.RetryAfter`, resolve to nothing: the step printed two blank values and read as a pass.
-Measured the same day, with the 5.1 forms: `application/problem+json` and `2`.
+the PowerShell 7 shapes this step used, `$r.Content.Headers.ContentType` and `$r.Headers.RetryAfter`,
+resolve to nothing: the step printed two blank values and read as a pass.
+[#441](https://github.com/DutchJaFO/Quotinator/issues/441) found that on 2026-10-10 as its item 6 and
+recorded the same corrected readings; applied here 2026-10-21, `application/problem+json` and `2`.
+
+**#441's first item is the developer deciding which edition the suite targets**, and these two steps
+are part of the evidence for it. Rewriting them to 5.1 forms treats that as settled, which it is not:
+if the suite targets 7, the correction is to install it rather than to reword every step.
 
 ### 3. Re-read health and version after seeding completes
 

@@ -176,12 +176,24 @@ Developer rule, 2026-09-08: *tests should not rely on bundled data to stay green
 the feature smoke test that exists purely to be aware of changes in the external data that may affect
 our rules.* Unit tests therefore use fixtures; this step watches the real thing.
 
-**This step is the developer's own to run, like T1.** It invokes `dotnet run` against
-`src/Quotinator.Api`, and `CLAUDE.md` forbids an AI assistant from running that for its own
-verification: a port or process clash with a Visual Studio instance has already caused a real IIS
-Express outage needing a reboot. The `--convert` form binds nothing, but the prohibition is on the
-command rather than on the argument, so the assistant runs every other step here and reports this one
-as the developer's. Recorded 2026-10-21, when #327's full run reached it.
+**This step cannot run, by anybody, and [#441](https://github.com/DutchJaFO/Quotinator/issues/441)
+owns fixing it.** Two faults, neither of which the correction below touches:
+
+- **`$manifest.sources` names an array the manifest does not have.** Its array is `files`, confirmed
+  by reading `data/sources/manifest.json` on 2026-10-21. So the `foreach` iterates nothing, the step
+  prints nothing, and that is indistinguishable from `0 diverging date(s)`: the sentinel reads as a
+  pass whatever the outside world did. #441 calls this the most serious of its six, because the
+  measurement recorded below cannot have come from this command and cannot currently be reproduced.
+- **`--convert` does not exist.** `src/Quotinator.Api` has no such argument, so even with the array
+  name corrected there is nothing to run. #441's own correction column says so.
+
+An AI assistant must not run `dotnet run` against `src/Quotinator.Api` either, per `CLAUDE.md`, which
+names a real IIS Express outage that needed a reboot. That is a separate reason and a weaker one: this
+step is blocked for a developer too.
+
+Do not repair the two faults above as part of another issue. #441's first item is the developer
+deciding which PowerShell edition the suite targets, and these steps are the evidence that decision
+rests on.
 
 ```powershell
 $manifest = Get-Content data/sources/manifest.json -Raw | ConvertFrom-Json
@@ -214,11 +226,12 @@ foreach ($entry in $manifest.sources | Where-Object { $_.converter -and $_.githu
 
 **Expected:** `0 diverging date(s)` for every file.
 
-**`??` was a parse error here until 2026-10-21, so the block never ran at all.** Null-coalescing is
-PowerShell 7; Windows PowerShell 5.1, which is what this project's shell is, rejects the whole block
-before its first statement, so the step failed with a syntax error rather than reporting divergences.
-Same class as the shapes `startup-and-degradation/03` carried, and what
-`project_powershell_edition_is_5_1` exists to catch.
+**`??` was a parse error here, and removing it is the smallest of the three faults.** Null-coalescing
+is PowerShell 7; Windows PowerShell 5.1 rejects the whole block before its first statement, so the
+step failed on syntax rather than reporting divergences. Corrected 2026-10-21 so the block at least
+parses, which changes nothing about the two faults above: the step still iterates nothing and still
+calls an argument that does not exist. #441 found this on 2026-10-10 as four of its six items, before
+#327's own run reached the step.
 
 **A divergence is not a converter bug: it means a correction was put somewhere that does not survive.**
 `Quotinator:AutoUpdateSources` is off by default (#424), so a container seeds the checked-in copy. Turned

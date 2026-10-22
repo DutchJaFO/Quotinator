@@ -333,14 +333,32 @@ its witness was "a non-zero quote count, because the refused reset changed nothi
 already `0`, so it could not tell a refusal from a reset that ran. It now counts `reset complete`
 lines, which only the rebuilding path writes.
 
-**`03`, step 1, a second unreachable expectation after the one found before this sweep.** It wanted
-`autoRefresh=True` from the HTML wait page, while `StartupWaitMiddleware.WantsHtml` looks for
-`text/html` in the Accept header and `http.csx` sent none, so the request received problem details and
-no meta refresh. The page was never at fault: with the header it answers `503`,
-`text/html; charset=utf-8`, 664 bytes, refresh present. `http.csx` gained `--accept`, and the step now
-reads `autoRefresh=True`. Step 2's accessors were PowerShell 7 shapes that resolve to nothing in 5.1,
-so the step printed two blanks and read as a pass; corrected to `$r.ContentType` and
-`$r.Headers['Retry-After']`, which measure `application/problem+json` and `2`.
+**`03` and `14` were [#441](https://github.com/DutchJaFO/Quotinator/issues/441)'s already, and this
+sweep re-found them instead of reading the issue.** Recorded as a process failure rather than smoothed
+over, because the cost is real: four of the six items #441 filed on 2026-10-10 are the ones this run
+reported as new findings on 2026-10-21, with the same measurements.
+
+| Re-found here | #441, twelve days earlier |
+|---|---|
+| `03` step 1, `/version` expecting `200` | items 4 and 5: `503` is correct per #419 |
+| `03` step 1, `autoRefresh=False` | with `Accept: text/html`: `503`, `text/html; charset=utf-8`, `autoRefresh=True`, `externalAssets=0` |
+| `03` step 2's two blank accessors | item 6: `application/problem+json` and `Retry-After: 2` |
+| `14` step 5 | items 1 to 3, including that it can never fail |
+
+The corrections stand, now credited to #441 in each document, and `http.csx` gained the `--accept`
+flag #441's own correction column prescribes. **Two things about them are worth stating plainly.**
+Rewriting two steps to PowerShell 5.1 forms treats the edition question as settled, and #441's first
+item is the developer deciding it; if the suite targets 7, the fix is to install it rather than to
+reword every step. And `14` step 5 is still blocked whatever the edition: its loop reads
+`$manifest.sources` where the manifest's array is `files`, and `--convert` does not exist on
+`src/Quotinator.Api`. This plan's first wording said that step was merely the developer's to run,
+which read as repaired when it is not; the document now states both faults and leaves them to #441.
+
+`project_powershell_edition_is_5_1` had already written down the rule that was broken here: report the
+document defect, and do not fix it as part of an unrelated issue. The note was read and the issue was
+not opened, which is the gap: checking for an existing issue before repairing a document is the step
+that was skipped, and it was done correctly for the admin endpoints the same day, where no issue
+existed and #453 was filed.
 
 **`06` step 7 and `backup/07` step 4, both broken by #428's fix.** Each read a database value from
 `/api/v1/version` while the container was degraded, which that endpoint now correctly refuses. Found by
@@ -352,11 +370,12 @@ in both steps passed, `06`'s modal repair included: `resetButtons=1` on the four
 `0` on `/about`, the three button sets exactly as specified, and after Confirm `/health` `200`,
 `quotes` `0` and the thrown count unchanged, so no reload and none of #445's WebSocketExceptions.
 
-**`14` step 5 is the one exception, and it is the developer's to run.** It invokes `dotnet run` against
-`src/Quotinator.Api`, which `CLAUDE.md` forbids an assistant from running, and it used `??`, which
-Windows PowerShell 5.1 rejects as a parse error so the block never ran at all. The `??` is fixed and
-the step is now marked the developer's, like T1. Steps 1 to 4 pass; step 6 was run far enough to read
-`resolvedToExisting = 25`, and its classification assertions were **not** evaluated.
+**`14` is the one document no run can complete**, and the detail is in the table above: its step 5
+iterates an array the manifest does not have and calls a `--convert` argument that does not exist, so
+it is blocked for a developer as much as for an assistant, and #441 owns both faults. The `??` that
+stopped the block even parsing is corrected; nothing else about the step is. Steps 1 to 4 pass, and
+step 6 was run far enough to read `resolvedToExisting = 25`, with its classification assertions
+**not** evaluated.
 
 **Two documents will need rewording when #453 lands**, neither wrong today. `06` step 4 probes
 `seed/preview` as a proxy for the admin surface being reachable, measured `200` with real data in the
@@ -388,4 +407,4 @@ them during this sweep.
 | 14 | ✅ | The scope change is recorded on the GitHub issue, so the spec reflects what #327 actually delivered | Live | Comment posted 2026-08-27 covering both scope changes, what #339 delivered, and the split into #348/#349 |
 | 15 | ✅ | A degraded application answers no database read, and every degrading document asserts it | Live | Developer direction 2026-10-21, now an index rule under *A degraded application is not expected to answer from its database*. Step 5 of `08` and `09` asserts six endpoints at `503`, all six measured `503` in both states |
 | 16 | ✅ | No existing document in this category contradicts the gating rule | Live | Checked across the suite. `03`'s step 1 did, asserting `--expect 200` where its own Expected said `503` per #419, so the step could not pass; corrected to `--expect 503 --status` 2026-10-21, with what it used to say recorded in the document |
-| 17 | ✅ | The category and the smoke set are run, and every document that cannot pass is repaired rather than left | Live | Step 12: all 17 documents run 2026-10-21, 13 passing outright. `02`, `03`, `06` and `backup/07` repaired and each repair re-run to green; `14` step 5 marked the developer's, with its PowerShell 7 syntax fixed. Build clean and 4,626 tests green afterwards |
+| 17 | ✅ | The category and the smoke set are run, and every document that cannot pass is repaired rather than left | Live | Step 12: all 17 documents run 2026-10-21, 13 passing outright. `02` and, for #428, `06` and `backup/07` repaired here and re-run to green. `03` and `14` were #441 findings this run re-found rather than read: the corrections stand, credited to #441 in each document, and `14` step 5 stays blocked on two faults #441 owns. Build clean and 4,626 tests green |
