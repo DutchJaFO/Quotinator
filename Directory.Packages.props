@@ -13,7 +13,7 @@
     <PackageVersion Include="Dapper" Version="2.1.89" />
     <PackageVersion Include="Dapper.Contrib" Version="2.0.78" />
     <PackageVersion Include="JsonSchema.Net" Version="9.4.1" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
     <!-- Test-only: Quotinator.Api.Tests resolves its own sources to symbols to prove no test
          constructs the unguarded WebApplicationFactory<Program> (#313). Never referenced by src/. -->
