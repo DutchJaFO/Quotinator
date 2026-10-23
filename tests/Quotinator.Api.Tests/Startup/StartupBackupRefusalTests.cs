@@ -3,6 +3,8 @@ using System.Net;
 using Dapper;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Quotinator.Api.Startup;
 using Quotinator.Constants.Api;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Enums;
@@ -45,6 +47,37 @@ public class StartupBackupRefusalTests
         Assert.AreEqual(HttpStatusCode.ServiceUnavailable, health.StatusCode);
     }
 
+    /// <summary>#327: refusing the migration must never cost the process.</summary>
+    [TestMethod]
+    public async Task Startup_MigrationRefusedForBackup_EntersDegradedStateInsteadOfCrashing()
+    {
+        await HealthAfterARefusedMigrationAsync();
+
+        Assert.IsTrue(
+            _factories[^1].Services.GetRequiredService<StartupPhaseState>().IsComplete,
+            "startup never completed: the process died rather than degrading");
+    }
+
+    /// <summary>
+    /// #327: the positive control. The same two runs and the same zero quota, with no migration pending:
+    /// nothing needs a backup, so nothing is refused and the application is healthy. The degraded state
+    /// above therefore comes from the pending migration meeting the quota, not from the setup.
+    /// </summary>
+    /// <remarks>
+    /// Raising the quota instead cannot serve as the control here. Forgetting a migration's version row
+    /// leaves its schema change in place, so letting it run again fails on its own DDL (measured: SQLite
+    /// Error 1, a table that already exists). A genuinely pending migration needs a database from a
+    /// prior release, which is what the container scenario builds, and that is where raising the quota
+    /// is proven to resolve the refusal.
+    /// </remarks>
+    [TestMethod]
+    public async Task Startup_NoMigrationPendingWithAZeroQuota_ReportsHealthy()
+    {
+        HttpResponseMessage health = await HealthAfterARestartAsync(forgetTheNewestMigration: false);
+
+        Assert.AreEqual(HttpStatusCode.OK, health.StatusCode);
+    }
+
     [TestMethod]
     public async Task Startup_MigrationRefusedForBackup_ReasonNamesTheObstacle()
     {
@@ -76,7 +109,10 @@ public class StartupBackupRefusalTests
     /// the next start finds that migration pending. The second start has a zero backup quota, so no backup
     /// can be taken and the migration is refused before it would run again.
     /// </summary>
-    private async Task<HttpResponseMessage> HealthAfterARefusedMigrationAsync()
+    private Task<HttpResponseMessage> HealthAfterARefusedMigrationAsync() =>
+        HealthAfterARestartAsync(forgetTheNewestMigration: true);
+
+    private async Task<HttpResponseMessage> HealthAfterARestartAsync(bool forgetTheNewestMigration)
     {
         string dataDirectory = NewDataDirectory();
 
@@ -85,7 +121,8 @@ public class StartupBackupRefusalTests
             using HttpClient warmUp = firstRun.CreateClient();
         }
 
-        ForgetTheNewestMigration(dataDirectory);
+        if (forgetTheNewestMigration)
+            ForgetTheNewestMigration(dataDirectory);
 
         WebApplicationFactory<Program> factory = FactoryFor(dataDirectory, maxBackupStorageGb: 0);
         _factories.Add(factory);

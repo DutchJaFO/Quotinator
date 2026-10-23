@@ -3,6 +3,7 @@ using System.Net;
 using Dapper;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Startup;
 using Quotinator.Data.Connections;
@@ -327,14 +328,7 @@ public class StartupResilienceTests
     [TestMethod]
     public async Task Startup_KeysDirectoryCannotBeCreated_StartsDegradedInsteadOfCrashingBeforeKestrelBinds()
     {
-        string dataDirectory = NewDataDirectory();
-        // A file where the keys/ directory belongs. Directory.CreateDirectory then throws IOException,
-        // deterministically, and identically on Windows and Linux. This runs at Program.cs:233, before
-        // app.StartAsync(), so an unguarded throw kills the process before Kestrel binds: no wait page,
-        // no /health, no OpenAPI at all.
-        File.WriteAllText(Path.Combine(dataDirectory, DataPaths.DataProtectionFolder), "not a directory");
-
-        using WebApplicationFactory<Program> factory = FactoryFor(dataDirectory);
+        using WebApplicationFactory<Program> factory = FactoryWithKeysDirectoryBlocked();
 
         using HttpClient client = factory.CreateClient();
         HttpResponseMessage response = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
@@ -342,6 +336,181 @@ public class StartupResilienceTests
         Assert.AreEqual(
             HttpStatusCode.ServiceUnavailable, response.StatusCode,
             "the app must still be serving health, degraded, rather than having died before binding");
+    }
+
+    [TestMethod]
+    public void Startup_KeysDirectoryCannotBeCreated_EntersDegradedStateInsteadOfCrashing()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithKeysDirectoryBlocked();
+
+        using HttpClient client = factory.CreateClient();
+
+        Assert.IsTrue(
+            factory.Services.GetRequiredService<StartupPhaseState>().IsComplete,
+            "startup never completed: the process died rather than degrading");
+    }
+
+    /// <summary>
+    /// #327: the data directory itself cannot be created, the earliest degraded path there is. It fails
+    /// before Kestrel binds, so an unguarded throw would leave no wait page, no /health and no OpenAPI.
+    /// </summary>
+    [TestMethod]
+    public void Startup_DataDirectoryCannotBeCreated_EntersDegradedStateInsteadOfCrashing()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithDataDirectoryPathOccupiedByAFile();
+
+        using HttpClient client = factory.CreateClient();
+
+        Assert.IsTrue(
+            factory.Services.GetRequiredService<StartupPhaseState>().IsComplete,
+            "startup never completed: the process died rather than degrading");
+    }
+
+    [TestMethod]
+    public async Task Startup_DataDirectoryCannotBeCreated_HealthReportsUnhealthyRatherThanBeingUnreachable()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithDataDirectoryPathOccupiedByAFile();
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Startup_DataDirectoryCannotBeCreated_HealthReasonNamesTheDataDirectory()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithDataDirectoryPathOccupiedByAFile();
+
+        using HttpClient client = factory.CreateClient();
+        string body = await (await client.GetAsync(HealthRoute, TestContext.CancellationToken))
+            .Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.Contains("Restore write access to the data directory", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #327: the generic reason names two remedies, a Reset and deleting the file. A Reset refuses on a
+    /// file SQLite cannot open, so deleting it is the one that can work, and the reason must carry it.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_DatabaseFileCorrupt_HealthReasonNamesARemedyThatCanWork()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase();
+
+        using HttpClient client = factory.CreateClient();
+        string body = await (await client.GetAsync(HealthRoute, TestContext.CancellationToken))
+            .Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.Contains("deleting the database file", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #327: a real database cut in half. SQLite reaches the file and finds it damaged, a different fault
+    /// from a file that was never a database, on a different code path.
+    /// </summary>
+    [TestMethod]
+    public void Startup_DatabaseFileTruncated_EntersDegradedStateInsteadOfCrashing()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithTruncatedDatabase();
+
+        using HttpClient client = factory.CreateClient();
+
+        Assert.IsTrue(
+            factory.Services.GetRequiredService<StartupPhaseState>().IsComplete,
+            "startup never completed: the process died rather than degrading");
+    }
+
+    [TestMethod]
+    public async Task Startup_DatabaseFileTruncated_HealthReportsUnhealthyRatherThanBeingUnreachable()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithTruncatedDatabase();
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Startup_DatabaseFileTruncated_HealthReasonNamesARemedyThatCanWork()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithTruncatedDatabase();
+
+        using HttpClient client = factory.CreateClient();
+        string body = await (await client.GetAsync(HealthRoute, TestContext.CancellationToken))
+            .Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.Contains("deleting the database file", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #327: a database whose schema is broken, a domain table missing from a database that otherwise
+    /// migrated cleanly. Here a Reset can succeed, since the file opens and the schema can be rebuilt.
+    /// </summary>
+    [TestMethod]
+    public void Startup_DomainTableMissing_EntersDegradedStateInsteadOfCrashing()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithAMissingDomainTable();
+
+        using HttpClient client = factory.CreateClient();
+
+        Assert.IsTrue(
+            factory.Services.GetRequiredService<StartupPhaseState>().IsComplete,
+            "startup never completed: the process died rather than degrading");
+    }
+
+    [TestMethod]
+    public async Task Startup_DomainTableMissing_HealthReportsUnhealthyRatherThanBeingUnreachable()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithAMissingDomainTable();
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Startup_DomainTableMissing_HealthReasonNamesTheReset()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithAMissingDomainTable();
+
+        using HttpClient client = factory.CreateClient();
+        string body = await (await client.GetAsync(HealthRoute, TestContext.CancellationToken))
+            .Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.Contains("database Reset", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #327: the positive control for every scenario that sabotages an empty data directory. Without
+    /// it, each degraded assertion above would stay green against a build that degraded on everything.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_FreshDataDirectory_ReportsHealthy()
+    {
+        using WebApplicationFactory<Program> factory = FactoryFor(NewDataDirectory());
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>
+    /// #327: the positive control for every scenario that sabotages a database a first run created, the
+    /// truncated file, the missing table and the version recorded ahead: the same two runs, unsabotaged.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_RestartOverAnIntactDatabase_ReportsHealthy()
+    {
+        using WebApplicationFactory<Program> factory = FactoryOverAnIntactDatabase();
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
 
     private const string HealthRoute = "/api/v1/health";
@@ -363,6 +532,77 @@ public class StartupResilienceTests
         }
 
         RecordASchemaVersionAheadOfThisBuild(dataDirectory);
+
+        return FactoryFor(dataDirectory);
+    }
+
+    /// <summary>A database a first run really created and migrated, its data directory returned for sabotage.</summary>
+    private string DataDirectoryWithAMigratedDatabase()
+    {
+        string dataDirectory = NewDataDirectory();
+
+        using (WebApplicationFactory<Program> firstRun = FactoryFor(dataDirectory))
+        {
+            using HttpClient warmUp = firstRun.CreateClient();
+        }
+
+        // Pooled connections hold the file open on Windows, which blocks the truncation below.
+        SqliteConnection.ClearAllPools();
+        return dataDirectory;
+    }
+
+    private WebApplicationFactory<Program> FactoryOverAnIntactDatabase() =>
+        FactoryFor(DataDirectoryWithAMigratedDatabase());
+
+    private WebApplicationFactory<Program> FactoryWithTruncatedDatabase()
+    {
+        string dataDirectory = DataDirectoryWithAMigratedDatabase();
+        string database = Path.Combine(dataDirectory, DataPaths.DatabaseFile);
+
+        // The sidecars go too: a surviving -wal beside a damaged main file gives SQLite two disagreeing
+        // sources, and which it reports first would be timing rather than this test's subject.
+        File.Delete(database + "-wal");
+        File.Delete(database + "-shm");
+        using (FileStream file = new(database, FileMode.Open, FileAccess.Write))
+            file.SetLength(file.Length / 2);
+
+        return FactoryFor(dataDirectory);
+    }
+
+    private WebApplicationFactory<Program> FactoryWithAMissingDomainTable()
+    {
+        string dataDirectory = DataDirectoryWithAMigratedDatabase();
+
+        using (IDbConnection connection =
+            new SqliteConnectionFactory(Path.Combine(dataDirectory, DataPaths.DatabaseFile)).CreateConnection())
+        {
+            connection.Execute("DROP TABLE Quotinator_Quote;");
+        }
+
+        SqliteConnection.ClearAllPools();
+        return FactoryFor(dataDirectory);
+    }
+
+    /// <summary>
+    /// A file where the data directory belongs, so <c>Directory.CreateDirectory</c> throws
+    /// <c>IOException</c> before Kestrel binds, deterministically and identically on Windows and Linux.
+    /// </summary>
+    private WebApplicationFactory<Program> FactoryWithDataDirectoryPathOccupiedByAFile()
+    {
+        string dataDirectory = Path.Combine(NewDataDirectory(), "data");
+        File.WriteAllText(dataDirectory, "not a directory");
+
+        return FactoryFor(dataDirectory);
+    }
+
+    /// <summary>
+    /// A file where the keys/ directory belongs. <c>Directory.CreateDirectory</c> then throws
+    /// <c>IOException</c>, deterministically, and identically on Windows and Linux, before Kestrel binds.
+    /// </summary>
+    private WebApplicationFactory<Program> FactoryWithKeysDirectoryBlocked()
+    {
+        string dataDirectory = NewDataDirectory();
+        File.WriteAllText(Path.Combine(dataDirectory, DataPaths.DataProtectionFolder), "not a directory");
 
         return FactoryFor(dataDirectory);
     }
