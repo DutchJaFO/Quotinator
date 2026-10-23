@@ -1,6 +1,6 @@
 # A recorded schema version ahead of the build degrades and says why
 
-**Smoke:** no
+**Smoke:** yes
 **Environment:** Fresh
 **Deterministic:** yes
 **Traces to:** #350, #327, #289
@@ -39,9 +39,11 @@ from it is a foot gun.
   the same reasoning `test-env.csx` records for its own `reenter`: a SIGKILL leaves the `-wal` and
   `-shm` sidecars behind, so a row written from the host afterwards is a row written beside a journal
   the next startup still has to replay.
-- **The second start waits for *listening*, not healthy.** Degraded is the expected outcome, so a
-  readiness poll for healthy would never return and the document would fail at the wrong step, saying
-  nothing about what the application actually did.
+- **The second start waits for *listening*, then for `unhealthy`, never for healthy or for a `503`.**
+  Degraded is the expected outcome, so a readiness poll for healthy would never return and the document
+  would fail at the wrong step, and the startup wait page answers `503` with `status=starting`, so a wait
+  on the status code can return before the degraded state is settled. Step 3 polls the `status` field,
+  the technique [`01`](01-seeding-backup-degraded-startup-and-reset-recovery.md) established.
 - **Without step 2 there is nothing to find.** Confirmed in-process by
   `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_DegradesRatherThanServing`, which
   passes only against a version recorded one beyond what the database already holds: recorded at the
@@ -96,20 +98,44 @@ $dataDir = "$PWD\.claude\temp\qt-startup-06-data"
 dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-06 --port 18406 `
   --image quotinator:local --bind $dataDir --wait-listening
 
-$health = dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/health" --expect 503 | ConvertFrom-Json
+# A 503's body is read from the response stream: PowerShell 5.1 leaves ErrorDetails.Message empty here.
+function Health {
+  try   { Invoke-RestMethod "http://localhost:18406/api/v1/health" }
+  catch {
+    $response = $_.Exception.Response
+    if ($null -eq $response) { return [pscustomobject]@{ status = 'down' } }
+    $body = (New-Object IO.StreamReader($response.GetResponseStream())).ReadToEnd()
+    try { $body | ConvertFrom-Json -ErrorAction Stop } catch { [pscustomobject]@{ status = 'unreadable' } }
+  }
+}
+$deadline = (Get-Date).AddSeconds(180)
+while (($health = Health).status -notin 'unhealthy', 'healthy' -and (Get-Date) -lt $deadline) { Start-Sleep 1 }
+
+docker inspect -f '{{.State.Running}}' qt-startup-06
 "status=$($health.status)"
 "namesTheOvershoot=$($health.reason -match 'schema version is ahead')"
 "namesReset=$($health.reason -match 'Reset')"
 "namesRestore=$($health.reason -match 'restore a backup')"
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/quotes/random" --expect 503 --status
+
+foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
+                  '/api/v1/stats', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/version') {
+  dotnet script scripts/testing/http.csx -- --url "http://localhost:18406$path" --expect 503 --status
+}
 ```
 
-**Expected:** `503` from `/health` with `status=unhealthy`, all three of `namesTheOvershoot`,
-`namesReset` and `namesRestore` `True`, and `503` from the quote endpoint.
+**Expected:** `true` from `docker inspect`, `status=unhealthy`, all three of `namesTheOvershoot`,
+`namesReset` and `namesRestore` `True`, and `503` from every one of the seven database reads.
 
-**On failure:** a `200` from either is the defect #350 exists to remove: the application vouching for a
-schema whose shape it has never seen. A `503` whose reason names only the Reset leaves an operator who
-wants their data back believing the route that discards it is the only one there is.
+**`true` and `unhealthy` together are the never-crash contract** for a database this build cannot vouch
+for. The seven reads refuse because a schema of unknown shape is untrusted whether or not a given query
+against it would execute.
+
+**On failure:** a container that is not running means the overshoot killed the process. `status=healthy`
+or a `200` from any read is the defect #350 exists to remove: the application vouching for a schema whose
+shape it has never seen. A reason naming only the Reset leaves an operator who wants their data back
+believing the route that discards it is the only one there is. `starting` or `down` means the wait gave
+up after 180 seconds.
 
 ### 4. Confirm the degraded surface and the recovery routes stay reachable
 
@@ -119,15 +145,22 @@ foreach ($p in '/', '/about', '/stats', '/notifications', '/import-review', '/re
   "$p -> $code"
 }
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/openapi/v1.json" --expect 200 --status
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/admin/database/seed/preview" --status
+$listed = dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/admin/backups" --expect 200 | ConvertFrom-Json
+"backupListing=$($null -ne $listed.items)"
 ```
 
-**Expected:** `200` from every page, `200` from the spec, and anything other than the gate's own
-`unavailable` body from the admin route.
+**Expected:** `200` from every page, `200` from the spec, and `200` from the backup listing with
+`backupListing=True`.
+
+**The backup listing is the recovery surface's probe, deliberately.** The reason names two remedies,
+a Reset (step 7) and restoring a backup taken before the version moved ahead; the listing is how an
+operator finds that backup, and it answers off the filesystem, so it reads nothing from the untrusted
+database. An earlier version of this step probed `GET /api/v1/admin/database/seed/preview`, which reads
+the database, so a `200` from it was a value served from untrusted content, and #453 gates it.
 
 **On failure:** a `500` from a page means the degraded UI is rendering against a query it should not be
-running, or not running one it safely could. A gated admin route means the remedy the reason names
-cannot be reached, which makes the reason point nowhere.
+running. A `503` from the listing means the recovery surface is gated, so the remedies the reason names
+cannot be reached from the API.
 
 ### 5. Confirm the operator is told why, and that nothing from the database is shown
 
@@ -236,45 +269,63 @@ indistinguishable from a genuinely empty one. No endpoint serves a count while d
 rule *A degraded application is not expected to answer from its database*, so `/health` is what
 separates the two outcomes below: still `503` after Cancel, `200` after Confirm.
 
-Then open `http://localhost:18406/` and, against the modal:
+Then, against the home page's modal, arm the Reset and cancel it:
 
-```js
+```powershell
+$cancelScript = @'
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const modal = () => document.querySelector('.modal');
 const btn = t => modal() ? [...modal().querySelectorAll('button')].find(b => b.textContent.trim() === t) : null;
+const labels = () => [...modal().querySelectorAll('button')].map(b => b.textContent.trim()).join(', ');
 for (let i = 0; i < 40 && !modal(); i++) await sleep(250);
-const before = [...modal().querySelectorAll('button')].map(b => b.textContent.trim());
+const before = labels();
 btn('Reset the database').click(); await sleep(1500);
-const armed = [...modal().querySelectorAll('button')].map(b => b.textContent.trim());
+const armed = labels();
 btn('Cancel').click(); await sleep(1200);
-return { before, armed, afterCancel: [...modal().querySelectorAll('button')].map(b => b.textContent.trim()) };
+return { before, armed, afterCancel: labels() };
+'@
+$cancel = $cancelScript | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18406/" `
+  --out "$out\modal-after-cancel.png" --width 1280 --height 1100 --script-stdin | ConvertFrom-Json
+"before=$($cancel.before) | armed=$($cancel.armed) | afterCancel=$($cancel.afterCancel)"
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/health" --expect 503 --status
+$thrownBefore = @(docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count
 ```
 
 **Expected:** `before` is `Reset the database, Continue`, `armed` is `Confirm, Cancel, Continue`, and
 `afterCancel` returns to `before`. `/health` still reads `503`: Cancel called nothing, so the overshoot
-is still there. Measured 2026-10-21, all three button sets exactly as above.
+is still there.
 
-Then click **Reset the database** and **Confirm**. The banner clears itself, in place, with no page
-reload:
+Then arm it again and confirm. The banner clears itself, in place, with no page reload:
 
 ```powershell
+$confirmScript = @'
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const modal = () => document.querySelector('.modal');
+const btn = t => modal() ? [...modal().querySelectorAll('button')].find(b => b.textContent.trim() === t) : null;
+for (let i = 0; i < 40 && !modal(); i++) await sleep(250);
+btn('Reset the database').click(); await sleep(1500);
+btn('Confirm').click();
+for (let i = 0; i < 60 && document.body.innerText.includes('schema version is ahead'); i++) await sleep(250);
+return { reasonGone: !document.body.innerText.includes('schema version is ahead') };
+'@
+$confirm = $confirmScript | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18406/" `
+  --out "$out\after-confirm.png" --width 1280 --height 1100 --script-stdin | ConvertFrom-Json
+"reasonGone=$($confirm.reasonGone)"
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/health" --expect 200 --status
 "quotes after: $((Invoke-RestMethod 'http://localhost:18406/api/v1/version').database.quotes)"
-"thrown: $(@(docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count)"
+"thrownSinceCancel=$(@(docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count - $thrownBefore)"
 ```
 
-**Expected:** `200` from `/health`, `quotes after: 0`, and `thrown` **unchanged from before the
-repair**. The rebuild recorded this build's own version, so there is no overshoot left to degrade on,
-and the banner and its button disappear where they stand.
+**Expected:** `reasonGone=True`, `200` from `/health`, `quotes after: 0`, and `thrownSinceCancel=0`.
+The rebuild recorded this build's own version, so there is no overshoot left to degrade on, and the
+banner and its button disappear where they stand. This is the positive control: the same container,
+repaired by the remedy the reason named, answers `200`.
 
 **The exception count is an assertion, not a detail.** The repair used to end in a forced page reload,
 and a full reload of an interactive page tears the Blazor circuit down without a close handshake:
 measured 2026-10-14, four `WebSocketException`s at `Error` for every reload, so a repair that worked
 wrote four error lines into the log an operator reads to find out what is wrong. The surfaces now
 re-render from `DatabaseHealthState.Changed` instead. Any rise here means a reload is back.
-
-**The quote count is what separates Cancel from Confirm**, as it is on the Notifications page: both
-leave the page looking similar, and only the domain read says which one ran.
 
 **One thing lags, deliberately.** The nav's `Limited` badge and its disabled Home link are rendered by
 `NavMenu`, which lives in the static layout rather than in the page's interactive island, so they
@@ -334,7 +385,15 @@ control appears on `/rest-api`, `/notifications`, `/import-review` and `/stats`,
 running it from any of them does the same. `/about` carries none: it is static SSR. The equivalent
 `POST /api/v1/admin/database/reset` answers `200` too, and the API comes back out of the gate with it.
 
-**The repair costs no log lines.** Measured on the same run: `thrown=0` before the repair and `0`
+**Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`, every step run unattended:
+`docker inspect` `true`, `unhealthy` naming the overshoot, the Reset and the restore; all seven database
+reads `503`; the six pages, the spec and `GET /api/v1/admin/backups` `200`; the modal and the
+notifications page showing the reason and no rows; the detection logged once with no `treated as
+complete`; the repair control on the four interactive pages and not on `/about`; Cancel leaving `/health`
+at `503`, Confirm clearing the reason in place, `/health` `200`, `quotes after: 0`, and no exception
+logged at any point.
+
+**The repair costs no log lines.** Measured on the 2026-10-15 run: `thrown=0` before the repair and `0`
 after, where the earlier forced-reload version wrote four `WebSocketException`s every time it
 succeeded. On a degraded page the banner and its button vanish in place; on the Home modal, the
 started-with-a-problem modal is replaced by the ready one, so the two surfaces agree without either
@@ -358,6 +417,11 @@ being told the state had changed. A pre-fix reading of the reload behaviour is n
 current step, so run step 7 against the current build only.
 
 Remove the container, image and worktree afterwards.
+
+**Where the canary has been run:** 2026-10-23 against `e4078444`, the commit before #327's first, as
+`quotinator:canary-327`, which also predates #350. Step 3 read `status=healthy` with no overshoot
+reason, and every database read answered (`200`, with `/api/v1/stats` `404` on that build). Step 4 read
+`404` from `/import-review` and from the backup listing, neither of which existed yet.
 
 ## Cleanup
 

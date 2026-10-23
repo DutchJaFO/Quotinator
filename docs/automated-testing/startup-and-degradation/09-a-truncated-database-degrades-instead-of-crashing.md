@@ -1,6 +1,6 @@
 # A truncated database degrades instead of crashing
 
-**Smoke:** no
+**Smoke:** yes
 **Environment:** Fresh + Constrained
 **Deterministic:** yes
 **Traces to:** #327
@@ -31,8 +31,10 @@ the other's behalf. The same split exists one category over, between
 - **The container is stopped before the file is touched.** `destroy` is `docker rm -f`, a kill rather
   than a clean stop, so the sidecars can survive it, which is why the bullet above deletes them rather
   than relying on a checkpoint.
-- **The second start waits for *listening*, not healthy**, since degrading is the expected outcome and
-  waiting for `200` would spend the whole timeout and then fail for the wrong reason.
+- **Wait for `unhealthy`, not for a `503`.** Degrading is the expected outcome, so waiting for `200`
+  would spend the whole timeout, and the startup wait page answers `503` with `status=starting`, so
+  waiting on the status code can return before the degraded state is settled. Step 3 polls the `status`
+  field, the technique [`01`](01-seeding-backup-degraded-startup-and-reset-recovery.md) established.
 - **A regex holding a backslash goes in its own variable, never inside an interpolated string.** In
   Windows PowerShell 5.1 a pattern such as `at [A-Za-z.]+\(` written directly inside `"$( ... )"` is a
   parse error on the escaped parenthesis, not a failed match. Measured 2026-10-21.
@@ -95,18 +97,37 @@ $dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-09"
 dotnet script scripts/testing/test-env.csx -- create --name qt-startup-09 --port 18409 `
   --image quotinator:local --bind $dataDir --wait-listening
 
+# A 503's body is read from the response stream: PowerShell 5.1 leaves ErrorDetails.Message empty here.
+function Health {
+  try   { Invoke-RestMethod "http://localhost:18409/api/v1/health" }
+  catch {
+    $response = $_.Exception.Response
+    if ($null -eq $response) { return [pscustomobject]@{ status = 'down' } }
+    $body = (New-Object IO.StreamReader($response.GetResponseStream())).ReadToEnd()
+    try { $body | ConvertFrom-Json -ErrorAction Stop } catch { [pscustomobject]@{ status = 'unreadable' } }
+  }
+}
+$deadline = (Get-Date).AddSeconds(180)
+while (($health = Health).status -notin 'unhealthy', 'healthy' -and (Get-Date) -lt $deadline) { Start-Sleep 1 }
+
 docker inspect -f '{{.State.Running}}' qt-startup-09
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18409/api/v1/health" --expect 503 --status
+"status=$($health.status)"
+"reasonNamesAWorkableRemedy=$($health.reason -match 'deleting the database file')"
 ```
 
-**Expected:** `true` from `docker inspect`, then `503` from health.
+**Expected:** `true` from `docker inspect`, `status=unhealthy`, and `reasonNamesAWorkableRemedy=True`.
 
-**Both halves are the point of this document.** `true` is the never-crash contract. `503` is the
-confirmation that the failure state was actually reached, rather than inferred from the recipe having
-been followed.
+**`true` and `unhealthy` together are the point of this document.** `true` is the never-crash contract.
+`unhealthy` is the confirmation that the failure state was actually reached, rather than inferred from
+the recipe having been followed.
+
+**The reason has to name a remedy that can work.** This fault gets the generic initialisation-failure
+reason, which names a database Reset, which refuses here (step 6), and deleting the database file and
+restarting, which works (step 7). The second is the one that has to be there.
 
 **On failure:** a container that is not running means the fault killed the process, which is the defect
-this document exists to catch. A `200` means the truncation did not take, so re-run from step 2.
+this document exists to catch. `status=healthy` means the truncation did not take, so re-run from step 2.
+`starting` or `down` means the wait gave up after 180 seconds.
 
 ### 4. Read the degraded pages and the OpenAPI surface
 
@@ -204,10 +225,11 @@ guidance rather than in this document.
 
 ## Observed effect
 
-**Measured 2026-10-21** against a freshly built `quotinator:local`, seeded to 795 quotes and truncated
-from 4,689,920 to 2,344,960 bytes.
+**Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`, seeded to 795 quotes and
+truncated from 4,730,880 to 2,365,440 bytes.
 
-The process stays up and `/health` reports `503`. `/`, `/stats` and `/notifications` each return `200`,
+The process stays up and `/health` settles at `503 unhealthy`, its reason naming the file-deletion
+remedy. `/`, `/stats` and `/notifications` each return `200`,
 `/openapi/v1.json` returns `200`, the home page carries *started with a problem*, and no page matches
 `at [A-Za-z.]+\(`. Every data-serving endpoint answers `503`.
 
@@ -221,7 +243,7 @@ count at `0`, and
 [`08`](08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md)'s Observed effect records
 that finding once, with #419's rule and the startup-state control behind it.
 
-**The three admin endpoints that answer an unhandled `500` in this state** are recorded there too, for
+**The six admin endpoints that answer an unhandled `500` in this state** are recorded there too, for
 the same reason: one finding, one place, rather than the same paragraph in both documents drifting
 apart.
 
@@ -232,17 +254,18 @@ remedy that points at the file. Deleting the database file and restarting return
 
 ## Canary
 
-**The positive control this run produces for itself**, since the never-crash contract predates every
-commit this document traces to and no pre-fix build applies. Step 7 removes the truncation and reads
-`200` in the same environment, so a build that degraded unconditionally fails there. Step 3's
-`--expect 503` is the other half: it ends the run when the truncation did not take, so the assertions
-in steps 4 to 6 cannot pass against a healthy container.
+**A pre-issue build.** The commit before #327's first commit, under a distinct tag, run through every
+step. That build predates the gating of `/version` while degraded and #348's reset refusal, so step 5
+reads `200` from `/api/v1/version` and step 6 reads an unhandled `500` from the reset.
 
-**Where the canary has been run:** step 7 returned `200` on 2026-10-21 against `quotinator:local` at
-commit `15f5b589`, in the same run that produced the readings above.
+**The positive control this run produces for itself.** Step 7 removes the truncation and reads `200` in
+the same environment, so a build that degraded unconditionally fails there. Step 3's `unhealthy` is the
+other half: it ends the run when the truncation did not take, so the assertions in steps 4 to 6 cannot
+pass against a healthy container.
 
-Deliberately not this document's own pass or fail: step 3 asserting `503` proves the truncation landed,
-not that the contract holds.
+**Where the canary has been run:** 2026-10-23 against `e4078444`, the commit before #327's first, as
+`quotinator:canary-327`. Steps 1 to 4 passed; step 5 read `200` from `/api/v1/version`, and step 6 read
+`500` from the reset. Step 7 read `healthy`.
 
 ## Cleanup
 

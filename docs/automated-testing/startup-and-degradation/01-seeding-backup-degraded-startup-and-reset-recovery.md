@@ -1,9 +1,9 @@
 # Seeding takes a backup, a broken schema degrades rather than crashes, and Reset recovers
 
-**Smoke:** no
+**Smoke:** yes
 **Environment:** Fresh + Constrained
 **Deterministic:** yes
-**Traces to:** #254
+**Traces to:** #254, #327
 
 ## Preconditions
 
@@ -155,14 +155,38 @@ or `starting` means the wait gave up after 120 seconds rather than hanging.
 
 ```powershell
 $health = dotnet script scripts/testing/http.csx -- --url "http://localhost:18401/api/v1/health" --expect 503 | ConvertFrom-Json
-"health status=$($health.status) reason=$($health.reason)"
+"health status=$($health.status)"
+"reasonNamesAWorkableRemedy=$($health.reason -match 'database Reset')"
 $random = dotnet script scripts/testing/http.csx -- --url "http://localhost:18401/api/v1/quotes/random" --expect 503 | ConvertFrom-Json
 "random status=$($random.status) reason=$($random.reason)"
+
+foreach ($path in '/api/v1/quotes', '/api/v1/quotes/search?q=the', '/api/v1/stats',
+                  '/api/v1/notifications', '/api/v1/masterdata/sources', '/api/v1/version') {
+  dotnet script scripts/testing/http.csx -- --url "http://localhost:18401$path" --expect 503 --status
+}
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18401/openapi/v1.json" --expect 200 --status
+
+$stackTrace = 'at [A-Za-z.]+\('
+foreach ($path in '/', '/stats', '/notifications') {
+  dotnet script scripts/testing/http.csx -- --url "http://localhost:18401$path" --expect 200 --status
+}
+$body = (Invoke-WebRequest "http://localhost:18401/" -UseBasicParsing).Content
+"degradedTextPresent=$($body -match 'started with a problem')"
+"stackTracePresent=$($body -match $stackTrace)"
 ```
 
-**Expected:** `/health` returns `503` with `status=unhealthy` and a populated `reason`, not a bare
-`200`. `/quotes/random` returns `503` with `status=unavailable` and its own `reason`, never a raw
-exception.
+**Expected:** `/health` returns `503` with `status=unhealthy` and `reasonNamesAWorkableRemedy=True`.
+`/quotes/random` returns `503` with `status=unavailable` and its own `reason`, never a raw exception,
+and the six other database reads return `503` too. `/openapi/v1.json` returns `200`. `/`, `/stats` and
+`/notifications` return `200`, with `degradedTextPresent=True` and `stackTracePresent=False`.
+
+**This fault is the one where the reason's first remedy works.** The schema is broken but the file
+opens, so a Reset can back it up and rebuild it, which step 6 does. The reason names it, and the
+assertion is that it does.
+
+**The pages and the spec are the other half of the contract.** The API refuses to answer from a broken
+schema, while the pages render a degraded form that says what happened, and the spec stays reachable so
+the operator can find the Reset. A `500` from any page is the degraded UI failing to render.
 
 ### 5. Call Reset with a missing key while still degraded
 
@@ -206,8 +230,20 @@ genuinely empty after a Reset.
 
 ## Observed effect
 
-Well established here, unusually: the ordered log sequence above *is* the observed effect, and it is
-what the assertions are made against.
+**Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`.
+
+The fresh seed logged `schema created at baseline` with `backups=0`, and the restart `schema is up to
+date`, still `backups=0`, with no exception before either. After `Quotinator_Quote` was dropped, the
+restart logged, in order: `[Database - Backup] backup complete` (INF), `[Database - Init] seeding failed:
+restoring pre-seed backup, database left unchanged...` (ERR), `[Database - Init] pre-seed backup
+restored.` (INF), and `[Server] "Database initialisation failed..."` (FTL) carrying
+`SQLite Error 1: 'no such table: Quotinator_Quote'`, with `backups=1` and the container `Up`.
+
+Degraded, `/health` read `unhealthy` with the generic reason, all seven database reads `503`, the spec
+`200`, and `/`, `/stats` and `/notifications` `200` with the degraded text and no stack trace. The reset
+answered `401` to a missing and to a wrong key, then `200` with every count `0`, after which `/health`
+read `healthy` and `/quotes/random` `NoResults` with no items. No exception was logged after the
+degraded start settled.
 
 **The three compounding gaps this came from**, all found during #254's own T1 pass:
 

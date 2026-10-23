@@ -27,9 +27,19 @@ job, recorded in its plan doc; the smoke set is the floor underneath it, never a
 
 ## The designated smoke set
 
-Nine tests. The question this set answers is *does this container fundamentally work*: a test is in
-it because its failure would invalidate most other results, not because it is important in its own
-right.
+Seventeen tests. The question this set answers is *does this container fundamentally work*, and a test
+is in it for one of two reasons.
+
+**Its failure would invalidate most other results.** That is the reason for the nine outside
+`startup-and-degradation/`'s degraded scenarios, and it is not a measure of importance in its own right.
+
+**It proves a degraded startup does not crash** (developer direction, 2026-10-22). The application must
+never crash, and a startup problem that takes the process down is a failure no run may let through,
+however rare the problem. Every degraded startup path the application has gets a document, and every one
+of those documents is in this set: a broken schema, an unwritable data directory, a file that is not a
+database, a truncated one, a data directory or `keys/` directory that cannot be created, a migration
+refused for want of a backup, and a schema version ahead of the build. Each asserts the same contract,
+and each ends by applying the remedy its failure reason names and reading `200`.
 
 | Test | Category |
 |---|---|
@@ -40,6 +50,14 @@ right.
 | [Per-file, per-entity-type import/seed report](import-and-staged-actions/19-per-file-import-report.md) | `import-and-staged-actions/` |
 | [Reset is a full wipe with no reseed](database-lifecycle/03-reset-is-a-full-wipe.md) | `database-lifecycle/` |
 | [Startup wait page during database initialisation](startup-and-degradation/03-startup-wait-page.md) | `startup-and-degradation/` |
+| [Seeding takes a backup, a broken schema degrades, and Reset recovers](startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md) | `startup-and-degradation/` |
+| [Degraded-state pages survive a genuine migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) | `startup-and-degradation/` |
+| [A recorded schema version ahead of the build degrades and says why](startup-and-degradation/06-schema-version-ahead-of-the-application.md) | `startup-and-degradation/` |
+| [A database that is not a database degrades instead of crashing](startup-and-degradation/08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
+| [A truncated database degrades instead of crashing](startup-and-degradation/09-a-truncated-database-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
+| [A data directory that cannot be created degrades instead of crashing](startup-and-degradation/10-a-data-directory-that-cannot-be-created-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
+| [A keys directory that cannot be created degrades instead of crashing](startup-and-degradation/11-a-keys-directory-that-cannot-be-created-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
+| [A migration refused for want of a backup degrades instead of crashing](startup-and-degradation/12-a-migration-refused-for-want-of-a-backup-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
 | [Startup notification system](notifications-and-changelog/01-notification-system.md) | `notifications-and-changelog/` |
 | [Changelog is served from its own on-disk database](notifications-and-changelog/07-changelog-served-from-its-own-database.md) | `notifications-and-changelog/` |
 
@@ -1193,7 +1211,6 @@ asserts what it should; what is missing is a reading an entry can quote.
 | [notifications-and-changelog/11-clean-reseed-confirmation.md](notifications-and-changelog/11-clean-reseed-confirmation.md) | The confirmation count per file, and the breakdown's own totals against its parts |
 | [notifications-and-changelog/12-running-action-state.md](notifications-and-changelog/12-running-action-state.md) | The badge text and the control set while the action runs, and the quote count after an interrupted run |
 | [notifications-and-changelog/13-notification-layout.md](notifications-and-changelog/13-notification-layout.md) | The computed `white-space`, the line-box count, and the dialog's height against a non-zero viewport |
-| [startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md](startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md) | The ordered log sequence the broken schema produces, with the date of the reading |
 | [startup-and-degradation/02-startup-backup-gating-and-storage-budget.md](startup-and-degradation/02-startup-backup-gating-and-storage-budget.md) | The backup count at each of the five checkpoints |
 
 ---
@@ -1256,15 +1273,18 @@ The five this suite runs on:
 
 | # | Test | Smoke |
 |---|---|---|
-| 01 | [Seeding backup, degraded startup, and Reset recovery](startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md) | no |
+| 01 | [Seeding backup, degraded startup, and Reset recovery](startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md) | yes |
 | 02 | [Startup backs up only when there is real work](startup-and-degradation/02-startup-backup-gating-and-storage-budget.md) | no |
 | 03 | [Kestrel serves a wait page during initialisation](startup-and-degradation/03-startup-wait-page.md) | yes |
 | 04 | [Migration replay under restricted write](startup-and-degradation/04-migration-replay-under-restricted-write.md) | no |
-| 05 | [Degraded pages survive a migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) | no |
-| 06 | [A recorded schema version ahead of the build degrades and says why](startup-and-degradation/06-schema-version-ahead-of-the-application.md) | no |
+| 05 | [Degraded pages survive a migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) | yes |
+| 06 | [A recorded schema version ahead of the build degrades and says why](startup-and-degradation/06-schema-version-ahead-of-the-application.md) | yes |
 | 07 | [The source refresh is off unless it is turned on, and still works when it is](startup-and-degradation/07-the-source-refresh-is-off-unless-turned-on.md) | no |
-| 08 | [A database that is not a database degrades instead of crashing](startup-and-degradation/08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md) | no |
-| 09 | [A truncated database degrades instead of crashing](startup-and-degradation/09-a-truncated-database-degrades-instead-of-crashing.md) | no |
+| 08 | [A database that is not a database degrades instead of crashing](startup-and-degradation/08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md) | yes |
+| 09 | [A truncated database degrades instead of crashing](startup-and-degradation/09-a-truncated-database-degrades-instead-of-crashing.md) | yes |
+| 10 | [A data directory that cannot be created degrades instead of crashing](startup-and-degradation/10-a-data-directory-that-cannot-be-created-degrades-instead-of-crashing.md) | yes |
+| 11 | [A keys directory that cannot be created degrades instead of crashing](startup-and-degradation/11-a-keys-directory-that-cannot-be-created-degrades-instead-of-crashing.md) | yes |
+| 12 | [A migration refused for want of a backup degrades instead of crashing](startup-and-degradation/12-a-migration-refused-for-want-of-a-backup-degrades-instead-of-crashing.md) | yes |
 
 ### `backup/`
 

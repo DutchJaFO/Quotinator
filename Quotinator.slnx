@@ -410,6 +410,9 @@
     <File Path="docs/automated-testing/startup-and-degradation/07-the-source-refresh-is-off-unless-turned-on.md" />
     <File Path="docs/automated-testing/startup-and-degradation/08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md" />
     <File Path="docs/automated-testing/startup-and-degradation/09-a-truncated-database-degrades-instead-of-crashing.md" />
+    <File Path="docs/automated-testing/startup-and-degradation/10-a-data-directory-that-cannot-be-created-degrades-instead-of-crashing.md" />
+    <File Path="docs/automated-testing/startup-and-degradation/11-a-keys-directory-that-cannot-be-created-degrades-instead-of-crashing.md" />
+    <File Path="docs/automated-testing/startup-and-degradation/12-a-migration-refused-for-want-of-a-backup-degrades-instead-of-crashing.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/notifications-and-changelog/">
     <File Path="docs/automated-testing/notifications-and-changelog/01-notification-system.md" />

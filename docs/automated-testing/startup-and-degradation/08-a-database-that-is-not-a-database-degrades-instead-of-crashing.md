@@ -1,6 +1,6 @@
 # A database that is not a database degrades instead of crashing
 
-**Smoke:** no
+**Smoke:** yes
 **Environment:** Fresh + Constrained
 **Deterministic:** yes
 **Traces to:** #327
@@ -29,8 +29,10 @@ continues: Kestrel binds, `/health` answers `503`, and the Blazor pages render t
   of this test.
 - **The container is stopped before the file is touched.** Writing under a running container races its
   own connections, so the outcome would depend on when the write landed.
-- **The second start waits for *listening*, not healthy.** Degrading is the expected outcome, so
-  waiting for `200` would spend the whole timeout and then fail for the wrong reason.
+- **Wait for `unhealthy`, not for a `503`.** Degrading is the expected outcome, so waiting for `200`
+  would spend the whole timeout, and the startup wait page answers `503` with `status=starting`, so
+  waiting on the status code can return before the degraded state is settled. Step 3 polls the `status`
+  field, the technique [`01`](01-seeding-backup-degraded-startup-and-reset-recovery.md) established.
 - **A regex holding a backslash goes in its own variable, never inside an interpolated string.** In
   Windows PowerShell 5.1 a pattern such as `at [A-Za-z.]+\(` written directly inside `"$( ... )"` is a
   parse error on the escaped parenthesis, not a failed match. Measured 2026-10-21, and step 4 writes it
@@ -93,21 +95,39 @@ $dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-08"
 dotnet script scripts/testing/test-env.csx -- create --name qt-startup-08 --port 18408 `
   --image quotinator:local --bind $dataDir --wait-listening
 
+# A 503's body is read from the response stream: PowerShell 5.1 leaves ErrorDetails.Message empty here.
+function Health {
+  try   { Invoke-RestMethod "http://localhost:18408/api/v1/health" }
+  catch {
+    $response = $_.Exception.Response
+    if ($null -eq $response) { return [pscustomobject]@{ status = 'down' } }
+    $body = (New-Object IO.StreamReader($response.GetResponseStream())).ReadToEnd()
+    try { $body | ConvertFrom-Json -ErrorAction Stop } catch { [pscustomobject]@{ status = 'unreadable' } }
+  }
+}
+$deadline = (Get-Date).AddSeconds(180)
+while (($health = Health).status -notin 'unhealthy', 'healthy' -and (Get-Date) -lt $deadline) { Start-Sleep 1 }
+
 docker inspect -f '{{.State.Running}}' qt-startup-08
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18408/api/v1/health" --expect 503 --status
+"status=$($health.status)"
+"reasonNamesAWorkableRemedy=$($health.reason -match 'deleting the database file')"
 ```
 
-**Expected:** `true` from `docker inspect`, then `503` from health.
+**Expected:** `true` from `docker inspect`, `status=unhealthy`, and `reasonNamesAWorkableRemedy=True`.
 
-**Both halves are the point of this document.** `true` is the never-crash contract: the process is
-still running after a failure that reached it before any schema version was read. `503` is the
-confirmation that the failure state was actually reached, rather than inferred from the recipe having
-been followed.
+**`true` and `unhealthy` together are the point of this document.** `true` is the never-crash contract:
+the process is still running after a failure that reached it before any schema version was read.
+`unhealthy` is the confirmation that the failure state was actually reached, rather than inferred from
+the recipe having been followed.
+
+**The reason has to name a remedy that can work.** This fault gets the generic initialisation-failure
+reason, which names two: a database Reset, which refuses here (step 6), and deleting the database file
+and restarting, which works (step 7). The second is the one that has to be there.
 
 **On failure:** a container that is not running means the fault killed the process, which is the defect
-this document exists to catch. A `200` means the file was not actually replaced, so re-run from step 2;
-`--expect 503` ends the run here either way rather than letting the assertions below pass against a
-container that never degraded.
+this document exists to catch. `status=healthy` means the file was not actually replaced, so re-run from
+step 2 rather than letting the assertions below pass against a container that never degraded. `starting`
+or `down` means the wait gave up after 180 seconds.
 
 ### 4. Read the degraded pages and the OpenAPI surface
 
@@ -178,7 +198,7 @@ that the admin request reached its handler rather than being answered by the hea
 makes the surface a recovery route at all. What it does *not* establish is that the route succeeds:
 this reset refuses, because a file SQLite cannot open cannot be backed up and cannot be dropped table
 by table either. `namesAFileRemedy` is the half that matters here, that the refusal hands the operator
-a remedy pointing at the file itself, which step 6 then proves works.
+a remedy pointing at the file itself, which step 7 then proves works.
 
 **On failure:** a `503` would mean the health gate answered instead of the handler, so the recovery
 surface is not actually reachable while degraded. A `500` would mean the refusal is not reached at all.
@@ -201,9 +221,9 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18408/api/v1/h
 
 **This is the positive control and the remedy proof in one step.** Every assertion above is about a
 degraded container, so without a passing case this document would stay green against a build that
-degraded on everything. It is also the proof that the remedy step 6 read out of the refusal, replace
-the database file from outside the application, actually resolves the condition rather than being
-advice nobody checked.
+degraded on everything. It is also the proof that the remedy step 3 read out of the reason and step 6
+read out of the refusal, removing the database file from outside the application, actually resolves the
+condition rather than being advice nobody checked.
 
 **On failure:** a `503` here means either the degradation is not specific to the sabotage, which makes
 every assertion above worthless, or the named remedy does not work, which is a defect in the guidance
@@ -211,10 +231,11 @@ rather than in this document.
 
 ## Observed effect
 
-**Measured 2026-10-21** against a freshly built `quotinator:local`, seeded to 795 quotes and then
+**Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`, seeded to 795 quotes and then
 replaced with 34 bytes of text.
 
-The process stays up and `/health` reports `503`. `/`, `/stats` and `/notifications` each return `200`,
+The process stays up and `/health` settles at `503 unhealthy`, its reason naming the file-deletion
+remedy. `/`, `/stats` and `/notifications` each return `200`,
 `/openapi/v1.json` returns `200`, the home page carries *started with a problem*, and no page matches
 `at [A-Za-z.]+\(`. Every database-reading endpoint is gated: `/api/v1/quotes`,
 `/api/v1/quotes/random`, `/api/v1/quotes/search`, `/api/v1/stats`, `/api/v1/notifications`,
@@ -228,7 +249,7 @@ broke, from #419: the endpoint is gated *while starting* precisely because "a ca
 reach for it as a readiness endpoint in `/health`'s place", and during startup it does answer `503`.
 The gate existed and the degraded state was not behind it. It now answers
 `503 {"status":"degraded","version":...,"environment":...}` with no `database` block, and it still
-answers `200` when healthy, measured in step 7.
+answers `200` when healthy.
 
 **Six admin endpoints answer an unhandled `500` in this state, and this document does not assert
 them.** Measured 2026-10-21, each returning a bare *"An error occurred while processing your request"*
@@ -253,32 +274,31 @@ governs it, since a condition the code has already detected is being thrown rath
 **Recovery route, and whether it can succeed.** Reachable: `POST /api/v1/admin/database/reset` reaches
 its handler and answers `409 Conflict` rather than being gated away by the `503`. **Not workable as
 offered**: the reset refuses, naming the obstacle and handing back a remedy that points at the file.
-Deleting the database file and restarting returns the container to `200`, measured in step 6.
+Deleting the database file and restarting returns the container to `200`, measured in step 7.
 
-**The first instruction the operator receives is the wrong one, and this document records that rather
-than asserting around it.** `/health` carries the generic initialisation-failure reason, which
-recommends a database Reset; that reset then refuses. The correct remedy arrives on the second hop, out
-of the refusal itself. Contrast
-[`05`](05-degraded-pages-survive-a-migration-failure.md), where #326 gave the unwritable-directory
-fault its own reason so the first instruction already names something that works. The selection
-predicate for that reason matches SQLite error codes 14 and 8; an unreadable file raises neither, so it
-falls through to the generic text. Reported as a finding, not fixed here: the degraded contract this
-document asserts is intact either way, and changing a health reason is an application change rather
-than test coverage.
+**The reason names a remedy that works, second.** `/health` carries the generic initialisation-failure
+reason, which recommends a database Reset first, and that reset refuses. Its second remedy, *stopping
+the app, deleting the database file, and restarting*, is the one that works, and step 3 asserts it is
+there. The reason's diagnosis does not fit this fault, though: it says the recorded schema version
+probably does not match the on-disk schema, for a file that is not a database at all. Contrast
+[`05`](05-degraded-pages-survive-a-migration-failure.md), where #326 gave the unwritable-directory fault
+its own reason, matched on SQLite error codes 14 and 8; an unreadable file raises neither, so it falls
+through to the generic text.
 
 ## Canary
 
-**The positive control this run produces for itself**, since the never-crash contract predates every
-commit this document traces to and no pre-fix build applies. Step 6 removes the sabotage and reads
-`200` in the same environment, so a build that degraded unconditionally fails there. Step 3's
-`--expect 503` is the other half: it ends the run when the sabotage did not land, so the assertions in
-steps 4 and 5 cannot pass against a healthy container.
+**A pre-issue build.** The commit before #327's first commit, under a distinct tag, run through every
+step. That build predates the gating of `/version` while degraded and #348's reset refusal, so step 5
+reads `200` from `/api/v1/version` and step 6 reads an unhandled `500` from the reset.
 
-**Where the canary has been run:** step 6 returned `200` on 2026-10-21 against `quotinator:local` at
-commit `15f5b589`, in the same run that produced the readings above.
+**The positive control this run produces for itself.** Step 7 removes the sabotage and reads `200` in
+the same environment, so a build that degraded unconditionally fails there. Step 3's `unhealthy` is the
+other half: it ends the run when the sabotage did not land, so the assertions in steps 4 to 6 cannot
+pass against a healthy container.
 
-Deliberately not this document's own pass or fail: step 3 asserting `503` proves the sabotage landed,
-not that the contract holds.
+**Where the canary has been run:** 2026-10-23 against `e4078444`, the commit before #327's first, as
+`quotinator:canary-327`. Steps 1 to 4 passed; step 5 read `200` from `/api/v1/version`, and step 6 read
+`500` from the reset. Step 7 read `healthy`.
 
 ## Cleanup
 

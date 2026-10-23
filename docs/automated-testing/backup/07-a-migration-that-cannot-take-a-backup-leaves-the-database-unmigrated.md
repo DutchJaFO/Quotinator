@@ -34,6 +34,13 @@ database migrate.
   and higher after the remedied one.
 - **The log is read before each stop.**
 
+## Explicitly not covered here
+
+- **The startup contract for this state**: the process alive, every database read gated, the OpenAPI
+  surface and the degraded pages answering, and the remedy applied from inside the application.
+  [`startup-and-degradation/12`](../startup-and-degradation/12-a-migration-refused-for-want-of-a-backup-degrades-instead-of-crashing.md)
+  provokes the same refusal to assert that. This document asserts the backup contract.
+
 ## Steps
 
 ### 1. Let the prior release create its database
