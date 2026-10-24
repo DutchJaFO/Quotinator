@@ -177,9 +177,7 @@ unprotected, so on that build step 2 reads `status=healthy`: the migration runs 
 Step 4 is the positive control inside every run: it removes the obstacle and reads `200`, so a build that
 degraded unconditionally fails there.
 
-**Where the canary has been run:** 2026-10-23 against `e4078444`, the commit before #327's first, as
-`quotinator:canary-327`, which also predates #348's refusal. Step 2 read `status=healthy` with no
-refusal reason: the migration ran without its backup. Step 3 read `200` from every database read.
+**Where the canary has been run, 2026-10-24.** Against `e4078444`, the commit before #327, which also predates #348's refusal, as `quotinator:canary-327`: step 2 read `status=healthy` with no reason, the migration having run without its backup, and step 3 read `200` from all seven database reads.
 
 ## Cleanup
 

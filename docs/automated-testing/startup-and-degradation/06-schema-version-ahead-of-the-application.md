@@ -423,10 +423,7 @@ current step, so run step 7 against the current build only.
 
 Remove the container, image and worktree afterwards.
 
-**Where the canary has been run:** 2026-10-23 against `e4078444`, the commit before #327's first, as
-`quotinator:canary-327`, which also predates #350. Step 3 read `status=healthy` with no overshoot
-reason, and every database read answered `200`. Step 4 read
-`404` from `/import-review` and from the backup listing, neither of which existed yet.
+**Where the canary has been run, 2026-10-24.** Against `e4078444`, the commit before #327 and before #350, as `quotinator:canary-327`: step 3 read `status=healthy` with no overshoot reason and every database read `200`; step 4 read `404` from `/api/v1/admin/backups`, which did not exist yet; step 5's modal named no overshoot, and step 7 found no repair control on any page.
 
 ## Cleanup
 

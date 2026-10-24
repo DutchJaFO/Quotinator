@@ -306,6 +306,8 @@ that degraded unconditionally fails there.
 
 Remove the container, image and worktree afterwards.
 
+**Where the canary has been run, 2026-10-24.** Against `e4078444`, the commit before #327, as `quotinator:canary-327`: step 3 read `200` from `/api/v1/version`, and step 4 `500` from the reset. Against `64297b7e`, the commit before #293, as `quotinator:canary-293`: the same two, and step 5 read `500` from all three pages. Step 6 read `healthy` on both.
+
 ## Cleanup
 
 ```powershell

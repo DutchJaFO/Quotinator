@@ -285,6 +285,8 @@ is why the two are named separately here.
 
 Remove the container, image and worktree afterwards.
 
+**Where the canary has been run, 2026-10-24.** Against `e4078444`, the commit before #327, as `quotinator:canary-327`: steps 1 to 3 passed and step 4 read `200` from `/api/v1/version`. Against `210d6830`, the commit before #254, as `quotinator:canary-254`: step 3 read `status=healthy` with no backup taken, the dropped table never detected, and step 4 read `200` from the database reads and `404` from the pages.
+
 ## Cleanup
 
 Read the log before the stop, per the index's *Read the log before the application stops*. Every line

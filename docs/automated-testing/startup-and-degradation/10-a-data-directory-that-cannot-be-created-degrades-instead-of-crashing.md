@@ -169,6 +169,8 @@ so on that build the configuration-time `CreateDirectory` throws before Kestrel 
 Step 3 is the positive control inside every run: it removes the sabotage and reads `200`, so a build
 that degraded unconditionally fails there.
 
+**Where the canary has been run, 2026-10-24.** Against `c8322590`, the commit before #326, as `quotinator:canary-326`: step 1 read `false` from `docker inspect` and `status=down`, the process gone before Kestrel bound. Against `e4078444`, the commit before #327, as `quotinator:canary-327`: step 1 passed and step 2 read `200` from `/api/v1/version`.
+
 ## Cleanup
 
 ```powershell

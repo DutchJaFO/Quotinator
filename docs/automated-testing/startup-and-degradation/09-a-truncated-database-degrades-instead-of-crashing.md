@@ -201,6 +201,9 @@ step. That build predates the gating of `/version` while degraded, so step 4 rea
 the same environment, so a build that degraded unconditionally fails there. Step 3's `unhealthy` is the
 other half: it ends the run when the truncation did not take, so step 4 cannot pass against a healthy
 container.
+
+**Where the canary has been run, 2026-10-24.** Against `e4078444`, the commit before #327, as `quotinator:canary-327`: steps 1 to 3 passed, step 4 read `200` from `/api/v1/version`, and step 5 read `healthy`.
+
 ## Cleanup
 
 ```powershell

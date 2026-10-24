@@ -1,6 +1,6 @@
 # #327: Smoke tests that prove startup problems degrade rather than crash
 
-**Status:** In progress (step 15)
+**Status:** In progress (step 16)
 **GitHub issue:** #327
 **Tiers required:** T1, T2
 **Depends on:** #326, #339, #350
@@ -478,7 +478,7 @@ All nine were re-run as written: zero expectation failures.
 
 ### 15. Run each document against a build from before this issue
 
-**Status:** 🚧 In progress, to be re-run for every document step 13 changes
+**Status:** ✅ Done 2026-10-24
 
 Per `process.md` → Implementation, step 1. The parent of the first `[#327]` commit
 (`git log --reverse --format=%H --grep "\[#327\]" | Select-Object -First 1`) is added as a worktree,
@@ -512,6 +512,28 @@ The earlier-fix canaries, each built from the commit before that issue's first c
 Several of those readings land on steps step 13 removes, so each narrowed document is run against the
 same builds again and only the readings that still apply are written into its `Canary`. Worktrees and
 images were removed after the first run.
+
+**Second run, 2026-10-24, against the narrowed documents**, every image rebuilt from the same commits.
+Each of the nine fails at a named step on its canary build, and each reading is in its own `Canary`:
+
+| Document | Build | Failing step |
+|---|---|---|
+| `01` | `canary-327` | step 4: `/api/v1/version` `200` |
+| `01` | `canary-254` | step 3: `healthy`, the dropped table not detected |
+| `05` | `canary-327` | step 3: `/version` `200`; step 4: reset `500` |
+| `05` | `canary-293` | step 5: all three pages `500` |
+| `06` | `canary-327` | step 3: `healthy`, no overshoot reason |
+| `08`, `09` | `canary-327` | step 4: `/version` `200` |
+| `10`, `11` | `canary-326` | step 1: the process gone, `status=down` |
+| `10`, `11` | `canary-327` | step 2: `/version` `200` |
+| `12` | `canary-327` | step 2: `healthy`, the migration ran without its backup |
+| `13` | `canary-327` and `eb8c1a19` | step 1: `healthy`, no reason |
+
+**The runner's first pass over `01` measured nothing.** `01`'s `create` names no `--image`, so the
+image substitution left it on `test-env.csx`'s default `quotinator:local` and both of its canary runs read
+the current build, passing throughout. Found by its baseline log naming the current schema; the runner
+now supplies `--image` where a document leaves it to the default, and `01` was run again against both
+builds. Worktrees and images were removed afterwards.
 
 ### 16. Run the template and suite guards
 
@@ -566,7 +588,7 @@ The developer starts the application in Visual Studio and confirms it starts wit
 | 14 | ❌ | No scenario asserts a migration number or schema version | Live | Read of all nine documents in steps 13 and 14 |
 | 15 | ❌ | Each document carries the template fields, including Determinism, and is in the smoke set | Unit test | Step 16: `RepositoryStructureTests` template guards and `SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` green |
 | 16 | ✅ | In-process: every deterministic, cross-platform scenario has negative tests and a positive control | Unit test | Step 2: the `StartupResilienceTests` and `StartupBackupRefusalTests` methods tabled there, 43 green, every new one shown able to fail by mutations M1 to M7 |
-| 17 | ❌ | Each document is shown able to fail | Live (Docker) | Step 15: every scenario document against `quotinator:canary-327`, and the earlier-fix canaries, the failing step recorded in each `Canary` |
+| 17 | ✅ | Each document is shown able to fail | Live (Docker) | Step 15: every scenario document against `quotinator:canary-327`, and the earlier-fix canaries, the failing step recorded in each `Canary` |
 | 18 | ❌ | End-of-issue T2 scope passes | Live (Docker) | Step 17: smoke set, `startup-and-degradation/`, changed documents and every `http.csx` user, each green |
 | 19 | ❌ | Build clean and no regression | Build + Unit test | Step 18: 0 warnings, 0 errors; full suite green with `-m:1` |
 | 20 | ❌ | The application still starts | Manual | Step 19, confirmed by the developer in Visual Studio |

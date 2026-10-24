@@ -155,6 +155,8 @@ every database read. Step 3 read `200`.
 **The positive control this run produces for itself.** Step 3 removes the sabotage and reads `200`, so a
 build that degraded unconditionally fails there.
 
+**Also run, 2026-10-24,** against `e4078444`, the commit before #327, as `quotinator:canary-327`: step 1 read `status=healthy` with no reason and no key file, and step 2 read `200` from all seven database reads.
+
 ## Cleanup
 
 ```powershell
