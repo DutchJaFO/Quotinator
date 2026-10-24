@@ -47,6 +47,10 @@
 //   --script-stdin        Read JavaScript from stdin, evaluate it after the wait, print its result, and
 //                         use an {x,y,width,height} return value as the capture region. The body runs
 //                         inside an async function, so `await` works and the value comes from `return`
+//   --script-file <path>  As --script-stdin, reading the JavaScript from a committed file instead, so a
+//                         document step is a single command with no here-string piped into it (ADR 010)
+//   --result-out <path>   Also write the script's result to this file (UTF-8, no BOM), so a following
+//                         command reads it from the file rather than through a shell pipe
 //   --browser <name>      edge (default) or chrome
 //   --full-page           Capture the whole scrollable page rather than the viewport. Ignored when the
 //                         script returns a region
@@ -66,7 +70,7 @@ string? url = Value("--url");
 string? outPath = Value("--out");
 if (url is null || outPath is null)
 {
-    Console.Error.WriteLine("usage: capture-page.csx -- --url <url> --out <path.png> [--width N] [--height N] [--wait-ms N] [--script-stdin] [--browser edge|chrome] [--full-page]");
+    Console.Error.WriteLine("usage: capture-page.csx -- --url <url> --out <path.png> [--width N] [--height N] [--wait-ms N] [--script-stdin | --script-file <path>] [--result-out <path>] [--browser edge|chrome] [--full-page]");
     return 1;
 }
 
@@ -97,7 +101,12 @@ if (browser is null)
 }
 
 string? script = null;
-if (Flag("--script-stdin"))
+if (Value("--script-file") is string scriptFile)
+{
+    script = File.ReadAllText(scriptFile).TrimStart('﻿').Trim();
+    if (script.Length == 0) script = null;
+}
+else if (Flag("--script-stdin"))
 {
     script = await Console.In.ReadToEndAsync();
     // PowerShell 5.1 prefixes a BOM when it pipes a string to a native process; it would be a syntax
@@ -217,7 +226,15 @@ try
         }
 
         JsonNode? value = evaluated?["result"]?["value"];
-        Console.Out.WriteLine(value?.ToJsonString() ?? "null");
+        string result = value?.ToJsonString() ?? "null";
+        Console.Out.WriteLine(result);
+
+        if (Value("--result-out") is string resultOut)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(resultOut))!);
+            File.WriteAllText(resultOut, result, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            Console.Error.WriteLine($"Wrote the script's result to {resultOut}");
+        }
 
         // An element's own getBoundingClientRect() is the intended shape here, so a document crops to
         // an element by returning one rather than by naming pixels.

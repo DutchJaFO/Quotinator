@@ -46,23 +46,17 @@ obstacle and its remedies.
 
 ### 1. Let the prior release create its database, then fill the backup budget
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-12"
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path "$dataDir\backups" | Out-Null
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-12 --port 18412 `
-  --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind $dataDir
-(Invoke-RestMethod "http://localhost:18412/api/v1/version").database.quotes
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-12 --bind $dataDir
-
-$stream = [System.IO.File]::Create((Join-Path $dataDir "backups\filler.db"))
-$stream.SetLength([int64]1073741824)
-$stream.Close()
-(Get-Item "$dataDir\backups\filler.db").Length
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-12 --delete C:\repos\Quotinator\.claude\temp\qt-startup-12-out --create-directory C:\repos\Quotinator\.claude\temp\qt-startup-12\backups
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-12 --port 18412 --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind C:\repos\Quotinator\.claude\temp\qt-startup-12
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-12-out\version-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-12-out\version-before.json --greater-than database.quotes=0
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-12 --bind C:\repos\Quotinator\.claude\temp\qt-startup-12
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --sparse C:\repos\Quotinator\.claude\temp\qt-startup-12\backups\filler.db 1073741824 --expect-length C:\repos\Quotinator\.claude\temp\qt-startup-12\backups\filler.db 1073741824
 ```
 
-**Expected:** a non-zero quote count from the prior release, and a filler of `1073741824` bytes.
+**Expected:** every command exits `0`: a quote count above `0` from the prior release, and a filler of
+`1073741824` bytes.
 
 **On failure:** a prior release that cannot reach healthy is not this document's subject. A smaller
 filler leaves room for the backup, so the migration would run and every step below would assert against
@@ -70,29 +64,15 @@ a healthy container.
 
 ### 2. Start the current build, and confirm it degraded rather than died
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-12 --port 18412 `
-  --image quotinator:local --bind $dataDir --wait-listening
-
-# A 503's body is read from the response stream: PowerShell 5.1 leaves ErrorDetails.Message empty here.
-function Health {
-  try   { Invoke-RestMethod "http://localhost:18412/api/v1/health" }
-  catch {
-    $response = $_.Exception.Response
-    if ($null -eq $response) { return [pscustomobject]@{ status = 'down' } }
-    $body = (New-Object IO.StreamReader($response.GetResponseStream())).ReadToEnd()
-    try { $body | ConvertFrom-Json -ErrorAction Stop } catch { [pscustomobject]@{ status = 'unreadable' } }
-  }
-}
-$deadline = (Get-Date).AddSeconds(180)
-while (($health = Health).status -notin 'unhealthy', 'healthy' -and (Get-Date) -lt $deadline) { Start-Sleep 1 }
-
+```
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-12 --port 18412 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-12 --wait-listening
+dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18412/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-startup-12-out\health.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-12-out\health.json --equals status=unhealthy --not-empty reason
 docker inspect -f '{{.State.Running}}' qt-startup-12
-"status=$($health.status)"
-"reasonGiven=$(-not [string]::IsNullOrWhiteSpace($health.reason))"
 ```
 
-**Expected:** `true` from `docker inspect`, `status=unhealthy`, and `reasonGiven=True`.
+**Expected:** the `json` command exits `0`, printing `status = unhealthy` and the reason, and
+`docker inspect` prints `true`.
 
 **`true` and `unhealthy` with a reason are the never-crash contract**, for a startup that refused the
 step it came to perform: the application says it is degraded rather than serving from a schema behind
@@ -104,14 +84,15 @@ gave up after 180 seconds.
 
 ### 3. Confirm the OpenAPI surface answers and every database read is gated
 
-```powershell
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18412/openapi/v1.json" --expect 200 --status
-
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
-                  '/api/v1/version') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18412$path" --expect 503 --status
-}
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/openapi/v1.json --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/quotes --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/quotes/random --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18412/api/v1/quotes/search?q=the" --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/conversations --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/notifications --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/masterdata/sources --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/version --expect 503 --status
 ```
 
 **Expected:** `200` from `/openapi/v1.json`, and `503` from every one of the seven endpoints.
@@ -124,25 +105,23 @@ reached the database and threw rather than being gated.
 
 ### 4. Remove the obstacle, and confirm the database migrates
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-12 --bind $dataDir
-Remove-Item (Join-Path $dataDir "backups\filler.db")
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-12 --port 18412 `
-  --image quotinator:local --bind $dataDir
-
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18412/api/v1/health" --expect 200 --status
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
-                  '/api/v1/version') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18412$path" --expect 200 --status
-}
-"quotes=$((Invoke-RestMethod 'http://localhost:18412/api/v1/version').database.quotes)"
-$log = docker logs qt-startup-12 2>&1 | Out-String
-"migrationApplied=$(([regex]::Matches($log, 'migration applied')).Count)"
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-12 --bind C:\repos\Quotinator\.claude\temp\qt-startup-12
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-12\backups\filler.db
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-12 --port 18412 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-12
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/health --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/quotes --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/quotes/random --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18412/api/v1/quotes/search?q=the" --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/conversations --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/notifications --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/masterdata/sources --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-12-out\version-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-12-out\version-after.json --greater-than database.quotes=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-12 --pattern "migration applied" --at-least 1
 ```
 
-**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` `200`, `quotes` non-zero, and `migrationApplied` non-zero.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` answers `200`, and both TestProbe commands exit `0`: a quote count above `0`, and at least one `migration applied` line.
 
 **This is the positive control.** Every assertion above is about a degraded container, so without a
 passing case this document would stay green against a build that refused every migration. With room for
@@ -181,10 +160,9 @@ degraded unconditionally fails there.
 
 ## Cleanup
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-12"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-12 --bind $dataDir
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-12 --bind C:\repos\Quotinator\.claude\temp\qt-startup-12
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-12 --delete C:\repos\Quotinator\.claude\temp\qt-startup-12-out
 ```
 
 **Expected:** the container is gone and the bind directory is removed, so the next run starts from

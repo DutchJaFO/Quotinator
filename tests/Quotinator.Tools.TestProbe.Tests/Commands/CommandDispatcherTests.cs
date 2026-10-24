@@ -27,6 +27,46 @@ public sealed class CommandDispatcherTests
         => Assert.AreEqual(0, Run(["json", "--equals", "status=unhealthy"], "﻿{\"status\":\"unhealthy\"}").ExitCode);
 
     [TestMethod]
+    public void Run_JsonFromFile_HoldsAgainstTheFile()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "testprobe-" + Guid.NewGuid().ToString("N") + ".json");
+        File.WriteAllText(path, """{"status":"unhealthy"}""");
+
+        try
+        {
+            Assert.AreEqual(0, Run(["json", "--file", path, "--equals", "status=unhealthy"], string.Empty).ExitCode);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void Run_JsonFromFile_FailsAgainstTheFile()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "testprobe-" + Guid.NewGuid().ToString("N") + ".json");
+        File.WriteAllText(path, """{"status":"unhealthy"}""");
+
+        try
+        {
+            Assert.AreEqual(1, Run(["json", "--file", path, "--equals", "status=healthy"], string.Empty).ExitCode);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void Run_JsonFromAMissingFile_ExitsOne()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "testprobe-absent-" + Guid.NewGuid().ToString("N") + ".json");
+
+        Assert.AreEqual(1, Run(["json", "--file", path, "--present", "status"], string.Empty).ExitCode);
+    }
+
+    [TestMethod]
     public void Run_JsonUnreadableOption_ExitsOne()
         => Assert.AreEqual(1, Run(["json", "--equals", "status"], """{"status":"x"}""").ExitCode);
 

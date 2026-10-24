@@ -518,7 +518,24 @@ script"* to a `tools/` project; no repository document describes sharing code be
   command's positive case exited `0` and every negative control exited `1`, naming the expectation. That
   check found that PowerShell 5.1 prefixes a BOM when it pipes into a native process; `json` now strips
   it, under its own red test.
-- [ ] Convert `01`, `05`, `06`, `08`, `09`, `10`, `11`, `12` and `13`.
+- [x] Convert `01`, `05`, `06`, `08`, `09`, `10`, `11`, `12` and `13`. TestProbe gained
+  `--create-directory`, `--expect-absent` and `--expect-match-count`, and `--write-text`/`--sparse` create
+  a missing parent, each under its own red test.
+- [x] Remove the shell constructs the first conversion kept. Data now passes between steps through files:
+  `http.csx --body-out`, `capture-page.csx --result-out`, `TestProbe wait-field --out`, read by
+  `TestProbe json --file`; page scripts are committed files under `scripts/testing/page-scripts/`, passed
+  with `--script-file`. No pipe, here-string or variable remains.
+- [x] State in the suite index that a document is reviewed against ADR 010 and the own-data rule each
+  time it is used, and rewrite its shell section, count rule, waits and template to the single-command
+  form.
+- [x] `08` re-run in the file form on `quotinator:local`: every step passed. The `capture-page.csx` file
+  options checked separately, with a negative control.
+- [ ] Replace the assertions on bundled content: `01`, `05`, `06`, `08`, `09` and `12` seed the bundled
+  sources and assert a quote count from them, which the own-data rule forbids.
+- [ ] Settle how `01` asserts that nothing new was thrown: a plain `docker restart` logs two
+  `SocketException`s, which the original's delta from after the restart hid. Its step 3 and cleanup
+  counts are not yet final.
+- [ ] Re-run `01`, `05`, `06`, `09`, `10`, `11`, `12` and `13` in the file form.
 ### 16. Run each document against a build from before this issue
 
 **Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps

@@ -14,11 +14,14 @@ internal sealed class FileCommand : IProbeCommand
         ["--write-text"] = (2, values => FileOperations.WriteText(values[0], values[1])),
         ["--truncate-half"] = (1, values => FileOperations.TruncateHalf(values[0])),
         ["--sparse"] = (2, values => WithNumber(values[1], bytes => FileOperations.Sparse(values[0], bytes))),
+        ["--create-directory"] = (1, values => FileOperations.CreateDirectory(values[0])),
         ["--delete"] = (1, values => FileOperations.Delete(values[0])),
         ["--expect-file"] = (1, values => FileOperations.ExpectFile(values[0])),
         ["--expect-directory"] = (1, values => FileOperations.ExpectDirectory(values[0])),
         ["--expect-empty-directory"] = (1, values => FileOperations.ExpectEmptyDirectory(values[0])),
         ["--expect-length"] = (2, values => WithNumber(values[1], bytes => FileOperations.ExpectLength(values[0], bytes))),
+        ["--expect-absent"] = (1, values => FileOperations.ExpectAbsent(values[0])),
+        ["--expect-match-count"] = (3, values => WithNumber(values[2], count => FileOperations.ExpectMatchCount(values[0], values[1], (int)count))),
         ["--expect-matches"] = (3, values => WithNumber(values[2], minimum => FileOperations.ExpectMatches(values[0], values[1], (int)minimum))),
     };
 

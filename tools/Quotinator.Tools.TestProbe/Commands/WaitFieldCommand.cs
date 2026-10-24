@@ -1,5 +1,6 @@
 using System.Globalization;
 using Quotinator.Tools.TestProbe.Arguments;
+using Quotinator.Tools.TestProbe.Files;
 using Quotinator.Tools.TestProbe.Results;
 using Quotinator.Tools.TestProbe.Waiting;
 
@@ -43,6 +44,11 @@ internal sealed class WaitFieldCommand : IProbeCommand
             TimeSpan.FromSeconds(timeoutSeconds),
             () => DateTimeOffset.UtcNow,
             () => Thread.Sleep(Pause));
+
+        if (OptionReader.Single(args, "--out") is string outPath && result.Body is not null)
+        {
+            FileOperations.WriteText(outPath, result.Body);
+        }
 
         string[] body = result.Body is null ? [] : [result.Body];
 

@@ -136,6 +136,25 @@ level to see it (`Quotinator__LogLevel=debug`, as
 [`11-batch-id-validation-and-request-log-status.md`](import-and-staged-actions/11-batch-id-validation-and-request-log-status.md)
 does), but raising the level cannot conjure a line nobody writes.
 
+### A document is reviewed every time it is used, and converted before it runs
+
+**Before any document in this suite is run, it is read against two rules, and brought into line first
+where it breaks one** (developer direction, 2026-10-24):
+
+1. **Every step is a single command**, per [ADR 010](../architecture-decisions/010-repository-is-csharp-only.md)
+   and *Every step is a single command* below. A step carrying PowerShell logic, a pipe, a here-string,
+   a variable, a loop or a function, breaks it.
+2. **The test supplies its own data.** The only test permitted against bundled content is the one
+   confirming zero pending issues after a reseed or import of that set on an empty database
+   (developer rule, 2026-09-17, recorded in #400). A step asserting on what the bundled sources happen
+   to contain, a count of seeded quotes included, breaks it: that content changes whenever a source or
+   a correction does.
+
+**Running a document that breaks either rule tests something already known to be wrong**, so the run is
+not started until the document is fixed. Much of this suite predates the first rule and is written in
+PowerShell; that is a known deviation, corrected document by document as each is next used, never
+worked around at run time with a wrapper or a runner of one's own.
+
 ### A test that cannot be confirmed has failed
 
 **If a run cannot confirm the behaviour, the test's result is FAIL, not pass, and not "a known
@@ -195,35 +214,20 @@ What can be asserted are the facts the operation itself establishes:
 fails or passes for reasons that have nothing to do with the application.** Every count a document
 asserts must be checked against three questions before it is trusted.
 
-**Does it count the right unit?** `Select-String` returns one result per *matching line*, not per match. That is the same trap `grep -c` set before the suite was PowerShell, and piping it into `Measure-Object` does
-not fix it. This suite's responses are single-line JSON, so counting that way returns `1` however many
-times the string occurs, and `0` only when it occurs never. `notifications-and-changelog/01` required
-`3` from exactly this shape and therefore failed on a correct setup every run.
+**Does it count the right unit?** A line matcher returns one result per *matching line*, not per
+match: `grep -c` and PowerShell's `Select-String` both set this trap. This suite's responses are
+single-line JSON, so counting that way returns `1` however many times the string occurs, and `0` only
+when it occurs never. `notifications-and-changelog/01` required `3` from exactly this shape and therefore
+failed on a correct setup every run.
 
-Two forms that do count the right thing:
+Two forms that do count the right thing, both C# rather than shell logic (see *Every step is a single
+command* below):
 
-```powershell
-([regex]::Matches($text, 'pattern')).Count                   # occurrences in a block of text
-@(Invoke-RestMethod $url).items.Count                        # better still, count objects, not text
-```
-
-The second is the real answer wherever the response is JSON. A count taken from a parsed object cannot
-disagree with the response about what a match is.
-
-**Always wrap a filtered result in `@(…)` before taking `.Count`:**
-
-```powershell
-@($response.items | Where-Object { $_.source -eq $title }).Count
-```
-
-Windows PowerShell 5.1 gives a single `PSCustomObject` **no `Count` property at all**, so the same
-expression written without the `@(…)` prints an empty string rather than `1` when exactly one row
-matches, while being perfectly correct for zero rows and for two. Measured on this machine, and it
-cost a false failure while converting `api-surface/03`, whose filter found the one row it was looking
-for and reported nothing.
-
-The one-row case is the *most likely* outcome of a well-targeted assertion, which is what makes this
-worth a rule: the unwrapped form fails precisely when the test is working.
+- **`TestProbe log`** counts occurrences of a pattern in a container's log, not matching lines.
+- **`TestProbe json --file`** asserts on a parsed field of a JSON response, the real answer wherever the
+  response is JSON. A value read from a parsed document cannot disagree with the response about what a
+  match is. A filtered count a document needs and `json` cannot yet express becomes an option of
+  TestProbe, tested, before the document uses it.
 
 **Does it match what the application actually emits?** Two live cases. `import-and-staged-actions/16`
 and `17` count `"operation":"Purge"` while the audit trail records `"operation":"Purged"`, the
@@ -232,11 +236,11 @@ traces are present. `import-and-staged-actions/05` counts `"totalCount"` in a `/
 response, and that endpoint returns `totalMatching`; the count is empty forever, so its resurrection
 check silently asserts nothing.
 
-**Does it match case the way the assertion needs?** `Select-String` is case-**in**sensitive by default,
-and `-eq` on a string is too. A check for a case-variant duplicate written without thinking about it
-matches the correctly-cased row and reports a duplicate that does not exist, found during #339's own
-run, against `import-and-staged-actions/12`'s `AIRPLANE!` fixture. Where casing *is* the subject, use
-`Select-String -CaseSensitive` or `-ceq`, and say at the command that the casing is the point.
+**Does it match case the way the assertion needs?** PowerShell's `Select-String` and `-eq` are
+case-**in**sensitive by default. A check for a case-variant duplicate written that way matched the
+correctly-cased row and reported a duplicate that did not exist, found during #339's own run, against
+`import-and-staged-actions/12`'s `AIRPLANE!` fixture. `TestProbe json --equals` and `TestProbe log` are
+both case-sensitive; where casing is the subject, say at the command that the casing is the point.
 
 **Does the browser actually have a viewport?** Any assertion of the form *"this fits on screen"*,
 `getBoundingClientRect()` against `window.innerHeight`, a height cap, a visible footer, is measured
@@ -268,7 +272,7 @@ printed correctly: the answer is on stdout, the call exits non-zero, and the sta
 rather than the snippet. Measured 2026-09-29, a snippet returning
 `document.querySelectorAll('.spinner-border').length`. Return an object, `return { spinners: n }`, until
 the harness itself tolerates the other shapes: several snippets written in this suite as browser-console
-`js` blocks return arrays and would hit the same throw if piped through it.
+`js` blocks return arrays and would hit the same throw if run through it.
 
 **And the expected number itself must be derived in the same run, never predicted.** That rule is
 stated above; these are about the instrument rather than the expectation, and a document can get
@@ -584,27 +588,28 @@ case. Poll for the state the test actually depends on.
 **`create` and `reenter` already wait**, so most documents never write a wait at all. These are for the
 moments they cannot cover: after a `docker restart` or `docker start` a document issues itself.
 
-Three canonical waits, because tests do not all wait for the same thing:
+Three canonical waits, because tests do not all wait for the same thing.
 
-```powershell
-# Wait until the app is healthy, the normal case.
-dotnet script scripts/testing/http.csx -- --url "http://localhost:PORT/api/v1/health" --wait-for 200 --status
+**Until the app is healthy**, the normal case:
+
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:PORT/api/v1/health --wait-for 200 --status
 ```
 
-```powershell
-# Wait until the app answers 503, for a degraded scenario, where that IS the expected outcome and
-# waiting for 200 would spend the whole timeout before failing for the wrong reason.
-dotnet script scripts/testing/http.csx -- --url "http://localhost:PORT/api/v1/health" --wait-for 503 --status
+**Until a degraded app has settled**, where degrading is the expected outcome. A starting app answers
+`503` too, with `status=starting`, so the wait is on the field, not the status code:
+
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:PORT/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-example-out\health.json
 ```
 
-```powershell
-# Wait on the log, for a container with no published port, where neither HTTP form is available.
-while (-not (docker logs qt-example 2>&1 | Select-String -SimpleMatch 'Quotinator ready')) { Start-Sleep 1 }
-```
+**Until a log line appears**, for a container with no published port, where neither HTTP form is
+available. No tool offers this yet: a document that needs it adds the option to TestProbe, tested,
+before it is converted, rather than writing a shell loop.
 
-**Both HTTP forms give up.** `--wait-timeout` defaults to 300 seconds and a condition that never
-arrives exits non-zero, so a wrong expectation fails the step instead of hanging the run. The log form
-does not, so bound it yourself if what it waits for might never appear.
+**Both forms give up.** `http.csx --wait-timeout` defaults to 300 seconds and `wait-field --timeout` to
+180, and a condition that never arrives exits non-zero, so a wrong expectation fails the step instead of
+hanging the run.
 
 A wait that is genuinely for elapsed time, a TTL expiring, a refresh interval passing, confirming a
 container *stayed* dead rather than became ready, is not a readiness wait and keeps its `sleep`. It
@@ -645,7 +650,8 @@ Three shapes currently break this, and each has an answer:
 - **"Take a screenshot."** Worth keeping as evidence, but the *assertion* alongside it has to be
   machine-checkable, or the screenshot is the only record and nothing compares it to anything.
   `scripts/testing/capture-page.csx` is how a document does both in one call: it loads a URL in
-  headless Edge, evaluates the step's own JavaScript, prints what that returns, and writes a PNG,
+  headless Edge, evaluates a committed page script (`--script-file`), writes what that returns
+  (`--result-out`), and writes a PNG,
   so the assertion and the picture describe the same moment, and the picture comes from a line
   anyone can run again. A `{x, y, width, height}` return value crops the shot to that element.
   Images belong in `.claude/temp/`, never in a tracked folder.
@@ -653,136 +659,58 @@ Three shapes currently break this, and each has an answer:
 **A step that genuinely cannot be automated is a finding, not an exemption**, say what blocks it, in
 the document, so it reads as known rather than as an oversight.
 
-#### Every command is PowerShell
+#### Every step is a single command
 
-**This project's shell is PowerShell, and so is this suite.** Not a style preference, three reasons,
-each of which cost something before the rule existed:
+**[ADR 010](../architecture-decisions/010-repository-is-csharp-only.md) governs this suite as it governs
+the code.** The shell only dispatches commands; any logic beyond a single command invocation is C#. A
+document step is therefore one invocation of an installed CLI (`docker`, `dotnet`, `git`) or of one of
+this repository's own test tools: a `scripts/testing/*.csx` script or
+[`tools/Quotinator.Tools.TestProbe`](../../tools/Quotinator.Tools.TestProbe/README.md). **No pipes,
+here-strings, redirects, variables, loops or functions**, and code fences carry no shell tag, because
+nothing in them depends on which shell runs them.
 
-- **[ADR 010](../architecture-decisions/010-repository-is-csharp-only.md) already forbids the
-  alternative.** *"No Python, Perl, Node.js, or Unix text-processing one-liners (`sed`, `awk`, etc.)
-  anywhere in this repository or its tooling"*, and *"PowerShell remains the primary shell"*. A
-  committed `grep -o '"batchId":"[^"]*"' | cut -d'"' -f4` is precisely that shape.
-- **Bash produced two false defect reports during the 2026-08-25 full run.** Its path conversion mounted
-  a directory inside the Docker VM where `dotnet script` mounted the Windows one, and an unprotected
-  `-e Quotinator__DataDir=/data` was rewritten to `C:/Program Files/Git/data`.
-- **String-matching a response is where this suite's instrument bugs come from.** `grep -c` counts
-  lines, not matches; a pattern misses a space against a pretty-printed spec; a check for a case variant
-  matches the correctly-cased row. Parse the response into an object and the whole class disappears,
-  which is why the rule below is *assert on a property*, not *translate the `grep`*.
+**Data passes between steps through files.** A command that reads something writes it out, and the next
+command reads that file:
 
-**Windows PowerShell 5.1 is the target.** `pwsh` is not installed on the development machine, and a test
-suite may not impose a shell upgrade as a prerequisite. Two consequences are measured, not assumed:
+| Reads | Writes with | Asserted by |
+|---|---|---|
+| an HTTP response, [`http.csx`](../../scripts/testing/http.csx) | `--body-out <path>` | `TestProbe json --file <path>` |
+| a page, [`capture-page.csx`](../../scripts/testing/capture-page.csx) | `--result-out <path>` | `TestProbe json --file <path>` |
+| a field reaching a value, `TestProbe wait-field` | `--out <path>` | `TestProbe json --file <path>` |
 
-| Written in PowerShell 5.1 | What a native exe actually receives |
-|---|---|
-| `'{"quoteText":{"choice":"keep"}}'` | `{quoteText:{choice:keep}}`, the JSON is destroyed |
-| `'{\"quoteText\":\"keep\"}'` | `{"quoteText":"keep"}`, correct, and unreadable |
+A page script is a committed file under [`scripts/testing/page-scripts/`](../../scripts/testing/page-scripts/),
+passed with `capture-page.csx --script-file`, never a here-string. Output files go under `.claude/temp/`,
+in a directory the document deletes in its first step and its cleanup.
 
-So **no JSON is ever passed to a native process as an argument**, and `Invoke-RestMethod` has no `-Form`
-before PowerShell 7, so **multipart upload has no cmdlet path at all**. Both are why
-[`scripts/testing/http.csx`](../../scripts/testing/http.csx) exists.
+**Assert on a property, never on matched text.** String-matching a response is where this suite's
+instrument bugs came from: `grep -c` counts lines, not matches; a pattern misses a space against a
+pretty-printed spec; a check for a case variant matches the correctly-cased row. `TestProbe json`
+asserts on a parsed field, and `TestProbe log` counts occurrences, not lines.
 
-**A here-string does not escape this.** `@'…'@` is literal to PowerShell, but the stripping happens
-when the value is handed to the process, not when it is parsed, so SQL carrying a JSON literal loses
-its quotes the same way, and lands in the database as corrupt data rather than failing. Where a fixture's
-SQL contains a double quote, write it to a file and use
-[`execute-sql.csx`](../../scripts/testing/execute-sql.csx)'s `--sql-file`. SQL with no double quote in
-it, every string single-quoted, as most fixtures are, passes safely through `--sql`.
+**Wait for a condition, never a duration**, and give up rather than hang: `TestProbe wait-field` for a
+field's value, `http.csx --wait-for` for a status code.
 
-**Five idioms cover the whole suite. Use these, and say why at the command if you depart from them.**
+**Paths are absolute Windows paths, written out in full.** A POSIX-style path depended on Git Bash
+rewriting it, and when that misfired a container silently bound a different directory.
 
-**Read JSON and assert on it**, a cmdlet, so nothing parses the URL on the way, and the result is an
-object rather than a line of text:
-
-```powershell
-$page = Invoke-RestMethod "http://localhost:PORT/api/v1/quotes?pageSize=0"
-$page.totalCount
-$page.items | Where-Object { $_.type -eq 'movie' } | Measure-Object | Select-Object -ExpandProperty Count
-```
-
-**Send a JSON body**: `-Body` is a cmdlet parameter, so the JSON survives:
-
-```powershell
-Invoke-RestMethod -Method Post -Uri "http://localhost:PORT/api/v1/import/actions/$id/decide" `
-  -Headers @{'X-Api-Key' = 'smoketest'} -ContentType 'application/json' `
-  -Body '{"quoteText":{"choice":"keep"}}'
-```
-
-**Upload a file, expect a non-2xx status, or wait for one**: the helper. `--expect` exits non-zero on a
-mismatch, which is what stops a run at the step that failed rather than three steps later:
-
-```powershell
-$fixture = Join-Path $env:TEMP "qt-example-fixture"
-dotnet script scripts/testing/stage-import-conflict.csx -- --imports $fixture | Out-Null
-dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:PORT/api/v1/import" `
-  --file (Join-Path $fixture "conflicting.json") --duplicate-resolution review --expect 202
-```
+**No JSON reaches a native process as an argument.** Windows PowerShell 5.1 dispatches every command,
+and it strips the quotes from one on the way: `'{"quoteText":{"choice":"keep"}}'` arrives as
+`{quoteText:{choice:keep}}`. SQL containing a double quote goes through
+[`execute-sql.csx`](../../scripts/testing/execute-sql.csx)'s `--sql-file`; SQL with every string
+single-quoted passes safely through `--sql`.
 
 **Stage from the conflict fixture, never from a bundled file.** A bundled file restates content the seed
 already stored, and since #373 that is an `Unchanged` no-op applied at once: `200`, nothing held for
 review. Every document that uploaded `quotinator-curated.json` expecting `202` stopped running as written
 for that reason (#411).
 
-```powershell
-dotnet script scripts/testing/http.csx -- --url "http://localhost:PORT/api/v1/quotes?page=0" --expect 422
-```
+**Two needs have no tool option yet**, so a document that needs one gets that option first, tested, in
+the work that converts it, never a variable or a pipe in its place:
 
-The body goes to stdout and nothing else does, so it pipes straight into `ConvertFrom-Json`; the request
-line and the status go to stderr, where a reader sees them and a pipeline does not.
-
-**Wait for a condition, never a duration**, and unlike the `until … done` loop this replaces, it gives
-up rather than hanging (one such loop ran ten minutes before being stopped by hand):
-
-```powershell
-dotnet script scripts/testing/http.csx -- --url "http://localhost:PORT/api/v1/health" --wait-for 200 --status
-```
-
-**Read the container log**: `Select-String`, and where a *count* is the assertion, count occurrences
-rather than matching lines:
-
-```powershell
-docker logs qt-example 2>&1 | Select-String -SimpleMatch 'Quotinator ready'
-([regex]::Matches((docker logs qt-example 2>&1 | Out-String), 'Seeded')).Count
-```
-
-`Select-String` is case-**in**sensitive by default, where `grep` was not. Where casing is the subject of
-the assertion (a test about a case-variant duplicate, for instance), pass `-CaseSensitive` and say at
-the command that the casing is the point.
-
-#### Capture ids into variables, never into `<placeholders>`
-
-A step reading `…/apply?batchId=<batchId>` cannot run: something has to read the previous response and
-paste the value in, and that something is a person. Capture it instead, in the same block that produced
-it, and note that none of this needs a text-extraction step, because the response is already an object:
-
-```powershell
-$batchId = (dotnet script scripts/testing/http.csx -- --method POST `
-              --url "http://localhost:PORT/api/v1/import" `
-              --file (Join-Path $fixture "conflicting.json") --duplicate-resolution review `
-            | ConvertFrom-Json).batchId
-$batchId
-```
-
-```powershell
-# the first pending action in that batch
-$actionId = (Invoke-RestMethod "http://localhost:PORT/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0").items[0].id
-```
-
-```powershell
-# every pending action in that batch, decided in turn
-foreach ($id in (Invoke-RestMethod "http://localhost:PORT/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0").items.id) {
-  Invoke-RestMethod -Method Post -Uri "http://localhost:PORT/api/v1/import/actions/$id/decide" `
-    -Headers @{'X-Api-Key' = 'smoketest'} -ContentType 'application/json' `
-    -Body '{"quoteText":{"choice":"keep"}}' | Out-Null
-}
-```
-
-**Echo the captured value**: the bare `$batchId` line above. An empty variable produces a request to
-`…?batchId=` and a confusing error several steps later; echoing it turns that into an immediately
-visible blank.
-
-**`pageSize=0` on any listing a loop reads from**, or the default page of 20 silently truncates the
-set: the curated file stages more than that.
+- **A JSON request body.** `http.csx` reads one only from stdin (`--json-stdin`), which takes a pipe.
+- **A value from one response used in a later command**, an id in a URL. A step reading
+  `…/apply?batchId=<batchId>` cannot run unattended, and capturing the value in a shell variable breaks
+  the rule above.
 
 A value a document genuinely cannot derive, one a *person* chooses, such as which of several rows to
 corrupt, stays explicit, and the step says how to choose it.
@@ -829,11 +757,11 @@ document whose environment is both writes both, base first:
 **A profile is a recipe, not a shared instance.** Each test creates its own container and its own
 volume, named after itself, and destroys both when it is done: two lines, with its own name and port:
 
-```powershell
+```
 dotnet script scripts/testing/test-env.csx -- create --name <name> --port <port>
 ```
 
-```powershell
+```
 dotnet script scripts/testing/test-env.csx -- destroy --name <name>
 ```
 
@@ -874,7 +802,7 @@ it to invent a number it never uses, which then contradicts its own `Determinism
 there.** A second startup, or an upgrade to a different `--image` over a database a prior one wrote,
 uses `reenter`: the container is replaced, the data is not:
 
-```powershell
+```
 dotnet script scripts/testing/test-env.csx -- reenter --name <name> --port <port> --image quotinator:local
 ```
 
@@ -904,13 +832,14 @@ database, which looks exactly like a passing check. That is also why a host-side
 cannot read a bind-mounted database by its `/tmp/…` path: it is not that the path lives inside a VM, it
 is that .NET roots it at the current drive.
 
-**A PowerShell path is the unambiguous form**, and it is what a document should prefer: `--bind
-"$env:TEMP\qt-example"` names one directory on one filesystem, with nothing translating it on the way.
+**An absolute Windows path, written out in full, is the unambiguous form**, and it is what a document
+uses: `--bind C:\repos\Quotinator\.claude\temp\qt-example` names one directory on one filesystem, with
+nothing translating it on the way. The document creates and deletes it with `TestProbe file`.
 
 **Building the image is the one genuinely shared step**, because it is the same image for every test
 and rebuilding it per test would be absurd:
 
-```powershell
+```
 docker build -f docker/Dockerfile -t quotinator:local .
 ```
 
@@ -1045,7 +974,7 @@ environment once, restore it between tests.
 
 **Image.** Tag the milestone's base image and save it once:
 
-```powershell
+```
 docker tag quotinator:local quotinator:m<N>-base
 docker save -o .claude/temp/test-environments/quotinator-m<N>-base.tar quotinator:m<N>-base
 ```
@@ -1231,12 +1160,14 @@ document. Executable scripts go to `scripts/testing/`, per
 [ADR 010](../architecture-decisions/010-repository-is-csharp-only.md), never inline in the document,
 never beside it.
 
-The five this suite runs on:
+The tools this suite runs on:
 
-| Script | What it is for |
+| Tool | What it is for |
 |---|---|
 | [`test-env.csx`](../../scripts/testing/test-env.csx) | Create, re-enter and destroy a test's own container and volume |
-| [`http.csx`](../../scripts/testing/http.csx) | Upload a file, expect a non-2xx status, or wait for one: the three things Windows PowerShell 5.1 cannot do cleanly |
+| [`http.csx`](../../scripts/testing/http.csx) | One HTTP call: upload a file, expect a status, wait for one, write the body to a file (`--body-out`) |
+| [`capture-page.csx`](../../scripts/testing/capture-page.csx) | Load a page headless, run a committed page script (`--script-file`), write its result (`--result-out`) and a PNG |
+| [`TestProbe`](../../tools/Quotinator.Tools.TestProbe/README.md) | Every assertion and set-up step between commands: wait for a field, assert on JSON from a file, set up and check files, count a container's log |
 | [`execute-sql.csx`](../../scripts/testing/execute-sql.csx) | Run SQL against a database file, to break or repair it from the host side |
 | [`sqlite-storage-probe.csx`](../../scripts/testing/sqlite-storage-probe.csx) | Measure what SQLite reports about a file's storage |
 | [`corrupt-csv-cell.csx`](../../scripts/testing/corrupt-csv-cell.csx) | Damage one cell of an exported CSV, so a re-import has something to reject |
@@ -1470,8 +1401,8 @@ container.
 
 ### 1. <what this step does>
 
-```powershell
-<the command>
+```
+<one command per line, no shell constructs>
 ```
 
 **Expected:** <what a pass looks like, precisely enough to check>.

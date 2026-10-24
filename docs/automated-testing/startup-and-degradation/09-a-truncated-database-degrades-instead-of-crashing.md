@@ -45,68 +45,43 @@ the other's behalf. The same split exists one category over, between
 
 ### 1. Seed a healthy database and record its size
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-09"
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-09 --port 18409 `
-  --image quotinator:local --bind $dataDir
-
-(Invoke-RestMethod "http://localhost:18409/api/v1/version").database.quotes
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-09 --delete C:\repos\Quotinator\.claude\temp\qt-startup-09-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-09 --port 18409 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-09
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-09-out\version.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-09-out\version.json --greater-than database.quotes=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-file C:\repos\Quotinator\.claude\temp\qt-startup-09\quotinatordata.db
 ```
 
-**Expected:** a non-zero quote count, and `quotinatordata.db` present in `$dataDir`.
+**Expected:** every command exits `0`: a quote count above `0`, and `quotinatordata.db` is a file.
 
 **On failure:** a fresh seed that cannot reach healthy is not this document's subject. Stop and fix
 that first.
 
 ### 2. Stop the container and cut the database in half
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-09"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-09 --bind $dataDir
-
-$path = "$dataDir\quotinatordata.db"
-$len  = (Get-Item $path).Length
-$fs   = [System.IO.File]::Open($path, 'Open', 'Write')
-$fs.SetLength([int64]($len / 2))
-$fs.Close()
-Remove-Item "$dataDir\quotinatordata.db-wal","$dataDir\quotinatordata.db-shm" -ErrorAction SilentlyContinue
-"truncated $len -> $((Get-Item $path).Length)"
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-09 --bind C:\repos\Quotinator\.claude\temp\qt-startup-09
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --truncate-half C:\repos\Quotinator\.claude\temp\qt-startup-09\quotinatordata.db --delete C:\repos\Quotinator\.claude\temp\qt-startup-09\quotinatordata.db-wal --delete C:\repos\Quotinator\.claude\temp\qt-startup-09\quotinatordata.db-shm
 ```
 
-**Expected:** the reported new length is half the old one, and both are megabytes rather than bytes.
+**Expected:** the `file` command exits `0`, reporting the new length as half the old one, both
+megabytes rather than bytes.
 
 **On failure:** a file-in-use error means the container did not stop. Re-run `destroy` and retry rather
 than forcing the write.
 
 ### 3. Start the current build, and confirm it degraded rather than died
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-09"
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-09 --port 18409 `
-  --image quotinator:local --bind $dataDir --wait-listening
-
-# A 503's body is read from the response stream: PowerShell 5.1 leaves ErrorDetails.Message empty here.
-function Health {
-  try   { Invoke-RestMethod "http://localhost:18409/api/v1/health" }
-  catch {
-    $response = $_.Exception.Response
-    if ($null -eq $response) { return [pscustomobject]@{ status = 'down' } }
-    $body = (New-Object IO.StreamReader($response.GetResponseStream())).ReadToEnd()
-    try { $body | ConvertFrom-Json -ErrorAction Stop } catch { [pscustomobject]@{ status = 'unreadable' } }
-  }
-}
-$deadline = (Get-Date).AddSeconds(180)
-while (($health = Health).status -notin 'unhealthy', 'healthy' -and (Get-Date) -lt $deadline) { Start-Sleep 1 }
-
+```
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-09 --port 18409 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-09 --wait-listening
+dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18409/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-startup-09-out\health.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-09-out\health.json --equals status=unhealthy --not-empty reason
 docker inspect -f '{{.State.Running}}' qt-startup-09
-"status=$($health.status)"
-"reasonGiven=$(-not [string]::IsNullOrWhiteSpace($health.reason))"
 ```
 
-**Expected:** `true` from `docker inspect`, `status=unhealthy`, and `reasonGiven=True`.
+**Expected:** the `json` command exits `0`, printing `status = unhealthy` and the reason, and
+`docker inspect` prints `true`.
 
 **These three are the point of this document.** `true` is the never-crash contract. `unhealthy` with a
 reason is the application saying it is degraded, rather than the operator discovering it from failures.
@@ -117,14 +92,15 @@ this document exists to catch. `status=healthy` means the truncation did not tak
 
 ### 4. Confirm the OpenAPI surface answers and every database read is gated
 
-```powershell
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18409/openapi/v1.json" --expect 200 --status
-
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
-                  '/api/v1/version') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18409$path" --expect 503 --status
-}
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/openapi/v1.json --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/quotes --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/quotes/random --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18409/api/v1/quotes/search?q=the" --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/conversations --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/notifications --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/masterdata/sources --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/version --expect 503 --status
 ```
 
 **Expected:** `200` from `/openapi/v1.json`, and `503` from every one of the seven.
@@ -138,21 +114,18 @@ initializer could not read. A `500` means it reached the database and threw rath
 
 ### 5. Remove the sabotage, and confirm the container is healthy
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-09"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-09 --bind $dataDir
-
-Remove-Item "$dataDir\quotinatordata.db"
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-09 --port 18409 `
-  --image quotinator:local --bind $dataDir
-
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18409/api/v1/health" --expect 200 --status
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
-                  '/api/v1/version') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18409$path" --expect 200 --status
-}
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-09 --bind C:\repos\Quotinator\.claude\temp\qt-startup-09
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-09\quotinatordata.db
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-09 --port 18409 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-09
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/health --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/quotes --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/quotes/random --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18409/api/v1/quotes/search?q=the" --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/conversations --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/notifications --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/masterdata/sources --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/version --expect 200 --status
 ```
 
 **Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. the container reaches healthy and `/health` returns `200`.
@@ -206,10 +179,9 @@ container.
 
 ## Cleanup
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-09"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-09 --bind $dataDir
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-09 --bind C:\repos\Quotinator\.claude\temp\qt-startup-09
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-09 --delete C:\repos\Quotinator\.claude\temp\qt-startup-09-out
 ```
 
 **Expected:** the container is gone and the bind directory is removed, so the next run seeds from

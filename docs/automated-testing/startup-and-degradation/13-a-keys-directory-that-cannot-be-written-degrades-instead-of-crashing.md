@@ -41,59 +41,39 @@ with nothing telling them why.
 
 ### 1. Start with `keys/` mounted read-only, and confirm it degraded rather than died
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-13"
-$keysDir = "C:\repos\Quotinator\.claude\temp\qt-startup-13-keys"
-docker rm -f qt-startup-13 2>$null | Out-Null
-Remove-Item -Recurse -Force $dataDir, $keysDir -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $dataDir, $keysDir | Out-Null
-
-docker run -d --name qt-startup-13 -p 18413:8080 -v "${dataDir}:/data" -v "${keysDir}:/data/keys:ro" `
-  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest `
-  -e Quotinator__AutoPurgeBundledImportActions=true -e Quotinator__AutoUpdateSources=false `
-  quotinator:local | Out-Null
-
-# A 503's body is read from the response stream: PowerShell 5.1 leaves ErrorDetails.Message empty here.
-function Health {
-  try   { Invoke-RestMethod "http://localhost:18413/api/v1/health" }
-  catch {
-    $response = $_.Exception.Response
-    if ($null -eq $response) { return [pscustomobject]@{ status = 'down' } }
-    $body = (New-Object IO.StreamReader($response.GetResponseStream())).ReadToEnd()
-    try { $body | ConvertFrom-Json -ErrorAction Stop } catch { [pscustomobject]@{ status = 'unreadable' } }
-  }
-}
-$deadline = (Get-Date).AddSeconds(180)
-while (($health = Health).status -notin 'unhealthy', 'healthy' -and (Get-Date) -lt $deadline) { Start-Sleep 1 }
-
+```
+docker rm -f qt-startup-13
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-13 --delete C:\repos\Quotinator\.claude\temp\qt-startup-13-keys --delete C:\repos\Quotinator\.claude\temp\qt-startup-13-out --create-directory C:\repos\Quotinator\.claude\temp\qt-startup-13 --create-directory C:\repos\Quotinator\.claude\temp\qt-startup-13-keys
+docker run -d --name qt-startup-13 -p 18413:8080 -v C:\repos\Quotinator\.claude\temp\qt-startup-13:/data -v C:\repos\Quotinator\.claude\temp\qt-startup-13-keys:/data/keys:ro -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest -e Quotinator__AutoPurgeBundledImportActions=true -e Quotinator__AutoUpdateSources=false quotinator:local
+dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18413/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-startup-13-out\health.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-13-out\health.json --equals status=unhealthy --not-empty reason
 docker inspect -f '{{.State.Running}}' qt-startup-13
-"status=$($health.status)"
-"reasonGiven=$(-not [string]::IsNullOrWhiteSpace($health.reason))"
-"keyFilesWritten=$(@(Get-ChildItem $keysDir -Force).Count)"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-empty-directory C:\repos\Quotinator\.claude\temp\qt-startup-13-keys
 ```
 
-**Expected:** `true` from `docker inspect`, `status=unhealthy`, `reasonGiven=True`, and
-`keyFilesWritten=0`.
+**Expected:** the `json` command exits `0`, printing `status = unhealthy` and the reason;
+`docker inspect` prints `true`; and the last `file` command exits `0`, the keys directory empty.
 
 **`unhealthy` is the whole point of this document.** The key ring cannot be written, so every page
-fails; an application reporting `healthy` here has not noticed that it is degraded. `keyFilesWritten=0`
-confirms the mount really refused.
+fails; an application reporting `healthy` here has not noticed that it is degraded. The empty keys
+directory confirms the mount really refused.
 
 **On failure:** a container that is not running means the fault killed the process. `status=healthy`
 is the defect this document exists to catch: the application does not know it is degraded. Files in
-`$keysDir` mean the mount was writable, so nothing below is about the fault. `starting` or `down` means
+the keys directory mean the mount was writable, so nothing below is about the fault. `starting` or `down` means
 the wait gave up after 180 seconds.
 
 ### 2. Confirm the OpenAPI surface answers and every database read is gated
 
-```powershell
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18413/openapi/v1.json" --expect 200 --status
-
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
-                  '/api/v1/version') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18413$path" --expect 503 --status
-}
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18413/openapi/v1.json --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18413/api/v1/quotes --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18413/api/v1/quotes/random --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18413/api/v1/quotes/search?q=the" --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18413/api/v1/conversations --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18413/api/v1/notifications --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18413/api/v1/masterdata/sources --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18413/api/v1/version --expect 503 --status
 ```
 
 **Expected:** `200` from `/openapi/v1.json`, and `503` from every one of the seven.
@@ -105,23 +85,21 @@ degraded, every database read refuses, whichever fault did it.
 
 ### 3. Remove the sabotage, and confirm the container is healthy
 
-```powershell
-docker rm -f qt-startup-13 | Out-Null
-docker run -d --name qt-startup-13 -p 18413:8080 -v "${dataDir}:/data" `
-  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest `
-  -e Quotinator__AutoPurgeBundledImportActions=true -e Quotinator__AutoUpdateSources=false `
-  quotinator:local | Out-Null
-
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18413/api/v1/health" --wait-for 200 --status
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
-                  '/api/v1/version') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18413$path" --expect 200 --status
-}
-"keyFilesWritten=$(@(Get-ChildItem "$dataDir\keys" -Force -Filter *.xml).Count)"
+```
+docker rm -f qt-startup-13
+docker run -d --name qt-startup-13 -p 18413:8080 -v C:\repos\Quotinator\.claude\temp\qt-startup-13:/data -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest -e Quotinator__AutoPurgeBundledImportActions=true -e Quotinator__AutoUpdateSources=false quotinator:local
+dotnet script scripts/testing/http.csx -- --url http://localhost:18413/api/v1/health --wait-for 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18413/api/v1/quotes --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18413/api/v1/quotes/random --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18413/api/v1/quotes/search?q=the" --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18413/api/v1/conversations --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18413/api/v1/notifications --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18413/api/v1/masterdata/sources --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18413/api/v1/version --expect 200 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-matches C:\repos\Quotinator\.claude\temp\qt-startup-13\keys "*.xml" 1
 ```
 
-**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` answers `200`, and `keyFilesWritten` is non-zero.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` answers `200`, and the `file` command exits `0`, with at least one key file written.
 
 **This is the positive control.** The same data directory with a writable `keys/` starts healthy and
 writes its key ring, so the degraded state above is about the read-only mount and nothing else.
@@ -159,9 +137,9 @@ build that degraded unconditionally fails there.
 
 ## Cleanup
 
-```powershell
-docker rm -f qt-startup-13 | Out-Null
-Remove-Item -Recurse -Force "C:\repos\Quotinator\.claude\temp\qt-startup-13", "C:\repos\Quotinator\.claude\temp\qt-startup-13-keys" -ErrorAction SilentlyContinue
+```
+docker rm -f qt-startup-13
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-13 --delete C:\repos\Quotinator\.claude\temp\qt-startup-13-keys --delete C:\repos\Quotinator\.claude\temp\qt-startup-13-out
 ```
 
 **Expected:** the container is gone and both directories are removed, so the next run starts from

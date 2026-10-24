@@ -35,6 +35,26 @@ public sealed class FileOperationsTests
     }
 
     [TestMethod]
+    public void WriteText_MissingParentDirectory_IsCreated()
+    {
+        string path = Path.Combine(_root, "absent", "keys");
+
+        FileOperations.WriteText(path, "x");
+
+        Assert.IsTrue(File.Exists(path));
+    }
+
+    [TestMethod]
+    public void Sparse_MissingParentDirectory_IsCreated()
+    {
+        string path = Path.Combine(_root, "absent", "filler");
+
+        FileOperations.Sparse(path, 1);
+
+        Assert.IsTrue(File.Exists(path));
+    }
+
+    [TestMethod]
     public void WriteText_ExistingFile_IsReplaced()
     {
         string path = InRoot("a.json");
@@ -68,6 +88,29 @@ public sealed class FileOperationsTests
         FileOperations.Sparse(path, 4096);
 
         Assert.AreEqual(4096, new FileInfo(path).Length);
+    }
+
+    [TestMethod]
+    public void CreateDirectory_Missing_CreatesIt()
+    {
+        string directory = InRoot("new");
+
+        FileOperations.CreateDirectory(directory);
+
+        Assert.IsTrue(Directory.Exists(directory));
+    }
+
+    [TestMethod]
+    public void CreateDirectory_AlreadyThere_Holds()
+        => Assert.IsTrue(FileOperations.CreateDirectory(_root).Holds);
+
+    [TestMethod]
+    public void CreateDirectory_AFileIsInTheWay_Fails()
+    {
+        string path = InRoot("f");
+        File.WriteAllText(path, "x");
+
+        Assert.IsFalse(FileOperations.CreateDirectory(path).Holds);
     }
 
     [TestMethod]
@@ -173,6 +216,44 @@ public sealed class FileOperationsTests
 
         Assert.IsFalse(FileOperations.ExpectMatches(_root, "*.bak", 2).Holds);
     }
+
+    [TestMethod]
+    public void ExpectAbsent_NothingThere_Holds()
+        => Assert.IsTrue(FileOperations.ExpectAbsent(InRoot("absent")).Holds);
+
+    [TestMethod]
+    public void ExpectAbsent_File_Fails()
+    {
+        string path = InRoot("f");
+        File.WriteAllText(path, "x");
+
+        Assert.IsFalse(FileOperations.ExpectAbsent(path).Holds);
+    }
+
+    [TestMethod]
+    public void ExpectAbsent_Directory_Fails()
+        => Assert.IsFalse(FileOperations.ExpectAbsent(_root).Holds);
+
+    [TestMethod]
+    public void ExpectMatchCount_ExactCount_Holds()
+    {
+        File.WriteAllText(InRoot("a.db"), "x");
+
+        Assert.IsTrue(FileOperations.ExpectMatchCount(_root, "*.db", 1).Holds);
+    }
+
+    [TestMethod]
+    public void ExpectMatchCount_MoreThanTheCount_Fails()
+    {
+        File.WriteAllText(InRoot("a.db"), "x");
+        File.WriteAllText(InRoot("b.db"), "x");
+
+        Assert.IsFalse(FileOperations.ExpectMatchCount(_root, "*.db", 1).Holds);
+    }
+
+    [TestMethod]
+    public void ExpectMatchCount_MissingDirectory_Fails()
+        => Assert.IsFalse(FileOperations.ExpectMatchCount(InRoot("absent"), "*", 0).Holds);
 
     [TestMethod]
     public void ExpectMatches_MissingDirectory_Fails()

@@ -43,64 +43,42 @@ continues: Kestrel binds, `/health` answers `503`, and the Blazor pages render t
 
 ### 1. Seed a healthy database
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-08"
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-08 --port 18408 `
-  --image quotinator:local --bind $dataDir
-
-(Invoke-RestMethod "http://localhost:18408/api/v1/version").database.quotes
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-08 --delete C:\repos\Quotinator\.claude\temp\qt-startup-08-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-08 --port 18408 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-08
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-08-out\version.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-08-out\version.json --greater-than database.quotes=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-file C:\repos\Quotinator\.claude\temp\qt-startup-08\quotinatordata.db
 ```
 
-**Expected:** a non-zero quote count, and `quotinatordata.db` present in `$dataDir`.
+**Expected:** every command exits `0`: a quote count above `0`, and `quotinatordata.db` is a file.
 
 **On failure:** a fresh seed that cannot reach healthy is not this document's subject, and every
 assertion below would be about the wrong fault. Stop and fix that first.
 
 ### 2. Stop the container and replace the database with non-database bytes
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-08"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-08 --bind $dataDir
-
-Set-Content -Path "$dataDir\quotinatordata.db" -Value "this file is not a SQLite database" -NoNewline
-Remove-Item "$dataDir\quotinatordata.db-wal","$dataDir\quotinatordata.db-shm" -ErrorAction SilentlyContinue
-(Get-Item "$dataDir\quotinatordata.db").Length
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-08 --bind C:\repos\Quotinator\.claude\temp\qt-startup-08
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --write-text C:\repos\Quotinator\.claude\temp\qt-startup-08\quotinatordata.db "this file is not a SQLite database" --delete C:\repos\Quotinator\.claude\temp\qt-startup-08\quotinatordata.db-wal --delete C:\repos\Quotinator\.claude\temp\qt-startup-08\quotinatordata.db-shm --expect-length C:\repos\Quotinator\.claude\temp\qt-startup-08\quotinatordata.db 34
 ```
 
-**Expected:** the file is 34 bytes.
+**Expected:** the `file` command exits `0`, reporting the file at 34 bytes.
 
 **On failure:** a file still megabytes in size means the write did not land, and every step below would
 assert against a healthy database. Stop rather than continuing.
 
 ### 3. Start the current build, and confirm it degraded rather than died
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-08"
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-08 --port 18408 `
-  --image quotinator:local --bind $dataDir --wait-listening
-
-# A 503's body is read from the response stream: PowerShell 5.1 leaves ErrorDetails.Message empty here.
-function Health {
-  try   { Invoke-RestMethod "http://localhost:18408/api/v1/health" }
-  catch {
-    $response = $_.Exception.Response
-    if ($null -eq $response) { return [pscustomobject]@{ status = 'down' } }
-    $body = (New-Object IO.StreamReader($response.GetResponseStream())).ReadToEnd()
-    try { $body | ConvertFrom-Json -ErrorAction Stop } catch { [pscustomobject]@{ status = 'unreadable' } }
-  }
-}
-$deadline = (Get-Date).AddSeconds(180)
-while (($health = Health).status -notin 'unhealthy', 'healthy' -and (Get-Date) -lt $deadline) { Start-Sleep 1 }
-
+```
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-08 --port 18408 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-08 --wait-listening
+dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18408/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-startup-08-out\health.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-08-out\health.json --equals status=unhealthy --not-empty reason
 docker inspect -f '{{.State.Running}}' qt-startup-08
-"status=$($health.status)"
-"reasonGiven=$(-not [string]::IsNullOrWhiteSpace($health.reason))"
 ```
 
-**Expected:** `true` from `docker inspect`, `status=unhealthy`, and `reasonGiven=True`.
+**Expected:** the `json` command exits `0`, printing `status = unhealthy` and the reason, and
+`docker inspect` prints `true`.
 
 **These three are the point of this document.** `true` is the never-crash contract: the process is still
 running after a failure that reached it before any schema version was read. `unhealthy` with a reason is
@@ -113,14 +91,15 @@ or `down` means the wait gave up after 180 seconds.
 
 ### 4. Confirm the OpenAPI surface answers and every database read is gated
 
-```powershell
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18408/openapi/v1.json" --expect 200 --status
-
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
-                  '/api/v1/version') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18408$path" --expect 503 --status
-}
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/openapi/v1.json --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/quotes --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/quotes/random --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18408/api/v1/quotes/search?q=the" --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/conversations --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/notifications --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/masterdata/sources --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/version --expect 503 --status
 ```
 
 **Expected:** `200` from `/openapi/v1.json`, and `503` from every one of the seven.
@@ -134,21 +113,18 @@ initializer could not read. A `500` means it reached the database and threw rath
 
 ### 5. Remove the sabotage, and confirm the container is healthy
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-08"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-08 --bind $dataDir
-
-Remove-Item "$dataDir\quotinatordata.db"
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-08 --port 18408 `
-  --image quotinator:local --bind $dataDir
-
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18408/api/v1/health" --expect 200 --status
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
-                  '/api/v1/version') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18408$path" --expect 200 --status
-}
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-08 --bind C:\repos\Quotinator\.claude\temp\qt-startup-08
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-08\quotinatordata.db
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-08 --port 18408 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-08
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/health --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/quotes --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/quotes/random --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18408/api/v1/quotes/search?q=the" --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/conversations --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/notifications --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/masterdata/sources --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/version --expect 200 --status
 ```
 
 **Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. the container reaches healthy and `/health` returns `200`.
@@ -227,10 +203,9 @@ half: it ends the run when the sabotage did not land, so step 4 cannot pass agai
 
 ## Cleanup
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-08"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-08 --bind $dataDir
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-08 --bind C:\repos\Quotinator\.claude\temp\qt-startup-08
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-08 --delete C:\repos\Quotinator\.claude\temp\qt-startup-08-out
 ```
 
 **Expected:** the container is gone and the bind directory is removed, so the next run seeds from

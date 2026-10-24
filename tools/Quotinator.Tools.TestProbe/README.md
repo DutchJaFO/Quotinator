@@ -15,7 +15,9 @@ T2 run was stopped (#327, 2026-10-24). This tool is where that logic lives now, 
 
 It does **not** make HTTP requests for a document's assertions or drive a browser:
 [`http.csx`](../../scripts/testing/http.csx) and [`capture-page.csx`](../../scripts/testing/capture-page.csx)
-already do that. Both print JSON to stdout, and this tool's `json` command asserts on it.
+already do that. Each writes the JSON it read to a file (`--body-out`, `--result-out`), and this tool's
+`json` command reads that file (`--file`). **Every step is a single command; data passes between
+commands through files, never through a shell pipe, here-string or variable** (ADR 010).
 
 ## Usage
 
@@ -30,19 +32,23 @@ values it observed to stdout, so the run records what was seen and not only that
 ### `wait-field`: poll a JSON endpoint until a field holds one of the given values
 
 ```bash
-dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18408/api/v1/health --field status --in unhealthy,healthy
+dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18408/api/v1/health --field status --in unhealthy,healthy --out .claude/temp/qt-startup-08/health.json
 ```
 
 Replaces a polling loop. A degraded container answers `503` while it is still starting, with
 `status=starting`, so a wait on the status code cannot tell starting from degraded; a wait on the field
-can. Prints the JSON body it finally read, so it can be piped into `json`. Gives up after `--timeout`
-seconds (default 180) and exits `1`.
+can. Prints the JSON body it finally read, and writes it to `--out` when given, so the next step's
+`json --file` can assert on it. Gives up after `--timeout` seconds (default 180) and exits `1`.
 
-### `json`: assert on a JSON document read from stdin
+### `json`: assert on a JSON document read from a file
 
 ```bash
-dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/health --expect 503 | dotnet run --project tools/Quotinator.Tools.TestProbe -- json --equals status=unhealthy --not-empty reason
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/health --expect 503 --body-out .claude/temp/qt-startup-08/health.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-startup-08/health.json --equals status=unhealthy --not-empty reason
 ```
+
+`--file <path>` names the document. Without it the document is read from stdin, which no document step
+uses, since a pipe is shell logic.
 
 | Option | Holds when |
 |---|---|
@@ -58,15 +64,18 @@ Every option is repeatable. A `<path>` is property names joined by dots (`databa
 
 | Option | Does |
 |---|---|
-| `--write-text <path> <text>` | Writes `<text>` to `<path>`, replacing anything there |
+| `--write-text <path> <text>` | Writes `<text>` to `<path>`, replacing anything there; a missing directory is created, as for `--sparse` |
 | `--truncate-half <path>` | Cuts the file to half its length and prints both lengths |
 | `--sparse <path> <bytes>` | Creates a sparse file of `<bytes>` bytes |
+| `--create-directory <path>` | Creates the directory if it is missing; fails when a file is in the way |
 | `--delete <path>` | Deletes a file, or a directory with everything in it, if it exists |
 | `--expect-file <path>` | Holds when `<path>` is a file |
 | `--expect-directory <path>` | Holds when `<path>` is a directory |
 | `--expect-empty-directory <path>` | Holds when `<path>` is a directory with nothing in it |
 | `--expect-length <path> <bytes>` | Holds when the file is exactly `<bytes>` long |
+| `--expect-absent <path>` | Holds when nothing, file or directory, exists at `<path>` |
 | `--expect-matches <directory> <pattern> <minimum>` | Holds when at least `<minimum>` files in `<directory>` match `<pattern>` |
+| `--expect-match-count <directory> <pattern> <count>` | Holds when exactly `<count>` files in `<directory>` match `<pattern>` |
 
 ### `log`: count a pattern in a container's log
 

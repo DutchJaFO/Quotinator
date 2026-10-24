@@ -8,9 +8,13 @@ internal static class FileOperations
 {
     private static readonly UTF8Encoding Utf8WithoutBom = new(encoderShouldEmitUTF8Identifier: false);
 
-    /// <summary>Writes <paramref name="text"/> to <paramref name="path"/>, replacing anything there, as UTF-8 without a byte-order mark.</summary>
+    /// <summary>
+    /// Writes <paramref name="text"/> to <paramref name="path"/>, replacing anything there, as UTF-8 without a
+    /// byte-order mark, creating its directory when missing.
+    /// </summary>
     internal static ExpectationResult WriteText(string path, string text)
     {
+        CreateParentDirectory(path);
         File.WriteAllText(path, text, Utf8WithoutBom);
         return ExpectationResult.Passed($"wrote {path} ({new FileInfo(path).Length} bytes)");
     }
@@ -30,13 +34,29 @@ internal static class FileOperations
         return ExpectationResult.Passed($"truncated {path} from {before} to {stream.Length} bytes");
     }
 
-    /// <summary>Creates a file of <paramref name="bytes"/> bytes by setting its length, without writing its content.</summary>
+    /// <summary>
+    /// Creates a file of <paramref name="bytes"/> bytes by setting its length, without writing its content,
+    /// creating its directory when missing.
+    /// </summary>
     internal static ExpectationResult Sparse(string path, long bytes)
     {
+        CreateParentDirectory(path);
         using FileStream stream = new(path, FileMode.Create, FileAccess.Write);
         stream.SetLength(bytes);
 
         return ExpectationResult.Passed($"created {path} at {stream.Length} bytes");
+    }
+
+    /// <summary>Creates the directory when missing. Fails when a file is in the way.</summary>
+    internal static ExpectationResult CreateDirectory(string path)
+    {
+        if (File.Exists(path))
+        {
+            return ExpectationResult.Failed($"{path} is a file; cannot create a directory there");
+        }
+
+        Directory.CreateDirectory(path);
+        return ExpectationResult.Passed($"{path} is a directory");
     }
 
     /// <summary>Deletes the file, or the directory with everything in it, when it exists; nothing to delete is not a failure.</summary>
@@ -102,6 +122,9 @@ internal static class FileOperations
 
     /// <summary>Holds when at least <paramref name="minimum"/> files directly in <paramref name="directory"/> match <paramref name="pattern"/>.</summary>
     internal static ExpectationResult ExpectMatches(string directory, string pattern, int minimum)
+        => CheckMatches(directory, pattern, found => found >= minimum, $"at least {minimum}");
+
+    private static ExpectationResult CheckMatches(string directory, string pattern, Func<int, bool> holds, string expected)
     {
         if (!Directory.Exists(directory))
         {
@@ -111,9 +134,29 @@ internal static class FileOperations
         string[] matches = Directory.GetFiles(directory, pattern);
         string observed = $"{matches.Length} match {pattern} in {directory}: {string.Join(", ", matches.Select(Path.GetFileName))}";
 
-        return matches.Length >= minimum
+        return holds(matches.Length)
             ? ExpectationResult.Passed(observed)
-            : ExpectationResult.Failed($"expected at least {minimum} files matching {pattern} in {directory}, found {matches.Length}", observed);
+            : ExpectationResult.Failed($"expected {expected} files matching {pattern} in {directory}, found {matches.Length}", observed);
+    }
+
+    /// <summary>Holds when nothing, neither file nor directory, exists at <paramref name="path"/>.</summary>
+    internal static ExpectationResult ExpectAbsent(string path)
+        => File.Exists(path) || Directory.Exists(path)
+            ? ExpectationResult.Failed($"expected nothing at {path}", Describe(path))
+            : ExpectationResult.Passed(Describe(path));
+
+    /// <summary>Holds when exactly <paramref name="count"/> files directly in <paramref name="directory"/> match <paramref name="pattern"/>.</summary>
+    internal static ExpectationResult ExpectMatchCount(string directory, string pattern, int count)
+        => CheckMatches(directory, pattern, found => found == count, $"exactly {count}");
+
+    private static void CreateParentDirectory(string path)
+    {
+        string? parent = Path.GetDirectoryName(Path.GetFullPath(path));
+
+        if (parent is not null)
+        {
+            Directory.CreateDirectory(parent);
+        }
     }
 
     private static string Describe(string path)

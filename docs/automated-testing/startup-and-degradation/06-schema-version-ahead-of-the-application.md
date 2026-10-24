@@ -59,33 +59,28 @@ from it is a foot gun.
 
 ### 1. Create a healthy, fully migrated database
 
-```powershell
-$dataDir = "$PWD\.claude\temp\qt-startup-06-data"
-# A folder left by an earlier run holds a database, and step 6's single log match assumes none.
-if (Test-Path $dataDir) { Remove-Item -LiteralPath $dataDir -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+A folder left by an earlier run holds a database, and step 6's single log match assumes none, so it is
+deleted first.
 
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-06 --port 18406 `
-  --image quotinator:local --bind $dataDir
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-06-data --delete C:\repos\Quotinator\.claude\temp\qt-startup-06-shots --create-directory C:\repos\Quotinator\.claude\temp\qt-startup-06-data
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-06 --port 18406 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-06-data
 ```
 
-**Expected:** the environment reports healthy, leaving a fully migrated database in `$dataDir`.
+**Expected:** the environment reports healthy, leaving a fully migrated database in the bind directory.
 
 **On failure:** if the build cannot reach healthy on a fresh database, nothing below is about
 overshoot: stop and fix that first.
 
 ### 2. Stop the container cleanly and record a version one beyond this build
 
-```powershell
-$dataDir = "$PWD\.claude\temp\qt-startup-06-data"
-docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "\[Runtime - Exception\]" --exactly 0
 docker stop -t 15 qt-startup-06
-
-dotnet script scripts/testing/execute-sql.csx -- --db "$dataDir\quotinatordata.db" `
-  --sql "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) SELECT MAX(Version) + 1, '2026-10-14 00:00:00' FROM System_ConsumerSchemaVersion;"
+dotnet script scripts/testing/execute-sql.csx -- --db C:\repos\Quotinator\.claude\temp\qt-startup-06-data\quotinatordata.db --sql "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) SELECT MAX(Version) + 1, '2026-10-14 00:00:00' FROM System_ConsumerSchemaVersion;"
 ```
 
-**Expected:** the log read before the stop finds nothing, the stop echoes the container name, then
+**Expected:** the `log` command read before the stop exits `0`, the stop echoes the container name, then
 `OK — 1 row(s) affected.` (the em dash is `execute-sql.csx`'s own output, quoted verbatim).
 
 **On failure:** a SQL error means the overshoot state was never built, and every step below would be
@@ -93,39 +88,23 @@ asserting against an ordinary healthy database, which proves nothing. Stop.
 
 ### 3. Restart, and confirm the application degrades
 
-```powershell
-$dataDir = "$PWD\.claude\temp\qt-startup-06-data"
-dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-06 --port 18406 `
-  --image quotinator:local --bind $dataDir --wait-listening
-
-# A 503's body is read from the response stream: PowerShell 5.1 leaves ErrorDetails.Message empty here.
-function Health {
-  try   { Invoke-RestMethod "http://localhost:18406/api/v1/health" }
-  catch {
-    $response = $_.Exception.Response
-    if ($null -eq $response) { return [pscustomobject]@{ status = 'down' } }
-    $body = (New-Object IO.StreamReader($response.GetResponseStream())).ReadToEnd()
-    try { $body | ConvertFrom-Json -ErrorAction Stop } catch { [pscustomobject]@{ status = 'unreadable' } }
-  }
-}
-$deadline = (Get-Date).AddSeconds(180)
-while (($health = Health).status -notin 'unhealthy', 'healthy' -and (Get-Date) -lt $deadline) { Start-Sleep 1 }
-
+```
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-06 --port 18406 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-06-data --wait-listening
+dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18406/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\health.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\health.json --equals status=unhealthy --contains "reason=schema version is ahead" --contains reason=Reset --contains "reason=restore a backup"
 docker inspect -f '{{.State.Running}}' qt-startup-06
-"status=$($health.status)"
-"namesTheOvershoot=$($health.reason -match 'schema version is ahead')"
-"namesReset=$($health.reason -match 'Reset')"
-"namesRestore=$($health.reason -match 'restore a backup')"
-
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
-                  '/api/v1/version') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18406$path" --expect 503 --status
-}
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/quotes --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/quotes/random --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/quotes/search?q=the" --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/conversations --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/notifications --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/masterdata/sources --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/version --expect 503 --status
 ```
 
-**Expected:** `true` from `docker inspect`, `status=unhealthy`, all three of `namesTheOvershoot`,
-`namesReset` and `namesRestore` `True`, and `503` from every one of the seven database reads.
+**Expected:** the `json` command exits `0`: `status = unhealthy`, the reason naming the overshoot, the
+Reset and restoring a backup. `docker inspect` prints `true`, and every one of the seven database reads
+answers `503`.
 
 **`true` and `unhealthy` together are the never-crash contract** for a database this build cannot vouch
 for. The seven reads refuse because a schema of unknown shape is untrusted whether or not a given query
@@ -139,18 +118,20 @@ up after 180 seconds.
 
 ### 4. Confirm the degraded surface and the recovery routes stay reachable
 
-```powershell
-foreach ($p in '/', '/about', '/stats', '/notifications', '/import-review', '/rest-api') {
-  $code = dotnet script scripts/testing/http.csx -- --url "http://localhost:18406$p" --status
-  "$p -> $code"
-}
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/openapi/v1.json" --expect 200 --status
-$listed = dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/admin/backups" --expect 200 | ConvertFrom-Json
-"backupListing=$($null -ne $listed.items)"
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/ --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/about --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/stats --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/notifications --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/import-review --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/rest-api --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/openapi/v1.json --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/admin/backups --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\backups.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\backups.json --present items
 ```
 
-**Expected:** `200` from every page, `200` from the spec, and `200` from the backup listing with
-`backupListing=True`.
+**Expected:** `200` from every page, `200` from the spec, and `200` from the backup listing, whose
+`json` command exits `0` on its `items` field.
 
 **The backup listing is the recovery surface's probe, deliberately.** The reason names two remedies,
 a Reset (step 7) and restoring a backup taken before the version moved ahead; the listing is how an
@@ -164,43 +145,20 @@ cannot be reached from the API.
 
 ### 5. Confirm the operator is told why, and that nothing from the database is shown
 
-```powershell
-$out = "$PWD\.claude\temp\qt-startup-06-shots"
-New-Item -ItemType Directory -Force -Path $out | Out-Null
+The page scripts are committed files:
+[`overshoot-modal.js`](../../../scripts/testing/page-scripts/overshoot-modal.js) and
+[`notifications-page-rows.js`](../../../scripts/testing/page-scripts/notifications-page-rows.js).
 
-# Substring matches rather than regex literals: a /pattern/ inside a here-string is read as a path by
-# some shells before it ever reaches the browser.
-$modalScript = @'
-  const modal = document.querySelector('.modal');
-  const text  = (modal ? modal.innerText : '').toLowerCase();
-  return { modal: !!modal,
-           namesTheOvershoot: text.includes('schema version is ahead'),
-           namesReset: text.includes('reset'),
-           namesRestore: text.includes('restore a backup'),
-           notificationRows: modal ? modal.querySelectorAll('.notification-body').length : -1 };
-'@
-$modalRead = $modalScript | dotnet script scripts/testing/capture-page.csx -- `
-  --url "http://localhost:18406/" --out "$out\degraded-home.png" --width 1280 --height 1100 `
-  --script-stdin | ConvertFrom-Json
-"modal=$($modalRead.modal) overshoot=$($modalRead.namesTheOvershoot) reset=$($modalRead.namesReset) restore=$($modalRead.namesRestore) rows=$($modalRead.notificationRows)"
-
-$pageScript = @'
-  return { rows: document.querySelectorAll('tbody tr').length,
-           bodyCells: document.querySelectorAll('.notification-body').length,
-           emptyState: document.body.innerText.toLowerCase().includes('no notifications yet') };
-'@
-$pageRead = $pageScript | dotnet script scripts/testing/capture-page.csx -- `
-  --url "http://localhost:18406/notifications" --out "$out\degraded-notifications.png" --height 1100 `
-  --script-stdin | ConvertFrom-Json
-"notificationsPage rows=$($pageRead.rows) bodyCells=$($pageRead.bodyCells) emptyState=$($pageRead.emptyState)"
+```
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18406/ --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-home.png --width 1280 --height 1100 --script-file scripts/testing/page-scripts/overshoot-modal.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-home.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-home.json --equals modal=true --equals namesTheOvershoot=true --equals namesReset=true --equals namesRestore=true --equals notificationRows=0
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18406/notifications --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-notifications.png --height 1100 --script-file scripts/testing/page-scripts/notifications-page-rows.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-notifications.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-notifications.json --equals rows=0 --equals bodyCells=0 --equals emptyState=true
 ```
 
-**Expected:** the modal renders, its reason names the overshoot and both remedies, and
-`notificationRows=0`. The notifications page reads `rows=0`, `bodyCells=0` and `emptyState=True`
-(*No notifications yet.*). Both screenshots record it.
-
-**`$home` is read-only in PowerShell 5.1**, so the modal reading is held in `$modalRead`: assigning
-`$home` fails the step with a variable error that has nothing to do with the application.
+**Expected:** both `json` commands exit `0`. The modal renders, its reason names the overshoot and both
+remedies, and it carries no notification row. The notifications page has no rows and no body cells, and
+shows its empty state (*No notifications yet.*). Both screenshots record it.
 
 **The reason is the only channel that can be relied on here, and that is the point of this step.** An
 overshot schema is of unknown shape, so every row read from it is untrusted content, the notification
@@ -214,18 +172,18 @@ reason means the degradation was recorded without one.
 
 ### 6. Confirm the detection is in the log as well as the UI
 
-```powershell
-docker logs qt-startup-06 2>&1 | Select-String -Pattern 'schema version overshoot detected'
-docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch 'is ahead of this build'
-docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch 'treated as complete'
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "schema version overshoot detected" --exactly 1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "is ahead of this build" --at-least 1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "treated as complete" --exactly 0
 ```
 
-**Expected:** one match for the detection, at least one for the degraded reason, and **no** match for
-`treated as complete`.
+**Expected:** all three exit `0`: one match for the detection, at least one for the degraded reason, and
+**no** match for `treated as complete`.
 
 **On failure:** no match for the detection while step 5 passed means the notification came from
 somewhere other than this startup, most likely a row left over from an earlier run against the same
-directory: re-run from step 1 with a fresh `$dataDir`. A match for `treated as complete` means a
+directory: re-run from step 1, which starts from an empty bind directory. A match for `treated as complete` means a
 message is claiming the schema is intact, which this build has no way to know.
 
 ### 7. Repair it from the degraded pages themselves
@@ -234,22 +192,24 @@ The operator's own route, and a driver step: the reason names a Reset, and the d
 they run one without reaching for an API client. Every page that can carry an interactive control shows
 the same banner, because the modal is dismissed once and the repair must not go with it.
 
-```powershell
-$js = @'
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const resets = () => [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === 'Reset the database').length;
-for (let i = 0; i < 40 && resets() === 0; i++) await sleep(250);
-return { resetButtons: resets(), reasonShown: document.body.innerText.includes('schema version is ahead') };
-'@
-foreach ($p in '/rest-api','/notifications','/import-review','/stats','/about') {
-  $r = $js | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18406$p" `
-         --out "$out\degraded-$($p.Trim('/')).png" --width 1280 --height 900 --script-stdin | ConvertFrom-Json
-  "$p -> resetButtons=$($r.resetButtons) reasonShown=$($r.reasonShown)"
-}
+Each page is read by the same committed page script,
+[`overshoot-reset-control.js`](../../../scripts/testing/page-scripts/overshoot-reset-control.js):
+
+```
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18406/rest-api --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-rest-api.png --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-rest-api.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-rest-api.json --equals resetButtons=1 --equals reasonShown=true
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18406/notifications --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-notifications-page.png --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-notifications-page.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-notifications-page.json --equals resetButtons=1 --equals reasonShown=true
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18406/import-review --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-import-review.png --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-import-review.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-import-review.json --equals resetButtons=1 --equals reasonShown=true
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18406/stats --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-stats.png --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-stats.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-stats.json --equals resetButtons=1 --equals reasonShown=true
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18406/about --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-about.png --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-about.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-about.json --equals resetButtons=0 --equals reasonShown=false
 ```
 
-**Expected:** `resetButtons=1` and `reasonShown=True` on `/rest-api`, `/notifications`,
-`/import-review` and `/stats`; `0` and `False` on `/about`, which is static SSR and carries no
+**Expected:** every `json` command exits `0`: one Reset button and the reason shown on `/rest-api`,
+`/notifications`, `/import-review` and `/stats`; neither on `/about`, which is static SSR and carries no
 interactive control. `/rest-api` is where the modal's Continue lands and is reachable from the nav
 anywhere, so no degraded page is more than one click from the repair.
 
@@ -257,8 +217,8 @@ anywhere, so no degraded page is more than one click from the repair.
 cannot run from it. `/about` reading `1` is not a failure, but it means that page became interactive,
 which is a change worth knowing about.
 
-```powershell
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/health" --expect 503 --status
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/health --expect 503 --status
 ```
 
 **The quote count cannot be read here, and that is the contract working rather than a gap.** This line
@@ -271,57 +231,36 @@ separates the two outcomes below: still `503` after Cancel, `200` after Confirm.
 
 Then, against the home page's modal, arm the Reset and cancel it:
 
-```powershell
-$cancelScript = @'
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const modal = () => document.querySelector('.modal');
-const btn = t => modal() ? [...modal().querySelectorAll('button')].find(b => b.textContent.trim() === t) : null;
-const labels = () => [...modal().querySelectorAll('button')].map(b => b.textContent.trim()).join(', ');
-for (let i = 0; i < 40 && !modal(); i++) await sleep(250);
-const before = labels();
-btn('Reset the database').click(); await sleep(1500);
-const armed = labels();
-btn('Cancel').click(); await sleep(1200);
-return { before, armed, afterCancel: labels() };
-'@
-$cancel = $cancelScript | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18406/" `
-  --out "$out\modal-after-cancel.png" --width 1280 --height 1100 --script-stdin | ConvertFrom-Json
-"before=$($cancel.before) | armed=$($cancel.armed) | afterCancel=$($cancel.afterCancel)"
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/health" --expect 503 --status
-$thrownBefore = @(docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count
+```
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18406/ --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\modal-after-cancel.png --width 1280 --height 1100 --script-file scripts/testing/page-scripts/overshoot-modal-cancel.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\modal-after-cancel.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\modal-after-cancel.json --equals "before=Reset the database, Continue" --equals "armed=Confirm, Cancel, Continue" --equals "afterCancel=Reset the database, Continue"
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/health --expect 503 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "\[Runtime - Exception\]" --exactly 0
 ```
 
-**Expected:** `before` is `Reset the database, Continue`, `armed` is `Confirm, Cancel, Continue`, and
-`afterCancel` returns to `before`. `/health` still reads `503`: Cancel called nothing, so the overshoot
-is still there.
+**Expected:** the `json` command exits `0`: the buttons read `Reset the database, Continue`, then
+`Confirm, Cancel, Continue` once armed, and return to the first after Cancel. `/health` still reads
+`503`: Cancel called nothing, so the overshoot is still there. The `log` command exits `0`: nothing has
+thrown since step 3's `reenter` started this container's log afresh.
 
 Then arm it again and confirm. The banner clears itself, in place, with no page reload:
 
-```powershell
-$confirmScript = @'
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const modal = () => document.querySelector('.modal');
-const btn = t => modal() ? [...modal().querySelectorAll('button')].find(b => b.textContent.trim() === t) : null;
-for (let i = 0; i < 40 && !modal(); i++) await sleep(250);
-btn('Reset the database').click(); await sleep(1500);
-btn('Confirm').click();
-for (let i = 0; i < 60 && document.body.innerText.includes('schema version is ahead'); i++) await sleep(250);
-return { reasonGone: !document.body.innerText.includes('schema version is ahead') };
-'@
-$confirm = $confirmScript | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18406/" `
-  --out "$out\after-confirm.png" --width 1280 --height 1100 --script-stdin | ConvertFrom-Json
-"reasonGone=$($confirm.reasonGone)"
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/health" --expect 200 --status
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
-                  '/api/v1/version') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18406$path" --expect 200 --status
-}
-"quotes after: $((Invoke-RestMethod 'http://localhost:18406/api/v1/version').database.quotes)"
-"thrownSinceCancel=$(@(docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count - $thrownBefore)"
+```
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18406/ --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-confirm.png --width 1280 --height 1100 --script-file scripts/testing/page-scripts/overshoot-modal-confirm.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-confirm.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-confirm.json --equals reasonGone=true
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/health --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/quotes --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/quotes/random --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/quotes/search?q=the" --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/conversations --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/notifications --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/masterdata/sources --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\version-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\version-after.json --equals database.quotes=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "\[Runtime - Exception\]" --exactly 0
 ```
 
-**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `reasonGone=True`, `200` from `/health`, `quotes after: 0`, and `thrownSinceCancel=0`.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. The first `json` command exits `0` on the reason gone, `/health` answers `200`, the quote count is `0`, and the exception count is unchanged since Cancel.
 The rebuild recorded this build's own version, so there is no overshoot left to degrade on, and the
 banner and its button disappear where they stand. This is the positive control: the same container,
 repaired by the remedy the reason named, answers `200`.
@@ -427,10 +366,11 @@ Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-```powershell
-$dataDir = "$PWD\.claude\temp\qt-startup-06-data"
-docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-06 --bind $dataDir
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
-Remove-Item -Recurse -Force "$PWD\.claude\temp\qt-startup-06-shots" -ErrorAction SilentlyContinue
 ```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-06 --bind C:\repos\Quotinator\.claude\temp\qt-startup-06-data
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-06-data --delete C:\repos\Quotinator\.claude\temp\qt-startup-06-shots
+```
+
+**Expected:** the `log` command exits `0`, the count unchanged since Cancel, before the container and
+both directories are removed.

@@ -75,49 +75,31 @@ wrong.
 
 ### 1. Seed a real, unmigrated v1.8.2 database
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-05 --port 18405 `
-  --image ghcr.io/dutchjafo/quotinator:1.8.2
-
-(Invoke-RestMethod "http://localhost:18405/api/v1/version").database.quotes
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-05-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-05 --port 18405 --image ghcr.io/dutchjafo/quotinator:1.8.2
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\version-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\version-before.json --greater-than database.quotes=0
 ```
 
-**Expected:** `quotes` is non-zero.
+**Expected:** the `json` command exits `0`, with a quote count above `0`.
 
 **On failure:** a partially seeded volume would make everything below meaningless. Stop and re-seed
 rather than proceeding.
 
 ### 2. Start the current build with `/data` read-only, and confirm it degraded rather than died
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-05 --port 18405 `
-  --image quotinator:local --read-only-data --wait-listening
-
-# A 503's body is read from the response stream: PowerShell 5.1 leaves ErrorDetails.Message empty here.
-function Health {
-  try   { Invoke-RestMethod "http://localhost:18405/api/v1/health" }
-  catch {
-    $response = $_.Exception.Response
-    if ($null -eq $response) { return [pscustomobject]@{ status = 'down' } }
-    $body = (New-Object IO.StreamReader($response.GetResponseStream())).ReadToEnd()
-    try { $body | ConvertFrom-Json -ErrorAction Stop } catch { [pscustomobject]@{ status = 'unreadable' } }
-  }
-}
-$deadline = (Get-Date).AddSeconds(180)
-while (($health = Health).status -notin 'unhealthy', 'healthy' -and (Get-Date) -lt $deadline) { Start-Sleep 1 }
-
+```
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-05 --port 18405 --image quotinator:local --read-only-data --wait-listening
+dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18405/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\health.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\health.json --equals status=unhealthy --contains "reason=data directory cannot be written" --contains "reason=Restore write access"
 docker inspect -f '{{.State.Running}}' qt-startup-05
-"status=$($health.status)"
-"reasonNamesTheFault=$($health.reason -match 'data directory cannot be written')"
-"reasonNamesAWorkableRemedy=$($health.reason -match 'Restore write access')"
-
-$log = docker logs qt-startup-05 2>&1 | Out-String
-"sqliteError14=$(([regex]::Matches($log, 'SQLite Error 14')).Count)"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-05 --pattern "SQLite Error 14" --at-least 1
 ```
 
-**Expected:** `true` from `docker inspect`, `status=unhealthy`, `reasonNamesTheFault=True`,
-`reasonNamesAWorkableRemedy=True`, and `sqliteError14` non-zero: the migration genuinely could not write,
-which is the failure state every step below depends on.
+**Expected:** the `json` command exits `0`: `status = unhealthy`, the reason naming the fault and the
+workable remedy. `docker inspect` prints `true`, and the `log` command exits `0`: the migration genuinely
+could not write, which is the failure state every step below depends on.
 
 **`true` and `unhealthy` together are the never-crash contract.** The reason is the half that has to be
 checked rather than assumed: the *generic* initialisation-failure reason tells the operator to run a
@@ -132,14 +114,15 @@ own output. `starting` or `down` means the wait gave up after 180 seconds.
 
 ### 3. Confirm the OpenAPI surface answers and every database read is gated
 
-```powershell
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18405/openapi/v1.json" --expect 200 --status
-
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
-                  '/api/v1/version') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18405$path" --expect 503 --status
-}
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/openapi/v1.json --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/quotes --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/quotes/random --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18405/api/v1/quotes/search?q=the" --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/conversations --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/notifications --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/masterdata/sources --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/version --expect 503 --status
 ```
 
 **Expected:** `200` from `/openapi/v1.json`, and `503` from every one of the seven endpoints.
@@ -154,16 +137,14 @@ could not open. A `500` means it reached the database and threw rather than bein
 
 ### 4. Confirm the recovery route is reachable, and read what it offers
 
-```powershell
-$reset = dotnet script scripts/testing/http.csx -- `
-  --url "http://localhost:18405/api/v1/admin/database/reset" --method POST --expect 409 | ConvertFrom-Json
-"reachedTheHandler=$($null -ne $reset.backupObstacle)"
-"obstacle=$($reset.backupObstacle)"
-"namesTheWorkableRemedy=$([bool](@($reset.remedies) -match 'Restore write access'))"
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/admin/database/reset --method POST --expect 409 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\reset.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\reset.json --equals backupObstacle=DestinationDirectoryNotWritable --contains "remedies=Restore write access"
 ```
 
-**Expected:** `409`, with `reachedTheHandler=True`, `obstacle=DestinationDirectoryNotWritable` and
-`namesTheWorkableRemedy=True`.
+**Expected:** `409`, and the `json` command exits `0`: the obstacle is
+`DestinationDirectoryNotWritable`, which only the handler can report, and a remedy names restoring
+write access.
 
 **Reachable is not workable.** The `409` shows the request reached its handler rather than the health
 gate. It cannot succeed: Reset writes, and the mount is what is read-only. The refusal hands back the
@@ -174,63 +155,53 @@ was never reached.
 
 ### 5. Read the three degraded pages
 
-```powershell
-$pageScript = @'
-const text = (document.querySelector('main') || document.body).innerText;
-const errorUi = document.getElementById('blazor-error-ui');
-return {
-  reasonShown: text.includes('data directory cannot be written'),
-  stackTrace: /at [A-Za-z.]+\(/.test(document.body.innerText),
-  errorUiShown: errorUi ? getComputedStyle(errorUi).display !== 'none' : null,
-  failedStatuses: performance.getEntriesByType('resource')
-    .filter(e => e.responseStatus >= 400).map(e => e.responseStatus)
-};
-'@
+Each page is read by the same committed page script,
+[`degraded-page-unwritable-data.js`](../../../scripts/testing/page-scripts/degraded-page-unwritable-data.js).
 
-foreach ($path in '/', '/stats', '/notifications') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18405$path" --expect 200 --status
-  $read = $pageScript | dotnet script scripts/testing/capture-page.csx -- `
-    --url "http://localhost:18405$path" --out ".claude/temp/qt-startup-05$($path.Replace('/', '-')).png" `
-    --script-stdin --wait-ms 4000 | ConvertFrom-Json
-  "$path reasonShown=$($read.reasonShown) stackTrace=$($read.stackTrace) errorUiShown=$($read.errorUiShown) everyFailureIs503=$(@($read.failedStatuses | Where-Object { $_ -ne 503 }).Count -eq 0)"
-}
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/ --expect 200 --status
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18405/ --out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\home.png --script-file scripts/testing/page-scripts/degraded-page-unwritable-data.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\home.json --wait-ms 4000
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\home.json --equals reasonShown=true --equals stackTrace=false --equals errorUiShown=false --equals failuresOtherThan503=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/stats --expect 200 --status
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18405/stats --out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\stats.png --script-file scripts/testing/page-scripts/degraded-page-unwritable-data.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\stats.json --wait-ms 4000
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\stats.json --equals reasonShown=true --equals stackTrace=false --equals errorUiShown=false --equals failuresOtherThan503=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/notifications --expect 200 --status
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18405/notifications --out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\notifications.png --script-file scripts/testing/page-scripts/degraded-page-unwritable-data.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\notifications.json --wait-ms 4000
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\notifications.json --equals reasonShown=true --equals stackTrace=false --equals errorUiShown=false --equals failuresOtherThan503=0
 ```
 
-**Expected:** `200` from each page, and for each one `reasonShown=True`, `stackTrace=False`,
-`errorUiShown=False` and `everyFailureIs503=True`.
+**Expected:** `200` from each page, and each `json` command exits `0`: the reason shown, no stack
+trace, Blazor's error banner hidden, and no failed request other than a `503`.
 
 **This is the historical incident's own surface.** A v1.8.2 to v1.8.3-beta upgrade whose migration failed
 left `/` and `/notifications` crashing instead of showing degraded UI. Each page now has to render the
 real failure reason, carry no exception text, keep Blazor's error banner hidden, and make no failing
 request other than the `503`s the gate is meant to answer.
 
-**On failure:** a `500` from a page is the degraded UI failing to render. `errorUiShown=True` is a Blazor
+**On failure:** a `500` from a page is the degraded UI failing to render. `errorUiShown = true` is a Blazor
 circuit error on a page that otherwise answered `200`. A failed status other than `503` is a request the
 page made that broke rather than being refused.
 
 ### 6. Apply the remedy, and confirm the container recovers with its content
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-05 --port 18405 `
-  --image quotinator:local
-
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18405/api/v1/health" --expect 200 --status
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
-                  '/api/v1/version') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18405$path" --expect 200 --status
-}
-foreach ($path in '/', '/stats', '/notifications') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18405$path" --expect 200 --status
-}
-"quotes=$((Invoke-RestMethod 'http://localhost:18405/api/v1/version').database.quotes)"
-
-$log = docker logs qt-startup-05 2>&1 | Out-String
-"migrationApplied=$(([regex]::Matches($log, 'migration applied')).Count)"
+```
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-05 --port 18405 --image quotinator:local
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/health --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/quotes --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/quotes/random --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18405/api/v1/quotes/search?q=the" --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/conversations --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/notifications --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/masterdata/sources --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\version-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\version-after.json --greater-than database.quotes=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/ --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/stats --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/notifications --expect 200 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-05 --pattern "migration applied" --at-least 1
 ```
 
-**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` and all three pages answer `200`, `quotes` is non-zero, and `migrationApplied` is
-non-zero.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` and all three pages answer `200`, and both TestProbe commands exit `0`: a quote count above `0`, and at least one `migration applied` line.
 
 **This is the positive control and the remedy proof in one step.** Every assertion above is about a
 degraded container, so without a passing case this document would stay green against a build that
@@ -238,7 +209,7 @@ degraded on everything. It also proves the remedy both `/health` and the refusal
 restored, the same volume migrates, and the content the read-only start could not touch is still there.
 
 **On failure:** a `503` here means the degradation was not specific to the read-only mount, or the named
-remedy does not work. `quotes=0` means the remedy cost the operator their data.
+remedy does not work. A quote count of `0` means the remedy cost the operator their data.
 
 ## Observed effect
 
@@ -310,8 +281,10 @@ Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-```powershell
+```
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-05
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-05-out
 ```
 
-**Expected:** the container and its volume are gone, so the next run seeds from nothing.
+**Expected:** the container, its volume and the output directory are gone, so the next run seeds from
+nothing.

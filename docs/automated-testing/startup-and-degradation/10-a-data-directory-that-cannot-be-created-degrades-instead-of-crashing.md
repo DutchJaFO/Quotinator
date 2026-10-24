@@ -49,56 +49,39 @@ Kestrel binds, and the initializer's own attempt to open the database then fails
 
 ### 1. Start with the data directory unobtainable, and confirm it degraded rather than died
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-10"
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-10 --port 18410 `
-  --image quotinator:local --bind $dataDir --read-only-data `
-  --unset Quotinator__DataDir --env Quotinator__DataDir=/data/quotinator --wait-listening
-
-# A 503's body is read from the response stream: PowerShell 5.1 leaves ErrorDetails.Message empty here.
-function Health {
-  try   { Invoke-RestMethod "http://localhost:18410/api/v1/health" }
-  catch {
-    $response = $_.Exception.Response
-    if ($null -eq $response) { return [pscustomobject]@{ status = 'down' } }
-    $body = (New-Object IO.StreamReader($response.GetResponseStream())).ReadToEnd()
-    try { $body | ConvertFrom-Json -ErrorAction Stop } catch { [pscustomobject]@{ status = 'unreadable' } }
-  }
-}
-$deadline = (Get-Date).AddSeconds(180)
-while (($health = Health).status -notin 'unhealthy', 'healthy' -and (Get-Date) -lt $deadline) { Start-Sleep 1 }
-
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-10 --delete C:\repos\Quotinator\.claude\temp\qt-startup-10-out --create-directory C:\repos\Quotinator\.claude\temp\qt-startup-10
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-10 --port 18410 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-10 --read-only-data --unset Quotinator__DataDir --env Quotinator__DataDir=/data/quotinator --wait-listening
+dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18410/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-startup-10-out\health.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-10-out\health.json --equals status=unhealthy --not-empty reason
 docker inspect -f '{{.State.Running}}' qt-startup-10
-"status=$($health.status)"
-"reasonGiven=$(-not [string]::IsNullOrWhiteSpace($health.reason))"
-"filesWritten=$(@(Get-ChildItem $dataDir -Force).Count)"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-empty-directory C:\repos\Quotinator\.claude\temp\qt-startup-10
 ```
 
-**Expected:** `true` from `docker inspect`, `status=unhealthy`, `reasonGiven=True`, and `filesWritten=0`.
+**Expected:** the `json` command exits `0`, printing `status = unhealthy` and the reason;
+`docker inspect` prints `true`; and the `file` command exits `0`, the bind directory empty.
 
 **`true` and `unhealthy` with a reason are the point of this document.** `true` is the never-crash
 contract, for a failure that happened before Kestrel bound. `unhealthy` with a reason is the application
-saying it is degraded. `filesWritten=0` confirms the mount really refused: a directory
+saying it is degraded. The empty bind directory confirms the mount really refused: a directory
 that was created would mean the sabotage did not land.
 
 **On failure:** a container that is not running means the configuration-time failure killed the process,
-which is the defect this document exists to catch. `status=healthy`, or files in `$dataDir`, means
+which is the defect this document exists to catch. `status=healthy`, or files in the bind directory, means
 `/data` was writable, so every step below would assert against a healthy container: stop. `starting` or
 `down` means the wait gave up after 180 seconds.
 
 ### 2. Confirm the OpenAPI surface answers and every database read is gated
 
-```powershell
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18410/openapi/v1.json" --expect 200 --status
-
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
-                  '/api/v1/version') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18410$path" --expect 503 --status
-}
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18410/openapi/v1.json --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18410/api/v1/quotes --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18410/api/v1/quotes/random --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18410/api/v1/quotes/search?q=the" --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18410/api/v1/conversations --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18410/api/v1/notifications --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18410/api/v1/masterdata/sources --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18410/api/v1/version --expect 503 --status
 ```
 
 **Expected:** `200` from `/openapi/v1.json`, and `503` from every one of the seven endpoints.
@@ -113,22 +96,20 @@ being gated.
 
 ### 3. Remove the sabotage, and confirm the container is healthy
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-10"
-dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-10 --port 18410 `
-  --image quotinator:local --bind $dataDir `
-  --unset Quotinator__DataDir --env Quotinator__DataDir=/data/quotinator
-
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18410/api/v1/health" --expect 200 --status
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
-                  '/api/v1/version') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18410$path" --expect 200 --status
-}
-"databaseCreated=$(Test-Path "$dataDir\quotinator\quotinatordata.db")"
+```
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-10 --port 18410 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-10 --unset Quotinator__DataDir --env Quotinator__DataDir=/data/quotinator
+dotnet script scripts/testing/http.csx -- --url http://localhost:18410/api/v1/health --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18410/api/v1/quotes --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18410/api/v1/quotes/random --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18410/api/v1/quotes/search?q=the" --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18410/api/v1/conversations --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18410/api/v1/notifications --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18410/api/v1/masterdata/sources --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18410/api/v1/version --expect 200 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-file C:\repos\Quotinator\.claude\temp\qt-startup-10\quotinator\quotinatordata.db
 ```
 
-**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. the container reaches healthy, `/health` answers `200`, and `databaseCreated=True`.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. The container reaches healthy, `/health` answers `200`, and the `file` command exits `0`: the database was created.
 
 **This is the positive control.** Every assertion above is about a degraded container, so without a
 passing case this document would stay green against a build that degraded on everything. The same
@@ -173,10 +154,9 @@ that degraded unconditionally fails there.
 
 ## Cleanup
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-10"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-10 --bind $dataDir
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-10 --bind C:\repos\Quotinator\.claude\temp\qt-startup-10
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-10 --delete C:\repos\Quotinator\.claude\temp\qt-startup-10-out
 ```
 
 **Expected:** the container is gone and the bind directory is removed, so the next run starts from

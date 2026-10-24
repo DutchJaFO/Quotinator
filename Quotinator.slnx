@@ -508,6 +508,15 @@
     <File Path="scripts/testing/stage-import-conflict.csx" />
     <File Path="scripts/testing/test-env.csx" />
   </Folder>
+  <Folder Name="/scripts/testing/page-scripts/">
+    <File Path="scripts/testing/page-scripts/degraded-home-text.js" />
+    <File Path="scripts/testing/page-scripts/degraded-page-unwritable-data.js" />
+    <File Path="scripts/testing/page-scripts/notifications-page-rows.js" />
+    <File Path="scripts/testing/page-scripts/overshoot-modal.js" />
+    <File Path="scripts/testing/page-scripts/overshoot-modal-cancel.js" />
+    <File Path="scripts/testing/page-scripts/overshoot-modal-confirm.js" />
+    <File Path="scripts/testing/page-scripts/overshoot-reset-control.js" />
+  </Folder>
   <Folder Name="/scripts/hooks/">
     <File Path="scripts/hooks/README.md" />
     <File Path="scripts/hooks/commit-msg" />

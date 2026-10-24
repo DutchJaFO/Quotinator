@@ -54,6 +54,9 @@
 //                         gives up: a condition that never arrives exits 1 rather than hanging the run
 //   --wait-timeout <s>    How long --wait-for keeps trying (default: 300)
 //   --status              Print only the status code to stdout, not the body
+//   --body-out <path>     Also write the response body to this file (UTF-8, no BOM), parent directories
+//                         created, so a following command reads it from the file rather than through a
+//                         shell pipe (ADR 010: a document step is a single command)
 //   --timeout <seconds>   Request timeout (default: 100)
 
 using System.Net;
@@ -242,6 +245,13 @@ string responseBody = await response.Content.ReadAsStringAsync();
 Console.Error.WriteLine($"< {status} {response.ReasonPhrase}");
 
 Console.WriteLine(Flag("--status") ? status.ToString() : responseBody);
+
+if (Value("--body-out") is string bodyOut)
+{
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(bodyOut))!);
+    File.WriteAllText(bodyOut, responseBody, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    Console.Error.WriteLine($"Wrote the body to {bodyOut}");
+}
 
 if (expect is not null && status != int.Parse(expect))
 {
