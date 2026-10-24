@@ -195,7 +195,7 @@ belongs where an operator will look for it. See [`automated-testing/README.md`](
 | Cause | |
 | Remedy | |
 | Status | From the status-code table, when one applies |
-| GitHub issue | When one exists — see the workflow rule below |
+| GitHub issue | When one exists — see the workflow rule below. Not limited to the issue that reported the condition: an entry also points to every planned issue that will fix it or improve its answer (developer direction, 2026-10-24), so an operator can see what is coming as well as what to do today |
 | Affected versions | When the entry is version-specific |
 | CVE | When the entry concerns a security advisory — see below |
 | Retired | Marks an entry as no longer applicable. **An entry that reached a release is retired, never deleted**, so a code can never be reused — see the rule below for one that never did |

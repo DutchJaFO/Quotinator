@@ -3,7 +3,7 @@
 **Kind:** diagnostic
 **Entry code:** —
 **Affected versions:** 1.9.0-alpha onwards
-**GitHub issue:** #454, #455
+**GitHub issue:** #454, #455, #332
 
 ## Symptom
 
@@ -29,7 +29,7 @@ pages that would explain why cannot render. The API reference at `/scalar/v1` an
 ## Cause
 
 The `keys/` folder inside the data directory, where the key ring the pages depend on is kept, could not
-be created at startup. Two causes produce it:
+be created or written at startup. Three causes produce it:
 
 - **A file named `keys` occupies the path** in the data directory, so no folder can be created there.
   The rest of the data directory may be perfectly writable, and the database may be healthy; the
@@ -50,11 +50,32 @@ Look at the data directory from outside the container.
 - **Otherwise**, restore write access to the data directory: remount the volume writable, or correct
   the container user's permissions on it, then restart.
 
-A database Reset does not help with either cause. With the first cause it runs, and can even turn
+A database Reset does not help with any of these causes. With the first cause it runs, and can even turn
 `/health` healthy, but the pages keep failing until the `keys` path is free.
+
+## Workaround: keep the key ring in memory
+
+Where the `keys` folder cannot be made writable, the key ring can live in memory instead. Two ways:
+
+- **A memory-backed mount, in plain Docker.** Mount an in-memory filesystem over the folder, for example
+  `docker run ... -v <data>:/data --tmpfs /data/keys ...`. The application sees a writable `keys/`, starts
+  healthy and the pages render. This is not available in the Home Assistant add-on, whose mounts the
+  supervisor decides; its `tmpfs` option covers `/tmp` only.
+- **An in-memory key ring inside the application.** Not available yet: whether, and when, Quotinator falls
+  back to it is [#332](https://github.com/DutchJaFO/Quotinator/issues/332)'s fallback chain for the keys
+  location.
+
+**What it costs.** The key ring is lost on every restart, so each browser's existing cookies and
+antiforgery tokens stop decrypting. Each browser logs one pair of errors on its first page after the
+restart and is then given a fresh cookie; see
+[An antiforgery token could not be decrypted](antiforgery-token-could-not-be-decrypted.md). Whether
+anything worse follows, such as an open page losing its connection across a restart, has not been
+measured. Prefer fixing the folder; use this when that is not possible.
 
 ## Notes
 
 Found by #327's `startup-and-degradation/10` and `11` (2026-10-23). #454 tracks making the pages render
 their degraded form in this state, as they do for every other startup problem; #455 tracks the reason
 naming the keys folder rather than the data directory, and a Reset no longer clearing the fault.
+[#332](https://github.com/DutchJaFO/Quotinator/issues/332) plans a fallback chain for the keys location,
+so the pages keep working when the preferred location cannot be written.
