@@ -35,12 +35,13 @@ obstacle and its remedies.
 
 ## Explicitly not covered here
 
+- **What the reason says, what the recovery routes offer, and how the pages render.** This document
+  proves the application says it is degraded instead of crashing, which is #327's contract; all three
+  are recorded under *Observed effect*.
 - **That the refused migration leaves the recorded schema version unchanged, and that the degraded page
   links the Knowledgebase entry.** That is
   [`backup/07`](../backup/07-a-migration-that-cannot-take-a-backup-leaves-the-database-unmigrated.md),
-  which provokes this same state to assert the backup contract. This document asserts the startup
-  contract.
-
+  which provokes this same state to assert the backup contract.
 ## Steps
 
 ### 1. Let the prior release create its database, then fill the backup budget
@@ -88,16 +89,14 @@ while (($health = Health).status -notin 'unhealthy', 'healthy' -and (Get-Date) -
 
 docker inspect -f '{{.State.Running}}' qt-startup-12
 "status=$($health.status)"
-"reasonNamesTheFault=$($health.reason.StartsWith('Database migration refused: no backup could be taken (BudgetExceeded).'))"
-"reasonNamesAnInAppRemedy=$($health.reason.Contains('DELETE /api/v1/admin/backups/{name}'))"
+"reasonGiven=$(-not [string]::IsNullOrWhiteSpace($health.reason))"
 ```
 
-**Expected:** `true` from `docker inspect`, `status=unhealthy`, `reasonNamesTheFault=True` and
-`reasonNamesAnInAppRemedy=True`.
+**Expected:** `true` from `docker inspect`, `status=unhealthy`, and `reasonGiven=True`.
 
-**`true` and `unhealthy` together are the never-crash contract**, for a startup that refused the step it
-came to perform. The reason names the obstacle, and a remedy the operator can apply from inside the
-application rather than on the volume, which step 6 then applies.
+**`true` and `unhealthy` with a reason are the never-crash contract**, for a startup that refused the
+step it came to perform: the application says it is degraded rather than serving from a schema behind
+this build.
 
 **On failure:** a container that is not running means the refusal killed the process. `status=healthy`
 means the migration ran without its backup, which is #348's defect. `starting` or `down` means the wait
@@ -123,80 +122,28 @@ would throw, and one it can answer would be serving through a schema the code do
 **On failure:** a `200` with a body means an endpoint answered from an unmigrated schema. A `500` means it
 reached the database and threw rather than being gated.
 
-### 4. Confirm the recovery route is reachable, and read what it offers
+### 4. Remove the obstacle, and confirm the database migrates
 
 ```powershell
-$reset = dotnet script scripts/testing/http.csx -- `
-  --url "http://localhost:18412/api/v1/admin/database/reset" --method POST --expect 409 | ConvertFrom-Json
-"reachedTheHandler=$($null -ne $reset.backupObstacle)"
-"obstacle=$($reset.backupObstacle)"
-"namesTheInAppRemedy=$([bool](@($reset.remedies) -match 'DELETE /api/v1/admin/backups'))"
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-12 --bind $dataDir
+Remove-Item (Join-Path $dataDir "backups\filler.db")
 
-$listed = dotnet script scripts/testing/http.csx -- --url "http://localhost:18412/api/v1/admin/backups" --expect 200 | ConvertFrom-Json
-"fillerListed=$(@($listed.items | Where-Object { $_.name -eq 'filler.db' }).Count -eq 1)"
-```
-
-**Expected:** `409` from the reset with `reachedTheHandler=True`, `obstacle=BudgetExceeded` and
-`namesTheInAppRemedy=True`; `200` from the backup listing with `fillerListed=True`.
-
-**A Reset is refused for the same reason the migration was**, since it takes a backup first too. What the
-recovery surface does offer is the backup category, and the listing proves it is reachable while
-degraded and shows the file occupying the budget.
-
-**On failure:** a `503` from either call means the health gate answered instead of the handler, so the
-recovery surface is not reachable while degraded.
-
-### 5. Read the degraded pages
-
-```powershell
-$stackTrace = 'at [A-Za-z.]+\('
-
-foreach ($path in '/', '/stats', '/notifications') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18412$path" --expect 200 --status
-}
-
-$body = (Invoke-WebRequest "http://localhost:18412/" -UseBasicParsing).Content
-"degradedTextPresent=$($body -match 'started with a problem')"
-"stackTracePresent=$($body -match $stackTrace)"
-```
-
-**Expected:** `200` from all three pages, with `degradedTextPresent=True` and `stackTracePresent=False`.
-
-**On failure:** a `500` from any page is the degraded UI failing to render, which the never-crash
-contract forbids.
-
-### 6. Apply the remedy from inside the application, and confirm the database migrates
-
-```powershell
-dotnet script scripts/testing/http.csx -- `
-  --url "http://localhost:18412/api/v1/admin/backups/filler.db" --method DELETE --expect 204 --status
-"fillerGone=$(-not (Test-Path "$dataDir\backups\filler.db"))"
-
-dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-12 --port 18412 `
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-12 --port 18412 `
   --image quotinator:local --bind $dataDir
 
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18412/api/v1/health" --expect 200 --status
-foreach ($path in '/', '/stats', '/notifications') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18412$path" --expect 200 --status
-}
 "quotes=$((Invoke-RestMethod 'http://localhost:18412/api/v1/version').database.quotes)"
 $log = docker logs qt-startup-12 2>&1 | Out-String
 "migrationApplied=$(([regex]::Matches($log, 'migration applied')).Count)"
-"backups=$(@(Get-ChildItem "$dataDir\backups").Count)"
 ```
 
-**Expected:** `204` from the delete and `fillerGone=True`; after the restart, `/health` and all three
-pages `200`, `quotes` non-zero, `migrationApplied` non-zero, and `backups` at least `1`, the backup the
-migration took first.
+**Expected:** `/health` `200`, `quotes` non-zero, and `migrationApplied` non-zero.
 
-**This is the positive control and the remedy proof in one step.** Every assertion above is about a
-degraded container, so without a passing case this document would stay green against a build that
-refused every migration. It also proves the remedy the reason named works end to end from inside the
-application: delete through the admin API, restart, and the same volume migrates with its content.
+**This is the positive control.** Every assertion above is about a degraded container, so without a
+passing case this document would stay green against a build that refused every migration. With room for
+its backup, the same volume migrates and keeps its content.
 
-**On failure:** a `503` after the restart means the degradation was not specific to the full budget, or
-the named remedy does not work.
-
+**On failure:** a `503` here means the degradation was not specific to the full budget.
 ## Observed effect
 
 **Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`, upgrading a `1.8.3` volume
@@ -210,7 +157,7 @@ by two remedies, removing old backups through `GET /api/v1/admin/backups` and
 Knowledgebase address. `/openapi/v1.json` answers `200`, all seven database reads `503`, and the three
 pages `200`.
 
-**Recovery route, and whether it can succeed.** A Reset is reachable and refuses with `409`, obstacle
+**Recovery route, recorded rather than asserted.** A Reset is reachable and refuses with `409`, obstacle
 `BudgetExceeded`, for the same reason. The backup category is reachable and is the route that works:
 the listing shows `filler.db` at `1073741824` bytes, `DELETE /api/v1/admin/backups/filler.db` answers
 `204`, and after a restart the migration applies, one backup is taken, and the container serves 795
@@ -222,13 +169,12 @@ A build from the commit before [#348](https://github.com/DutchJaFO/Quotinator/is
 a distinct tag, run through step 2. #348 is what made a migration with no backup refuse rather than run
 unprotected, so on that build step 2 reads `status=healthy`: the migration runs without its backup.
 
-Step 6 is the positive control inside every run: it removes the obstacle and reads `200`, so a build that
+Step 4 is the positive control inside every run: it removes the obstacle and reads `200`, so a build that
 degraded unconditionally fails there.
 
 **Where the canary has been run:** 2026-10-23 against `e4078444`, the commit before #327's first, as
 `quotinator:canary-327`, which also predates #348's refusal. Step 2 read `status=healthy` with no
-refusal reason: the migration ran without its backup. Step 3 read `200` from every database read, and
-step 4 `200` from the reset and `404` from the backup listing, which did not exist yet.
+refusal reason: the migration ran without its backup. Step 3 read `200` from every database read.
 
 ## Cleanup
 

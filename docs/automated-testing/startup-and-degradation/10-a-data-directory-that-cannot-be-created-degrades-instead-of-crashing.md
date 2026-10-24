@@ -4,7 +4,6 @@
 **Environment:** Fresh + Constrained
 **Deterministic:** yes
 **Traces to:** #327, #326
-**Fully green after:** #332: step 4 reads `500` from all three pages until the DataProtection keys directory has a fallback location. Step 5 still runs, since it proves the remedy rather than the degraded state.
 
 ## Preconditions
 
@@ -25,11 +24,10 @@ Kestrel binds, and the initializer's own attempt to open the database then fails
 
 - **The parent mount is read-only, rather than a file placed where the directory belongs.** Both make
   `CreateDirectory` throw, and `StartupResilienceTests` uses the file, which is deterministic on every
-  platform. This document uses the real-world cause instead, because its remedy has to be the one the
-  reason names: *restore write access*. Removing a stray file is not that remedy.
+  platform. This document uses the real-world cause instead, the one an operator actually meets.
 - **`create` with `--read-only-data` gives the container its own key ring**, since a brand-new volume
-  that cannot be written has none to share (`test-env.csx`'s note on `--read-only-data`). That is the
-  condition step 4 depends on: no `keys/` directory exists or can be created.
+  that cannot be written has none to share (`test-env.csx`'s note on `--read-only-data`). So no `keys/`
+  directory exists or can be created, which is what the pages recorded under *Observed effect* fail on.
 - **The data directory is configured with `--unset` and then `--env`**, so the profile's own
   `Quotinator__DataDir=/data` is removed rather than relying on the later `-e` winning.
 - **Wait for `unhealthy`, not for a `503`.** The startup wait page answers `503` with
@@ -39,18 +37,14 @@ Kestrel binds, and the initializer's own attempt to open the database then fails
   Initialisation fails within a second here, since there is nothing to seed, but a wait that is right
   only because it happens to be fast is a guess.
 - **No WAL sidecar state to pin.** No database file exists, so there is nothing for SQLite to replay.
-- **A regex holding a backslash goes in its own variable**, never inside an interpolated string: in
-  Windows PowerShell 5.1 a pattern such as `at [A-Za-z.]+\(` inside `"$( ... )"` is a parse error.
-
 ## Explicitly not covered here
 
-- **What the backup refusal offers, obstacle by obstacle.** `backup/04` provokes an unwritable backup
-  folder to assert the Reset path. This document asserts only that the recovery surface is reachable
-  and what the refusal hands back.
+- **How the degraded pages render, and what the recovery routes offer.** This document proves the
+  application says it is degraded instead of crashing, which is #327's contract. Both are recorded under
+  *Observed effect*, and `backup/04` provokes an unwritable backup folder to assert the Reset path.
 - **A file where the directory belongs.** That sabotage is
   `StartupResilienceTests.Startup_DataDirectoryCannotBeCreated_*`, in-process, where it is
   deterministic across platforms.
-
 ## Steps
 
 ### 1. Start with the data directory unobtainable, and confirm it degraded rather than died
@@ -79,17 +73,15 @@ while (($health = Health).status -notin 'unhealthy', 'healthy' -and (Get-Date) -
 
 docker inspect -f '{{.State.Running}}' qt-startup-10
 "status=$($health.status)"
-"reasonNamesTheFault=$($health.reason -match 'data directory cannot be written')"
-"reasonNamesAWorkableRemedy=$($health.reason -match 'Restore write access')"
+"reasonGiven=$(-not [string]::IsNullOrWhiteSpace($health.reason))"
 "filesWritten=$(@(Get-ChildItem $dataDir -Force).Count)"
 ```
 
-**Expected:** `true` from `docker inspect`, `status=unhealthy`, `reasonNamesTheFault=True`,
-`reasonNamesAWorkableRemedy=True`, and `filesWritten=0`.
+**Expected:** `true` from `docker inspect`, `status=unhealthy`, `reasonGiven=True`, and `filesWritten=0`.
 
-**`true` and `unhealthy` together are the point of this document.** `true` is the never-crash contract,
-for a failure that happened before Kestrel bound. `unhealthy` confirms the failure state was reached
-rather than inferred from the recipe. `filesWritten=0` confirms the mount really refused: a directory
+**`true` and `unhealthy` with a reason are the point of this document.** `true` is the never-crash
+contract, for a failure that happened before Kestrel bound. `unhealthy` with a reason is the application
+saying it is degraded. `filesWritten=0` confirms the mount really refused: a directory
 that was created would mean the sabotage did not land.
 
 **On failure:** a container that is not running means the configuration-time failure killed the process,
@@ -119,52 +111,7 @@ exist, so each refuses rather than answering from nothing.
 and whatever it returned is not a result. A `500` means it reached the database and threw rather than
 being gated.
 
-### 3. Confirm the recovery route is reachable, and read what it offers
-
-```powershell
-$reset = dotnet script scripts/testing/http.csx -- `
-  --url "http://localhost:18410/api/v1/admin/database/reset" --method POST --expect 409 | ConvertFrom-Json
-"reachedTheHandler=$($null -ne $reset.backupObstacle)"
-"obstacle=$($reset.backupObstacle)"
-"namesTheWorkableRemedy=$([bool](@($reset.remedies) -match 'Restore write access'))"
-```
-
-**Expected:** `409`, with `reachedTheHandler=True`, `obstacle=DestinationDirectoryNotWritable` and
-`namesTheWorkableRemedy=True`.
-
-**Reachable is not workable, and this step separates them.** The `409` shows the admin request reached
-its handler rather than the health gate, which is what makes the surface a recovery route. It does not
-succeed: a Reset writes, and the mount is what is read-only, exactly as the `/health` reason says. What
-matters is that the refusal hands back the same remedy the reason named, which step 5 proves works.
-
-**On failure:** a `503` means the health gate answered instead of the handler, so the recovery surface is
-not reachable while degraded. A `500` means the refusal was never reached.
-
-### 4. Read the degraded pages
-
-```powershell
-$stackTrace = 'at [A-Za-z.]+\('
-
-foreach ($path in '/', '/stats', '/notifications') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18410$path" --expect 200 --status
-}
-
-$body = (Invoke-WebRequest "http://localhost:18410/" -UseBasicParsing).Content
-"degradedTextPresent=$($body -match 'started with a problem')"
-"stackTracePresent=$($body -match $stackTrace)"
-```
-
-**Expected:** `200` from all three pages, with `degradedTextPresent=True` and `stackTracePresent=False`.
-
-**This is the half of the contract an operator actually looks at.** The pages stay reachable because they
-render a degraded form that says what happened. A `500` here leaves the operator with nothing to read but
-`/health`, which is the outcome the never-crash contract forbids.
-
-**On failure:** a `500` from any page is the degraded UI failing to render. See the header: until #332
-gives the keys directory a fallback location, every page fails here on the DataProtection key ring, and
-step 5 still runs.
-
-### 5. Apply the remedy, and confirm the container recovers
+### 3. Remove the sabotage, and confirm the container is healthy
 
 ```powershell
 $dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-10"
@@ -173,24 +120,17 @@ dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-10 --por
   --unset Quotinator__DataDir --env Quotinator__DataDir=/data/quotinator
 
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18410/api/v1/health" --expect 200 --status
-foreach ($path in '/', '/stats', '/notifications') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18410$path" --expect 200 --status
-}
 "databaseCreated=$(Test-Path "$dataDir\quotinator\quotinatordata.db")"
 ```
 
-**Expected:** the container reaches healthy, `/health` and all three pages answer `200`, and
-`databaseCreated=True`.
+**Expected:** the container reaches healthy, `/health` answers `200`, and `databaseCreated=True`.
 
-**This is the positive control and the remedy proof in one step.** Every assertion above is about a
-degraded container, so without a passing case this document would stay green against a build that
-degraded on everything. It also proves that the remedy both the reason and the refusal named, restoring
-write access, actually resolves the fault: the same configuration on a writable mount creates the
-directory, the database and the keys.
+**This is the positive control.** Every assertion above is about a degraded container, so without a
+passing case this document would stay green against a build that degraded on everything. The same
+configuration on a writable mount creates the directory and the database.
 
 **On failure:** a `503` here means the degradation was not specific to the read-only mount, which makes
-every assertion above worthless, or the named remedy does not work.
-
+every assertion above worthless.
 ## Observed effect
 
 **Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`.
@@ -200,19 +140,19 @@ empty. `/openapi/v1.json` answers `200` and all seven database-reading endpoints
 carries the configuration-time `[Config]` warning, two `IOException`s for the two directories that could
 not be created, and then `SQLite Error 14: 'unable to open database file'` from the initializer.
 
-**All three pages answer `500`.** With no `keys/` directory, every request that renders a page fails to
-read the DataProtection key ring (`ErrorOccurredWhileReadingKeyRing`, five times for five page
-requests). `Program.cs` records that a keys fallback is #332's, and #332's requirement 10 is exactly that
-the UI keeps working when the preferred keys location is not writable. The same holds for an uncreatable
+**All three pages answer `500`, recorded rather than asserted.** With no `keys/` directory, every request
+that renders a page fails to read the DataProtection key ring (`ErrorOccurredWhileReadingKeyRing`, five
+times for five page requests), while `/health` correctly reports the fault, so the application still says
+it is degraded. A finding for its own issue, not this document's contract. The same holds for an uncreatable
 `keys/` alone, which [`11`](11-a-keys-directory-that-cannot-be-created-degrades-instead-of-crashing.md)
 covers.
 
-**Recovery route, and whether it can succeed.** Reachable: `POST /api/v1/admin/database/reset` reaches
+**Recovery route, recorded rather than asserted.** Reachable: `POST /api/v1/admin/database/reset` reaches
 its handler and refuses with `409`, obstacle `DestinationDirectoryNotWritable`, naming *restore write
 access* first. **Not workable**: a Reset writes. The refusal's second remedy, *Retry with
 `allowNoBackup=true`*, answers an unhandled `500` here, since the reset still has to write; this document
 does not assert it, so as not to write the `500` in as the contract. Remounting `/data` writable and
-restarting returns the container to `200`, measured in step 5.
+restarting returns the container to `200`, which is step 3's positive control.
 
 ## Canary
 
@@ -221,7 +161,7 @@ change, under a distinct tag, run through step 1. #326 is what turned this failu
 so on that build the configuration-time `CreateDirectory` throws before Kestrel binds: step 1's
 `docker inspect` reads `false` and nothing answers on the port.
 
-Step 5 is the positive control inside every run: it removes the sabotage and reads `200`, so a build
+Step 3 is the positive control inside every run: it removes the sabotage and reads `200`, so a build
 that degraded unconditionally fails there.
 
 ## Cleanup

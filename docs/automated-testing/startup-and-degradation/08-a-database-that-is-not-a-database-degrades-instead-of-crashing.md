@@ -33,25 +33,12 @@ continues: Kestrel binds, `/health` answers `503`, and the Blazor pages render t
   would spend the whole timeout, and the startup wait page answers `503` with `status=starting`, so
   waiting on the status code can return before the degraded state is settled. Step 3 polls the `status`
   field, the technique [`01`](01-seeding-backup-degraded-startup-and-reset-recovery.md) established.
-- **A regex holding a backslash goes in its own variable, never inside an interpolated string.** In
-  Windows PowerShell 5.1 a pattern such as `at [A-Za-z.]+\(` written directly inside `"$( ... )"` is a
-  parse error on the escaped parenthesis, not a failed match. Measured 2026-10-21, and step 4 writes it
-  the working way.
-
 ## Explicitly not covered here
 
-- **The per-element DOM reads and the browser console.** The degraded page is the same page whatever
-  fault produced it, and
-  [`05`](05-degraded-pages-survive-a-migration-failure.md) asserts its structure element by element
-  and requires every console error to be a `503`. This document asserts that the same contract holds
-  for an unreadable database rather than repeating that depth: status, the degraded text, and the
-  absence of a stack trace.
-- **Which backup obstacle the refusal names, and the remedies it offers.** That is
-  [`backup/01`](../backup/01-refuses-a-reset-when-the-source-cannot-be-read.md)'s subject, which
-  provokes this same state to assert the Reset path. This document asserts only that the recovery
-  surface is reachable and that the route it offers resolves the fault, which is the startup contract
-  rather than the backup contract.
-
+- **How the degraded pages render, and what the recovery routes offer.** This document proves the
+  application says it is degraded instead of crashing, which is #327's contract. The pages and the Reset
+  are recorded under *Observed effect*, and [`backup/01`](../backup/01-refuses-a-reset-when-the-source-cannot-be-read.md)
+  provokes this same state to assert the Reset path.
 ## Steps
 
 ### 1. Seed a healthy database
@@ -110,57 +97,25 @@ while (($health = Health).status -notin 'unhealthy', 'healthy' -and (Get-Date) -
 
 docker inspect -f '{{.State.Running}}' qt-startup-08
 "status=$($health.status)"
-"reasonNamesAWorkableRemedy=$($health.reason -match 'deleting the database file')"
+"reasonGiven=$(-not [string]::IsNullOrWhiteSpace($health.reason))"
 ```
 
-**Expected:** `true` from `docker inspect`, `status=unhealthy`, and `reasonNamesAWorkableRemedy=True`.
+**Expected:** `true` from `docker inspect`, `status=unhealthy`, and `reasonGiven=True`.
 
-**`true` and `unhealthy` together are the point of this document.** `true` is the never-crash contract:
-the process is still running after a failure that reached it before any schema version was read.
-`unhealthy` is the confirmation that the failure state was actually reached, rather than inferred from
-the recipe having been followed.
-
-**The reason has to name a remedy that can work.** This fault gets the generic initialisation-failure
-reason, which names two: a database Reset, which refuses here (step 6), and deleting the database file
-and restarting, which works (step 7). The second is the one that has to be there.
+**These three are the point of this document.** `true` is the never-crash contract: the process is still
+running after a failure that reached it before any schema version was read. `unhealthy` with a reason is
+the application saying it is degraded, rather than the operator discovering it from failures.
 
 **On failure:** a container that is not running means the fault killed the process, which is the defect
 this document exists to catch. `status=healthy` means the file was not actually replaced, so re-run from
 step 2 rather than letting the assertions below pass against a container that never degraded. `starting`
 or `down` means the wait gave up after 180 seconds.
 
-### 4. Read the degraded pages and the OpenAPI surface
+### 4. Confirm the OpenAPI surface answers and every database read is gated
 
 ```powershell
-$stackTrace = 'at [A-Za-z.]+\('
-
-foreach ($path in '/', '/stats', '/notifications') {
-  dotnet script scripts/testing/http.csx -- --url "http://localhost:18408$path" --expect 200 --status
-}
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18408/openapi/v1.json" --expect 200 --status
 
-$body = (Invoke-WebRequest "http://localhost:18408/" -UseBasicParsing).Content
-$degraded = $body -match 'started with a problem'
-$crashed  = $body -match $stackTrace
-"degradedTextPresent=$degraded"
-"stackTracePresent=$crashed"
-```
-
-**Expected:** `200` from all three pages and from `/openapi/v1.json`, with
-`degradedTextPresent=True` and `stackTracePresent=False`.
-
-**`/openapi/v1.json` is the recovery route, not a nice-to-have.** The degraded state's whole contract
-is that an operator can still read what happened and reach the documented way out, and the spec is how
-that way out is discovered. A degraded container that stopped serving its own spec would leave the
-operator with a broken UI and no documented next step.
-
-**On failure:** a `500` from any page is the degraded UI failing to render, which is the historical
-incident this contract exists to prevent. `stackTracePresent=True` means the page rendered an exception
-instead of the degraded form, which is the same failure wearing a `200`.
-
-### 5. Confirm every endpoint that queries the database is gated
-
-```powershell
 foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
                   '/api/v1/stats', '/api/v1/notifications', '/api/v1/masterdata/sources',
                   '/api/v1/version') {
@@ -168,42 +123,16 @@ foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/sea
 }
 ```
 
-**Expected:** `503` from every one of the seven.
+**Expected:** `200` from `/openapi/v1.json`, and `503` from every one of the seven.
 
-**With health reporting a problem, no endpoint that reads the database is expected to return sane
-results, so each one is gated rather than left to answer from a database it could not open**
-(developer direction, 2026-10-21). This is the complement of step 4: the pages stay reachable because
-they render a degraded form that says so, while the data-serving API refuses outright. A `200` from
-any of these would be worse than a `503`, because the caller cannot tell an empty database from one
-that failed to open.
+**The spec is the surface an operator recovers through**, so it has to stay reachable while degraded.
+**The reads refuse rather than answer from a database the initializer could not open** (developer
+direction, 2026-10-21): a `200` carrying zeroes cannot be told apart from an empty database.
 
-**On failure:** a `200` with a body means an endpoint answered from a database the initializer could
-not read, and whatever it returned is not a result. A `500` means it reached the database and threw
-rather than being gated, which is the same defect wearing a different code.
+**On failure:** a `200` with a body from any of the seven means an endpoint answered from a database the
+initializer could not read. A `500` means it reached the database and threw rather than being gated.
 
-### 6. Confirm the recovery route is reachable, and read what it offers
-
-```powershell
-$reset = dotnet script scripts/testing/http.csx -- `
-  --url "http://localhost:18408/api/v1/admin/database/reset" --method POST --expect 409 | ConvertFrom-Json
-"reachedTheHandler=$($null -ne $reset.backupObstacle)"
-"namesAFileRemedy=$([bool](@($reset.remedies) -match 'file'))"
-```
-
-**Expected:** `409`, with `reachedTheHandler=True` and `namesAFileRemedy=True`.
-
-**Reachable and workable are different claims, and this step separates them.** Step 5 gates every
-read; this one establishes that the recovery surface is the exception, and it has to be. The `409` establishes
-that the admin request reached its handler rather than being answered by the health gate, which is what
-makes the surface a recovery route at all. What it does *not* establish is that the route succeeds:
-this reset refuses, because a file SQLite cannot open cannot be backed up and cannot be dropped table
-by table either. `namesAFileRemedy` is the half that matters here, that the refusal hands the operator
-a remedy pointing at the file itself, which step 7 then proves works.
-
-**On failure:** a `503` would mean the health gate answered instead of the handler, so the recovery
-surface is not actually reachable while degraded. A `500` would mean the refusal is not reached at all.
-
-### 7. Apply the remedy, and confirm the container recovers
+### 5. Remove the sabotage, and confirm the container is healthy
 
 ```powershell
 $dataDir = "C:\repos\Quotinator\.claude\temp\qt-startup-08"
@@ -219,16 +148,11 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18408/api/v1/h
 
 **Expected:** the container reaches healthy and `/health` returns `200`.
 
-**This is the positive control and the remedy proof in one step.** Every assertion above is about a
-degraded container, so without a passing case this document would stay green against a build that
-degraded on everything. It is also the proof that the remedy step 3 read out of the reason and step 6
-read out of the refusal, removing the database file from outside the application, actually resolves the
-condition rather than being advice nobody checked.
+**This is the positive control.** Every assertion above is about a degraded container, so without a
+passing case this document would stay green against a build that degraded on everything.
 
-**On failure:** a `503` here means either the degradation is not specific to the sabotage, which makes
-every assertion above worthless, or the named remedy does not work, which is a defect in the guidance
-rather than in this document.
-
+**On failure:** a `503` here means the degradation is not specific to the sabotage, which makes every
+assertion above worthless.
 ## Observed effect
 
 **Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`, seeded to 795 quotes and then
@@ -256,7 +180,7 @@ them.** Measured 2026-10-21, each returning a bare *"An error occurred while pro
 and a trace id: `GET /api/v1/admin/database/seed/preview`, `GET /api/v1/admin/audit`,
 `GET /api/v1/admin/audit/date-range`, `GET /api/v1/admin/audit/export`,
 `POST /api/v1/admin/database/reseed` and `DELETE /api/v1/admin/audit`. The admin surface is exempt
-from the health gate so it can be the recovery route, which is why step 6 asserts the reset reaches its
+from the health gate so it can be the recovery route, which is why the reset reaching its handler matters
 handler; these six reach theirs and throw, and two of them are writes.
 
 Correct in the same run, which is what shows the fault is specific rather than the surface being
@@ -271,15 +195,14 @@ endpoints carrying #348's preflight are exactly the ones answering correctly.
 to the reset and the backup category, which is the repair route an operator can actually use. ADR 022
 governs it, since a condition the code has already detected is being thrown rather than returned.
 
-**Recovery route, and whether it can succeed.** Reachable: `POST /api/v1/admin/database/reset` reaches
+**Recovery route, recorded rather than asserted.** Reachable: `POST /api/v1/admin/database/reset` reaches
 its handler and answers `409 Conflict` rather than being gated away by the `503`. **Not workable as
 offered**: the reset refuses, naming the obstacle and handing back a remedy that points at the file.
-Deleting the database file and restarting returns the container to `200`, measured in step 7.
+Deleting the database file and restarting returns the container to `200`, which is step 5's positive control.
 
 **The reason names a remedy that works, second.** `/health` carries the generic initialisation-failure
 reason, which recommends a database Reset first, and that reset refuses. Its second remedy, *stopping
-the app, deleting the database file, and restarting*, is the one that works, and step 3 asserts it is
-there. The reason's diagnosis does not fit this fault, though: it says the recorded schema version
+the app, deleting the database file, and restarting*, is the one that works. The reason's diagnosis does not fit this fault, though: it says the recorded schema version
 probably does not match the on-disk schema, for a file that is not a database at all. Contrast
 [`05`](05-degraded-pages-survive-a-migration-failure.md), where #326 gave the unwritable-directory fault
 its own reason, matched on SQLite error codes 14 and 8; an unreadable file raises neither, so it falls
@@ -288,18 +211,12 @@ through to the generic text.
 ## Canary
 
 **A pre-issue build.** The commit before #327's first commit, under a distinct tag, run through every
-step. That build predates the gating of `/version` while degraded and #348's reset refusal, so step 5
-reads `200` from `/api/v1/version` and step 6 reads an unhandled `500` from the reset.
+step. That build predates the gating of `/version` while degraded, so step 4 reads `200` from
+`/api/v1/version`.
 
-**The positive control this run produces for itself.** Step 7 removes the sabotage and reads `200` in
-the same environment, so a build that degraded unconditionally fails there. Step 3's `unhealthy` is the
-other half: it ends the run when the sabotage did not land, so the assertions in steps 4 to 6 cannot
-pass against a healthy container.
-
-**Where the canary has been run:** 2026-10-23 against `e4078444`, the commit before #327's first, as
-`quotinator:canary-327`. Steps 1 to 4 passed; step 5 read `200` from `/api/v1/version`, and step 6 read
-`500` from the reset. Step 7 read `healthy`.
-
+**The positive control this run produces for itself.** Step 5 removes the sabotage and reads `200` in the
+same environment, so a build that degraded unconditionally fails there. Step 3's `unhealthy` is the other
+half: it ends the run when the sabotage did not land, so step 4 cannot pass against a healthy container.
 ## Cleanup
 
 ```powershell

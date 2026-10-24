@@ -38,8 +38,11 @@ never crash, and a startup problem that takes the process down is a failure no r
 however rare the problem. Every degraded startup path the application has gets a document, and every one
 of those documents is in this set: a broken schema, an unwritable data directory, a file that is not a
 database, a truncated one, a data directory or `keys/` directory that cannot be created, a migration
-refused for want of a backup, and a schema version ahead of the build. Each asserts the same contract,
-and each ends by applying the remedy its failure reason names and reading `200`.
+refused for want of a backup, and a schema version ahead of the build. Each asserts the same contract:
+the process stays up, `/health` reports `unhealthy` with a reason, the OpenAPI surface answers and the
+database reads are gated, and each ends by removing its own sabotage and reading `200`. Whether the
+reason names the right cause, how the pages render and whether a recovery route succeeds are recorded,
+not asserted: the contract is that the application says it is degraded instead of crashing.
 
 | Test | Category |
 |---|---|

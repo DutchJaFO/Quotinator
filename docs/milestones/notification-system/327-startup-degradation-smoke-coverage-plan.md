@@ -386,7 +386,7 @@ description now names the second reason a test belongs there beside the first.
 
 ### 13. Narrow every document to the contract, and file each finding as its own issue
 
-**Status:** ⬜ Not started
+**Status:** 🚧 In progress
 
 Steps 3 to 10 asserted more than #327 owns: a reason naming a workable remedy, the degraded pages
 rendering, what each recovery route offers, and in `10` and `11` the remedy proven through the API. Under
@@ -406,8 +406,19 @@ holding #327 open:
 | The `allowNoBackup` override refuses a corrupt or truncated database; its tests exercised only `BudgetExceeded` against a real database | `08`, `09`, `backup/01` |
 | The generic initialisation reason misdiagnoses a corrupt or truncated file as a schema-version mismatch | `08`, `09` |
 
-The last two are #348's own feature not working where it is offered, so they are the evidence for
-reopening #348 once #327 is finished (developer decision, 2026-10-24), rather than new issues.
+The fourth is #348's own feature not working where it is offered, so it is the evidence for reopening
+#348 once #327 is finished (developer decision, 2026-10-24), rather than a new issue. The other four are
+drafted as issues of their own.
+
+**Documents narrowed, 2026-10-24.** `08`, `09`, `10`, `11` and `12`, the five #327 wrote, now assert the
+contract and nothing else: the reason checks became `reasonGiven`, the pages and recovery-route steps
+moved into *Observed effect*, `10` and `11` lost their `Fully green after: #332` headers, and `12`'s
+positive control removes the filler on the host rather than through the backup API. `01`, `05` and `06`
+are left as they are: each asserts what its own originating issue promised (#254's Reset recovery,
+#293's degraded pages, #350's reason and repair), and all three pass. The index's smoke-set description
+states the narrowed contract. All five were run as written against `quotinator:local` at `eb8c1a19`,
+every step passing, and the 52 `RepositoryStructureTests` guards are green. The findings are not yet
+drafted as issues.
 
 ### 14. Fix the undetected read-only `keys/` directory, red first, and write its document
 
