@@ -160,7 +160,7 @@ $health = dotnet script scripts/testing/http.csx -- --url "http://localhost:1840
 $random = dotnet script scripts/testing/http.csx -- --url "http://localhost:18401/api/v1/quotes/random" --expect 503 | ConvertFrom-Json
 "random status=$($random.status) reason=$($random.reason)"
 
-foreach ($path in '/api/v1/quotes', '/api/v1/quotes/search?q=the', '/api/v1/stats',
+foreach ($path in '/api/v1/quotes', '/api/v1/quotes/search?q=the', '/api/v1/conversations',
                   '/api/v1/notifications', '/api/v1/masterdata/sources', '/api/v1/version') {
   dotnet script scripts/testing/http.csx -- --url "http://localhost:18401$path" --expect 503 --status
 }
@@ -219,11 +219,16 @@ afterwards (#156).
 
 ```powershell
 (dotnet script scripts/testing/http.csx -- --url "http://localhost:18401/api/v1/health" --expect 200 | ConvertFrom-Json).status
+foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
+                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/version') {
+  dotnet script scripts/testing/http.csx -- --url "http://localhost:18401$path" --expect 200 --status
+}
 $after = dotnet script scripts/testing/http.csx -- --url "http://localhost:18401/api/v1/quotes/random" --expect 200 | ConvertFrom-Json
 "status=$($after.status) items=$(@($after.items).Count)"
 ```
 
-**Expected:** `/health` returns `200` and `healthy`, proving `DatabaseHealthState.MarkHealthy()` clears
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` returns `200` and `healthy`, proving `DatabaseHealthState.MarkHealthy()` clears
 the degraded state rather than requiring a process restart. `/quotes/random` returns `200`,
 `status=NoResults` and `items=0`, not `503`, and not real quote data, because the database is
 genuinely empty after a Reset.

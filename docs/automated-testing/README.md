@@ -27,7 +27,7 @@ job, recorded in its plan doc; the smoke set is the floor underneath it, never a
 
 ## The designated smoke set
 
-Seventeen tests. The question this set answers is *does this container fundamentally work*, and a test
+Eighteen tests. The question this set answers is *does this container fundamentally work*, and a test
 is in it for one of two reasons.
 
 **Its failure would invalidate most other results.** That is the reason for the nine outside
@@ -37,8 +37,9 @@ is in it for one of two reasons.
 never crash, and a startup problem that takes the process down is a failure no run may let through,
 however rare the problem. Every degraded startup path the application has gets a document, and every one
 of those documents is in this set: a broken schema, an unwritable data directory, a file that is not a
-database, a truncated one, a data directory or `keys/` directory that cannot be created, a migration
-refused for want of a backup, and a schema version ahead of the build. Each asserts the same contract:
+database, a truncated one, a data directory or `keys/` directory that cannot be created, a `keys/`
+directory that exists but cannot be written, a migration refused for want of a backup, and a schema
+version ahead of the build. Each asserts the same contract:
 the process stays up, `/health` reports `unhealthy` with a reason, the OpenAPI surface answers and the
 database reads are gated, and each ends by removing its own sabotage and reading `200`. Whether the
 reason names the right cause, how the pages render and whether a recovery route succeeds are recorded,
@@ -61,6 +62,7 @@ not asserted: the contract is that the application says it is degraded instead o
 | [A data directory that cannot be created degrades instead of crashing](startup-and-degradation/10-a-data-directory-that-cannot-be-created-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
 | [A keys directory that cannot be created degrades instead of crashing](startup-and-degradation/11-a-keys-directory-that-cannot-be-created-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
 | [A migration refused for want of a backup degrades instead of crashing](startup-and-degradation/12-a-migration-refused-for-want-of-a-backup-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
+| [A keys directory that cannot be written degrades instead of crashing](startup-and-degradation/13-a-keys-directory-that-cannot-be-written-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
 | [Startup notification system](notifications-and-changelog/01-notification-system.md) | `notifications-and-changelog/` |
 | [Changelog is served from its own on-disk database](notifications-and-changelog/07-changelog-served-from-its-own-database.md) | `notifications-and-changelog/` |
 
@@ -1288,6 +1290,7 @@ The five this suite runs on:
 | 10 | [A data directory that cannot be created degrades instead of crashing](startup-and-degradation/10-a-data-directory-that-cannot-be-created-degrades-instead-of-crashing.md) | yes |
 | 11 | [A keys directory that cannot be created degrades instead of crashing](startup-and-degradation/11-a-keys-directory-that-cannot-be-created-degrades-instead-of-crashing.md) | yes |
 | 12 | [A migration refused for want of a backup degrades instead of crashing](startup-and-degradation/12-a-migration-refused-for-want-of-a-backup-degrades-instead-of-crashing.md) | yes |
+| 13 | [A keys directory that cannot be written degrades instead of crashing](startup-and-degradation/13-a-keys-directory-that-cannot-be-written-degrades-instead-of-crashing.md) | yes |
 
 ### `backup/`
 

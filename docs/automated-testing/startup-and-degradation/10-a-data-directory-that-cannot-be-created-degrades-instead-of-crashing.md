@@ -95,7 +95,7 @@ which is the defect this document exists to catch. `status=healthy`, or files in
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18410/openapi/v1.json" --expect 200 --status
 
 foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/stats', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
                   '/api/v1/version') {
   dotnet script scripts/testing/http.csx -- --url "http://localhost:18410$path" --expect 503 --status
 }
@@ -120,10 +120,15 @@ dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-10 --por
   --unset Quotinator__DataDir --env Quotinator__DataDir=/data/quotinator
 
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18410/api/v1/health" --expect 200 --status
+foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
+                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/version') {
+  dotnet script scripts/testing/http.csx -- --url "http://localhost:18410$path" --expect 200 --status
+}
 "databaseCreated=$(Test-Path "$dataDir\quotinator\quotinatordata.db")"
 ```
 
-**Expected:** the container reaches healthy, `/health` answers `200`, and `databaseCreated=True`.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. the container reaches healthy, `/health` answers `200`, and `databaseCreated=True`.
 
 **This is the positive control.** Every assertion above is about a degraded container, so without a
 passing case this document would stay green against a build that degraded on everything. The same

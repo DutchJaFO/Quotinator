@@ -136,7 +136,7 @@ own output. `starting` or `down` means the wait gave up after 180 seconds.
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18405/openapi/v1.json" --expect 200 --status
 
 foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/stats', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
                   '/api/v1/version') {
   dotnet script scripts/testing/http.csx -- --url "http://localhost:18405$path" --expect 503 --status
 }
@@ -215,6 +215,11 @@ dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-05 --por
   --image quotinator:local
 
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18405/api/v1/health" --expect 200 --status
+foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
+                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/version') {
+  dotnet script scripts/testing/http.csx -- --url "http://localhost:18405$path" --expect 200 --status
+}
 foreach ($path in '/', '/stats', '/notifications') {
   dotnet script scripts/testing/http.csx -- --url "http://localhost:18405$path" --expect 200 --status
 }
@@ -224,7 +229,7 @@ $log = docker logs qt-startup-05 2>&1 | Out-String
 "migrationApplied=$(([regex]::Matches($log, 'migration applied')).Count)"
 ```
 
-**Expected:** `/health` and all three pages answer `200`, `quotes` is non-zero, and `migrationApplied` is
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` and all three pages answer `200`, `quotes` is non-zero, and `migrationApplied` is
 non-zero.
 
 **This is the positive control and the remedy proof in one step.** Every assertion above is about a

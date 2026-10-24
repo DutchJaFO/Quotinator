@@ -118,7 +118,7 @@ docker inspect -f '{{.State.Running}}' qt-startup-06
 "namesRestore=$($health.reason -match 'restore a backup')"
 
 foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/stats', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
                   '/api/v1/version') {
   dotnet script scripts/testing/http.csx -- --url "http://localhost:18406$path" --expect 503 --status
 }
@@ -312,11 +312,16 @@ $confirm = $confirmScript | dotnet script scripts/testing/capture-page.csx -- --
   --out "$out\after-confirm.png" --width 1280 --height 1100 --script-stdin | ConvertFrom-Json
 "reasonGone=$($confirm.reasonGone)"
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/health" --expect 200 --status
+foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
+                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/version') {
+  dotnet script scripts/testing/http.csx -- --url "http://localhost:18406$path" --expect 200 --status
+}
 "quotes after: $((Invoke-RestMethod 'http://localhost:18406/api/v1/version').database.quotes)"
 "thrownSinceCancel=$(@(docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count - $thrownBefore)"
 ```
 
-**Expected:** `reasonGone=True`, `200` from `/health`, `quotes after: 0`, and `thrownSinceCancel=0`.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `reasonGone=True`, `200` from `/health`, `quotes after: 0`, and `thrownSinceCancel=0`.
 The rebuild recorded this build's own version, so there is no overshoot left to degrade on, and the
 banner and its button disappear where they stand. This is the positive control: the same container,
 repaired by the remedy the reason named, answers `200`.
@@ -420,7 +425,7 @@ Remove the container, image and worktree afterwards.
 
 **Where the canary has been run:** 2026-10-23 against `e4078444`, the commit before #327's first, as
 `quotinator:canary-327`, which also predates #350. Step 3 read `status=healthy` with no overshoot
-reason, and every database read answered (`200`, with `/api/v1/stats` `404` on that build). Step 4 read
+reason, and every database read answered `200`. Step 4 read
 `404` from `/import-review` and from the backup listing, neither of which existed yet.
 
 ## Cleanup

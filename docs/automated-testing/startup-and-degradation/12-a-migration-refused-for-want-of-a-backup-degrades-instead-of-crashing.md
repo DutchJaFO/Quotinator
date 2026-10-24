@@ -108,7 +108,7 @@ gave up after 180 seconds.
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18412/openapi/v1.json" --expect 200 --status
 
 foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/stats', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
                   '/api/v1/version') {
   dotnet script scripts/testing/http.csx -- --url "http://localhost:18412$path" --expect 503 --status
 }
@@ -132,12 +132,17 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-startup-12 --port
   --image quotinator:local --bind $dataDir
 
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18412/api/v1/health" --expect 200 --status
+foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
+                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/version') {
+  dotnet script scripts/testing/http.csx -- --url "http://localhost:18412$path" --expect 200 --status
+}
 "quotes=$((Invoke-RestMethod 'http://localhost:18412/api/v1/version').database.quotes)"
 $log = docker logs qt-startup-12 2>&1 | Out-String
 "migrationApplied=$(([regex]::Matches($log, 'migration applied')).Count)"
 ```
 
-**Expected:** `/health` `200`, `quotes` non-zero, and `migrationApplied` non-zero.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` `200`, `quotes` non-zero, and `migrationApplied` non-zero.
 
 **This is the positive control.** Every assertion above is about a degraded container, so without a
 passing case this document would stay green against a build that refused every migration. With room for

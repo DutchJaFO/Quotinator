@@ -36,6 +36,8 @@ be created at startup. Two causes produce it:
   `/health` reason still names the data directory as a whole.
 - **The whole data directory cannot be written or created**, for example a volume mounted read-only, or
   a configured data directory below a read-only mount.
+- **The `keys` folder exists but cannot be written**, for example a separate read-only mount at `keys/`,
+  or a folder whose permissions deny the container user. The rest of the data directory may be writable.
 
 ## Remedy
 
@@ -43,6 +45,8 @@ Look at the data directory from outside the container.
 
 - **If a file named `keys` is there**, remove it (or move it aside), then restart. The application
   creates the folder and its key ring itself.
+- **If the `keys` folder exists**, give the container user write access to it (or remount it writable),
+  then restart.
 - **Otherwise**, restore write access to the data directory: remount the volume writable, or correct
   the container user's permissions on it, then restart.
 

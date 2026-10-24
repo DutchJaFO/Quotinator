@@ -1,6 +1,6 @@
 # #327: Smoke tests that prove startup problems degrade rather than crash
 
-**Status:** In progress (step 14)
+**Status:** In progress (step 15)
 **GitHub issue:** #327
 **Tiers required:** T1, T2
 **Depends on:** #326, #339, #350
@@ -56,7 +56,7 @@ at a different stage, plus one startup problem the application does not detect a
 | 6 | The schema is broken (a domain table is missing) | Initialisation, generic failure | Generic initialisation failure | `01` |
 | 7 | A migration is refused because no backup can be taken | Initialisation, refused step | Migration refused, naming the backup obstacle | `12` |
 | 8 | The recorded schema version is ahead of the build | Initialisation, overshoot detected | Schema version ahead, naming Reset and restore | `06` |
-| 9 | The `keys/` directory exists but cannot be written | Not detected: fails on each page request | None: `/health` reports healthy | to be written |
+| 9 | The `keys/` directory exists but cannot be written | Configuration, a write probe after creating `keys/` (step 14) | Data directory not writable | `13` |
 
 Step 1 confirms rows 1 to 8 against the code. Row 9 has no branch to find, which is why step 1 missed it;
 it was measured on 2026-10-23 and is step 14's subject.
@@ -432,7 +432,7 @@ every step passing, and the 52 `RepositoryStructureTests` guards are green.
 
 ### 14. Fix the undetected read-only `keys/` directory, red first, and write its document
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done 2026-10-24
 
 Scenario 9 is the one finding that is a crash in effect: the application does not know it is degraded.
 With `/data` writable and an existing `keys/` that cannot be written, `/health` reports **`healthy`**
@@ -450,6 +450,31 @@ it is fixed here, per the bug-fix order in `testing-policy.md`:
    degraded with a reason saying so. How it detects it is settled against the code when this step starts;
    no ephemeral-key fallback is introduced, per `CLAUDE.md`'s DataProtection rule.
 4. **Green.** The test and the document pass, and the document's canary is the build before the fix.
+
+**Result.** Red first, both tiers. `StartupResilienceTests.Startup_KeysDirectoryNotWritable_HealthReportsUnhealthyRatherThanHealthy`
+read `200` against current code, reaching the state with an explicit deny ACE on Windows and owner
+read-execute elsewhere (lifted in cleanup); its sibling `…_EntersDegradedStateInsteadOfCrashing` passed
+throughout, as a never-crash guard. [`13`](../../automated-testing/startup-and-degradation/13-a-keys-directory-that-cannot-be-written-degrades-instead-of-crashing.md),
+port 18413, its own `docker run` with `keys/` mounted `:ro`, read `status=healthy` and `200` from every
+database read on the pre-fix build.
+
+**The fix reuses a check the codebase already had.** #348's backup pre-flight writes a zero-byte probe
+because `CreateDirectory` proves nothing on an existing read-only directory. A second consumer in another
+project, so it moved rather than being copied, per `CLAUDE.md`: `Quotinator.Data.Paths.DirectoryWriteProbe`,
+with `DirectoryWriteProbeTests` (four, red against a `NotImplementedException` stub first), and the
+backup pre-flight and `BackupFileNames.ProbeFileName` now delegate to it. `Program.cs` probes `keys/`
+after creating it and records the failure with #326's reason; #455 owns naming `keys/` in it.
+
+**Green.** Build 0 warnings; 112 `Quotinator.Data.Tests` probe and backup tests and 200
+`Quotinator.Api.Tests` startup and backup tests pass. Rebuilt `quotinator:local`, `13` reads `unhealthy`
+with a reason, every read gated, and `200` with a key file once writable.
+
+**A defect in the documents, found by `13`'s first run.** Every degrading document listed
+`/api/v1/stats` among the seven database reads, and no such endpoint exists: it answered `503` only
+because the gate refuses any path while degraded, and `404` when healthy. Replaced with
+`/api/v1/conversations` in all nine, and each positive control now reads the same seven paths and
+expects `200` once healthy, so a gated path that is not a real endpoint can no longer pass unnoticed.
+All nine were re-run as written: zero expectation failures.
 
 ### 15. Run each document against a build from before this issue
 
@@ -545,5 +570,5 @@ The developer starts the application in Visual Studio and confirms it starts wit
 | 18 | ❌ | End-of-issue T2 scope passes | Live (Docker) | Step 17: smoke set, `startup-and-degradation/`, changed documents and every `http.csx` user, each green |
 | 19 | ❌ | Build clean and no regression | Build + Unit test | Step 18: 0 warnings, 0 errors; full suite green with `-m:1` |
 | 20 | ❌ | The application still starts | Manual | Step 19, confirmed by the developer in Visual Studio |
-| 21 | ❌ | Scenario 9, `keys/` exists but cannot be written: the application reports itself degraded, and the contract holds | Unit test + Live (Docker) | Step 14: the new `StartupResilienceTests` case red then green, and the new document red on the current build, green after the fix |
+| 21 | ✅ | Scenario 9, `keys/` exists but cannot be written: the application reports itself degraded, and the contract holds | Unit test + Live (Docker) | Step 14: the new `StartupResilienceTests` case red then green, and the new document red on the current build, green after the fix |
 | 22 | ✅ | Each finding outside the contract is recorded in its document and drafted as an issue | Live | Step 13: every finding recorded in the named documents' `Observed effect`; filed as #454, #455, #456 and #457, the override gap held for #348, each with Knowledgebase coverage |

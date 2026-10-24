@@ -92,7 +92,7 @@ wait gave up after 180 seconds.
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18411/openapi/v1.json" --expect 200 --status
 
 foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/stats', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
                   '/api/v1/version') {
   dotnet script scripts/testing/http.csx -- --url "http://localhost:18411$path" --expect 503 --status
 }
@@ -119,10 +119,15 @@ dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-11 --por
   --image quotinator:local --bind $dataDir --own-keys
 
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18411/api/v1/health" --expect 200 --status
+foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
+                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/version') {
+  dotnet script scripts/testing/http.csx -- --url "http://localhost:18411$path" --expect 200 --status
+}
 "keysIsADirectory=$((Get-Item "$dataDir\keys").PSIsContainer)"
 ```
 
-**Expected:** the container reaches healthy, `/health` answers `200`, and `keysIsADirectory=True`.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. the container reaches healthy, `/health` answers `200`, and `keysIsADirectory=True`.
 
 **This is the positive control.** Without a passing case every assertion above would stay green against
 a build that degraded on everything. With the path free, the application creates `keys/` itself.

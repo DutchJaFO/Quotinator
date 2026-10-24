@@ -121,7 +121,7 @@ this document exists to catch. `status=healthy` means the truncation did not tak
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18409/openapi/v1.json" --expect 200 --status
 
 foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
-                  '/api/v1/stats', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
                   '/api/v1/version') {
   dotnet script scripts/testing/http.csx -- --url "http://localhost:18409$path" --expect 503 --status
 }
@@ -148,9 +148,14 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-startup-09 --port
   --image quotinator:local --bind $dataDir
 
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18409/api/v1/health" --expect 200 --status
+foreach ($path in '/api/v1/quotes', '/api/v1/quotes/random', '/api/v1/quotes/search?q=the',
+                  '/api/v1/conversations', '/api/v1/notifications', '/api/v1/masterdata/sources',
+                  '/api/v1/version') {
+  dotnet script scripts/testing/http.csx -- --url "http://localhost:18409$path" --expect 200 --status
+}
 ```
 
-**Expected:** the container reaches healthy and `/health` returns `200`.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. the container reaches healthy and `/health` returns `200`.
 
 **This is the positive control.** Without a passing case this document would stay green against a build
 that degraded on everything.
