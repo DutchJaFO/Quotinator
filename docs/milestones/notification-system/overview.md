@@ -120,7 +120,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #324 ─── depends on #278, #312, #319; soft-consumes #329: Planning
 #325 ─── depends on #323: Closed as not planned
 #326 ─── (none); blocks #327: Waiting for release
-#327 ─── depends on #326, #332, #339, #348, #350: In progress
+#327 ─── depends on #326, #339, #350: In progress
 #328 ─── depends on #339: Planning
 #329 ─── depends on #323, #325; blocks #324: Planning
 #330 ─── (none); blocks #331: Planning
@@ -243,7 +243,7 @@ Every issue in this milestone is self-contained on top of already-released infra
 #156): none leave anything half-wired if merged independently, except #81 (which genuinely cannot
 merge before #309 and #307), #319 (which cannot merge before #312), #331 (which cannot merge before
 #330), #328 (which cannot merge before #339), and #327 (which cannot merge before #339 for its
-structure, nor before #348 for the behaviour its corrupt- and truncated-database documents assert).
+structure, nor before #348, whose migration refusal one of its documents provokes).
 Those are real implementation-order dependencies, not just sequencing preferences.
 Default assumption per `process.md`: the branch stays open until all issues in the milestone are done,
 then one PR: no known reason to depart from that default.

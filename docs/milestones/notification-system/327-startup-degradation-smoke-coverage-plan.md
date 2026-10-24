@@ -3,7 +3,7 @@
 **Status:** In progress (step 13)
 **GitHub issue:** #327
 **Tiers required:** T1, T2
-**Depends on:** #326, #332, #339, #348, #350
+**Depends on:** #326, #339, #350
 
 ---
 
@@ -21,8 +21,20 @@ a degraded startup that crashes is a failure that cannot be allowed through any 
 
 Every scenario proves both directions, per `testing-policy.md`: the negative, the fault provoked and the
 degraded contract holding, and the positive, the sabotage removed and the application healthy in the
-same environment, which also proves the remedy the failure reason names actually works. Each document is
-also run against a build from before this issue, so it is shown able to fail.
+same environment. Each document is also run against a build from before this issue, so it is shown able
+to fail.
+
+**The goal is narrow, and that is deliberate** (developer direction, 2026-10-24): identify each startup
+problem and prove it yields a degraded application that *says* it is degraded, instead of a crash.
+Telling the operator why is the ideal, not the requirement. Whether an offered remedy gets the
+application back out, and how well each surface renders while degraded, are not this issue's to prove:
+where the exact answer is not known, that is what the Knowledgebase is for.
+
+**Only a crash is fixed here.** A finding where the application does not know it is degraded, so the
+operator meets failures with nothing telling them why, is a crash in effect and is fixed before this issue
+closes. Every other finding, a remedy that does not work, a page that fails while `/health` reports the
+fault, a test elsewhere that turned out incomplete, gets an issue of its own and may wait for another
+milestone.
 
 Nothing recorded before this plan is taken as verified. Every verification row starts ❌ and turns ✅
 only on a run made under this plan.
@@ -47,7 +59,7 @@ at a different stage, plus one startup problem the application does not detect a
 | 9 | The `keys/` directory exists but cannot be written | Not detected: fails on each page request | None: `/health` reports healthy | to be written |
 
 Step 1 confirms rows 1 to 8 against the code. Row 9 has no branch to find, which is why step 1 missed it;
-it was measured during step 13 (see step 13's result).
+it was measured on 2026-10-23 and is step 14's subject.
 
 ---
 
@@ -55,19 +67,19 @@ it was measured during step 13 (see step 13's result).
 
 **Negative, the fault:**
 
-1. The fault is confirmed reached, not inferred from the recipe: the sabotage read back, and `/health`
-   answering `503` before any other assertion.
+1. The fault is confirmed reached, not inferred from the recipe: the sabotage read back.
 2. The process is alive: `docker inspect -f '{{.State.Running}}'` reads `true`.
-3. `/health` is `503` with `unhealthy`, and its reason names the fault.
-4. `/`, `/stats` and `/notifications` render `200` with the degraded text and no stack trace.
-5. `/openapi/v1.json` is `200`.
-6. Every endpoint that reads the database answers `503` (index: *A degraded application is not
+3. The application says it is degraded: `/health` settles at `503` `unhealthy` with a non-empty reason.
+4. `/openapi/v1.json` is `200`, so the surface an operator recovers through is still there.
+5. Every endpoint that reads the database answers `503` (index: *A degraded application is not
    expected to answer from its database*).
-7. The recovery route reachable while degraded is stated, and whether it can succeed. Where it cannot,
-   the `/health` reason is asserted to name a remedy that can.
 
-**Positive, the remedy:** the document removes its own sabotage using the remedy the reason names, and
-the same container reaches `/health` `200`.
+**Positive, the control:** the document removes its own sabotage, and the same container reaches
+`/health` `200`. This is what keeps a build that degrades on everything from passing.
+
+**Recorded, not asserted:** what the reason says and whether it names the right cause, how the pages
+render, what the recovery routes offer and whether they succeed. Each document's `Observed effect`
+carries them, and a shortfall is filed as its own issue.
 
 **No document asserts a migration number or schema version.**
 
@@ -171,11 +183,11 @@ mutations breaks a page, the spec, or the notification producer. They are #350's
 `…KeysDirectoryCannotBeCreated_HealthReasonNamesTheDataDirectory`, and removed during step 4: the
 container run showed the data-directory reason misdiagnoses this fault (the directory is writable and a
 Reset runs), so the test asserted a defect as the contract. The reason requirement for scenario 2 is
-asserted by `11`'s step 1, red until #332.
+recorded in `11`'s Observed effect and filed as a finding (step 13).
 
 ### 3. Write the document for scenario 1, the data directory cannot be created
 
-**Status:** ✅ Done 2026-10-23, step 4 of the document red until #332
+**Status:** ✅ Done 2026-10-23, narrowed again by step 13
 
 New document in `startup-and-degradation/`, from the index template, with its own container, bind
 directory and port. The configured data directory sits under a read-only mount, so `CreateDirectory`
@@ -194,12 +206,11 @@ the form whose remedy can be proven. Run end to end against `quotinator:local` a
 - step 4: **`/`, `/stats` and `/notifications` all `500`**;
 - step 5: remounted writable, `/health` and all three pages `200`, database created.
 
-**Step 4 is a defect in the never-crash contract, and #332 owns its fix.** With no `keys/` directory,
-every page request fails reading the DataProtection key ring (`ErrorOccurredWhileReadingKeyRing`, once
-per page request). `Program.cs:282` defers a keys fallback to #332, whose requirement 10 is that the UI
-keeps working when the preferred keys location is not writable. The document asserts the contract as
-specified and carries `**Fully green after:** #332`, the index's mechanism for a step another open issue
-owns, and #327 depends on #332 for its last green row.
+**Step 4's pages are a finding, not a #327 failure.** With no `keys/` directory, every page request
+fails reading the DataProtection key ring (`ErrorOccurredWhileReadingKeyRing`, once per page request),
+while `/health` correctly reports the fault. This step first recorded it as waiting on #332, on the strength
+of a code comment (`Program.cs:282`) naming that issue; #332 is not in this milestone and was never a
+dependency. Step 13 removes the page assertion and files the finding.
 
 **A second defect, not owned by any issue.** The refusal's second remedy, *Retry with
 `allowNoBackup=true`*, answers an unhandled `500` in this state: the reset still has to write.
@@ -211,7 +222,7 @@ Added to the index's category table and smoke table, and to `Quotinator.slnx`.
 
 ### 4. Write the document for scenario 2, the `keys/` directory cannot be created
 
-**Status:** ✅ Done 2026-10-23, steps 1, 3 and 4 of the document red until #332
+**Status:** ✅ Done 2026-10-23, narrowed again by step 13
 
 New document. A file is placed where `keys/` belongs on a writable data directory, the same sabotage
 `StartupResilienceTests` uses. Asserts the full contract; the remedy is removing the file, after which
@@ -229,10 +240,10 @@ port 18411, `--own-keys` so the shared ring is not mounted over the file. Run en
 - step 4: **`/`, `/stats` and `/notifications` all `500`**, on the key ring as in `10`;
 - step 5: file removed, restarted, `/health` and all three pages `200`, `keys/` created.
 
-All three red readings trace to one decision, #326 recording an uncreatable `keys/` in the database
-health state with the data-directory reason, which #332's requirement 10 replaces with a fallback chain.
-The document carries `**Fully green after:** #332`, naming the three steps and stating that #332
-rewrites it, since the fallback changes what this sabotage produces.
+All three readings trace to one decision, #326 recording an uncreatable `keys/` in the database health
+state with the data-directory reason. None of them is a crash: the application says it is degraded. Step
+13 removes the three assertions and files them as findings; the `Fully green after: #332` header this
+step first wrote goes with them.
 
 **The first start has to wait for `unhealthy`, not for a `503`.** Measured: `--wait-listening` returned
 on the startup wait page while the fresh database was still seeding, and every endpoint, the reset
@@ -373,28 +384,55 @@ a degraded startup that crashes is a failure no run may let through (developer d
 step finished, and each is in both index tables. The set grew from nine to seventeen, and its
 description now names the second reason a test belongs there beside the first.
 
-### 13. Write the document for scenario 9, a `keys/` directory that exists but cannot be written
+### 13. Narrow every document to the contract, and file each finding as its own issue
 
 **Status:** ⬜ Not started
 
-New document in `startup-and-degradation/`. `/data` writable, and an empty `keys/` mounted read-only
-over it, so `CreateDirectory` succeeds and the failure moves to the first key write. The application does
-not detect this state, so the document asserts the contract as specified: the process alive, `/health`
-`503` with a reason naming the keys directory, the pages rendering their degraded form, the spec
-reachable and every database read gated; and it ends by remounting `keys/` writable and reading `200`.
-`test-env.csx` has no option for a separate read-only mount at `keys/`, so the document needs one added,
-or states its own `docker run`.
+Steps 3 to 10 asserted more than #327 owns: a reason naming a workable remedy, the degraded pages
+rendering, what each recovery route offers, and in `10` and `11` the remedy proven through the API. Under
+the contract above, each document asserts the five negative items and the positive control, and moves
+the rest into its `Observed effect` as recorded readings. The `**Fully green after:** #332` headers in
+`10` and `11` go, since nothing they still assert waits on another issue. Each document is run again
+after the change.
 
-**Measured before writing, 2026-10-23**, with a direct `docker run` against `quotinator:local` at
-`eb8c1a19`: the container stays up and `/health` reports **`healthy`**, `/api/v1/quotes/random` and
-`/openapi/v1.json` answer `200`, and `/`, `/stats` and `/notifications` answer **`500`**, with 41
-`[Runtime - Exception]` lines and no key file written. Most of the document is therefore red until the
-fix, which #332's requirement 10 owns (the UI keeps working when the keys location is not writable);
-the document carries `**Fully green after:** #332`.
+The findings recorded so far, each to be drafted as its own issue for the developer's approval, none
+holding #327 open:
 
-### 14. Run each document against a build from before this issue
+| Finding | Where measured |
+|---|---|
+| With `keys/` uncreatable, or the whole data directory uncreatable, every page answers `500` while `/health` reports the fault | `10`, `11` |
+| An uncreatable `keys/` is reported as an unwritable data directory, and a Reset then turns `/health` healthy while the fault remains | `11` |
+| On an unwritable data directory the degraded pages still offer a Reset, and the refusal still offers the `allowNoBackup` override, which answers a bare `500` | `05`, `10` |
+| The `allowNoBackup` override refuses a corrupt or truncated database; its tests exercised only `BudgetExceeded` against a real database | `08`, `09`, `backup/01` |
+| The generic initialisation reason misdiagnoses a corrupt or truncated file as a schema-version mismatch | `08`, `09` |
 
-**Status:** 🚧 In progress, the readings for `08` and `09` to be re-taken once #348's override is fixed
+The last two are #348's own feature not working where it is offered, so they are the evidence for
+reopening #348 once #327 is finished (developer decision, 2026-10-24), rather than new issues.
+
+### 14. Fix the undetected read-only `keys/` directory, red first, and write its document
+
+**Status:** ⬜ Not started
+
+Scenario 9 is the one finding that is a crash in effect: the application does not know it is degraded.
+With `/data` writable and an existing `keys/` that cannot be written, `/health` reports **`healthy`**
+while `/`, `/stats` and `/notifications` answer **`500`**, with 41 `[Runtime - Exception]` lines and no
+key file written (measured 2026-10-23, direct `docker run` against `quotinator:local` at `eb8c1a19`). So
+it is fixed here, per the bug-fix order in `testing-policy.md`:
+
+1. **Red first.** An in-process test in `StartupResilienceTests` reaching the state (a `keys/` directory
+   that exists and cannot be written), asserting startup completes and `/health` answers `503`, run red
+   against current code. Its positive control is `Startup_FreshDataDirectory_ReportsHealthy`.
+2. **The document.** New, in `startup-and-degradation/`, asserting the contract, with the read-only
+   `keys/` mount. `test-env.csx` has no option for a separate read-only mount at `keys/`; one is added, or
+   the document states its own `docker run`. Run red against the current build.
+3. **The fix.** Startup detects that the key ring location cannot be written and marks the application
+   degraded with a reason saying so. How it detects it is settled against the code when this step starts;
+   no ephemeral-key fallback is introduced, per `CLAUDE.md`'s DataProtection rule.
+4. **Green.** The test and the document pass, and the document's canary is the build before the fix.
+
+### 15. Run each document against a build from before this issue
+
+**Status:** 🚧 In progress, to be re-run for every document step 13 changes
 
 Per `process.md` → Implementation, step 1. The parent of the first `[#327]` commit
 (`git log --reverse --format=%H --grep "\[#327\]" | Select-Object -First 1`) is added as a worktree,
@@ -403,8 +441,9 @@ named step. A document whose `Traces to` names an earlier fix (`05` → #293, `0
 is also run against the commit before that fix. The reading goes in each document's `Canary`, naming
 the commit and tag. Container, image and worktree are removed afterwards.
 
-**Result so far.** `quotinator:canary-327` was built from `e4078444`, the commit before `50434b8b`, and
-every one of the eight documents fails on it at a named step:
+**First run, 2026-10-23, before step 13 narrowed the documents.** `quotinator:canary-327` was built from
+`e4078444`, the commit before `50434b8b`, and every one of the eight documents failed on it at a named
+step:
 
 | Document | Failing step on `canary-327` |
 |---|---|
@@ -424,19 +463,11 @@ The earlier-fix canaries, each built from the commit before that issue's first c
 | `05` | `canary-293` (`64297b7e`) | step 5: all three pages `500` |
 | `01` | `canary-254` (`210d6830`) | step 3: `healthy`, the dropped table not detected |
 
-The `canary-327` readings are in `06`, `08`, `09` and `12`'s `Canary` sections; the earlier-fix readings
-and those for `01`, `05`, `10` and `11` are still to be written into theirs. Worktrees and images were
-removed after each run.
+Several of those readings land on steps step 13 removes, so each narrowed document is run against the
+same builds again and only the readings that still apply are written into its `Canary`. Worktrees and
+images were removed after the first run.
 
-**Blocked on #348 for `08`, `09` and `backup/01`.** Measuring the recovery routes showed the
-`allowNoBackup` override, #348's feature, does not work where it is offered: it refuses a corrupt or
-truncated database (`backup/01` step 5 codifies that refusal as expected) and answers an unhandled `500`
-on an unwritable data directory, and only `BudgetExceeded` is exercised against a real database. The
-developer decided (2026-10-23) that #348 returns to `In progress` to close those gaps first. Once it has,
-`08` and `09`'s recovery step asserts the override recovering the database, and their canary readings
-are taken again against that contract.
-
-### 15. Run the template and suite guards
+### 16. Run the template and suite guards
 
 **Status:** ⬜ Not started
 
@@ -444,7 +475,7 @@ are taken again against that contract.
 template sections and fields, the smoke index matching the documents, index links, cross-references,
 unique ports per document, and every document listed in `Quotinator.slnx`.
 
-### 16. Run the end-of-issue T2 scope
+### 17. Run the end-of-issue T2 scope
 
 **Status:** ⬜ Not started
 
@@ -454,14 +485,14 @@ Per the index's *When to run what*: the designated smoke set, every document in
 invoking it runs too. Each document's `Observed effect` records the reading, opening
 `**Measured YYYY-MM-DD**`.
 
-### 17. Build and full test run
+### 18. Build and full test run
 
 **Status:** ⬜ Not started
 
 `dotnet build --configuration Release` at 0 warnings, 0 errors, and
 `dotnet test --configuration Release --verbosity normal -m:1` all green.
 
-### 18. T1
+### 19. T1
 
 **Status:** ⬜ Not started
 
@@ -477,20 +508,21 @@ The developer starts the application in Visual Studio and confirms it starts wit
 | 2 | ✅ | The `--read-only`-forces-a-failure technique is gone, with the note on why placed beside the surviving `--read-only` discussion | Live | `05`'s *Determinism* carries the note, beside its `--read-only-data` and `04` discussion; `05` forces its failure with `--read-only-data`, and `04` uses `--read-only` only to assert success (step 5) |
 | 3 | ✅ | #294's test keeps `--read-only` and asserts success | Live (Docker) | `startup-and-degradation/04` run unchanged in step 11, `/health` `200`, content accounted for |
 | 4 | ❌ | Each scenario is its own document in `startup-and-degradation/` | Unit test | Nine documents present; `RepositoryStructureTests.EveryAutomatedTestingDocument_IsLinkedFromTheIndex` green |
-| 5 | ❌ | Scenario 1, data directory cannot be created: negative contract and positive remedy | Live (Docker) | `10` run in step 3: every step but step 4 passes; step 4's pages read `500` until #332 |
-| 6 | ❌ | Scenario 2, `keys/` cannot be created: negative contract and positive remedy | Live (Docker) | `11` run in step 4: steps 2 and 5 pass; steps 1, 3 and 4 read as its header states until #332 |
+| 5 | ❌ | Scenario 1, data directory cannot be created: the contract and its positive control | Live (Docker) | `10` run after step 13 narrows it |
+| 6 | ❌ | Scenario 2, `keys/` cannot be created: the contract and its positive control | Live (Docker) | `11` run after step 13 narrows it |
 | 7 | ✅ | Scenario 3, data directory not writable: negative contract and positive remedy, with `:ro` mount, pinned sidecar state and `SQLite Error 14` confirmed | Live (Docker) | `05` run in step 5, all six steps passing; reason matches `Restore write access` |
 | 8 | ✅ | Scenario 4, corrupt database: negative contract and positive remedy | Live (Docker) | `08` run in step 6, all seven steps passing; reset `409`; reason matches `deleting the database file` |
 | 9 | ✅ | Scenario 5, truncated database: negative contract and positive remedy | Live (Docker) | `09` run in step 7, all seven steps passing |
 | 10 | ✅ | Scenario 6, broken schema: negative contract and positive remedy | Live (Docker) | `01` run in step 8, all seven steps passing; Reset recovers to `200` |
 | 11 | ✅ | Scenario 7, migration refused: negative contract and positive remedy | Live (Docker) | `12` run in step 9, all six steps passing; reason names `BudgetExceeded` and the in-app remedy, applied through the API |
 | 12 | ✅ | Scenario 8, schema version ahead: negative contract and positive remedy | Live (Docker) | `06` run in step 10, all seven steps passing unattended; reason names Reset and restore; Confirm returns `/health` to `200` |
-| 13 | ❌ | Scenarios are independent: each creates, seeds and destroys its own volume and port | Unit test + Live | `RepositoryStructureTests.EveryAutomatedTestingDocument_PublishesThePortsItUses_AndSharesNoneWithAnother` green; each document run alone in step 16 |
-| 14 | ❌ | No scenario asserts a migration number or schema version | Live | Read of all nine documents in steps 3 to 10 and 13 |
-| 15 | ❌ | Each document carries the template fields, including Determinism, and is in the smoke set | Unit test | Step 15: `RepositoryStructureTests` template guards and `SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` green |
+| 13 | ❌ | Scenarios are independent: each creates, seeds and destroys its own volume and port | Unit test + Live | `RepositoryStructureTests.EveryAutomatedTestingDocument_PublishesThePortsItUses_AndSharesNoneWithAnother` green; each document run alone in step 17 |
+| 14 | ❌ | No scenario asserts a migration number or schema version | Live | Read of all nine documents in steps 13 and 14 |
+| 15 | ❌ | Each document carries the template fields, including Determinism, and is in the smoke set | Unit test | Step 16: `RepositoryStructureTests` template guards and `SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` green |
 | 16 | ✅ | In-process: every deterministic, cross-platform scenario has negative tests and a positive control | Unit test | Step 2: the `StartupResilienceTests` and `StartupBackupRefusalTests` methods tabled there, 43 green, every new one shown able to fail by mutations M1 to M7 |
-| 17 | ❌ | Each document is shown able to fail | Live (Docker) | Step 14: every scenario document against `quotinator:canary-327`, and the earlier-fix canaries, the failing step recorded in each `Canary` |
-| 18 | ❌ | End-of-issue T2 scope passes | Live (Docker) | Step 16: smoke set, `startup-and-degradation/`, changed documents and every `http.csx` user, each green |
-| 19 | ❌ | Build clean and no regression | Build + Unit test | Step 17: 0 warnings, 0 errors; full suite green with `-m:1` |
-| 20 | ❌ | The application still starts | Manual | Step 18, confirmed by the developer in Visual Studio |
-| 21 | ❌ | Scenario 9, `keys/` exists but cannot be written: negative contract and positive remedy | Live (Docker) | Step 13's document run, as row 5; red until #332 |
+| 17 | ❌ | Each document is shown able to fail | Live (Docker) | Step 15: every scenario document against `quotinator:canary-327`, and the earlier-fix canaries, the failing step recorded in each `Canary` |
+| 18 | ❌ | End-of-issue T2 scope passes | Live (Docker) | Step 17: smoke set, `startup-and-degradation/`, changed documents and every `http.csx` user, each green |
+| 19 | ❌ | Build clean and no regression | Build + Unit test | Step 18: 0 warnings, 0 errors; full suite green with `-m:1` |
+| 20 | ❌ | The application still starts | Manual | Step 19, confirmed by the developer in Visual Studio |
+| 21 | ❌ | Scenario 9, `keys/` exists but cannot be written: the application reports itself degraded, and the contract holds | Unit test + Live (Docker) | Step 14: the new `StartupResilienceTests` case red then green, and the new document red on the current build, green after the fix |
+| 22 | ❌ | Each finding outside the contract is recorded in its document and drafted as an issue | Live | Step 13: every row of its findings table recorded in the named documents' `Observed effect`, and each drafted for the developer |
