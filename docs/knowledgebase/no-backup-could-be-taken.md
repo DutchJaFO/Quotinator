@@ -3,7 +3,7 @@
 **Kind:** diagnostic
 **Entry code:** none yet (allocated when codes are, per `docs/knowledgebase.md`'s bootstrapping rule)
 **Affected versions:** 1.9.0-alpha onwards
-**GitHub issue:** [#348](https://github.com/DutchJaFO/Quotinator/issues/348)
+**GitHub issue:** [#348](https://github.com/DutchJaFO/Quotinator/issues/348), [#456](https://github.com/DutchJaFO/Quotinator/issues/456)
 
 ## Symptom
 
@@ -104,7 +104,12 @@ write permission on it.
 - **Offered:** *Reseed without a backup*. It can still fail if the data directory is read-only as a
   whole, since loading content writes to the database in the same directory.
 - **Resolve:** restore write access to the data directory (remount the volume writable, or correct its
-  permissions), then restart.
+  permissions), then restart. Nothing inside the application can do this for you.
+- **When the whole data directory is read-only, do not use the other routes.** The degraded pages still
+  show *Reset the database*, and a refused Reset still offers `allowNoBackup=true`, but both write and
+  cannot succeed here: the override answers a bare `500`. Restoring write access is the only remedy.
+  [#456](https://github.com/DutchJaFO/Quotinator/issues/456) tracks the application no longer offering
+  them in this state.
 
 ### `DestinationFileNotWritable`
 

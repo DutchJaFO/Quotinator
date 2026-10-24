@@ -1,6 +1,6 @@
 # #327: Smoke tests that prove startup problems degrade rather than crash
 
-**Status:** In progress (step 13)
+**Status:** In progress (step 14)
 **GitHub issue:** #327
 **Tiers required:** T1, T2
 **Depends on:** #326, #339, #350
@@ -386,7 +386,7 @@ description now names the second reason a test belongs there beside the first.
 
 ### 13. Narrow every document to the contract, and file each finding as its own issue
 
-**Status:** 🚧 In progress
+**Status:** ✅ Done 2026-10-24
 
 Steps 3 to 10 asserted more than #327 owns: a reason naming a workable remedy, the degraded pages
 rendering, what each recovery route offers, and in `10` and `11` the remedy proven through the API. Under
@@ -417,8 +417,18 @@ positive control removes the filler on the host rather than through the backup A
 are left as they are: each asserts what its own originating issue promised (#254's Reset recovery,
 #293's degraded pages, #350's reason and repair), and all three pass. The index's smoke-set description
 states the narrowed contract. All five were run as written against `quotinator:local` at `eb8c1a19`,
-every step passing, and the 52 `RepositoryStructureTests` guards are green. The findings are not yet
-drafted as issues.
+every step passing, and the 52 `RepositoryStructureTests` guards are green.
+
+**Findings filed, 2026-10-24**, each in the *Startup and degraded experience* milestone, none holding
+#327 open, and each given Knowledgebase coverage so an operator can still resolve the condition today:
+
+| Finding | Issue | Knowledgebase |
+|---|---|---|
+| Pages `500` when `keys/` or the data directory cannot be created | [#454](https://github.com/DutchJaFO/Quotinator/issues/454) | `every-page-fails-when-the-keys-directory-cannot-be-created.md` (new) |
+| Uncreatable `keys/` reported as the data directory; a Reset clears it | [#455](https://github.com/DutchJaFO/Quotinator/issues/455) | the same entry |
+| Unwritable data directory still offers a Reset and the override | [#456](https://github.com/DutchJaFO/Quotinator/issues/456) | `no-backup-could-be-taken.md`, its `DestinationDirectoryNotWritable` section corrected |
+| The override refuses an unreadable database | #348, to be reopened after #327 | `the-database-file-cannot-be-read.md` (new) |
+| The generic reason misdiagnoses an unreadable file | [#457](https://github.com/DutchJaFO/Quotinator/issues/457) | the same new entry |
 
 ### 14. Fix the undetected read-only `keys/` directory, red first, and write its document
 
@@ -536,4 +546,4 @@ The developer starts the application in Visual Studio and confirms it starts wit
 | 19 | ❌ | Build clean and no regression | Build + Unit test | Step 18: 0 warnings, 0 errors; full suite green with `-m:1` |
 | 20 | ❌ | The application still starts | Manual | Step 19, confirmed by the developer in Visual Studio |
 | 21 | ❌ | Scenario 9, `keys/` exists but cannot be written: the application reports itself degraded, and the contract holds | Unit test + Live (Docker) | Step 14: the new `StartupResilienceTests` case red then green, and the new document red on the current build, green after the fix |
-| 22 | ❌ | Each finding outside the contract is recorded in its document and drafted as an issue | Live | Step 13: every row of its findings table recorded in the named documents' `Observed effect`, and each drafted for the developer |
+| 22 | ✅ | Each finding outside the contract is recorded in its document and drafted as an issue | Live | Step 13: every finding recorded in the named documents' `Observed effect`; filed as #454, #455, #456 and #457, the override gap held for #348, each with Knowledgebase coverage |

@@ -358,6 +358,8 @@
   </Folder>
   <Folder Name="/docs/knowledgebase/">
     <File Path="docs/knowledgebase/README.md" />
+    <File Path="docs/knowledgebase/every-page-fails-when-the-keys-directory-cannot-be-created.md" />
+    <File Path="docs/knowledgebase/the-database-file-cannot-be-read.md" />
     <File Path="docs/knowledgebase/a-quote-id-stops-working-after-an-upgrade.md" />
     <File Path="docs/knowledgebase/antiforgery-token-could-not-be-decrypted.md" />
     <File Path="docs/knowledgebase/degraded-startup-shows-every-count-as-zero.md" />

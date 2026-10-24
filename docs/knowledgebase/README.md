@@ -20,3 +20,5 @@ per `knowledgebase.md`'s bootstrapping rule, entries come first and codes are as
 | [Every database count reads 0 after a startup problem](degraded-startup-shows-every-count-as-zero.md) | No | 1.9.0-alpha onwards |
 | [Two backups of the same database show different version numbers](two-backups-of-one-database-show-different-versions.md) | No | v1.8.0 through 1.9.0-alpha |
 | [A correction that only changes capitalisation does not take effect](a-casing-correction-cannot-be-made.md) | No | 1.8.0 onwards |
+| [Every page shows an error after startup, while /health says the data directory cannot be written](every-page-fails-when-the-keys-directory-cannot-be-created.md) | Yes | 1.9.0-alpha onwards |
+| [Startup reports that database initialisation failed, and a Reset is refused](the-database-file-cannot-be-read.md) | Yes | 1.9.0-alpha onwards |
