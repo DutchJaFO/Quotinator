@@ -291,6 +291,12 @@ catch (Exception ex) when (IsDataDirectoryNotWritable(ex))
 {
     dataDirectoryFailure ??= DataDirectoryNotWritableReason;
 }
+
+// #327: CreateDirectory succeeds on a keys/ directory that already exists read-only, so the key ring's
+// first write failed on a page request instead, while startup reported healthy. Probing proves the key
+// ring can actually be written; the reason is #326's for now, and #455 owns naming keys/ in it.
+if (dataDirectoryFailure is null && !DirectoryWriteProbe.CanCreateFileIn(keysDir))
+    dataDirectoryFailure = DataDirectoryNotWritableReason;
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(keysDir));
 

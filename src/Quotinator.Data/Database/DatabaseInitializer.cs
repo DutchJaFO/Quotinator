@@ -882,18 +882,9 @@ public class DatabaseInitializer(
         // with backups/ already present cleared this check, then failed with SQLITE_CANTOPEN inside the
         // table drop and reached the client as an unhandled 500. So the check writes something, which is
         // the only way to answer the question it claims to answer.
-        string probePath = Path.Combine(_options.BackupsPath, BackupFileNames.ProbeFileName);
-        try
-        {
-            File.WriteAllBytes(probePath, []);
-            File.Delete(probePath);
-        }
-        catch (Exception)
-        {
-            return BackupOutcome.DestinationFileNotWritable;
-        }
-
-        return BackupOutcome.Succeeded;
+        return DirectoryWriteProbe.CanCreateFileIn(_options.BackupsPath)
+            ? BackupOutcome.Succeeded
+            : BackupOutcome.DestinationFileNotWritable;
     }
 
 

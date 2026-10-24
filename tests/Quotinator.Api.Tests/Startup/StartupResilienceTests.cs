@@ -37,10 +37,14 @@ namespace Quotinator.Api.Tests.Startup;
 public class StartupResilienceTests
 {
     private readonly List<TempDirectory> _temporaryDirectories = [];
+    private readonly List<string> _deniedDirectories = [];
 
     [TestCleanup]
     public void RemoveTemporaryDirectories()
     {
+        foreach (string keys in _deniedDirectories)
+            LiftWriteDenial(keys);
+
         foreach (TempDirectory directory in _temporaryDirectories)
             directory.Dispose();
     }
@@ -351,6 +355,36 @@ public class StartupResilienceTests
     }
 
     /// <summary>
+    /// #327: a <c>keys/</c> directory that exists but cannot be written. <c>CreateDirectory</c> succeeds
+    /// on it, so the failure only surfaces at the first key write, on a page request, while the
+    /// application reports itself healthy: it did not know it was degraded.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_KeysDirectoryNotWritable_HealthReportsUnhealthyRatherThanHealthy()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithKeysDirectoryNotWritable();
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+
+        Assert.AreEqual(
+            HttpStatusCode.ServiceUnavailable, response.StatusCode,
+            "the key ring cannot be written, so the pages fail on every request; reporting healthy hides it");
+    }
+
+    [TestMethod]
+    public void Startup_KeysDirectoryNotWritable_EntersDegradedStateInsteadOfCrashing()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithKeysDirectoryNotWritable();
+
+        using HttpClient client = factory.CreateClient();
+
+        Assert.IsTrue(
+            factory.Services.GetRequiredService<StartupPhaseState>().IsComplete,
+            "startup never completed: the process died rather than degrading");
+    }
+
+    /// <summary>
     /// #327: the data directory itself cannot be created, the earliest degraded path there is. It fails
     /// before Kestrel binds, so an unguarded throw would leave no wait page, no /health and no OpenAPI.
     /// </summary>
@@ -605,6 +639,58 @@ public class StartupResilienceTests
         File.WriteAllText(Path.Combine(dataDirectory, DataPaths.DataProtectionFolder), "not a directory");
 
         return FactoryFor(dataDirectory);
+    }
+
+    /// <summary>
+    /// An empty <c>keys/</c> directory the test process cannot create files in. Denied per platform,
+    /// since a read-only attribute does not stop file creation on Windows: an explicit deny ACE there,
+    /// owner read and execute only elsewhere. The deny is lifted in <see cref="RemoveTemporaryDirectories"/>
+    /// so the directory can be removed.
+    /// </summary>
+    private WebApplicationFactory<Program> FactoryWithKeysDirectoryNotWritable()
+    {
+        string dataDirectory = NewDataDirectory();
+        string keys = Path.Combine(dataDirectory, DataPaths.DataProtectionFolder);
+        Directory.CreateDirectory(keys);
+
+        if (OperatingSystem.IsWindows())
+        {
+            DirectoryInfo directory = new(keys);
+            System.Security.AccessControl.DirectorySecurity security = directory.GetAccessControl();
+            security.AddAccessRule(WriteDenial());
+            directory.SetAccessControl(security);
+            _deniedDirectories.Add(keys);
+        }
+        else
+        {
+            File.SetUnixFileMode(keys, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            _deniedDirectories.Add(keys);
+        }
+
+        return FactoryFor(dataDirectory);
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static System.Security.AccessControl.FileSystemAccessRule WriteDenial() =>
+        new(System.Security.Principal.WindowsIdentity.GetCurrent().User!,
+            System.Security.AccessControl.FileSystemRights.CreateFiles
+            | System.Security.AccessControl.FileSystemRights.WriteData
+            | System.Security.AccessControl.FileSystemRights.AppendData,
+            System.Security.AccessControl.AccessControlType.Deny);
+
+    private static void LiftWriteDenial(string keys)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            DirectoryInfo directory = new(keys);
+            System.Security.AccessControl.DirectorySecurity security = directory.GetAccessControl();
+            security.RemoveAccessRule(WriteDenial());
+            directory.SetAccessControl(security);
+        }
+        else
+        {
+            File.SetUnixFileMode(keys, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     private WebApplicationFactory<Program> FactoryWithCorruptDatabase()

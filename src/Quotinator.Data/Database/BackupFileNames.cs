@@ -1,3 +1,5 @@
+using Quotinator.Data.Paths;
+
 namespace Quotinator.Data.Database;
 
 /// <summary>
@@ -28,7 +30,7 @@ public static class BackupFileNames
     /// offered to an operator as a restore point.
     /// </para>
     /// </summary>
-    public const string ProbeFileName = ".writable-probe";
+    public const string ProbeFileName = DirectoryWriteProbe.ProbeFileName;
 
     /// <summary>
     /// Whether a file in the backups folder is a backup, rather than an artefact this application
