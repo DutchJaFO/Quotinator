@@ -536,6 +536,7 @@
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/Quotinator.Tools.DbInspector/Quotinator.Tools.DbInspector.csproj" />
+    <Project Path="tools/Quotinator.Tools.TestProbe/Quotinator.Tools.TestProbe.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
@@ -550,6 +551,7 @@
     <Project Path="tests/Quotinator.Data.Testing.Tests/Quotinator.Data.Testing.Tests.csproj" />
     <Project Path="tests/Quotinator.Logging.Tests/Quotinator.Logging.Tests.csproj" />
     <Project Path="tests/Quotinator.Tools.DbInspector.Tests/Quotinator.Tools.DbInspector.Tests.csproj" />
+    <Project Path="tests/Quotinator.Tools.TestProbe.Tests/Quotinator.Tools.TestProbe.Tests.csproj" />
   </Folder>
   <Folder Name="/CVE/" />
   <Folder Name="/CVE/Quotinator.Api/">
@@ -647,5 +649,11 @@
   </Folder>
   <Folder Name="/CVE/Quotinator.Tools.DbInspector.Tests/archived/">
     <File Path="tests/Quotinator.Tools.DbInspector.Tests/CVE/archived/CVE-2025-6965.md" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Tools.TestProbe/">
+    <File Path="tools/Quotinator.Tools.TestProbe/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Tools.TestProbe.Tests/">
+    <File Path="tests/Quotinator.Tools.TestProbe.Tests/CVE/.gitkeep" />
   </Folder>
 </Solution>

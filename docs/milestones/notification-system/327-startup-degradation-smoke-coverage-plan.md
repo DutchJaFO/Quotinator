@@ -1,6 +1,6 @@
 # #327: Smoke tests that prove startup problems degrade rather than crash
 
-**Status:** In progress (step 16)
+**Status:** In progress (step 15)
 **GitHub issue:** #327
 **Tiers required:** T1, T2
 **Depends on:** #326, #339, #350
@@ -187,7 +187,7 @@ recorded in `11`'s Observed effect and filed as a finding (step 13).
 
 ### 3. Write the document for scenario 1, the data directory cannot be created
 
-**Status:** ✅ Done 2026-10-23, narrowed again by step 13
+**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
 
 New document in `startup-and-degradation/`, from the index template, with its own container, bind
 directory and port. The configured data directory sits under a read-only mount, so `CreateDirectory`
@@ -222,7 +222,7 @@ Added to the index's category table and smoke table, and to `Quotinator.slnx`.
 
 ### 4. Write the document for scenario 2, the `keys/` directory cannot be created
 
-**Status:** ✅ Done 2026-10-23, narrowed again by step 13
+**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
 
 New document. A file is placed where `keys/` belongs on a writable data directory, the same sabotage
 `StartupResilienceTests` uses. Asserts the full contract; the remedy is removing the file, after which
@@ -254,7 +254,7 @@ Added to the index's category table and smoke table, and to `Quotinator.slnx`.
 
 ### 5. Bring `05` to the contract, scenario 3
 
-**Status:** ✅ Done 2026-10-23
+**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
 
 `05-degraded-pages-survive-a-migration-failure.md`. Provoked with `--read-only-data`, a `:ro` mount on
 `/data`, never `--read-only` on the root filesystem, with the WAL sidecar state pinned by how the
@@ -282,7 +282,7 @@ failures; remounted writable, `/health` and pages `200`, the migration applied, 
 
 ### 6. Bring `08` to the contract, scenario 4
 
-**Status:** ✅ Done 2026-10-23
+**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
 
 `08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md`. The file replaced with
 non-database bytes, sidecars deleted, container stopped first, size read back. The reset reaches its
@@ -300,7 +300,7 @@ naming a file remedy, and `200` after deleting the file.
 
 ### 7. Bring `09` to the contract, scenario 5
 
-**Status:** ✅ Done 2026-10-23
+**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
 
 `09-a-truncated-database-degrades-instead-of-crashing.md`. As step 6, with a real seeded database cut in
 half and both sizes recorded so the truncation point is pinned. Edit, then run.
@@ -312,7 +312,7 @@ endpoints said three where `08` and the index record six. Run end to end against
 
 ### 8. Bring `01` to the contract, scenario 6
 
-**Status:** ✅ Done 2026-10-23
+**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
 
 `01-seeding-backup-degraded-startup-and-reset-recovery.md`. The schema broken by dropping a domain table
 on the host while the container is stopped. Here a Reset can succeed, and the document's own Reset is its
@@ -325,7 +325,7 @@ Observed effect now carries that reading as a measurement, which takes it off th
 
 ### 9. Write the document for scenario 7, a migration refused for want of a backup
 
-**Status:** ✅ Done 2026-10-23
+**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
 
 New document in `startup-and-degradation/`. Same provocation as
 [`backup/07`](../../automated-testing/backup/07-a-migration-that-cannot-take-a-backup-leaves-the-database-unmigrated.md),
@@ -345,7 +345,7 @@ at `eb8c1a19`: `docker inspect` `true`, `unhealthy` naming `BudgetExceeded` and 
 
 ### 10. Bring `06` to the contract, scenario 8
 
-**Status:** ✅ Done 2026-10-23
+**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
 
 `06-schema-version-ahead-of-the-application.md`. The version recorded as `MAX(Version) + 1`, never a
 literal. The reason must name both Reset and restore; the positive control is the repair it already
@@ -363,7 +363,7 @@ step passing; readings in its Observed effect.
 
 ### 11. Confirm #294's test keeps `--read-only` and asserts success
 
-**Status:** ✅ Done 2026-10-23
+**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
 
 Run `04-migration-replay-under-restricted-write.md` unchanged: a restricted-write root filesystem, a
 healthy upgrade.
@@ -432,7 +432,7 @@ every step passing, and the 52 `RepositoryStructureTests` guards are green.
 
 ### 14. Fix the undetected read-only `keys/` directory, red first, and write its document
 
-**Status:** ✅ Done 2026-10-24
+**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
 
 Scenario 9 is the one finding that is a crash in effect: the application does not know it is degraded.
 With `/data` writable and an existing `keys/` that cannot be written, `/health` reports **`healthy`**
@@ -476,9 +476,52 @@ because the gate refuses any path while degraded, and `404` when healthy. Replac
 expects `200` once healthy, so a gated path that is not a real endpoint can no longer pass unnoticed.
 All nine were re-run as written: zero expectation failures.
 
-### 15. Run each document against a build from before this issue
+### 15. Convert this issue's documents to ADR 010
 
-**Status:** ✅ Done 2026-10-24
+**Status:** 🚧 In progress
+
+ADR 010 allows PowerShell only to invoke a single command; any logic beyond that is a `.csx` under
+`scripts/testing/`. The documents this issue wrote or brought to its contract, `01`, `05`, `06` and `08`
+to `13`, carry that logic in their steps instead: a `Health` function with polling loops, `foreach`
+loops over the gated endpoints, regex counts over `docker logs`, file counts and string tests on the
+reason text. That deviation is mine, and it is why the T2 run had to be stopped (developer, 2026-10-24).
+
+Each step becomes single command invocations; a step keeps PowerShell only where a C# tool genuinely
+cannot do the job, and says so in the document.
+
+**Design (approved 2026-10-24), held to DRY and SOLID.** All new test logic lives in
+[`tools/Quotinator.Tools.TestProbe`](../../../tools/Quotinator.Tools.TestProbe/README.md), and the
+documents invoke it as they invoke `DbInspector`. ADR 010 sends logic that *"grows beyond a single-file
+script"* to a `tools/` project; no repository document describes sharing code between `.csx` files, so
+`#load` is not introduced. The existing `.csx` scripts are not extended.
+
+| Logic now in a step | Becomes |
+|---|---|
+| Polling `/health` until `status` is `unhealthy` or `healthy` | `TestProbe wait-field`, piped into `json` |
+| `status=unhealthy`, a non-empty `reason`, a seeded count, a reset's `backupObstacle` and `remedies` | `http.csx` piped into `TestProbe json` |
+| `foreach` over the seven gated endpoints | Seven `http.csx --expect` commands, one per endpoint, no logic |
+| `docker inspect -f '{{.State.Running}}'` | Unchanged: a single CLI command, which ADR 010 allows |
+| Sabotage set-up and file checks | `TestProbe file` |
+| Regex counts over `docker logs` | `TestProbe log` |
+| Assertions on a `capture-page.csx` page script's return value | `capture-page.csx` piped into `TestProbe json` |
+
+- **Single responsibility.** Each command is its own class; `CommandDispatcher` only selects one and maps
+  its result to an exit code.
+- **Verified by the existing strategy.** `tests/Quotinator.Tools.TestProbe.Tests` holds 104 tests, red
+  before green, with a holding and a failing case for every expectation.
+- **Existing duplication, found while designing this.** The argument helpers `Value` and `Flag` are
+  copied into seven `scripts/testing/` scripts. Surfaced for the developer, not swept here.
+
+**Progress.**
+
+- [x] TestProbe built, test-first, and checked live against `08`'s scenario on `quotinator:local`: every
+  command's positive case exited `0` and every negative control exited `1`, naming the expectation. That
+  check found that PowerShell 5.1 prefixes a BOM when it pipes into a native process; `json` now strips
+  it, under its own red test.
+- [ ] Convert `01`, `05`, `06`, `08`, `09`, `10`, `11`, `12` and `13`.
+### 16. Run each document against a build from before this issue
+
+**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
 
 Per `process.md` → Implementation, step 1. The parent of the first `[#327]` commit
 (`git log --reverse --format=%H --grep "\[#327\]" | Select-Object -First 1`) is added as a worktree,
@@ -535,32 +578,43 @@ the current build, passing throughout. Found by its baseline log naming the curr
 now supplies `--image` where a document leaves it to the default, and `01` was run again against both
 builds. Worktrees and images were removed afterwards.
 
-### 16. Run the template and suite guards
+### 17. Run the template and suite guards
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done 2026-10-24, 52 green on `47d2e9c9`
 
 `dotnet test tests/Quotinator.Api.Tests --configuration Release --filter "FullyQualifiedName~RepositoryStructureTests"`:
 template sections and fields, the smoke index matching the documents, index links, cross-references,
 unique ports per document, and every document listed in `Quotinator.slnx`.
 
-### 17. Run the end-of-issue T2 scope
+### 18. Run the end-of-issue T2 scope
 
-**Status:** ⬜ Not started
+**Status:** 🚧 In progress
 
+**First attempt, 2026-10-24, discarded.** All 67 documents were run by extracting their PowerShell
+blocks into one script per document with a scratch runner outside the repository, not by following
+their steps. That breaks ADR 010 and repeatability, skipped every browser step, ignored each step's
+stop-on-failure, and garbled non-ASCII text, so none of its readings is evidence. The same method was
+used for every document run and canary reading recorded in steps 3 to 11, 14 and 15, which are reopened
+for the same reason. Findings it surfaced, still to be confirmed by a proper run: `import/17` concludes
+from a log line that does not exist and leans on bundled aliases; `import/30` reads
+`ruleOnNothing=Add/Applied` where it expects `Add/Pending`; `import/22` step 3 prints no `series`
+value; `api-surface/05` step 4 printed only the last exception line, so it could not show the first type
+its expectation names. Every document is now re-run by following its steps in order with the
+repository's own tools.
 Per the index's *When to run what*: the designated smoke set, every document in
 `startup-and-degradation/`, and every document this issue changed. This issue changed
 `scripts/testing/http.csx`, so per `testing-policy.md` → *A changed test is executed* every document
 invoking it runs too. Each document's `Observed effect` records the reading, opening
 `**Measured YYYY-MM-DD**`.
 
-### 18. Build and full test run
+### 19. Build and full test run
 
 **Status:** ⬜ Not started
 
 `dotnet build --configuration Release` at 0 warnings, 0 errors, and
 `dotnet test --configuration Release --verbosity normal -m:1` all green.
 
-### 19. T1
+### 20. T1
 
 **Status:** ⬜ Not started
 
@@ -574,23 +628,23 @@ The developer starts the application in Visual Studio and confirms it starts wit
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | Every degraded startup path in the code has a scenario and a document | Live | Step 1: each of the five `MarkFailed` sites maps to one or more rows of *The scenarios*, table in step 1 |
 | 2 | ✅ | The `--read-only`-forces-a-failure technique is gone, with the note on why placed beside the surviving `--read-only` discussion | Live | `05`'s *Determinism* carries the note, beside its `--read-only-data` and `04` discussion; `05` forces its failure with `--read-only-data`, and `04` uses `--read-only` only to assert success (step 5) |
-| 3 | ✅ | #294's test keeps `--read-only` and asserts success | Live (Docker) | `startup-and-degradation/04` run unchanged in step 11, `/health` `200`, content accounted for |
-| 4 | ❌ | Each scenario is its own document in `startup-and-degradation/` | Unit test | Nine documents present; `RepositoryStructureTests.EveryAutomatedTestingDocument_IsLinkedFromTheIndex` green |
+| 3 | ❌ | #294's test keeps `--read-only` and asserts success | Live (Docker) | `startup-and-degradation/04` run unchanged in step 11, `/health` `200`, content accounted for |
+| 4 | ✅ | Each scenario is its own document in `startup-and-degradation/` | Unit test | Nine documents present; `RepositoryStructureTests.EveryAutomatedTestingDocument_IsLinkedFromTheIndex` green |
 | 5 | ❌ | Scenario 1, data directory cannot be created: the contract and its positive control | Live (Docker) | `10` run after step 13 narrows it |
 | 6 | ❌ | Scenario 2, `keys/` cannot be created: the contract and its positive control | Live (Docker) | `11` run after step 13 narrows it |
-| 7 | ✅ | Scenario 3, data directory not writable: negative contract and positive remedy, with `:ro` mount, pinned sidecar state and `SQLite Error 14` confirmed | Live (Docker) | `05` run in step 5, all six steps passing; reason matches `Restore write access` |
-| 8 | ✅ | Scenario 4, corrupt database: negative contract and positive remedy | Live (Docker) | `08` run in step 6, all seven steps passing; reset `409`; reason matches `deleting the database file` |
-| 9 | ✅ | Scenario 5, truncated database: negative contract and positive remedy | Live (Docker) | `09` run in step 7, all seven steps passing |
-| 10 | ✅ | Scenario 6, broken schema: negative contract and positive remedy | Live (Docker) | `01` run in step 8, all seven steps passing; Reset recovers to `200` |
-| 11 | ✅ | Scenario 7, migration refused: negative contract and positive remedy | Live (Docker) | `12` run in step 9, all six steps passing; reason names `BudgetExceeded` and the in-app remedy, applied through the API |
-| 12 | ✅ | Scenario 8, schema version ahead: negative contract and positive remedy | Live (Docker) | `06` run in step 10, all seven steps passing unattended; reason names Reset and restore; Confirm returns `/health` to `200` |
+| 7 | ❌ | Scenario 3, data directory not writable: negative contract and positive remedy, with `:ro` mount, pinned sidecar state and `SQLite Error 14` confirmed | Live (Docker) | `05` run in step 5, all six steps passing; reason matches `Restore write access` |
+| 8 | ❌ | Scenario 4, corrupt database: negative contract and positive remedy | Live (Docker) | `08` run in step 6, all seven steps passing; reset `409`; reason matches `deleting the database file` |
+| 9 | ❌ | Scenario 5, truncated database: negative contract and positive remedy | Live (Docker) | `09` run in step 7, all seven steps passing |
+| 10 | ❌ | Scenario 6, broken schema: negative contract and positive remedy | Live (Docker) | `01` run in step 8, all seven steps passing; Reset recovers to `200` |
+| 11 | ❌ | Scenario 7, migration refused: negative contract and positive remedy | Live (Docker) | `12` run in step 9, all six steps passing; reason names `BudgetExceeded` and the in-app remedy, applied through the API |
+| 12 | ❌ | Scenario 8, schema version ahead: negative contract and positive remedy | Live (Docker) | `06` run in step 10, all seven steps passing unattended; reason names Reset and restore; Confirm returns `/health` to `200` |
 | 13 | ❌ | Scenarios are independent: each creates, seeds and destroys its own volume and port | Unit test + Live | `RepositoryStructureTests.EveryAutomatedTestingDocument_PublishesThePortsItUses_AndSharesNoneWithAnother` green; each document run alone in step 17 |
 | 14 | ❌ | No scenario asserts a migration number or schema version | Live | Read of all nine documents in steps 13 and 14 |
-| 15 | ❌ | Each document carries the template fields, including Determinism, and is in the smoke set | Unit test | Step 16: `RepositoryStructureTests` template guards and `SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` green |
+| 15 | ✅ | Each document carries the template fields, including Determinism, and is in the smoke set | Unit test | Step 16: `RepositoryStructureTests` template guards and `SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` green |
 | 16 | ✅ | In-process: every deterministic, cross-platform scenario has negative tests and a positive control | Unit test | Step 2: the `StartupResilienceTests` and `StartupBackupRefusalTests` methods tabled there, 43 green, every new one shown able to fail by mutations M1 to M7 |
-| 17 | ✅ | Each document is shown able to fail | Live (Docker) | Step 15: every scenario document against `quotinator:canary-327`, and the earlier-fix canaries, the failing step recorded in each `Canary` |
+| 17 | ❌ | Each document is shown able to fail | Live (Docker) | Step 15: every scenario document against `quotinator:canary-327`, and the earlier-fix canaries, the failing step recorded in each `Canary` |
 | 18 | ❌ | End-of-issue T2 scope passes | Live (Docker) | Step 17: smoke set, `startup-and-degradation/`, changed documents and every `http.csx` user, each green |
 | 19 | ❌ | Build clean and no regression | Build + Unit test | Step 18: 0 warnings, 0 errors; full suite green with `-m:1` |
 | 20 | ❌ | The application still starts | Manual | Step 19, confirmed by the developer in Visual Studio |
-| 21 | ✅ | Scenario 9, `keys/` exists but cannot be written: the application reports itself degraded, and the contract holds | Unit test + Live (Docker) | Step 14: the new `StartupResilienceTests` case red then green, and the new document red on the current build, green after the fix |
+| 21 | ❌ | Scenario 9, `keys/` exists but cannot be written: the application reports itself degraded, and the contract holds | Unit test + Live (Docker) | Step 14: the new `StartupResilienceTests` case red then green, and the new document red on the current build, green after the fix |
 | 22 | ✅ | Each finding outside the contract is recorded in its document and drafted as an issue | Live | Step 13: every finding recorded in the named documents' `Observed effect`; filed as #454, #455, #456 and #457, the override gap held for #348, each with Knowledgebase coverage |
