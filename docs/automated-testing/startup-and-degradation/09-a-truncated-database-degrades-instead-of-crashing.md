@@ -48,12 +48,14 @@ the other's behalf. The same split exists one category over, between
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-09 --delete C:\repos\Quotinator\.claude\temp\qt-startup-09-out
 dotnet script scripts/testing/test-env.csx -- create --name qt-startup-09 --port 18409 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-09
-dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-09-out\version.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-09-out\version.json --greater-than database.quotes=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/health --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-09-out\health-seeded.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-09-out\health-seeded.json --equals status=healthy
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-file C:\repos\Quotinator\.claude\temp\qt-startup-09\quotinatordata.db
 ```
 
-**Expected:** every command exits `0`: a quote count above `0`, and `quotinatordata.db` is a file.
+**Expected:** every command exits `0`: the application reports `healthy`, and `quotinatordata.db` is a
+file. Nothing here asserts what the database holds: the fault below is the file being cut short, so its
+content is not this document's subject, and a count would depend on the bundled sources.
 
 **On failure:** a fresh seed that cannot reach healthy is not this document's subject. Stop and fix
 that first.

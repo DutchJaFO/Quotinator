@@ -99,6 +99,14 @@ public sealed class CommandDispatcherTests
         => Assert.AreEqual(1, Run(["wait-field", "--field", "status", "--in", "healthy"], string.Empty).ExitCode);
 
     [TestMethod]
+    public void Run_LogSinceAMissingMark_ExitsOneNamingTheMark()
+    {
+        string mark = Path.Combine(Path.GetTempPath(), "testprobe-absent-" + Guid.NewGuid().ToString("N") + ".mark");
+
+        Assert.Contains("mark", Run(["log", "--container", "qt-unused", "--pattern", "x", "--exactly", "0", "--since-mark", mark], string.Empty).Error);
+    }
+
+    [TestMethod]
     public void Run_LogWithoutContainer_ExitsOne()
         => Assert.AreEqual(1, Run(["log", "--pattern", "x", "--at-least", "1"], string.Empty).ExitCode);
 

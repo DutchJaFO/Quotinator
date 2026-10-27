@@ -17,6 +17,31 @@ public sealed class LogCounterTests
     public void Count_NoOccurrence_IsZero()
         => Assert.AreEqual(0, LogCounter.Count("all fine", "ERR"));
 
+    private const string Timestamped =
+        "2026-10-24T19:51:50.1Z first\n" +
+        "2026-10-24T19:51:58.123456789Z second ERR\n" +
+        "2026-10-24T19:51:58.2Z third ERR\n";
+
+    [TestMethod]
+    public void LastTimestamp_ReturnsTheNewestLineStamp()
+        => Assert.AreEqual(DateTimeOffset.Parse("2026-10-24T19:51:58.2Z"), LogCounter.LastTimestamp(Timestamped));
+
+    [TestMethod]
+    public void LastTimestamp_EmptyLog_IsMinValue()
+        => Assert.AreEqual(DateTimeOffset.MinValue, LogCounter.LastTimestamp(string.Empty));
+
+    [TestMethod]
+    public void LinesAfter_KeepsOnlyLaterLines()
+        => Assert.AreEqual(1, LogCounter.Count(LogCounter.LinesAfter(Timestamped, DateTimeOffset.Parse("2026-10-24T19:51:58.15Z")), "ERR"));
+
+    [TestMethod]
+    public void LinesAfter_ExcludesTheLineAtTheMark()
+        => Assert.AreEqual(0, LogCounter.Count(LogCounter.LinesAfter(Timestamped, DateTimeOffset.Parse("2026-10-24T19:51:58.2Z")), "ERR"));
+
+    [TestMethod]
+    public void LinesAfter_MinValue_KeepsEveryLine()
+        => Assert.AreEqual(2, LogCounter.Count(LogCounter.LinesAfter(Timestamped, DateTimeOffset.MinValue), "ERR"));
+
     [TestMethod]
     public void Check_AtLeastMet_Holds()
         => Assert.IsTrue(LogCounter.Check(2, atLeast: 1, exactly: null).Holds);

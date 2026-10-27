@@ -49,10 +49,10 @@ and `SQLite Error 14: 'unable to open database file'` is *the original incident'
 - **The page reads go through `capture-page.csx`.** It cannot read the browser console, so the console
   assertion is made from what a page script can read: every request the page issued, with its status
   (`performance.getEntriesByType('resource')`), and whether Blazor's own error banner is showing.
-- **Never assert a count read while degraded, and never the count after the remedy either.** The first is
-  a value read from a database the application could not open (index: *A degraded application is not
-  expected to answer from its database*); the second moves with whatever the pending migration does to
-  the content. Step 6 asserts only that content survived, a non-zero count.
+- **Never assert a count, while degraded or after the remedy.** The first is a value read from a
+  database the application could not open (index: *A degraded application is not expected to answer
+  from its database*); the second depends on the bundled sources, which this test does not own. Step 6
+  asserts only that the test's own sentinel quote survived.
 
 **What this replaced, and why the old version could never pass.** Until 2026-08-27 this test forced the
 failure with `--read-only` on the root filesystem, leaving `/data` writable, byte-identical to `04`'s
@@ -78,14 +78,19 @@ wrong.
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-05-out
 dotnet script scripts/testing/test-env.csx -- create --name qt-startup-05 --port 18405 --image ghcr.io/dutchjafo/quotinator:1.8.2
-dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\version-before.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\version-before.json --greater-than database.quotes=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/import --method POST --file docs/automated-testing/startup-and-degradation/fixtures/sentinel-quote.json --expect 200
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/quotes/5e7a1c3d-9b2f-4e6a-8d0c-b1f2a3e4c5d6 --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\sentinel-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\sentinel-before.json --equals source="Quotinator Test Harness"
 ```
 
-**Expected:** the `json` command exits `0`, with a quote count above `0`.
+**Expected:** the import answers `200`, and the `json` command exits `0`: the test's own
+[sentinel quote](fixtures/sentinel-quote.json) is stored and readable by its id.
 
-**On failure:** a partially seeded volume would make everything below meaningless. Stop and re-seed
-rather than proceeding.
+**The sentinel is this document's own data.** The bundled sources are seeded too, since the image always
+seeds them, but nothing below asserts on what they contain: that changes whenever a source or a
+correction does. Step 6 asks only whether the sentinel survived.
+
+**On failure:** a sentinel that cannot be stored or read leaves step 6 with nothing to prove. Stop.
 
 ### 2. Start the current build with `/data` read-only, and confirm it degraded rather than died
 
@@ -193,15 +198,16 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18405/api/v1/q
 dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/conversations --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/notifications --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/masterdata/sources --expect 200 --status
-dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\version-after.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\version-after.json --greater-than database.quotes=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/version --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/quotes/5e7a1c3d-9b2f-4e6a-8d0c-b1f2a3e4c5d6 --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\sentinel-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\sentinel-after.json --equals source="Quotinator Test Harness"
 dotnet script scripts/testing/http.csx -- --url http://localhost:18405/ --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18405/stats --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18405/notifications --expect 200 --status
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-05 --pattern "migration applied" --at-least 1
 ```
 
-**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` and all three pages answer `200`, and both TestProbe commands exit `0`: a quote count above `0`, and at least one `migration applied` line.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` and all three pages answer `200`, and both TestProbe commands exit `0`: the sentinel quote from step 1 is still there, and at least one `migration applied` line was logged.
 
 **This is the positive control and the remedy proof in one step.** Every assertion above is about a
 degraded container, so without a passing case this document would stay green against a build that
@@ -209,7 +215,7 @@ degraded on everything. It also proves the remedy both `/health` and the refusal
 restored, the same volume migrates, and the content the read-only start could not touch is still there.
 
 **On failure:** a `503` here means the degradation was not specific to the read-only mount, or the named
-remedy does not work. A quote count of `0` means the remedy cost the operator their data.
+remedy does not work. A missing sentinel means the remedy cost the operator their data.
 
 ## Observed effect
 

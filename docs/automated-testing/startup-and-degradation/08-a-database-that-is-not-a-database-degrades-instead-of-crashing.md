@@ -46,12 +46,14 @@ continues: Kestrel binds, `/health` answers `503`, and the Blazor pages render t
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-08 --delete C:\repos\Quotinator\.claude\temp\qt-startup-08-out
 dotnet script scripts/testing/test-env.csx -- create --name qt-startup-08 --port 18408 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-08
-dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-08-out\version.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-08-out\version.json --greater-than database.quotes=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18408/api/v1/health --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-08-out\health-seeded.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-08-out\health-seeded.json --equals status=healthy
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-file C:\repos\Quotinator\.claude\temp\qt-startup-08\quotinatordata.db
 ```
 
-**Expected:** every command exits `0`: a quote count above `0`, and `quotinatordata.db` is a file.
+**Expected:** every command exits `0`: the application reports `healthy`, and `quotinatordata.db` is a
+file. Nothing here asserts what the database holds: the fault below is the file itself, so its content is
+not this document's subject, and a count would depend on the bundled sources.
 
 **On failure:** a fresh seed that cannot reach healthy is not this document's subject, and every
 assertion below would be about the wrong fault. Stop and fix that first.

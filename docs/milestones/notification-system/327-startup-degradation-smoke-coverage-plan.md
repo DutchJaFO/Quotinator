@@ -530,12 +530,31 @@ script"* to a `tools/` project; no repository document describes sharing code be
   form.
 - [x] `08` re-run in the file form on `quotinator:local`: every step passed. The `capture-page.csx` file
   options checked separately, with a negative control.
-- [ ] Replace the assertions on bundled content: `01`, `05`, `06`, `08`, `09` and `12` seed the bundled
-  sources and assert a quote count from them, which the own-data rule forbids.
-- [ ] Settle how `01` asserts that nothing new was thrown: a plain `docker restart` logs two
-  `SocketException`s, which the original's delta from after the restart hid. Its step 3 and cleanup
-  counts are not yet final.
-- [ ] Re-run `01`, `05`, `06`, `09`, `10`, `11`, `12` and `13` in the file form.
+- [x] Replace the assertions on bundled content. `08` and `09` assert `healthy` before the sabotage
+  instead of a quote count; `05` and `12` import their own
+  [sentinel quote](../../automated-testing/startup-and-degradation/fixtures/sentinel-quote.json) before it
+  and read it back by id after the remedy. `01` and `06` assert only zero after a Reset, which no
+  bundled content decides.
+- [x] Re-run `05`, `08`, `09`, `10`, `11`, `12` and `13` in the file form: every step passed, the
+  sentinel stored on `1.8.2` and `1.8.3` and surviving each migration.
+- [x] Re-run `06`: every step passed except its two exact `[Runtime - Exception]` counts after the
+  repair. The log gained `TaskCanceledException`s when the headless browser closed, and kept gaining
+  them with no command running (2, then 5, then 9).
+- [x] Re-run `05` and `12` with the sentinel fixture as it now stands (its explicit `"character": null`
+  and `"author": null` removed under `CLAUDE.md`'s import-file minimalism rule): every step passed.
+- [x] Assert exceptions the documented way (developer direction, 2026-10-24: an exception is an issue
+  unless expected, and an expected one must match its expectation). A document that stops its container
+  counts only what was logged since its previous read, per the index's *Read the log before the
+  application stops*; `TestProbe log --mark`/`--since-mark` does that from the daemon's own timestamps.
+  Expected types are asserted by name: in `01`, the degraded start's `SqliteException` and the stop's two
+  documented `SocketException`s, with any other type at zero.
+- [x] `01` re-run: every step passed.
+- [x] `06` re-run: every step passed except *nothing thrown since Cancel*, which read 4 and then 7
+  `TaskCanceledException`s after the in-page Reset, on two independent runs. No document expects them
+  and no Knowledgebase entry records that form, so it is an issue.
+- [x] Record it against the issues that already own it rather than filing a new one: a second form of
+  #445's defect (a circuit the client closed logged at `Error`), and a form #446's Knowledgebase gap must
+  also cover. Measurements posted to both on 2026-10-27; `06` carries `**Fully green after:** #445`.
 ### 16. Run each document against a build from before this issue
 
 **Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps

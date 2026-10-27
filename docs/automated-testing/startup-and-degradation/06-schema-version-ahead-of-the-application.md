@@ -4,6 +4,10 @@
 **Environment:** Fresh
 **Deterministic:** yes
 **Traces to:** #350, #327, #289
+**Fully green after:** [#445](https://github.com/DutchJaFO/Quotinator/issues/445): step 7's last
+`log` command and the cleanup's `log` command, both *nothing thrown since Cancel*, read `TaskCanceledException`
+lines logged after the page that confirmed the Reset closes (measured 4 and 7 on 2026-10-24), until the
+application stops logging a circuit the client closed as an error.
 
 ## Preconditions
 
@@ -236,6 +240,7 @@ dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18406/ 
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\modal-after-cancel.json --equals "before=Reset the database, Continue" --equals "armed=Confirm, Cancel, Continue" --equals "afterCancel=Reset the database, Continue"
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/health --expect 503 --status
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-cancel.mark
 ```
 
 **Expected:** the `json` command exits `0`: the buttons read `Reset the database, Continue`, then
@@ -257,7 +262,7 @@ dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/no
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/masterdata/sources --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\version-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\version-after.json --equals database.quotes=0
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-cancel.mark --pattern "\[Runtime - Exception\]" --exactly 0
 ```
 
 **Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. The first `json` command exits `0` on the reason gone, `/health` answers `200`, the quote count is `0`, and the exception count is unchanged since Cancel.
@@ -367,7 +372,7 @@ Remove the container, image and worktree afterwards.
 ## Cleanup
 
 ```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-cancel.mark --pattern "\[Runtime - Exception\]" --exactly 0
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-06 --bind C:\repos\Quotinator\.claude\temp\qt-startup-06-data
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-06-data --delete C:\repos\Quotinator\.claude\temp\qt-startup-06-shots
 ```

@@ -78,12 +78,15 @@ wrong one they report nonsense.
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "\[Runtime - Exception\]" --exactly 0
 docker restart qt-startup-01
 dotnet script scripts/testing/http.csx -- --url http://localhost:18401/api/v1/health --wait-for 200 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\after-restart.mark
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "schema is up to date" --at-least 1
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-absent C:\repos\Quotinator\.claude\temp\qt-startup-01-data\backups
 ```
 
 **Expected:** every command exits `0`: no exception thrown before the restart, `schema is up to date`
-logged, and still no `backups` directory. No migration is pending and the content
+logged, and still no `backups` directory. The mark records where the log stood once the restarted app
+was healthy, so step 3 counts only what came after the restart's own documented shutdown lines (index:
+*Read the log before the application stops*). No migration is pending and the content
 already exists, so neither risky action runs and there is nothing to protect against.
 
 ### 3. Break the schema on the host side, then restart
@@ -92,7 +95,8 @@ The container stays the one step 1 created: it is already bound to this director
 re-running. It is stopped only so the host can write to the database file safely:
 
 ```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\after-restart.mark --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\before-stop.mark
 docker stop qt-startup-01
 dotnet script scripts/testing/execute-sql.csx -- --db C:\repos\Quotinator\.claude\temp\qt-startup-01-data\quotinatordata.db --sql "PRAGMA foreign_keys=OFF; DROP TABLE Quotinator_Quote;"
 docker start qt-startup-01
@@ -104,8 +108,11 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-star
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "Database initialisation failed" --at-least 1
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "no such table: Quotinator_Quote" --at-least 1
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "Unhandled exception" --exactly 0
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "\[Runtime - Exception\]" --exactly THROWN_AFTER_DEGRADED
-dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-match-count C:\repos\Quotinator\.claude\temp\qt-startup-01-data\backups *.db 1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\before-stop.mark --pattern "thrown: SqliteException" --at-least 1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\before-stop.mark --pattern "thrown: SocketException" --exactly 2
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\before-stop.mark --pattern "thrown: (?!SqliteException|SocketException)" --exactly 0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\degraded.mark
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-match-count C:\repos\Quotinator\.claude\temp\qt-startup-01-data\backups "*.db" 1
 docker inspect -f '{{.State.Running}}' qt-startup-01
 ```
 
@@ -125,9 +132,19 @@ its `-shm`/`-wal` sidecars are not separate backups.
 
 `docker inspect` printing `true`: the app degrades, it does not crash.
 
-No exception before the stop. The degraded start then logs its own `SqliteException`: thrown, then
-handled by the restore, which is this step's subject, not noise. Its count is asserted exactly, so the
-cleanup can prove nothing after it threw.
+**Every exception this step logs is one it expects, counted since the mark taken before the stop.** No
+exception since the restart, before the stop. Then three kinds, and only these:
+
+- **`SqliteException`, at least one.** The degraded start's own fault: thrown, then handled by the
+  restore, which is this step's subject, not noise. Its count is not predicted, only its presence.
+- **`SocketException`, exactly two.** The stop's documented cost, one per listening port (index: *Read
+  the log before the application stops*; Knowledgebase:
+  `transport-connection-cancelled-during-a-request`).
+- **Any other type, zero.** An exception this document does not expect is an issue, and counting it
+  here is what makes it visible rather than absorbed into a total.
+
+The last mark records where the log stood once the degraded state settled, so the cleanup can prove
+nothing after it threw.
 
 **Wait for `unhealthy`, not for a `503`.** A starting app answers `503` too: the startup wait page
 (#280) reports `status=starting` until initialisation finishes, so a wait on the status code returns at
@@ -280,12 +297,13 @@ belongs to step 3's degraded start, counted once it reported `unhealthy`; none m
 or the recovery after it:
 
 ```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "\[Runtime - Exception\]" --exactly THROWN_AFTER_DEGRADED
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\degraded.mark --pattern "\[Runtime - Exception\]" --exactly 0
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-01 --bind C:\repos\Quotinator\.claude\temp\qt-startup-01-data
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-01-data --delete C:\repos\Quotinator\.claude\temp\qt-startup-01-out
 ```
 
-**Expected:** the `log` command exits `0`: the count is still step 3's, so nothing threw after it.
+**Expected:** the `log` command exits `0`: nothing has been logged as thrown since step 3's degraded
+state settled, through the Reset and the recovery after it.
 
 This test's data directory is a bind mount rather than a named volume, so removing the directory is
 what removes its data.

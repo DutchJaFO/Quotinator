@@ -86,6 +86,18 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-star
 Counts occurrences, not matching lines, in `docker logs <container>` (stdout and stderr both). Takes
 `--at-least <n>` or `--exactly <n>`, and prints the count.
 
+**Counting only what was logged since a previous read**, which the suite index requires of a document
+that stops or restarts its container:
+
+```bash
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\after-restart.mark
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\after-restart.mark --pattern "\[Runtime - Exception\]" --exactly 0
+```
+
+`--mark <file>` records the newest line's timestamp; `--since-mark <file>` counts only lines stamped
+after it. The timestamps are the Docker daemon's own (`docker logs --timestamps`), so the host clock
+plays no part.
+
 ## Design notes
 
 - Each command is its own class with one job (`Commands/`); `CommandDispatcher` only selects the command

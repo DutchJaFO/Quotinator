@@ -49,14 +49,16 @@ obstacle and its remedies.
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-12 --delete C:\repos\Quotinator\.claude\temp\qt-startup-12-out --create-directory C:\repos\Quotinator\.claude\temp\qt-startup-12\backups
 dotnet script scripts/testing/test-env.csx -- create --name qt-startup-12 --port 18412 --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind C:\repos\Quotinator\.claude\temp\qt-startup-12
-dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-12-out\version-before.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-12-out\version-before.json --greater-than database.quotes=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/import --method POST --file docs/automated-testing/startup-and-degradation/fixtures/sentinel-quote.json --expect 200
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/quotes/5e7a1c3d-9b2f-4e6a-8d0c-b1f2a3e4c5d6 --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-12-out\sentinel-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-12-out\sentinel-before.json --equals source="Quotinator Test Harness"
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-12 --bind C:\repos\Quotinator\.claude\temp\qt-startup-12
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --sparse C:\repos\Quotinator\.claude\temp\qt-startup-12\backups\filler.db 1073741824 --expect-length C:\repos\Quotinator\.claude\temp\qt-startup-12\backups\filler.db 1073741824
 ```
 
-**Expected:** every command exits `0`: a quote count above `0` from the prior release, and a filler of
-`1073741824` bytes.
+**Expected:** every command exits `0`: the prior release stores and serves the test's own
+[sentinel quote](fixtures/sentinel-quote.json), and the filler is `1073741824` bytes. The bundled sources
+are seeded too, but nothing in this document asserts on what they contain.
 
 **On failure:** a prior release that cannot reach healthy is not this document's subject. A smaller
 filler leaves room for the backup, so the migration would run and every step below would assert against
@@ -116,18 +118,20 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18412/api/v1/q
 dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/conversations --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/notifications --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/masterdata/sources --expect 200 --status
-dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-12-out\version-after.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-12-out\version-after.json --greater-than database.quotes=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/version --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/quotes/5e7a1c3d-9b2f-4e6a-8d0c-b1f2a3e4c5d6 --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-12-out\sentinel-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-12-out\sentinel-after.json --equals source="Quotinator Test Harness"
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-12 --pattern "migration applied" --at-least 1
 ```
 
-**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` answers `200`, and both TestProbe commands exit `0`: a quote count above `0`, and at least one `migration applied` line.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` answers `200`, and both TestProbe commands exit `0`: the sentinel quote from step 1 is still there, and at least one `migration applied` line was logged.
 
 **This is the positive control.** Every assertion above is about a degraded container, so without a
 passing case this document would stay green against a build that refused every migration. With room for
-its backup, the same volume migrates and keeps its content.
+its backup, the same volume migrates and keeps the sentinel.
 
-**On failure:** a `503` here means the degradation was not specific to the full budget.
+**On failure:** a `503` here means the degradation was not specific to the full budget. A missing
+sentinel means the migration cost the operator their data.
 ## Observed effect
 
 **Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`, upgrading a `1.8.3` volume
