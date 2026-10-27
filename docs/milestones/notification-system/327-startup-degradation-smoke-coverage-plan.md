@@ -1,6 +1,6 @@
 # #327: Smoke tests that prove startup problems degrade rather than crash
 
-**Status:** In progress (step 15)
+**Status:** In progress (step 16)
 **GitHub issue:** #327
 **Tiers required:** T1, T2
 **Depends on:** #326, #339, #350
@@ -187,7 +187,10 @@ recorded in `11`'s Observed effect and filed as a finding (step 13).
 
 ### 3. Write the document for scenario 1, the data directory cannot be created
 
-**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
+**Status:** ✅ Done 2026-10-24
+
+**Evidence, 2026-10-24.** `10` run step by step in its single-command form (step 15) against
+`quotinator:local` built from the tree at `83e27671`: every step passed.
 
 New document in `startup-and-degradation/`, from the index template, with its own container, bind
 directory and port. The configured data directory sits under a read-only mount, so `CreateDirectory`
@@ -222,7 +225,10 @@ Added to the index's category table and smoke table, and to `Quotinator.slnx`.
 
 ### 4. Write the document for scenario 2, the `keys/` directory cannot be created
 
-**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
+**Status:** ✅ Done 2026-10-24
+
+**Evidence, 2026-10-24.** `11` run step by step in its single-command form (step 15) against
+`quotinator:local` built from the tree at `83e27671`: every step passed.
 
 New document. A file is placed where `keys/` belongs on a writable data directory, the same sabotage
 `StartupResilienceTests` uses. Asserts the full contract; the remedy is removing the file, after which
@@ -254,7 +260,11 @@ Added to the index's category table and smoke table, and to `Quotinator.slnx`.
 
 ### 5. Bring `05` to the contract, scenario 3
 
-**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
+**Status:** ✅ Done 2026-10-24
+
+**Evidence, 2026-10-24.** `05` run step by step in its single-command form (step 15), with its own
+sentinel quote, against `quotinator:local` built from the tree at `83e27671`: every step passed, the
+sentinel stored on `1.8.2` and surviving the migration.
 
 `05-degraded-pages-survive-a-migration-failure.md`. Provoked with `--read-only-data`, a `:ro` mount on
 `/data`, never `--read-only` on the root filesystem, with the WAL sidecar state pinned by how the
@@ -282,7 +292,10 @@ failures; remounted writable, `/health` and pages `200`, the migration applied, 
 
 ### 6. Bring `08` to the contract, scenario 4
 
-**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
+**Status:** ✅ Done 2026-10-24
+
+**Evidence, 2026-10-24.** `08` run step by step in its single-command form (step 15) against
+`quotinator:local` built from the tree at `83e27671`: every step passed.
 
 `08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md`. The file replaced with
 non-database bytes, sidecars deleted, container stopped first, size read back. The reset reaches its
@@ -300,7 +313,10 @@ naming a file remedy, and `200` after deleting the file.
 
 ### 7. Bring `09` to the contract, scenario 5
 
-**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
+**Status:** ✅ Done 2026-10-24
+
+**Evidence, 2026-10-24.** `09` run step by step in its single-command form (step 15) against
+`quotinator:local` built from the tree at `83e27671`: every step passed.
 
 `09-a-truncated-database-degrades-instead-of-crashing.md`. As step 6, with a real seeded database cut in
 half and both sizes recorded so the truncation point is pinned. Edit, then run.
@@ -312,7 +328,11 @@ endpoints said three where `08` and the index record six. Run end to end against
 
 ### 8. Bring `01` to the contract, scenario 6
 
-**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
+**Status:** ✅ Done 2026-10-24
+
+**Evidence, 2026-10-24.** `01` run step by step in its single-command form (step 15), counting
+exceptions since each read, against `quotinator:local` built from the tree at `83e27671`: every step
+passed.
 
 `01-seeding-backup-degraded-startup-and-reset-recovery.md`. The schema broken by dropping a domain table
 on the host while the container is stopped. Here a Reset can succeed, and the document's own Reset is its
@@ -325,7 +345,11 @@ Observed effect now carries that reading as a measurement, which takes it off th
 
 ### 9. Write the document for scenario 7, a migration refused for want of a backup
 
-**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
+**Status:** ✅ Done 2026-10-24
+
+**Evidence, 2026-10-24.** `12` run step by step in its single-command form (step 15), with its own
+sentinel quote, against `quotinator:local` built from the tree at `83e27671`: every step passed, the
+sentinel stored on `1.8.3` and surviving the migration.
 
 New document in `startup-and-degradation/`. Same provocation as
 [`backup/07`](../../automated-testing/backup/07-a-migration-that-cannot-take-a-backup-leaves-the-database-unmigrated.md),
@@ -345,7 +369,11 @@ at `eb8c1a19`: `docker inspect` `true`, `unhealthy` naming `BudgetExceeded` and 
 
 ### 10. Bring `06` to the contract, scenario 8
 
-**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
+**Status:** ✅ Done 2026-10-24
+
+**Evidence, 2026-10-24.** `06` run step by step in its single-command form (step 15) against
+`quotinator:local` built from the tree at `83e27671`: every step passed except the two *nothing thrown
+since Cancel* reads, which are #445's and carry the document's `Fully green after: #445` header.
 
 `06-schema-version-ahead-of-the-application.md`. The version recorded as `MAX(Version) + 1`, never a
 literal. The reason must name both Reset and restore; the positive control is the repair it already
@@ -363,7 +391,13 @@ step passing; readings in its Observed effect.
 
 ### 11. Confirm #294's test keeps `--read-only` and asserts success
 
-**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
+**Status:** ✅ Done 2026-10-27
+
+**Evidence, 2026-10-27.** `04` was converted before running, per the index's *A document is reviewed
+every time it is used*: single commands, and its own sentinel quote in place of a quote count predicted
+from the bundled seed's duplicates. Run step by step against `quotinator:local` built from the tree at
+`83e27671`: the sentinel stored on `1.8.2`, then under `--read-only` `healthy`, the sentinel intact, one
+migration applied and no SQLite error.
 
 Run `04-migration-replay-under-restricted-write.md` unchanged: a restricted-write root filesystem, a
 healthy upgrade.
@@ -432,7 +466,10 @@ every step passing, and the 52 `RepositoryStructureTests` guards are green.
 
 ### 14. Fix the undetected read-only `keys/` directory, red first, and write its document
 
-**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
+**Status:** ✅ Done 2026-10-24
+
+**Evidence, 2026-10-24.** `13` run step by step in its single-command form (step 15) against
+`quotinator:local` built from the tree at `83e27671`, which carries the fix: every step passed.
 
 Scenario 9 is the one finding that is a crash in effect: the application does not know it is degraded.
 With `/data` writable and an existing `keys/` that cannot be written, `/health` reports **`healthy`**
@@ -478,7 +515,7 @@ All nine were re-run as written: zero expectation failures.
 
 ### 15. Convert this issue's documents to ADR 010
 
-**Status:** 🚧 In progress
+**Status:** ✅ Done 2026-10-24
 
 ADR 010 allows PowerShell only to invoke a single command; any logic beyond that is a `.csx` under
 `scripts/testing/`. The documents this issue wrote or brought to its contract, `01`, `05`, `06` and `08`

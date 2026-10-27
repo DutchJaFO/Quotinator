@@ -19,10 +19,11 @@ because a fresh insert has nothing to conflict with and never exercises the stat
 at all. The real incident happened during **migration replay against an already-populated database**, so
 this test must start from one.
 
-**The seeding run must have completed cleanly before proceeding**: a partially-seeded volume produces
-a misleading result. The fact to establish is not a dataset size but that seeding finished with zero
-failures: `quotes` is non-zero, and the seed's own report shows nothing `Pending`, `Blocked` or
-`Stale`. Record the count you observe so the upgrade below can be compared against it.
+**The test owns the content it asserts on.** The predecessor release seeds its bundled sources, which is
+what populates the database the migration replays against, but nothing here asserts what they contain:
+that changes whenever a source or a correction does. Instead step 1 imports the test's own
+[sentinel quote](fixtures/sentinel-quote.json) into the populated database, and step 2 asks whether the
+replay kept it.
 
 ## Determinism
 
@@ -54,50 +55,41 @@ so a pass here is strong evidence, not proof of the exact mechanism.
 
 ### 1. Seed a populated database from the predecessor release
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-04 --port 18404 `
-  --image ghcr.io/dutchjafo/quotinator:1.8.2
-
-$seeded = (Invoke-RestMethod "http://localhost:18404/api/v1/version").database
-$seededQuotes = @((Invoke-RestMethod "http://localhost:18404/api/v1/quotes?pageSize=0").items)
-$duplicateGroups = $seededQuotes | Group-Object { "$($_.quote)|$($_.source)" } | Where-Object Count -gt 1
-$duplicateRows   = ($duplicateGroups | ForEach-Object { $_.Count - 1 } | Measure-Object -Sum).Sum
-"quotes=$($seeded.quotes) sources=$($seeded.sources) duplicateRows=$duplicateRows"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-04-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-04 --port 18404 --image ghcr.io/dutchjafo/quotinator:1.8.2
+dotnet script scripts/testing/http.csx -- --url http://localhost:18404/api/v1/import --method POST --file docs/automated-testing/startup-and-degradation/fixtures/sentinel-quote.json --expect 200
+dotnet script scripts/testing/http.csx -- --url http://localhost:18404/api/v1/quotes/5e7a1c3d-9b2f-4e6a-8d0c-b1f2a3e4c5d6 --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-04-out\sentinel-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-04-out\sentinel-before.json --equals source="Quotinator Test Harness"
 ```
 
-**Expected:** a non-zero `quotes` count, and a seed reporting zero failures: nothing `Pending`,
-`Blocked` or `Stale`. `$seeded` and `$duplicateRows` are kept for step 2 to compare against.
+**Expected:** the environment reports healthy, the import answers `200`, and the `json` command exits
+`0`: the sentinel is stored in a populated predecessor database and readable by its id.
 
-**On failure:** a zero or partial count means the volume is only partially seeded, and the upgrade
-below has nothing meaningful to replay against, and a pass would then say nothing about the restricted
-environment. Stop and re-seed rather than continuing.
+**On failure:** a predecessor that cannot reach healthy, or a sentinel that cannot be stored, leaves
+step 2 with nothing to replay against or nothing to prove. Stop.
 
 ### 2. Upgrade to the current build under the restricted environment
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-04 --port 18404 `
-  --image quotinator:local --read-only --wait-listening
-
-(dotnet script scripts/testing/http.csx -- --url "http://localhost:18404/api/v1/health" --expect 200 | ConvertFrom-Json).status
-$upgraded = (Invoke-RestMethod "http://localhost:18404/api/v1/version").database
-"quotes=$($upgraded.quotes) accountedFor=$($upgraded.quotes -eq $seeded.quotes - $duplicateRows)"
-
-$log = docker logs qt-startup-04 2>&1 | Out-String
-"migrationApplied=$(([regex]::Matches($log, 'migration applied')).Count)"
-"sqliteErrors=$(([regex]::Matches($log, 'SqliteException|SQLite Error')).Count)"
+```
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-04 --port 18404 --image quotinator:local --read-only --wait-listening
+dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18404/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-startup-04-out\health.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-04-out\health.json --equals status=healthy
+dotnet script scripts/testing/http.csx -- --url http://localhost:18404/api/v1/quotes/5e7a1c3d-9b2f-4e6a-8d0c-b1f2a3e4c5d6 --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-04-out\sentinel-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-04-out\sentinel-after.json --equals source="Quotinator Test Harness"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-04 --pattern "migration applied" --at-least 1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-04 --pattern "SqliteException|SQLite Error" --exactly 0
 ```
 
-**Expected:** `/health` returns `200` and `healthy`. `accountedFor=True`: the upgraded count is the
-seeded count less exactly the duplicate rows step 1 counted, because migration replay must not lose
-content; that is a relationship between the two runs rather than a number either of them should
-predict.
+**Expected:** every TestProbe command exits `0`. `/health` reports `healthy`; the sentinel from step 1
+is still there, because migration replay must not lose content the test owns; at least one migration
+was applied; and no SQLite error was logged. The fix means the migration's temp files never touch disk
+at all, so restricting every other writable path does not matter.
 
-**Duplicates are the one deliberate loss.** Migration009 (#374) makes a quote unique per Source by
-deleting every row that repeats another's text under the same Source, keeping the earliest. Measured
-2026-09-22: the 1.8.2 seed holds four such pairs, 799 quotes become 795, and nothing else goes. Until
-#411 this step asserted the two counts were equal, which has been false since #374. `migrationApplied` is non-zero
-and `sqliteErrors` is `0`: the fix means the migration's temp files never touch disk at all, so
-restricting every other writable path does not matter.
+**Nothing here counts quotes.** Migration009 (#374) deliberately deletes repeated quotes under one
+Source, so a count of the bundled content moves with whatever duplicates the predecessor's sources held,
+which is the bundled sources' property, not this test's subject. The sentinel has no duplicate, so it
+must survive.
 
 The start waits for *listening* rather than healthy: if the migration fails this container answers
 `503` by design, and waiting for `200` would burn the whole timeout before the assertions that name
@@ -121,7 +113,7 @@ Not required on every run: a one-time gut-check when this document itself change
 In `Program.cs`, temporarily change `useMemoryTempStore: true` to `false` at `SqliteConnectionFactory`'s
 DI registration site, rebuild, and repeat the upgrade against a **fresh clone** of the seeded volume:
 
-```powershell
+```
 docker run --rm -v qt-startup-04-data:/from -v qt-startup-04-data-clone:/to alpine sh -c "cp -a /from/. /to/"
 ```
 
@@ -130,9 +122,10 @@ before committing anything.
 
 ## Cleanup
 
-```powershell
+```
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-04
-docker volume rm qt-startup-04-data-clone 2>$null
+docker volume rm --force qt-startup-04-data-clone
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-04-out
 ```
 
 If the gut-check section above was run, confirm `useMemoryTempStore: true` has been restored in
