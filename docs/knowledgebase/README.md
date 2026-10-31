@@ -26,3 +26,4 @@ per `knowledgebase.md`'s bootstrapping rule, entries come first and codes are as
 | [A source refresh test fails when GitHub does not answer](a-source-refresh-test-fails-when-github-does-not-answer.md) | No | test suite, not the application |
 | [/version reports old counts after an import](version-counts-are-stale-after-an-import.md) | No | 1.9.0-alpha, the only version measured |
 | [Applying an import batch answers 200, but nothing was imported](applying-a-batch-that-does-not-exist-answers-200.md) | No | 1.9.0-alpha, the only version measured |
+| [A quote's date is missing after an import that reported success](a-quote-date-is-lost-when-its-source-is-declared-without-one.md) | No | 1.9.0-alpha, the only version measured |
