@@ -4,6 +4,8 @@
 **Environment:** Fresh
 **Deterministic:** no
 **Traces to:** #424
+**Fully green after:** #462: step 2 depends on GitHub answering until this document is rewritten against a
+source server under this project's control; it reads as a failure whenever GitHub does not answer.
 
 ## Preconditions
 

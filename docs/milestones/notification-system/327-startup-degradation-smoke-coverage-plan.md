@@ -708,6 +708,11 @@ removed, so its step 2 now counts by type. `03` has no canary reading, and neith
 against a pre-fix build after this conversion; `07`'s earlier reading against `29b55805` was of the removed
 log assertions, so it was dropped rather than carried forward.
 
+**`07` still depends on GitHub, which is #462's to remove.** Its step 2 fails whenever GitHub does not answer,
+so a red reading there is not by itself a defect in the application. Its header says so with a
+`Fully green after: #462` line. **#462 does not block this issue or the milestone:** no application behaviour
+depends on it, and this issue closes with `07` still carrying that line.
+
 **First attempt, 2026-10-24, discarded.** All 67 documents were run by extracting their PowerShell
 blocks into one script per document with a scratch runner outside the repository, not by following
 their steps. That breaks ADR 010 and repeatability, skipped every browser step, ignored each step's
