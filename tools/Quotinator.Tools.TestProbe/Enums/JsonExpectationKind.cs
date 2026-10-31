@@ -17,4 +17,13 @@ internal enum JsonExpectationKind
 
     /// <summary>The field is a number greater than the expected number (<c>--greater-than</c>).</summary>
     GreaterThan,
+
+    /// <summary>The field's value is exactly another field's value (<c>--equals-field</c>).</summary>
+    EqualToField,
+
+    /// <summary>The field is an array with as many elements as another field's number (<c>--length-equals-field</c>).</summary>
+    LengthEqualToField,
+
+    /// <summary>The field is an array with exactly the expected number of elements (<c>--length-equals</c>).</summary>
+    LengthEquals,
 }

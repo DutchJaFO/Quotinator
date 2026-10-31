@@ -57,6 +57,9 @@ uses, since a pipe is shell logic.
 | `--present <path>` | the field exists |
 | `--not-empty <path>` | the field exists and is not `null`, an empty string or an empty array |
 | `--greater-than <path>=<number>` | the field is a number greater than `<number>` (a seeded count above `0`) |
+| `--equals-field <path>=<other path>` | the field's value is exactly the other field's value, for a contract that relates two fields of one response |
+| `--length-equals-field <path>=<other path>` | the field is an array with as many elements as the other field's number |
+| `--length-equals <path>=<number>` | the field is an array with exactly `<number>` elements |
 | `--equals-xml <path>=<file>#<element>` | the field's value is exactly the text of the first `<element>` in the XML file, read now, so a value the repository owns is not copied into a document (`version=Directory.Build.props#Version`) |
 
 Every option is repeatable. A `<path>` is segments joined by dots: a property name, or a zero-based index

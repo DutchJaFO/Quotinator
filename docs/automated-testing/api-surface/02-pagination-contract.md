@@ -10,62 +10,39 @@
 `/quotes`, `/admin/audit` and `/import/actions` share one pagination contract, and this proves it
 holds live on all three rather than at the stub level.
 
-**`/admin/audit` and `/import/actions` must have rows before the assertions below mean anything**: two
-of them invert on an empty table, see Determinism.
-
-The container half of that is the Fresh profile's job. The rows are not: the profile's own first boot
-is what would populate both tables: the bundled seed writes `Audit_Entry` rows, and stages
-`Import_Action` rows per bundled batch.
-
-**The `Import_Action` half needs one delta beyond the profile:**
-`Quotinator__AutoPurgeBundledImportActions=false`, declared in step 1.
-
-Fresh pins that setting to the application's own default, `true`, which removes the bundled batches'
-`Import_Action` rows immediately after a successful seed. Without the delta this test's
-`/import/actions` assertions run against an empty table and invert: page 1 of nothing is not beyond
-the last page, so the `422` becomes a `200`, and the default page size arrives by defaulting-through
-rather than by being applied.
-
-**Measured both ways during #339's full run**, which is what settled it. Under the profile default,
-`pageSize=0` returned `pageSize 0` with `totalCount 0` and page-beyond-last returned `200`. With the
-delta: 1425 rows, `pageSize=0` returned `pageSize 1425` equal to `totalCount`, the default read `20`,
-and page-beyond-last returned `422`. The endpoint was correct throughout; only the table was empty.
-
-This document previously flagged the choice as unresolved and offered two ways out: declare the delta,
-or drop the `/import/actions` assertions and confine the contract check to the other two endpoints.
-The delta is chosen, because the alternative removes live coverage of one of the three endpoints whose
-shared contract is the entire subject. `database-lifecycle/02` already runs one container on the
-default and a second on `false` for the same reason.
+The rows are the test's own: step 2 imports [25 quotes](fixtures/pagination-quotes.json) through
+`POST /api/v1/import`, so a broken import blocks this document. That is the index's second honest
+resolution for a precondition, and it is named here so a blocked run reads as that.
 
 ## Determinism
 
-- **Row counts are non-zero** in `Audit_Entry` and `Import_Action` before starting. On a table with
-  zero rows, page 1 of nothing is not "beyond the last page", so the 422 assertion inverts to a 200
-  and the test reports a false failure. `PaginationParsingTests.ValidatePageBeyondLast_ZeroTotalPages_ReturnsNull`
-  is the unit-level statement of the same behaviour.
-- **The default-page-size assertion needs populated tables too**: an empty table would return the
-  default without proving it was applied rather than defaulted-through.
-- Admin key present for the `/admin/audit` calls.
+- **All three tables must hold more rows than one default page before anything is asserted.** On an
+  empty table, page 1 of nothing is not "beyond the last page", so the `422` assertion inverts to a `200`
+  and the test reports a false failure, and the default page size arrives without having limited anything.
+  `PaginationParsingTests.ValidatePageBeyondLast_ZeroTotalPages_ReturnsNull` is the unit-level statement of
+  the same behaviour. Step 3 asserts it for each table before reading anything else from it.
+- **The fixture is what fills `/import/actions`.** The Fresh profile purges the bundled batches' actions after
+  the seed, so this document needs no setting of its own, and the rows it reads there are its import's.
+- **The import adds only a few rows to `/admin/audit`.** What takes that table past one page is the first boot
+  itself, so step 3 is where a smaller first boot would show: as that precondition failing, not as a pagination
+  defect. Nothing here depends on how many rows there are beyond that.
+- **Every assertion relates a response to itself**, or to the fixed limits of the contract. No count of
+  bundled quotes appears anywhere, so a change to a source cannot fail this document.
+- The admin key `http.csx` sends is what the `/admin/audit` calls need.
 
 ## Explicitly not covered here
 
 `page`/`pageSize` publishing as `integer` rather than `string` on the live spec is **not** part of
-this test. It was originally a text-matching check on the published spec here, and the first version of
-that command was wrong: it assumed single-line JSON and never matched anything. Matching a
-pretty-printed multi-line body for a nested field is fragile and its pass/fail needs a human to eyeball
-the output.
-
-It is now `OpenApiSpecEndpointTests`, a `WebApplicationFactory` test that fetches the real
-`/openapi/v1.json` through the full pipeline and asserts the type via `JsonDocument`, so it runs
-deterministically in every `dotnet test` instead of requiring a live container.
+this test. `OpenApiSpecEndpointTests`, a `WebApplicationFactory` test, fetches the real `/openapi/v1.json`
+through the full pipeline and asserts the type, so it runs deterministically in every `dotnet test`.
 
 ## Steps
 
 ### 1. Create this test's own environment
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-api-02 --port 18102 `
-  --env Quotinator__AutoPurgeBundledImportActions=false
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete .claude/temp/qt-api-02-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-api-02 --port 18102 --image quotinator:local
 ```
 
 **Expected:** the app reports healthy, so the bundled seed has finished.
@@ -73,106 +50,123 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-api-02 --port 181
 **On failure:** every step below reads this container. Stop rather than running them against an app
 that never became healthy.
 
-### 1b. Confirm all three tables have rows before asserting anything
+### 2. Import this test's own quotes
 
-Two of the assertions below invert on an empty table, so this is a precondition rather than preamble:
-
-```powershell
-$key  = @{'X-Api-Key' = 'smoketest'}
-$base = "http://localhost:18102/api/v1"
-$endpoints = @{
-  quotes  = "$base/quotes"
-  audit   = "$base/admin/audit"
-  actions = "$base/import/actions"
-}
-foreach ($name in $endpoints.Keys) {
-  "$name totalCount = $((Invoke-RestMethod "$($endpoints[$name])?pageSize=1" -Headers $key).totalCount)"
-}
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18102/api/v1/import --method POST --file docs/automated-testing/api-surface/fixtures/pagination-quotes.json --expect 200 --status --body-out .claude/temp/qt-api-02-out/import.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-api-02-out/import.json --equals summary.imported=25 --equals summary.errors=0
 ```
 
-**Expected:** all three report a non-zero `totalCount`.
+**Expected:** all 25 quotes are imported, with no errors.
 
-**On failure:** a zero from `actions` means step 1's auto-purge delta did not take effect, and
-every `/import/actions` assertion below then reports a false failure that looks exactly like a
-pagination defect. Stop and re-create the container with the delta rather than recording the result.
+**On failure:** stop. `/import/actions` has no rows without this import.
 
-### 2. Request every row with `pageSize=0`
+### 3. Omit `pageSize` and read the applied default
 
-```powershell
-foreach ($name in $endpoints.Keys) {
-  $all = Invoke-RestMethod "$($endpoints[$name])?pageSize=0" -Headers $key
-  "$name items=$($all.items.Count) pageSize=$($all.pageSize) totalCount=$($all.totalCount)"
-}
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18102/api/v1/quotes --expect 200 --status --body-out .claude/temp/qt-api-02-out/quotes-default.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-api-02-out/quotes-default.json --greater-than totalCount=20 --equals pageSize=20 --length-equals items=20
+dotnet script scripts/testing/http.csx -- --url http://localhost:18102/api/v1/admin/audit --expect 200 --status --body-out .claude/temp/qt-api-02-out/audit-default.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-api-02-out/audit-default.json --greater-than totalCount=20 --equals pageSize=20 --length-equals items=20
+dotnet script scripts/testing/http.csx -- --url http://localhost:18102/api/v1/import/actions --expect 200 --status --body-out .claude/temp/qt-api-02-out/actions-default.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-api-02-out/actions-default.json --greater-than totalCount=20 --equals pageSize=20 --length-equals items=20
 ```
 
-**Expected:** on all three, `items` contains every row (not zero), and `pageSize` in the response
-equals `totalCount`. That is the effective-size contract, not the literal `0` requested.
+**Expected:** on all three, more rows exist than one page holds, the response reports `20`, and `items` holds
+exactly `20`. That is the default being applied rather than a table happening to be short.
 
-### 3. Request a page size above the maximum
+**On failure:** a `totalCount` of `20` or less is the precondition failing, not the contract: every later
+step would read a table too short to mean anything. Stop and report that.
 
-```powershell
-foreach ($name in $endpoints.Keys) {
-  dotnet script scripts/testing/http.csx -- --url "$($endpoints[$name])?pageSize=501" --expect 422 --status
-}
+### 4. Request every row with `pageSize=0`
+
+```
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/quotes?pageSize=0" --expect 200 --status --body-out .claude/temp/qt-api-02-out/quotes-all.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-api-02-out/quotes-all.json --greater-than totalCount=20 --equals-field pageSize=totalCount --length-equals-field items=totalCount
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/admin/audit?pageSize=0" --expect 200 --status --body-out .claude/temp/qt-api-02-out/audit-all.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-api-02-out/audit-all.json --greater-than totalCount=20 --equals-field pageSize=totalCount --length-equals-field items=totalCount
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/import/actions?pageSize=0" --expect 200 --status --body-out .claude/temp/qt-api-02-out/actions-all.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-api-02-out/actions-all.json --greater-than totalCount=20 --equals-field pageSize=totalCount --length-equals-field items=totalCount
 ```
 
-**Expected:** all three return `422`. Above 500 is rejected, never silently clamped, and `--expect`
-makes a `200` here end the step rather than being read past.
+**Expected:** on all three, `items` holds every row, and `pageSize` in the response equals `totalCount`. That is
+the effective-size contract, not the literal `0` requested.
 
-### 4. Omit `pageSize` and read the applied default
+### 5. Request a page size above the maximum
 
-```powershell
-foreach ($name in @('audit', 'actions')) {
-  "$name pageSize = $((Invoke-RestMethod $endpoints[$name] -Headers $key).pageSize)"
-}
+```
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/quotes?pageSize=501" --expect 422 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/admin/audit?pageSize=501" --expect 422 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/import/actions?pageSize=501" --expect 422 --status
 ```
 
-**Expected:** both responses report `20`, not the endpoints' old default of `50`.
+**Expected:** all three return `422`. Above 500 is rejected, never silently clamped.
 
-**On failure:** a `20` read off an empty table proves nothing: it is the default arriving by
-default-through rather than by application, per Determinism. Confirm both tables have rows before
-recording this either way.
+### 6. Request a page beyond the last
 
-### 5. Request a page beyond the last
-
-```powershell
-dotnet script scripts/testing/http.csx -- --url "$base/quotes?pageSize=500&page=99" --expect 422 --status
-dotnet script scripts/testing/http.csx -- --url "$base/admin/audit?pageSize=1&page=999999" --expect 422 --status
-dotnet script scripts/testing/http.csx -- --url "$base/import/actions?pageSize=1&page=999999" --expect 422 --status
+```
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/quotes?pageSize=1&page=999999" --expect 422 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/admin/audit?pageSize=1&page=999999" --expect 422 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/import/actions?pageSize=1&page=999999" --expect 422 --status
 ```
 
-**Expected:** all three return `422`.
+**Expected:** all three return `422`, each from a table step 3 showed holds rows.
 
-**On failure:** a `200` here inverts on an empty table rather than indicating a pagination defect:
-page 1 of nothing is not beyond the last page. Confirm the table has rows before reading this as a
-failure of the contract.
+### 7. Nothing unexpected was thrown
+
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-02 --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18102/api/v1/import --file docs/automated-testing/startup-and-degradation/fixtures/malformed-import.json --duplicate-resolution review --expect 422 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-02 --pattern "thrown: JsonReaderException" --at-least 1
+```
+
+**Expected:** no exception has been logged by anything so far, the rejected requests above included. The
+malformed upload then answers `422` and its `JsonReaderException` is logged, which is the positive control:
+the same channel that read zero can see an exception, so the zero means something.
+
+**The count comes first**, because the upload throws more than the type its control names.
+
+**On failure:** a count above zero is an issue, unless a Knowledgebase entry says otherwise. Report it with the
+line that names it.
 
 ## Observed effect
 
-Not yet established as a captured record. What this test exists to catch is documented, though: both
-the audit and import readers were found passing `pageSize=0` straight into `LIMIT @pageSize` rather
-than translating it to `LIMIT -1`, during #195's own T2 pass. No unit test could have caught it: the
-stub readers those tests use echo their input back instead of exercising real SQL.
+**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
+
+| Request | `/quotes` | `/admin/audit` | `/import/actions` |
+|---|---|---|---|
+| No `pageSize` | `200`, `pageSize=20`, 20 items of 820 | `200`, `pageSize=20`, 20 items of 42 | `200`, `pageSize=20`, 20 items of 26 |
+| `pageSize=0` | `200`, `pageSize=820`, 820 items | `200`, `pageSize=42`, 42 items | `200`, `pageSize=26`, 26 items |
+| `pageSize=501` | `422` | `422` | `422` |
+| `pageSize=1&page=999999` | `422` | `422` | `422` |
+
+The 26 actions are the fixture's 25 quotes and the one source they share; the table read `0` before the import.
+The audit table read `40` before the import, so the import itself added 2. These totals are this run's reading,
+not expectations: only the fixture's import count and the relations above are asserted.
+
+**No exception was logged before the malformed upload**, the six rejected requests included. That upload's
+`JsonReaderException` was then logged once.
 
 ## Canary
 
 Build the commit before [#195](https://github.com/DutchJaFO/Quotinator/issues/195)'s first code
-change, under a distinct tag, and run steps 1 to 5 against it.
+change, under a distinct tag, and run steps 1 to 6 against it.
 
-Step 4 must read `50`, the default #195 replaced, which this document's own expectation already names.
-Step 2 is the other half: `CLAUDE.md`'s *Standard pagination contract* records #195's own pass finding
-`SystemAuditReader` and `SystemImportActionReader` translating `pageSize=0` into a literal `LIMIT 0`,
-so that build must return zero rows where this one returns every row. Confirm which of the two readers
-shows it rather than assuming both do.
+Step 3 must read `50` on `/admin/audit` and `/import/actions`, the default #195 replaced. Step 4 is the other
+half: `CLAUDE.md`'s *Standard pagination contract* records #195's own pass finding `SystemAuditReader` and
+`SystemImportActionReader` translating `pageSize=0` into a literal `LIMIT 0`, so that build must return zero
+rows where this one returns every row. Confirm which of the two readers shows it rather than assuming both do.
 
-Steps 1 and 3 are expected to pass there. A non-zero total and a rejected oversized page size both
-predate #195, so they are the control that keeps step 4's reading attributable to the default rather
-than to a broken container.
+Step 5 is expected to pass there. A rejected oversized page size predates #195, so it is the control that keeps
+step 3's reading attributable to the default rather than to a broken container.
 
 Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-02
 ```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-02
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete .claude/temp/qt-api-02-out
+```
+
+**Expected:** the container, its volume and the output directory are gone.

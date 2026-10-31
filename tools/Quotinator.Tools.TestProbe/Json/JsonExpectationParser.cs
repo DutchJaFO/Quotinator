@@ -16,12 +16,16 @@ internal static class JsonExpectationParser
         ["--present"] = JsonExpectationKind.Present,
         ["--not-empty"] = JsonExpectationKind.NotEmpty,
         ["--greater-than"] = JsonExpectationKind.GreaterThan,
+        ["--equals-field"] = JsonExpectationKind.EqualToField,
+        ["--length-equals-field"] = JsonExpectationKind.LengthEqualToField,
+        ["--length-equals"] = JsonExpectationKind.LengthEquals,
     };
 
     /// <summary>
     /// The expectations named by <c>--equals</c>, <c>--contains</c>, <c>--present</c>,
-    /// <c>--not-empty</c>, <c>--greater-than</c> and <c>--equals-xml</c>, in no particular order, and one
-    /// error per option that could not be read. <c>--equals-xml</c> becomes an equality expectation on the
+    /// <c>--not-empty</c>, <c>--greater-than</c>, <c>--equals-field</c>, <c>--length-equals-field</c>,
+    /// <c>--length-equals</c> and <c>--equals-xml</c>, in no particular order, and one error per option
+    /// that could not be read. <c>--equals-xml</c> becomes an equality expectation on the
     /// text the named file holds now, so a value the repository owns is never copied into a document.
     /// </summary>
     /// <param name="args">The command's arguments, without the command name.</param>
@@ -80,7 +84,7 @@ internal static class JsonExpectationParser
                 value = expected;
             }
 
-            if (kind == JsonExpectationKind.GreaterThan && !decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
+            if (kind is JsonExpectationKind.GreaterThan or JsonExpectationKind.LengthEquals && !decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
             {
                 problems.Add($"{option} needs a number after '=', got '{value}'");
                 continue;

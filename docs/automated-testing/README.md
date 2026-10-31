@@ -1097,7 +1097,7 @@ an entry needs; a happy-path-only test has nothing to contribute.
 
 ## Observed effects awaiting measurement
 
-**46 of 81 documents describe their effect without having measured it.** Each row below names the
+**45 of 81 documents describe their effect without having measured it.** Each row below names the
 quantity its next run must read, so the measurement is a specific act rather than a vague intention to
 look. A document leaves this list by recording `**Measured <date>**` in its own section, and
 `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails if it does so while its row is still
@@ -1108,7 +1108,6 @@ asserts what it should; what is missing is a reading an entry can quote.
 
 | Document | What its next run must measure |
 |---|---|
-| [api-surface/02-pagination-contract.md](api-surface/02-pagination-contract.md) | The `totalCount` each of the three endpoints reports on a fresh seed, and the row count `pageSize=0` returns |
 | [api-surface/03-unicode-aware-search-toggle.md](api-surface/03-unicode-aware-search-toggle.md) | The `matching` figure each of the two containers returns for the same accented query |
 | [api-surface/04-endpoint-naming-and-operation-ids.md](api-surface/04-endpoint-naming-and-operation-ids.md) | The operation count in the published spec, and the `[Api - GetQuoteById]` line as emitted |
 | [api-surface/05-a-thrown-exception-is-logged.md](api-surface/05-a-thrown-exception-is-logged.md) | The `ERR` line the rejected upload writes, with its exception id |

@@ -41,9 +41,9 @@ internal static class JsonExpectationEvaluator
             foreach (JsonExpectation expectation in expectations)
             {
                 bool found = JsonPathReader.TryRead(document.RootElement, expectation.Path, out JsonElement value);
-                observations.Add(found ? $"{expectation.Path} = {JsonPathReader.Render(value)}" : $"{expectation.Path} is absent");
+                observations.Add(found ? Observe(expectation, value) : $"{expectation.Path} is absent");
 
-                string? failure = Check(expectation, found, value);
+                string? failure = Check(document.RootElement, expectation, found, value);
 
                 if (failure is not null)
                 {
@@ -55,7 +55,7 @@ internal static class JsonExpectationEvaluator
         }
     }
 
-    private static string? Check(JsonExpectation expectation, bool found, JsonElement value)
+    private static string? Check(JsonElement root, JsonExpectation expectation, bool found, JsonElement value)
     {
         if (!found)
         {
@@ -69,11 +69,25 @@ internal static class JsonExpectationEvaluator
             JsonExpectationKind.Present => true,
             JsonExpectationKind.NotEmpty => IsNotEmpty(value),
             JsonExpectationKind.GreaterThan => IsGreaterThan(value, expectation.Value),
+            JsonExpectationKind.EqualToField => ReadOther(root, expectation) == JsonPathReader.Render(value),
+            JsonExpectationKind.LengthEqualToField => LengthText(value) == ReadOther(root, expectation),
+            JsonExpectationKind.LengthEquals => LengthText(value) == expectation.Value,
             _ => false,
         };
 
-        return holds ? null : $"{expectation.Path}: expected {Describe(expectation)}, got {JsonPathReader.Render(value)}";
+        return holds ? null : $"{expectation.Path}: expected {Describe(expectation)}, got: {Observe(expectation, value)}";
     }
+
+    private static string Observe(JsonExpectation expectation, JsonElement value)
+        => expectation.Kind is JsonExpectationKind.LengthEqualToField or JsonExpectationKind.LengthEquals && LengthText(value) is string length
+            ? $"{expectation.Path} has {length} elements"
+            : $"{expectation.Path} = {JsonPathReader.Render(value)}";
+
+    private static string? ReadOther(JsonElement root, JsonExpectation expectation)
+        => JsonPathReader.TryRead(root, expectation.Value ?? string.Empty, out JsonElement other) ? JsonPathReader.Render(other) : null;
+
+    private static string? LengthText(JsonElement value)
+        => value.ValueKind == JsonValueKind.Array ? value.GetArrayLength().ToString(CultureInfo.InvariantCulture) : null;
 
     private static bool Contains(JsonElement value, string text) => value.ValueKind switch
     {
@@ -101,6 +115,9 @@ internal static class JsonExpectationEvaluator
         JsonExpectationKind.GreaterThan => $"a number greater than {expectation.Value}",
         JsonExpectationKind.Contains => $"to contain '{expectation.Value}'",
         JsonExpectationKind.Present => "to be present",
+        JsonExpectationKind.EqualToField => $"the value of {expectation.Value}",
+        JsonExpectationKind.LengthEqualToField => $"an array as long as the value of {expectation.Value}",
+        JsonExpectationKind.LengthEquals => $"an array of {expectation.Value} elements",
         _ => "to be not empty",
     };
 }

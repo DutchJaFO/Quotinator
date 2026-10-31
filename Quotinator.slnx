@@ -421,6 +421,7 @@
   </Folder>
   <Folder Name="/docs/automated-testing/api-surface/fixtures/">
     <File Path="docs/automated-testing/api-surface/fixtures/baseline-quotes.json" />
+    <File Path="docs/automated-testing/api-surface/fixtures/pagination-quotes.json" />
   </Folder>
   <Folder Name="/docs/automated-testing/startup-and-degradation/fixtures/">
     <File Path="docs/automated-testing/startup-and-degradation/fixtures/malformed-import.json" />

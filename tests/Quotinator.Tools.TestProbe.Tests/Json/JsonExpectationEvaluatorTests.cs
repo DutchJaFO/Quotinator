@@ -8,6 +8,7 @@ namespace Quotinator.Tools.TestProbe.Tests.Json;
 public sealed class JsonExpectationEvaluatorTests
 {
     private const string Health = """{"status":"unhealthy","reason":"locked","empty":"","list":["one","two"],"none":[],"nothing":null,"count":3}""";
+    private const string Page = """{"items":["a","b"],"pageSize":2,"totalCount":2,"other":5}""";
 
     [TestMethod]
     public void EqualTo_MatchingValue_Holds()
@@ -28,6 +29,54 @@ public sealed class JsonExpectationEvaluatorTests
     [TestMethod]
     public void EqualTo_MissingField_Fails()
         => Assert.IsFalse(Evaluate(JsonExpectationKind.EqualTo, "absent", "x").Holds);
+
+    [TestMethod]
+    public void EqualToField_SameValues_Holds()
+        => Assert.IsTrue(JsonExpectationEvaluator.Evaluate(Page, [new JsonExpectation(JsonExpectationKind.EqualToField, "pageSize", "totalCount")]).Holds);
+
+    [TestMethod]
+    public void EqualToField_DifferentValues_Fails()
+        => Assert.IsFalse(JsonExpectationEvaluator.Evaluate(Page, [new JsonExpectation(JsonExpectationKind.EqualToField, "pageSize", "other")]).Holds);
+
+    [TestMethod]
+    public void EqualToField_OtherFieldMissing_Fails()
+        => Assert.IsFalse(JsonExpectationEvaluator.Evaluate(Page, [new JsonExpectation(JsonExpectationKind.EqualToField, "pageSize", "absent")]).Holds);
+
+    [TestMethod]
+    public void LengthEqualToField_ArrayAsLongAsTheField_Holds()
+        => Assert.IsTrue(JsonExpectationEvaluator.Evaluate(Page, [new JsonExpectation(JsonExpectationKind.LengthEqualToField, "items", "totalCount")]).Holds);
+
+    [TestMethod]
+    public void LengthEqualToField_ArrayOfAnotherLength_Fails()
+        => Assert.IsFalse(JsonExpectationEvaluator.Evaluate(Page, [new JsonExpectation(JsonExpectationKind.LengthEqualToField, "items", "other")]).Holds);
+
+    [TestMethod]
+    public void LengthEqualToField_NotAnArray_Fails()
+        => Assert.IsFalse(JsonExpectationEvaluator.Evaluate(Page, [new JsonExpectation(JsonExpectationKind.LengthEqualToField, "pageSize", "totalCount")]).Holds);
+
+    [TestMethod]
+    public void LengthEquals_ArrayOfThatLength_Holds()
+        => Assert.IsTrue(JsonExpectationEvaluator.Evaluate(Page, [new JsonExpectation(JsonExpectationKind.LengthEquals, "items", "2")]).Holds);
+
+    [TestMethod]
+    public void LengthEquals_ObservesTheLengthRatherThanTheArray()
+    {
+        ExpectationResult result = JsonExpectationEvaluator.Evaluate(Page, [new JsonExpectation(JsonExpectationKind.LengthEquals, "items", "2")]);
+
+        Assert.AreEqual("items has 2 elements", result.Observations[0]);
+    }
+
+    [TestMethod]
+    public void LengthEqualToField_ObservesTheLengthRatherThanTheArray()
+    {
+        ExpectationResult result = JsonExpectationEvaluator.Evaluate(Page, [new JsonExpectation(JsonExpectationKind.LengthEqualToField, "items", "totalCount")]);
+
+        Assert.AreEqual("items has 2 elements", result.Observations[0]);
+    }
+
+    [TestMethod]
+    public void LengthEquals_ArrayOfAnotherLength_Fails()
+        => Assert.IsFalse(JsonExpectationEvaluator.Evaluate(Page, [new JsonExpectation(JsonExpectationKind.LengthEquals, "items", "3")]).Holds);
 
     [TestMethod]
     public void Contains_StringContainingText_Holds()

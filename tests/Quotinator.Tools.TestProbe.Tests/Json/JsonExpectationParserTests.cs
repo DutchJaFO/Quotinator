@@ -23,6 +23,30 @@ public sealed class JsonExpectationParserTests
     }
 
     [TestMethod]
+    public void Parse_EqualsField_ReadsBothPaths()
+    {
+        IReadOnlyList<JsonExpectation> parsed = JsonExpectationParser.Parse(["--equals-field", "pageSize=totalCount"], out _);
+
+        Assert.AreEqual(new JsonExpectation(JsonExpectationKind.EqualToField, "pageSize", "totalCount"), parsed[0]);
+    }
+
+    [TestMethod]
+    public void Parse_LengthEqualsField_ReadsBothPaths()
+    {
+        IReadOnlyList<JsonExpectation> parsed = JsonExpectationParser.Parse(["--length-equals-field", "items=totalCount"], out _);
+
+        Assert.AreEqual(new JsonExpectation(JsonExpectationKind.LengthEqualToField, "items", "totalCount"), parsed[0]);
+    }
+
+    [TestMethod]
+    public void Parse_LengthEquals_ReadsPathAndLength()
+    {
+        IReadOnlyList<JsonExpectation> parsed = JsonExpectationParser.Parse(["--length-equals", "items=20"], out _);
+
+        Assert.AreEqual(new JsonExpectation(JsonExpectationKind.LengthEquals, "items", "20"), parsed[0]);
+    }
+
+    [TestMethod]
     public void Parse_Present_ReadsPathWithoutValue()
     {
         IReadOnlyList<JsonExpectation> parsed = JsonExpectationParser.Parse(["--present", "reason"], out _);
