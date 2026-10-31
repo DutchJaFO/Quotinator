@@ -88,10 +88,70 @@ public sealed class JsonExpectationParserTests
     }
 
     [TestMethod]
+    public void Parse_EqualsXml_ExpectsTheElementsTextFromTheFile()
+    {
+        string file = WriteTempFile("<Project><PropertyGroup><Version>1.2.3-alpha</Version></PropertyGroup></Project>");
+
+        try
+        {
+            IReadOnlyList<JsonExpectation> parsed = JsonExpectationParser.Parse(["--equals-xml", $"version={file}#Version"], out _);
+
+            Assert.AreEqual(new JsonExpectation(JsonExpectationKind.EqualTo, "version", "1.2.3-alpha"), parsed[0]);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [TestMethod]
+    public void Parse_EqualsXmlWithAnElementTheFileDoesNotHave_IsAnError()
+    {
+        string file = WriteTempFile("<Project />");
+
+        try
+        {
+            _ = JsonExpectationParser.Parse(["--equals-xml", $"version={file}#Version"], out IReadOnlyList<string> errors);
+
+            Assert.HasCount(1, errors);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [TestMethod]
+    public void Parse_EqualsXmlWithAMissingFile_IsAnError()
+    {
+        string file = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xml");
+
+        _ = JsonExpectationParser.Parse(["--equals-xml", $"version={file}#Version"], out IReadOnlyList<string> errors);
+
+        Assert.HasCount(1, errors);
+    }
+
+    [TestMethod]
+    public void Parse_EqualsXmlWithoutAnElementName_IsAnError()
+    {
+        _ = JsonExpectationParser.Parse(["--equals-xml", "version=Directory.Build.props"], out IReadOnlyList<string> errors);
+
+        Assert.HasCount(1, errors);
+    }
+
+    [TestMethod]
     public void Parse_WellFormedOptions_HaveNoErrors()
     {
         _ = JsonExpectationParser.Parse(["--equals", "status=x", "--present", "reason"], out IReadOnlyList<string> errors);
 
         Assert.IsEmpty(errors);
+    }
+
+    private static string WriteTempFile(string content)
+    {
+        string file = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xml");
+        File.WriteAllText(file, content);
+
+        return file;
     }
 }

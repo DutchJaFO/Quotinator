@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 namespace Quotinator.Tools.TestProbe.Json;
@@ -6,8 +7,8 @@ namespace Quotinator.Tools.TestProbe.Json;
 internal static class JsonPathReader
 {
     /// <summary>
-    /// Resolves <paramref name="path"/>, property names joined by dots, from <paramref name="root"/>.
-    /// Property names are matched exactly as written.
+    /// Resolves <paramref name="path"/>, segments joined by dots, from <paramref name="root"/>. A segment
+    /// is a property name, matched exactly as written, or a zero-based index when the element is an array.
     /// </summary>
     /// <param name="root">The document's root element.</param>
     /// <param name="path">The dotted path.</param>
@@ -16,9 +17,9 @@ internal static class JsonPathReader
     {
         value = root;
 
-        foreach (string name in path.Split('.'))
+        foreach (string segment in path.Split('.'))
         {
-            if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(name, out JsonElement next))
+            if (!TryReadSegment(value, segment, out JsonElement next))
             {
                 value = default;
                 return false;
@@ -27,6 +28,26 @@ internal static class JsonPathReader
             value = next;
         }
 
+        return true;
+    }
+
+    private static bool TryReadSegment(JsonElement element, string segment, out JsonElement next)
+    {
+        next = default;
+
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            return element.TryGetProperty(segment, out next);
+        }
+
+        if (element.ValueKind != JsonValueKind.Array
+            || !int.TryParse(segment, NumberStyles.None, CultureInfo.InvariantCulture, out int index)
+            || index >= element.GetArrayLength())
+        {
+            return false;
+        }
+
+        next = element[index];
         return true;
     }
 

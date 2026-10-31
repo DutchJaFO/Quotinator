@@ -49,6 +49,42 @@ public sealed class JsonPathReaderTests
     }
 
     [TestMethod]
+    public void TryRead_ArrayIndex_ReturnsThatElementsField()
+    {
+        using JsonDocument document = JsonDocument.Parse("""{"items":[{"quote":"first"},{"quote":"second"}]}""");
+
+        JsonPathReader.TryRead(document.RootElement, "items.1.quote", out JsonElement value);
+
+        Assert.AreEqual("second", value.GetString());
+    }
+
+    [TestMethod]
+    public void TryRead_ArrayIndexPastTheEnd_IsNotFound()
+    {
+        using JsonDocument document = JsonDocument.Parse("""{"items":[{"quote":"first"}]}""");
+
+        Assert.IsFalse(JsonPathReader.TryRead(document.RootElement, "items.1.quote", out _));
+    }
+
+    [TestMethod]
+    public void TryRead_NamedSegmentOnAnArray_IsNotFound()
+    {
+        using JsonDocument document = JsonDocument.Parse("""{"items":[{"quote":"first"}]}""");
+
+        Assert.IsFalse(JsonPathReader.TryRead(document.RootElement, "items.quote", out _));
+    }
+
+    [TestMethod]
+    public void TryRead_NumericPropertyNameOnAnObject_IsFound()
+    {
+        using JsonDocument document = JsonDocument.Parse("""{"counts":{"0":"zero"}}""");
+
+        JsonPathReader.TryRead(document.RootElement, "counts.0", out JsonElement value);
+
+        Assert.AreEqual("zero", value.GetString());
+    }
+
+    [TestMethod]
     public void Render_String_IsUnquoted()
     {
         using JsonDocument document = JsonDocument.Parse("\"text\"");

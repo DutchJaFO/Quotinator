@@ -419,6 +419,9 @@
     <File Path="docs/automated-testing/startup-and-degradation/12-a-migration-refused-for-want-of-a-backup-degrades-instead-of-crashing.md" />
     <File Path="docs/automated-testing/startup-and-degradation/13-a-keys-directory-that-cannot-be-written-degrades-instead-of-crashing.md" />
   </Folder>
+  <Folder Name="/docs/automated-testing/api-surface/fixtures/">
+    <File Path="docs/automated-testing/api-surface/fixtures/baseline-quotes.json" />
+  </Folder>
   <Folder Name="/docs/automated-testing/startup-and-degradation/fixtures/">
     <File Path="docs/automated-testing/startup-and-degradation/fixtures/malformed-import.json" />
     <File Path="docs/automated-testing/startup-and-degradation/fixtures/sentinel-quote.json" />

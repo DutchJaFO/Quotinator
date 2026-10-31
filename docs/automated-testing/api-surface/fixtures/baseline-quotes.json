@@ -1,0 +1,26 @@
+{
+  "quotes": [
+    {
+      "id": "7c1e4a90-3f5b-4d27-9a18-6be02d7f1a01",
+      "quote": "Test quote owned by the baseline document, which mentions Xyzzyauthor only in its text.",
+      "originalLanguage": "en",
+      "source": "Xyzzysource Harbour",
+      "date": "2026",
+      "character": "Xyzzycharacter",
+      "type": "movie",
+      "genres": ["drama"],
+      "translations": {}
+    },
+    {
+      "id": "7c1e4a90-3f5b-4d27-9a18-6be02d7f1a02",
+      "quote": "Test quote owned by the baseline document, which mentions Xyzzysource and Xyzzycharacter only in its text.",
+      "originalLanguage": "en",
+      "source": "Quotinator Baseline Speech",
+      "date": "2026",
+      "author": "Xyzzyauthor",
+      "type": "person",
+      "genres": ["non-fiction"],
+      "translations": {}
+    }
+  ]
+}
