@@ -77,14 +77,20 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http:/
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-04-out\health.json --equals status=healthy
 dotnet script scripts/testing/http.csx -- --url http://localhost:18404/api/v1/quotes/5e7a1c3d-9b2f-4e6a-8d0c-b1f2a3e4c5d6 --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-04-out\sentinel-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-04-out\sentinel-after.json --equals source="Quotinator Test Harness"
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-04 --pattern "migration applied" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-04 --pattern "SqliteException|SQLite Error" --exactly 0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18404/api/v1/notifications?pageSize=0 --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-04-out\notifications.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-04-out\notifications.json --contains items=migrationapplied
 ```
 
 **Expected:** every TestProbe command exits `0`. `/health` reports `healthy`; the sentinel from step 1
-is still there, because migration replay must not lose content the test owns; at least one migration
-was applied; and no SQLite error was logged. The fix means the migration's temp files never touch disk
-at all, so restricting every other writable path does not matter.
+is still there, because migration replay must not lose content the test owns; and the notifications
+list holds a notification of kind `migrationapplied`, which the application writes for each migration
+it applies, so replay ran rather than being skipped. The fix means the migration's temp files never
+touch disk at all, so restricting every other writable path does not matter.
+
+**Nothing here reads a log line's wording, or asserts that no error was logged.** That replay
+succeeded is shown by `healthy` and the notification, both responses; a failed migration answers
+`503`. An empty error log would prove nothing on its own: a log without exceptions is not proof there
+were none, and this step has no defect of its own to show the channel working.
 
 **Nothing here counts quotes.** Migration009 (#374) deliberately deletes repeated quotes under one
 Source, so a count of the bundled content moves with whatever duplicates the predecessor's sources held,
@@ -97,14 +103,11 @@ the failure ever run.
 
 ## Observed effect
 
-**Measured 2026-08-11** for the failing case, which is unusual and useful. Reverting the fix reproduces
-a real `SqliteException`, `SQLite Error 10: 'disk I/O error'`, plus the degraded `/health` →
-`503 {"status":"unhealthy"}` and `/version` → `schemaVersion: 0, quotes: 0` outcome the original
-incident showed.
+**Measured 2026-10-27** against `quotinator:local` built from `00a9dfe2`, upgrading a `1.8.2` volume
+holding the sentinel quote, with the root filesystem `--read-only`.
 
-That error code differs from the original incident's `SQLite Error 14: 'unable to open database file'`,
-because `--read-only`'s full write-denial hits a different syscall than the real profile's
-lock-denial would. Same class of failure, different code; an exact match is not expected.
+`/health` reads `healthy`, the sentinel quote is still there, and the notifications list holds one
+`migrationapplied` notification per migration applied, among 33 notifications in all.
 
 ## Canary
 
@@ -119,6 +122,8 @@ docker run --rm -v qt-startup-04-data:/from -v qt-startup-04-data-clone:/to alpi
 
 It must reproduce a genuine failure somewhere in `ApplyMigrationPhaseAsync`. Revert the flag to `true`
 before committing anything.
+
+**Where the canary has been run, 2026-10-31.** Against `2f4abbd6` with the flag set to `false`, as `quotinator:canary-04`, upgrading a freshly seeded `1.8.2` volume: step 2 read `status=unhealthy` with the generic initialisation reason, where the unmodified build reads `healthy`.
 
 ## Cleanup
 

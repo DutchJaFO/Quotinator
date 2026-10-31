@@ -13,16 +13,10 @@
 the runs against one named volume, and the Constrained defect is **`/data` itself mounted read-only**
 while a migration is pending.
 
-**Two conditions have to hold together, and neither is sufficient alone** (measured 2026-08-27):
-
-| `/data` | Migration pending | Result |
-|---|---|---|
-| Writable, root filesystem `--read-only` | yes | `200` healthy, which is #294's fix working |
-| Read-only | no, already migrated | `200` healthy, with a `SQLite Error 8` logged |
-| **Read-only** | **yes** | **`503` unhealthy, `SQLite Error 14`** |
-
-**The third row is this test.** The initializer has real work to do and cannot write, so it degrades,
-and `SQLite Error 14: 'unable to open database file'` is *the original incident's own error code*.
+**The test is `/data` read-only with a migration pending.** The initializer has real work to do and
+cannot write, which is the state the original incident's pages crashed in. A writable `/data` under a
+read-only root filesystem is a different setup and stays healthy, which is
+[`04`](04-migration-replay-under-restricted-write.md)'s subject.
 
 ## Determinism
 
@@ -30,10 +24,10 @@ and `SQLite Error 14: 'unable to open database file'` is *the original incident'
   [`04-migration-replay-under-restricted-write.md`](04-migration-replay-under-restricted-write.md)'s
   subject and the application survives it by design. Using that flag here reproduces `04` and asserts
   the opposite of it.
-- **The prior image must leave a migration pending.** Run this against a volume the current build has
-  already upgraded and it reports `200` with only a `SQLite Error 8` in the log: the write fails, but
-  there is no migration for it to fail *during*, so nothing degrades. That is why step 1 seeds from a
-  published tag and step 2 never re-runs against its own output.
+- **The prior image must leave a migration pending.** A read-only `/data` degrades without one as well,
+  with the same reason, because `keys/` is read-only with it. So `unhealthy` does not show a migration
+  was pending, and only step 6 finding one applied does. That is why step 1 seeds from a published tag
+  and step 2 never re-runs against its own output.
 - **WAL sidecar state does not decide this.** Measured both ways, cleanly stopped so the sidecars are
   checkpointed away, and force-killed so they survive, and both degrade. #326 found sidecar state
   decisive for a read-only mount *without* a pending migration; that is a different question from this
@@ -99,12 +93,17 @@ dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-05 --por
 dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18405/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\health.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\health.json --equals status=unhealthy --contains "reason=data directory cannot be written" --contains "reason=Restore write access"
 docker inspect -f '{{.State.Running}}' qt-startup-05
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-05 --pattern "SQLite Error 14" --at-least 1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-05 --pattern "thrown: SqliteException" --at-least 1
 ```
 
 **Expected:** the `json` command exits `0`: `status = unhealthy`, the reason naming the fault and the
-workable remedy. `docker inspect` prints `true`, and the `log` command exits `0`: the migration genuinely
-could not write, which is the failure state every step below depends on.
+workable remedy. `docker inspect` prints `true`, and the `log` command exits `0`: the database itself
+refused the write.
+
+**The reason alone does not show the database failed.** A read-only `keys/` produces the same reason
+from the write probe, before the database is opened, so the `SqliteException` is what shows the failure
+state every step below depends on. It is counted by type, never by message or error code. That a
+migration was what could not run is shown in step 6, which finds it applied once writing is possible.
 
 **`true` and `unhealthy` together are the never-crash contract.** The reason is the half that has to be
 checked rather than assumed: the *generic* initialisation-failure reason tells the operator to run a
@@ -113,9 +112,9 @@ reason for exactly this fault so the advice points somewhere that can succeed. `
 pass just as happily with the misdirecting reason.
 
 **On failure:** a container that is not running means the migration failure killed the process.
-`status=healthy` means the volume was already migrated, so there was no pending migration for the
-read-only mount to fail during: re-seed from the published tag rather than re-running step 2 against its
-own output. `starting` or `down` means the wait gave up after 180 seconds.
+`status=healthy` means the mount did not take effect, so nothing was refused. No `SqliteException` means
+the reason came from the write probe alone and the database was never reached, so the steps below would
+not be reading a failed migration. `starting` or `down` means the wait gave up after 180 seconds.
 
 ### 3. Confirm the OpenAPI surface answers and every database read is gated
 
@@ -204,10 +203,11 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 dotnet script scripts/testing/http.csx -- --url http://localhost:18405/ --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18405/stats --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18405/notifications --expect 200 --status
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-05 --pattern "migration applied" --at-least 1
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/notifications?pageSize=0 --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\notifications-api.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\notifications-api.json --contains items=migrationapplied
 ```
 
-**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` and all three pages answer `200`, and both TestProbe commands exit `0`: the sentinel quote from step 1 is still there, and at least one `migration applied` line was logged.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` and all three pages answer `200`, and both TestProbe commands exit `0`: the sentinel quote from step 1 is still there, and the notifications list holds a notification of kind `migrationapplied`, which the application writes for each migration it applies.
 
 **This is the positive control and the remedy proof in one step.** Every assertion above is about a
 degraded container, so without a passing case this document would stay green against a build that
@@ -219,45 +219,35 @@ remedy does not work. A missing sentinel means the remedy cost the operator thei
 
 ## Observed effect
 
-**Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`, upgrading a `1.8.2` volume
-seeded to 799 quotes.
+**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`, upgrading a `1.8.2` volume
+holding the sentinel quote.
 
-The process stays up and `/health` settles at `503 unhealthy`, the first read already settled, with the
-data-directory reason and fourteen `SQLite Error 14` lines in the log. `/openapi/v1.json` answers `200`
-and all seven database reads answer `503`. The reset reaches its handler and refuses with `409`, obstacle
-`DestinationDirectoryNotWritable`, naming *restore write access* first. Its second remedy, *Retry with
-`allowNoBackup=true`*, cannot work on a read-only mount either, and is measured as an unhandled `500`
-in [`10`](10-a-data-directory-that-cannot-be-created-degrades-instead-of-crashing.md).
+The process stays up and `/health` settles at `503 unhealthy` with the data-directory reason:
 
-Each page renders the reason, carries no stack trace, keeps Blazor's error banner hidden, and makes
-exactly two failing requests, both `503`. What an operator sees on `/`, verbatim:
-
-> Quotinator started with a problem
->
 > The data directory cannot be written. This usually means the volume is mounted read-only, or the
 > container user lacks write permission on it. Restore write access to the data directory and restart.
 > A database Reset cannot resolve this: it writes too.
->
-> The database was left at its last known-good state: Quotes 0, Sources 0, Characters 0, People 0,
-> Series 0, Seasons 0, Universes 0, Stage directions 0, Sound cues 0, Conversations 0.
 
-**The zeroes are wrong, and this document does not assert them.** The database holds 799 quotes; the
-counts are read from a database the application could not open, which is
-[#428](https://github.com/DutchJaFO/Quotinator/issues/428)'s subject: withhold the counts rather than
-show zero. `/stats` renders the same zeroes. Every page also offers *Reset the database*, a button that
-cannot succeed on this mount, as step 4 shows.
+The log holds 11 `SqliteException` throws. `/openapi/v1.json` answers `200` and all seven database reads
+answer `503`. The reset reaches its handler and refuses with `409`, obstacle
+`DestinationDirectoryNotWritable`, naming *restore write access* first and *retry with
+`allowNoBackup=true`* second.
 
-That error code matters. The original incident, a live HA v1.8.2 to v1.8.3-beta upgrade whose migration
-failed partway through, leaving `NotificationSummary` (embedded in Home's modal) and `/notifications`
-crashing instead of showing degraded UI, reported exactly `SQLite Error 14`. The `--read-only`-root
-technique this replaced could not reproduce it: that arrangement denies writes at a different syscall
-and produced `SQLite Error 10: 'disk I/O error'` when it degraded at all. Denying `/data` reproduces the
-incident's code exactly.
+`/`, `/stats` and `/notifications` each answer `200`, render the reason, carry no stack trace, keep
+Blazor's error banner hidden, and make no failing request other than a `503`.
+
+**A read-only `/data` with no migration pending degrades too.** Measured the same day by creating a
+database on this build and re-entering it with `--read-only-data`: `503 unhealthy`, the same reason.
 
 **Recovery route, and whether it can succeed.** Reachable: the pages, `/openapi/v1.json` and the reset
 handler all answer. **A Reset cannot fix this one**: it writes, and the mount is what is read-only. The
-remedy is outside the container, remount the volume writable or fix its permissions, and restart; doing
-that applied the pending migration and returned `200` with 795 quotes, measured in step 6.
+remedy is outside the container, remount the volume writable or fix its permissions, and restart. Doing
+that returned `200` from `/health`, all seven reads and all three pages, with the sentinel quote present
+and one `migrationapplied` notification per migration applied.
+
+The original incident was a live HA v1.8.2 to v1.8.3-beta upgrade whose migration failed partway through,
+leaving `NotificationSummary` (embedded in Home's modal) and `/notifications` crashing instead of showing
+degraded UI.
 
 `System_Notification` genuinely does not exist on a real v1.8.2 database (confirmed live:
 `SELECT name FROM sqlite_master WHERE type='table' AND name='System_Notification'` returns no rows), so
@@ -274,16 +264,19 @@ Step 5 must fail: the degraded pages are what #293 made survivable, so on that b
 instead, since an unhandled error and a blank response are different defects.
 
 **Step 2 is the precondition and the control, and this document was rewritten because an earlier
-technique could not reach it.** `sqliteError14` must be non-zero: a `--read-only` root leaves `/data`
-writable and the migration succeeds, so the failure state is reached by denying `/data` itself with a
-migration pending. A run reporting a healthy start has not reached the premise.
+technique could not reach it.** `/health` must read `unhealthy` with the container running: a
+`--read-only` root leaves `/data` writable and the migration succeeds, so the failure state is reached by
+denying `/data` itself with a migration pending. A run reporting a healthy start has not reached the
+premise. On a canary this is the whole control: neither commit below has the exception channel, so
+step 2's `SqliteException` count reads `0` there and says nothing, and the commit before #293 also
+predates #326's reason.
 
 Step 6 is the positive control inside every run: it removes the sabotage and reads `200`, so a build
 that degraded unconditionally fails there.
 
 Remove the container, image and worktree afterwards.
 
-**Where the canary has been run, 2026-10-24.** Against `e4078444`, the commit before #327, as `quotinator:canary-327`: step 3 read `200` from `/api/v1/version`, and step 4 `500` from the reset. Against `64297b7e`, the commit before #293, as `quotinator:canary-293`: the same two, and step 5 read `500` from all three pages. Step 6 read `healthy` on both.
+**Where the canary has been run, 2026-10-31.** Against `64297b7e`, the commit before #293, as `quotinator:canary-293`: step 2 read `unhealthy` with the generic reason and the container running, and step 5 read `500` from all three pages. Against `e4078444`, the commit before #327, as `quotinator:canary-327`: step 2 read `unhealthy` with the data-directory reason, step 3 read `200` from `/api/v1/version`, and step 4 `500` from the reset.
 
 ## Cleanup
 

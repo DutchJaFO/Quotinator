@@ -12,7 +12,7 @@ directory. The prior image is the published `ghcr.io/dutchjafo/quotinator:1.8.3`
 has migrations to apply. Before the current build starts, the backup folder is filled to the budget, so
 the backup every migration takes first cannot be taken and the migration is refused.
 
-**The state this establishes, measured 2026-10-23.** The initializer refuses the migration, the database
+**The state this establishes.** The initializer refuses the migration, the database
 stays at the schema the prior release wrote, and the application degrades with a reason naming the
 obstacle and its remedies.
 
@@ -121,10 +121,11 @@ dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/ma
 dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/version --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/quotes/5e7a1c3d-9b2f-4e6a-8d0c-b1f2a3e4c5d6 --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-12-out\sentinel-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-12-out\sentinel-after.json --equals source="Quotinator Test Harness"
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-12 --pattern "migration applied" --at-least 1
+dotnet script scripts/testing/http.csx -- --url http://localhost:18412/api/v1/notifications?pageSize=0 --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-12-out\notifications.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-12-out\notifications.json --contains items=migrationapplied
 ```
 
-**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` answers `200`, and both TestProbe commands exit `0`: the sentinel quote from step 1 is still there, and at least one `migration applied` line was logged.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. `/health` answers `200`, and both TestProbe commands exit `0`: the sentinel quote from step 1 is still there, and the notifications list holds a notification of kind `migrationapplied`, which the application writes for each migration it applies.
 
 **This is the positive control.** Every assertion above is about a degraded container, so without a
 passing case this document would stay green against a build that refused every migration. With room for
@@ -134,22 +135,22 @@ its backup, the same volume migrates and keeps the sentinel.
 sentinel means the migration cost the operator their data.
 ## Observed effect
 
-**Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`, upgrading a `1.8.3` volume
-seeded to 799 quotes.
+**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`, upgrading a `1.8.3` volume
+holding the sentinel quote.
 
 The process stays up and `/health` settles at `503 unhealthy`: *"Database migration refused: no backup
 could be taken (BudgetExceeded). The backup folder has reached its storage ceiling, so no new backup can
 be written. The database stays at its recorded schema version until a backup can be taken."*, followed
 by two remedies, removing old backups through `GET /api/v1/admin/backups` and
 `DELETE /api/v1/admin/backups/{name}`, or raising `Quotinator:MaxBackupStorageGb` and restarting, and the
-Knowledgebase address. `/openapi/v1.json` answers `200`, all seven database reads `503`, and the three
-pages `200`.
+Knowledgebase address. `/openapi/v1.json` answers `200`, all seven database reads `503`, and `/`, `/stats`
+and `/notifications` `200`.
 
 **Recovery route, recorded rather than asserted.** A Reset is reachable and refuses with `409`, obstacle
-`BudgetExceeded`, for the same reason. The backup category is reachable and is the route that works:
-the listing shows `filler.db` at `1073741824` bytes, `DELETE /api/v1/admin/backups/filler.db` answers
-`204`, and after a restart the migration applies, one backup is taken, and the container serves 795
-quotes.
+`BudgetExceeded`, for the same reason. The backup category is reachable and is the route that works: the
+listing shows `filler.db` at `1073741824` bytes, and `DELETE /api/v1/admin/backups/filler.db` answers
+`204`. After a restart the migration applies, one backup is taken, the sentinel quote is still there, and
+every read answers `200`.
 
 ## Canary
 
@@ -160,7 +161,7 @@ unprotected, so on that build step 2 reads `status=healthy`: the migration runs 
 Step 4 is the positive control inside every run: it removes the obstacle and reads `200`, so a build that
 degraded unconditionally fails there.
 
-**Where the canary has been run, 2026-10-24.** Against `e4078444`, the commit before #327, which also predates #348's refusal, as `quotinator:canary-327`: step 2 read `status=healthy` with no reason, the migration having run without its backup, and step 3 read `200` from all seven database reads.
+**Where the canary has been run, 2026-10-31.** Against `e4078444`, the commit before #327, which also predates #348's refusal, as `quotinator:canary-327`: step 2 read `status=healthy` with no reason, the migration having run without its backup. A fuller pass on 2026-10-24 against the same commit read `200` from all seven database reads in step 3.
 
 ## Cleanup
 

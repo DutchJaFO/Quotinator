@@ -138,8 +138,8 @@ does), but raising the level cannot conjure a line nobody writes.
 
 ### A document is reviewed every time it is used, and converted before it runs
 
-**Before any document in this suite is run, it is read against two rules, and brought into line first
-where it breaks one** (developer direction, 2026-10-24):
+**Before any document in this suite is run, it is read against three rules, and brought into line first
+where it breaks one** (developer direction, 2026-10-24; the third, 2026-10-31):
 
 1. **Every step is a single command**, per [ADR 010](../architecture-decisions/010-repository-is-csharp-only.md)
    and *Every step is a single command* below. A step carrying PowerShell logic, a pipe, a here-string,
@@ -149,8 +149,16 @@ where it breaks one** (developer direction, 2026-10-24):
    (developer rule, 2026-09-17, recorded in #400). A step asserting on what the bundled sources happen
    to contain, a count of seeded quotes included, breaks it: that content changes whenever a source or
    a correction does.
+3. **It refers to no outdated result.** A reader compares a run against what the document says, so a
+   reading the build has moved past fails a correct build: a false negative. Anything stating what the
+   application does, in any section, is either read by this run or removed, and `Observed effect` is
+   replaced by this run's reading rather than added to. Two things are not results of this kind and
+   stay: a canary reading, which names a commit that does not change, and a past defect described as
+   past, for why the document exists. Found live: `startup-and-degradation/05` said a read-only `/data`
+   with no migration pending stays healthy, measured two months earlier; a run against the current
+   build read `503`.
 
-**Running a document that breaks either rule tests something already known to be wrong**, so the run is
+**Running a document that breaks any of these rules tests something already known to be wrong**, so the run is
 not started until the document is fixed. Much of this suite predates the first rule and is written in
 PowerShell; that is a known deviation, corrected document by document as each is next used, never
 worked around at run time with a wrapper or a runner of one's own.
@@ -187,9 +195,9 @@ do not annotate it with the fact that it fails: execute it and see.
 **Never assert a specific migration number or schema version.** Not `Data v2 → v11`, not "migration 8
 does X". Migration counts change whenever any milestone adds one, and they are consolidated before a
 release, so a hardcoded number goes stale on its own and gets "fixed" by editing the number rather
-than by anyone checking what actually happened. Assert the *behaviour*: that a `migration applied:`
-line appears, that no SQLite error accompanies it, that the resulting state is healthy, that content
-is present and correct.
+than by anyone checking what actually happened. Assert the *behaviour*: that a `migrationapplied`
+notification exists, that the resulting state is healthy, that the test's own content is present and
+correct.
 
 **We only observe facts. We never claim to know how many.** A test cannot legitimately assert that an
 import produces 799 quotes or 461 sources: that is a prediction about content, and content changes

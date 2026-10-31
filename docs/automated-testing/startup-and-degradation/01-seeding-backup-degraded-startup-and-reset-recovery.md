@@ -59,18 +59,15 @@ so it is deleted first.
 
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-01-data --delete C:\repos\Quotinator\.claude\temp\qt-startup-01-out --create-directory C:\repos\Quotinator\.claude\temp\qt-startup-01-data
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-01 --port 18401 --bind C:\repos\Quotinator\.claude\temp\qt-startup-01-data
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "schema created at baseline" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-absent C:\repos\Quotinator\.claude\temp\qt-startup-01-data\backups
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-01 --port 18401 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-01-data
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-file C:\repos\Quotinator\.claude\temp\qt-startup-01-data\quotinatordata.db --expect-absent C:\repos\Quotinator\.claude\temp\qt-startup-01-data\backups
 ```
 
-**Expected:** both TestProbe commands exit `0`: the init log shows `schema created at baseline` (fresh
-database, baseline path), and the `backups` directory does not exist yet. A baseline run has nothing to
-lose, so no backup is taken.
+**Expected:** the `file` command exits `0`: the database was created in the bind directory, and the
+`backups` directory does not exist yet. A fresh database has nothing to lose, so no backup is taken.
 
-**On failure:** an empty host directory, or an init log that never mentions the baseline, means the
-bind mount did not take effect. Stop: every step below reads and writes that directory, and against the
-wrong one they report nonsense.
+**On failure:** no database in the bind directory means the bind mount did not take effect. Stop: every
+step below reads and writes that directory, and against the wrong one they report nonsense.
 
 ### 2. Restart unchanged: nothing is at risk, so nothing is backed up
 
@@ -79,12 +76,12 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-star
 docker restart qt-startup-01
 dotnet script scripts/testing/http.csx -- --url http://localhost:18401/api/v1/health --wait-for 200 --status
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\after-restart.mark
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "schema is up to date" --at-least 1
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-absent C:\repos\Quotinator\.claude\temp\qt-startup-01-data\backups
 ```
 
-**Expected:** every command exits `0`: no exception thrown before the restart, `schema is up to date`
-logged, and still no `backups` directory. The mark records where the log stood once the restarted app
+**Expected:** every command exits `0`: no exception thrown before the restart, the restarted app healthy,
+and still no `backups` directory. The zero is believed because step 3 shows this same container's log
+recording exceptions when they are thrown. The mark records where the log stood once the restarted app
 was healthy, so step 3 counts only what came after the restart's own documented shutdown lines (index:
 *Read the log before the application stops*). No migration is pending and the content
 already exists, so neither risky action runs and there is nothing to protect against.
@@ -102,12 +99,6 @@ dotnet script scripts/testing/execute-sql.csx -- --db C:\repos\Quotinator\.claud
 docker start qt-startup-01
 dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18401/api/v1/health --field status --in unhealthy --timeout 120 --out C:\repos\Quotinator\.claude\temp\qt-startup-01-out\health-degraded.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-01-out\health-degraded.json --equals status=unhealthy
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "\[Database - Backup\] backup complete" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "seeding failed: restoring pre-seed backup" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "pre-seed backup restored" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "Database initialisation failed" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "no such table: Quotinator_Quote" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --pattern "Unhandled exception" --exactly 0
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\before-stop.mark --pattern "thrown: SqliteException" --at-least 1
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\before-stop.mark --pattern "thrown: SocketException" --exactly 2
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\before-stop.mark --pattern "thrown: (?!SqliteException|SocketException)" --exactly 0
@@ -118,12 +109,15 @@ docker inspect -f '{{.State.Running}}' qt-startup-01
 
 **Expected:** every TestProbe command exits `0`, and `docker inspect` prints `true`.
 
-The log carries `[Database - Backup] backup complete`, then
-`[Database - Init] seeding failed: restoring pre-seed backup, database left unchanged...` (ERR),
-`[Database - Init] pre-seed backup restored.` (INF), then
-`[Server] Database initialisation failed...` (CRIT/FTL) with the underlying
-`SqliteException: ... no such table: Quotinator_Quote` attached as the log event's exception: **not**
-a bare .NET unhandled-exception runtime dump. Their order is not asserted.
+**Nothing here reads a log line's wording.** That seeding failed is shown by `/health` reporting
+`unhealthy` and by the `SqliteException` the exception channel counts; that a backup was taken is shown
+by the file. That the backup is then restored, leaving the database as it was before the attempt, is
+not observable from outside the container, so it is proven where it can be measured: by
+`DatabaseInitializerTests.InitialiseAsync_SeedingFailsOnAlreadyMigratedDatabase_BacksUpFirstAndRethrows`
+(`Quotinator.Core.Tests`) for the backup and the failure, and
+`DatabaseInitializerSeedRestoreTests.InitialiseAsync_SeedingFailsAfterWriting_RestoresThePreSeedDatabase`
+(`Quotinator.Data.Tests`, with `InitialiseAsync_SeedingSucceeds_KeepsWhatItWrote` as its positive
+control) for the restore.
 
 Exactly one backup: the first this test has produced, because step 2 correctly took none. This is the
 case a backup exists for: seeding was about to run against a database it could not repair, and the
@@ -238,14 +232,12 @@ the database is genuinely empty after a Reset.
 
 ## Observed effect
 
-**Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`.
+**Measured 2026-10-27** against `quotinator:local` built from `00a9dfe2`.
 
-The fresh seed logged `schema created at baseline` with `backups=0`, and the restart `schema is up to
-date`, still `backups=0`, with no exception before either. After `Quotinator_Quote` was dropped, the
-restart logged, in order: `[Database - Backup] backup complete` (INF), `[Database - Init] seeding failed:
-restoring pre-seed backup, database left unchanged...` (ERR), `[Database - Init] pre-seed backup
-restored.` (INF), and `[Server] "Database initialisation failed..."` (FTL) carrying
-`SQLite Error 1: 'no such table: Quotinator_Quote'`, with `backups=1` and the container `Up`.
+The fresh seed created the database and no `backups` directory, and the restart left it that way, with no
+exception logged before either. After `Quotinator_Quote` was dropped, the restart logged 11
+`SqliteException` throws and 2 `SocketException` throws since the mark taken before the stop, and no
+other type. One backup file exists and the container is running.
 
 Degraded, `/health` read `unhealthy` with the generic reason, all seven database reads `503`, the spec
 `200`, and `/`, `/stats` and `/notifications` `200` with the degraded text and no stack trace. The reset
@@ -288,7 +280,12 @@ is why the two are named separately here.
 
 Remove the container, image and worktree afterwards.
 
-**Where the canary has been run, 2026-10-24.** Against `e4078444`, the commit before #327, as `quotinator:canary-327`: steps 1 to 3 passed and step 4 read `200` from `/api/v1/version`. Against `210d6830`, the commit before #254, as `quotinator:canary-254`: step 3 read `status=healthy` with no backup taken, the dropped table never detected, and step 4 read `200` from the database reads and `404` from the pages.
+**Step 3 must drop the table the build under test has.** The commit before #254 predates the domain
+prefixes, so its quote table is `Quotes`. Dropping `Quotinator_Quote` there breaks nothing, and the build
+then reads `healthy` for a reason that has nothing to do with this test. Neither commit below has the
+exception channel, so step 3's counts do not apply to them.
+
+**Where the canary has been run, 2026-10-31.** Against `e4078444`, the commit before #327, as `quotinator:canary-327`: step 3 reached `unhealthy` with the generic reason, and step 4 read `200` from `/api/v1/version`. Against `210d6830`, the commit before #254, as `quotinator:canary-254`, dropping `Quotes`: the container exited with code `139` and never answered, so there was no degraded surface to read.
 
 ## Cleanup
 

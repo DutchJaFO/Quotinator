@@ -4,10 +4,10 @@
 **Environment:** Fresh
 **Deterministic:** yes
 **Traces to:** #350, #327, #289
-**Fully green after:** [#445](https://github.com/DutchJaFO/Quotinator/issues/445): step 7's last
-`log` command and the cleanup's `log` command, both *nothing thrown since Cancel*, read `TaskCanceledException`
-lines logged after the page that confirmed the Reset closes (measured 4 and 7 on 2026-10-24), until the
-application stops logging a circuit the client closed as an error.
+**Fully green after:** [#445](https://github.com/DutchJaFO/Quotinator/issues/445): step 6's
+*nothing thrown since Cancel* `log` command reads `TaskCanceledException` lines logged after the page
+that confirmed the Reset closes, until the application stops logging a circuit the client closed as an
+error.
 
 ## Preconditions
 
@@ -63,8 +63,8 @@ from it is a foot gun.
 
 ### 1. Create a healthy, fully migrated database
 
-A folder left by an earlier run holds a database, and step 6's single log match assumes none, so it is
-deleted first.
+A folder left by an earlier run holds a database that is already overshot or already repaired, and step
+1 must start from none, so it is deleted first.
 
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-06-data --delete C:\repos\Quotinator\.claude\temp\qt-startup-06-shots --create-directory C:\repos\Quotinator\.claude\temp\qt-startup-06-data
@@ -79,13 +79,12 @@ overshoot: stop and fix that first.
 ### 2. Stop the container cleanly and record a version one beyond this build
 
 ```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "\[Runtime - Exception\]" --exactly 0
 docker stop -t 15 qt-startup-06
 dotnet script scripts/testing/execute-sql.csx -- --db C:\repos\Quotinator\.claude\temp\qt-startup-06-data\quotinatordata.db --sql "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) SELECT MAX(Version) + 1, '2026-10-14 00:00:00' FROM System_ConsumerSchemaVersion;"
 ```
 
-**Expected:** the `log` command read before the stop exits `0`, the stop echoes the container name, then
-`OK — 1 row(s) affected.` (the em dash is `execute-sql.csx`'s own output, quoted verbatim).
+**Expected:** the stop echoes the container name, then `OK — 1 row(s) affected.` (the em dash is
+`execute-sql.csx`'s own output, quoted verbatim).
 
 **On failure:** a SQL error means the overshoot state was never built, and every step below would be
 asserting against an ordinary healthy database, which proves nothing. Stop.
@@ -138,7 +137,7 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 `json` command exits `0` on its `items` field.
 
 **The backup listing is the recovery surface's probe, deliberately.** The reason names two remedies,
-a Reset (step 7) and restoring a backup taken before the version moved ahead; the listing is how an
+a Reset (step 6) and restoring a backup taken before the version moved ahead; the listing is how an
 operator finds that backup, and it answers off the filesystem, so it reads nothing from the untrusted
 database. An earlier version of this step probed `GET /api/v1/admin/database/seed/preview`, which reads
 the database, so a `200` from it was a value served from untrusted content, and #453 gates it.
@@ -174,23 +173,13 @@ whatever the database turns out to hold.
 whether the query *would execute* rather than whether its answer can be trusted. A modal with no
 reason means the degradation was recorded without one.
 
-### 6. Confirm the detection is in the log as well as the UI
+**Nothing here reads a log line's wording.** The detection is shown by `/health`'s reason and the
+modal's, both read above from the application's own responses, and covered in-process by
+`StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_HealthReasonNamesTheOvershoot`. A step
+that matched the log's wording used to follow; wording changes with the application, and a test that
+reads it breaks for a reason that has nothing to do with the behaviour it is about.
 
-```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "schema version overshoot detected" --exactly 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "is ahead of this build" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "treated as complete" --exactly 0
-```
-
-**Expected:** all three exit `0`: one match for the detection, at least one for the degraded reason, and
-**no** match for `treated as complete`.
-
-**On failure:** no match for the detection while step 5 passed means the notification came from
-somewhere other than this startup, most likely a row left over from an earlier run against the same
-directory: re-run from step 1, which starts from an empty bind directory. A match for `treated as complete` means a
-message is claiming the schema is intact, which this build has no way to know.
-
-### 7. Repair it from the degraded pages themselves
+### 6. Repair it from the degraded pages themselves
 
 The operator's own route, and a driver step: the reason names a Reset, and the degraded pages are where
 they run one without reaching for an API client. Every page that can carry an interactive control shows
@@ -239,14 +228,13 @@ Then, against the home page's modal, arm the Reset and cancel it:
 dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18406/ --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\modal-after-cancel.png --width 1280 --height 1100 --script-file scripts/testing/page-scripts/overshoot-modal-cancel.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\modal-after-cancel.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\modal-after-cancel.json --equals "before=Reset the database, Continue" --equals "armed=Confirm, Cancel, Continue" --equals "afterCancel=Reset the database, Continue"
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/health --expect 503 --status
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --pattern "\[Runtime - Exception\]" --exactly 0
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-cancel.mark
 ```
 
 **Expected:** the `json` command exits `0`: the buttons read `Reset the database, Continue`, then
 `Confirm, Cancel, Continue` once armed, and return to the first after Cancel. `/health` still reads
-`503`: Cancel called nothing, so the overshoot is still there. The `log` command exits `0`: nothing has
-thrown since step 3's `reenter` started this container's log afresh.
+`503`: Cancel called nothing, so the overshoot is still there. The mark records where the log stands, so
+the repair below is counted on its own.
 
 Then arm it again and confirm. The banner clears itself, in place, with no page reload:
 
@@ -263,9 +251,19 @@ dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/ma
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\version-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\version-after.json --equals database.quotes=0
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-cancel.mark --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18406/api/v1/import --file docs/automated-testing/startup-and-degradation/fixtures/malformed-import.json --duplicate-resolution review --expect 422
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-cancel.mark --pattern "thrown: JsonReaderException" --at-least 1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-control.mark
 ```
 
-**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. The first `json` command exits `0` on the reason gone, `/health` answers `200`, the quote count is `0`, and the exception count is unchanged since Cancel.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. The first `json` command exits `0` on the reason gone, `/health` answers `200`, the quote count is `0`, and the exception count is unchanged since Cancel. The malformed upload answers `422`, and the `log` command after it exits `0` on at least one `JsonReaderException` thrown since Cancel.
+
+**The malformed upload is the zero count's positive control.** A log with no exception in it is not
+proof that nothing was thrown: it proves it only once the same run has shown the channel recording one.
+The upload throws a `JsonReaderException` the application expects and answers `422` for, the same defect
+[`api-surface/05`](../api-surface/05-a-thrown-exception-is-logged.md) uses, from the committed
+[`malformed-import.json`](fixtures/malformed-import.json). It comes after the zero count so it cannot
+raise it, and the second mark lets the cleanup count from after it.
 The rebuild recorded this build's own version, so there is no overshoot left to degrade on, and the
 banner and its button disappear where they stand. This is the positive control: the same container,
 repaired by the remedy the reason named, answers `200`.
@@ -274,14 +272,7 @@ repaired by the remedy the reason named, answers `200`.
 and a full reload of an interactive page tears the Blazor circuit down without a close handshake:
 measured 2026-10-14, four `WebSocketException`s at `Error` for every reload, so a repair that worked
 wrote four error lines into the log an operator reads to find out what is wrong. The surfaces now
-re-render from `DatabaseHealthState.Changed` instead. Any rise here means a reload is back.
-
-**One thing lags, deliberately.** The nav's `Limited` badge and its disabled Home link are rendered by
-`NavMenu`, which lives in the static layout rather than in the page's interactive island, so they
-correct themselves on the next page load rather than the instant the repair finishes. Measured: every
-page loaded after the repair reads `limitedBadge=False`. Making the nav interactive would close that
-gap and is not done here, because `CLAUDE.md` documents the language selector inside it as working
-deliberately without a Blazor circuit.
+re-render from `DatabaseHealthState.Changed` instead. A `WebSocketException` here means a reload is back.
 
 **On failure:** no `Reset the database` button means the degraded page has no repair control at all,
 and the reason names a route the operator cannot take from the UI. A `409` from the equivalent API call
@@ -290,10 +281,9 @@ means the Reset refused for want of a backup, which is a different fault with it
 
 ## Observed effect
 
-**Measured 2026-10-14** against `quotinator:local`, on the first run of this document after #350, on a
-database recorded at data v28, app v10 against a build knowing app v9.
+**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`, every step run unattended.
 
-`/health` answers `503` with:
+The container stays running and `/health` answers `503` with:
 
 > The database's recorded schema version is ahead of this build (data v28, app v10). This build does
 > not know what the migrations it never saw changed, so the schema's shape is unknown and quote content
@@ -301,81 +291,50 @@ database recorded at data v28, app v10 against a build knowing app v9.
 > rebuilds the schema at this build's own version and discards what the database holds now, or restore
 > a backup taken before the version moved ahead and restart.
 
-`/api/v1/quotes/random` answers `503`, while all six exempt pages, the OpenAPI spec and the admin
-surface answer normally. The log carries the detection once:
+The version numbers are observed output, not assertions: they move whenever a migration is added.
 
-> `[Database - Init] schema version overshoot detected: recorded data v28 (known: v28), recorded app
-> v10 (known: v9). This build does not know what the migrations it never saw changed, so the schema's
-> shape is unknown: resolve it with a database Reset, or restore a backup taken before the version
-> moved ahead`
+All seven database reads answer `503`. The six pages, the spec and `GET /api/v1/admin/backups` answer
+`200`. The modal names the overshoot and both remedies with no notification row, and the notifications
+page shows its empty state.
 
-and nothing matching `treated as complete`, the claim #289's message made and #350 removed.
+**The remedy works from the pages.** One Reset button and the reason appear on `/rest-api`,
+`/notifications`, `/import-review` and `/stats`, and neither on `/about`. The modal offers
+`Reset the database, Continue`, arming to `Confirm, Cancel, Continue`. Cancel returns to the first and
+leaves `/health` at `503`. Confirm clears the reason in place, `/health` and all seven reads answer `200`,
+and `database.quotes` reads `0`.
 
-**The version numbers above are observed output, not assertions.** They are recorded because an
-operator reading a real log sees numbers there and should recognise the shape; no step compares against
-them, and they move whenever a migration is added.
-
-**The modal carries the reason and no database content.** The notifications page shows its empty
-state, and the modal's own summary lists no rows: an overshot schema's content is untrusted, so none
-of it is shown, and what the operator reads is the in-memory reason above it.
-
-**The counts are populated rather than zero on this path, and are no more trustworthy for it.**
-Measured `795 quotes`, `473 sources`, `15 characters` on the degraded start, because this fault
-completes `InitialiseAsync` where the faults in
-[`degraded-startup-shows-every-count-as-zero`](../../knowledgebase/degraded-startup-shows-every-count-as-zero.md)
-never do. [#428](https://github.com/DutchJaFO/Quotinator/issues/428) owns withholding them on both
-surfaces, and this path is one more reason it should: a real-looking number read from a schema this
-build cannot vouch for is the most convincing wrong answer of the three.
-
-**The remedy works from the pages, not only from an API client.** Measured 2026-10-15: the modal
-offers `Reset the database` next to `Continue`, arming to `Confirm, Cancel, Continue`; Cancel leaves
-`quotes` at `795`, and Confirm takes `/health` from `503` to `200` with `quotes` at `0`. The same
-control appears on `/rest-api`, `/notifications`, `/import-review` and `/stats`, above the reason, and
-running it from any of them does the same. `/about` carries none: it is static SSR. The equivalent
-`POST /api/v1/admin/database/reset` answers `200` too, and the API comes back out of the gate with it.
-
-**Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`, every step run unattended:
-`docker inspect` `true`, `unhealthy` naming the overshoot, the Reset and the restore; all seven database
-reads `503`; the six pages, the spec and `GET /api/v1/admin/backups` `200`; the modal and the
-notifications page showing the reason and no rows; the detection logged once with no `treated as
-complete`; the repair control on the four interactive pages and not on `/about`; Cancel leaving `/health`
-at `503`, Confirm clearing the reason in place, `/health` `200`, `quotes after: 0`, and no exception
-logged at any point.
-
-**The repair costs no log lines.** Measured on the 2026-10-15 run: `thrown=0` before the repair and `0`
-after, where the earlier forced-reload version wrote four `WebSocketException`s every time it
-succeeded. On a degraded page the banner and its button vanish in place; on the Home modal, the
-started-with-a-problem modal is replaced by the ready one, so the two surfaces agree without either
-being reloaded.
+**The repair logs `TaskCanceledException` lines, and nothing else.** Since the mark taken after Cancel,
+the exception channel read 9 lines, then 11 moments later, every one of them that type: #445. The
+malformed upload then answered `422` and logged its `JsonReaderException`, and nothing was thrown after it.
 
 ## Canary
 
 Build the commit before [#350](https://github.com/DutchJaFO/Quotinator/issues/350)'s first code
-change, under a distinct tag, and run steps 2 to 7 against it.
+change, under a distinct tag, and run steps 2 to 6 against it.
 
 Step 3 must read `200` and `healthy`. That is #350's own title: a recorded version ahead of the build
 ran healthy instead of degrading, against a schema whose shape the application cannot know. With no
-degradation there is nothing for steps 5, 6 and 7 to read either, so the reason, the log line and the
-repair route all fail with it.
+degradation there is nothing for steps 5 and 6 to read either, so the reason and the repair route both
+fail with it.
 
 **Step 1 is the control.** It leaves a healthy, fully migrated database, so step 3's reading is about
 the recorded overshoot rather than about a container that was broken before the version was touched.
 
-Step 7's own repair was changed after #350's first pass, when a repaired page reloaded rather than
+Step 6's own repair was changed after #350's first pass, when a repaired page reloaded rather than
 being told the state had changed. A pre-fix reading of the reload behaviour is not evidence about the
-current step, so run step 7 against the current build only.
+current step, so run step 6 against the current build only.
 
 Remove the container, image and worktree afterwards.
 
-**Where the canary has been run, 2026-10-24.** Against `e4078444`, the commit before #327 and before #350, as `quotinator:canary-327`: step 3 read `status=healthy` with no overshoot reason and every database read `200`; step 4 read `404` from `/api/v1/admin/backups`, which did not exist yet; step 5's modal named no overshoot, and step 7 found no repair control on any page.
+**Where the canary has been run, 2026-10-31.** Against `e4078444`, the commit before #327 and before #350, as `quotinator:canary-327`: step 3 read `status=healthy` with no overshoot reason. A fuller pass on 2026-10-24 against the same commit read every database read `200`, `404` from `/api/v1/admin/backups`, no overshoot in step 5's modal, and no repair control on any page.
 
 ## Cleanup
 
 ```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-cancel.mark --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-control.mark --pattern "\[Runtime - Exception\]" --exactly 0
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-06 --bind C:\repos\Quotinator\.claude\temp\qt-startup-06-data
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-06-data --delete C:\repos\Quotinator\.claude\temp\qt-startup-06-shots
 ```
 
-**Expected:** the `log` command exits `0`, the count unchanged since Cancel, before the container and
-both directories are removed.
+**Expected:** the `log` command exits `0`, nothing thrown since the positive control, before the
+container and both directories are removed.

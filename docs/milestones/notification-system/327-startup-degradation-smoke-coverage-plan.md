@@ -594,7 +594,7 @@ script"* to a `tools/` project; no repository document describes sharing code be
   also cover. Measurements posted to both on 2026-10-27; `06` carries `**Fully green after:** #445`.
 ### 16. Run each document against a build from before this issue
 
-**Status:** 🚧 Evidence being re-gathered: the earlier runs used a scratch block-extracting script, not the document's steps
+**Status:** 🚧 Evidence re-gathered from the documents' own steps for `01`, `04`, `05`, `06` and `12` (third run, below). Next action: do the same for `08`, `09`, `10`, `11` and `13`, whose images and worktrees were removed and must be rebuilt from the commits named below
 
 Per `process.md` → Implementation, step 1. The parent of the first `[#327]` commit
 (`git log --reverse --format=%H --grep "\[#327\]" | Select-Object -First 1`) is added as a worktree,
@@ -650,6 +650,33 @@ image substitution left it on `test-env.csx`'s default `quotinator:local` and bo
 the current build, passing throughout. Found by its baseline log naming the current schema; the runner
 now supplies `--image` where a document leaves it to the default, and `01` was run again against both
 builds. Worktrees and images were removed afterwards.
+
+**Third run, 2026-10-31, from the documents' own steps, after log-wording assertions were replaced with
+responses and every zero count was given a positive control.** Each document's current build passes, and
+each fails on its canary build:
+
+| Document | Build | Failing step |
+|---|---|---|
+| `01` | `canary-327` | step 4: `/api/v1/version` `200` |
+| `01` | `canary-254` | step 3: the container exits with code `139`, nothing answers |
+| `04` | `canary-04` (`2f4abbd6`, `useMemoryTempStore: false`) | step 2: `unhealthy` |
+| `05` | `canary-293` | step 5: all three pages `500` |
+| `05` | `canary-327` | step 3: `/version` `200`; step 4: reset `500` |
+| `06` | `canary-327` | step 3: `healthy`, no overshoot reason |
+| `12` | `canary-327` | step 2: `healthy`, the migration ran without its backup |
+
+**The `01` / `canary-254` reading in both tables above is false.** That commit's quote table is `Quotes`,
+so step 3's `DROP TABLE Quotinator_Quote` broke nothing and `healthy` said nothing about #254. Dropping
+the table that build has takes the container down, which is the defect #254 fixed.
+
+**Two more findings from this run.** `05` claimed a read-only `/data` with no migration pending stays
+healthy, last measured 2026-08-27. Step 14's write probe made that false, since `keys/` is read-only with
+it: the state now reads `503`, which is what #336 describes and sets out to improve. And neither
+`canary-293` nor `canary-327` has the exception channel, so a `thrown:` count of `0` on those builds says
+nothing, and a zero count on any build means something only with a positive control in the same run.
+
+**`06` is not fully green until #445:** its *nothing thrown since Cancel* count read 9, then 11, every line
+`TaskCanceledException`.
 
 ### 17. Run the template and suite guards
 
