@@ -118,6 +118,27 @@ field from a saved JSON response, with the same path syntax as `json`. `--upper-
 in that case, so a test proving a comparison ignores case sends both forms without assuming which one the server holds. A missing file or field, a value with no placeholder, or a
 placeholder with no value exits `1` and writes nothing, so a later request cannot run against a half-built URL.
 
+### `seed-sources`: check a seed's Sources for duplicates and undeclared date variants
+
+```bash
+dotnet run --project tools/Quotinator.Tools.TestProbe -- seed-sources --sources C:\repos\Quotinator\.claude\temp\qt-import-14-out\sources.json --declared data/sources
+```
+
+Reads a saved `/masterdata/sources?pageSize=0` response. Fails on an exact duplicate (title, type and date, ignoring
+case), a casing duplicate (one title and type under two spellings), a date variant the `sources[]` of no file in
+`--declared` names, and an empty list, which would satisfy the other three.
+
+### `seed-noops`: check every no-op resolution is accounted for
+
+```bash
+dotnet run --project tools/Quotinator.Tools.TestProbe -- seed-noops --actions C:\repos\Quotinator\.claude\temp\qt-import-14-out\actions.json --rules data/sources
+```
+
+Reads a saved `/import/actions?pageSize=0` response. A `ResolvedToExisting` action is accounted for when a
+`*conflict-rules.json` file in `--rules` covers its entity, or when the incoming side left empty every field that
+differs, an absent field, a `null` and an empty array all counting as empty. Fails on any other, and on there being none
+at all.
+
 ## Design notes
 
 - Each command is its own class with one job (`Commands/`); `CommandDispatcher` only selects the command

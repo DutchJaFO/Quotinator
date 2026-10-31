@@ -4,8 +4,7 @@
 **Environment:** Fresh
 **Deterministic:** yes
 **Traces to:** #181
-**Fully green after:** [#400](https://github.com/DutchJaFO/Quotinator/issues/400): step 5 cannot run
-until then: it calls a `--convert` entry point that does not exist
+**Fully green after:** [#400](https://github.com/DutchJaFO/Quotinator/issues/400): step 5 has nothing to run until then, because the regeneration it needs is reached through the source refresh #400 builds its step on
 
 ## Preconditions
 
@@ -20,28 +19,31 @@ first place.
 **A `ConflictResolutionRule` alone cannot do that**: it only ever corrects what a Quote's own field
 *displays*, never which Source row it links to.
 
-Nothing beyond the Fresh profile. The seed this test inspects is the profile's own first boot.
+**This is the one document permitted to read bundled content**, per the index's second rule and #400. The seed it
+inspects is the profile's own first boot, and step 6 adds one setting of its own in a second container.
 
 ## Determinism
 
 - **This is the zero-failures assertion for the bundled dataset.** Nothing staged awaiting review is
   the fact; the number of quotes seeded is not asserted, only that content exists.
-- **Copy the `-wal` and `-shm` sidecars** with the `.db`; see
-  [`10-source-date-from-resolving-quote.md`](10-source-date-from-resolving-quote.md) for why a bare
-  copy can silently omit committed data. Their copies are allowed to fail, because a cleanly stopped
-  database has already checkpointed and removed them.
-- The duplicate-Source query groups on `LOWER(Title)`, so a case-only difference counts as a duplicate.
-  That is the point: the alias mechanism exists to prevent exactly that.
-- **The values `/version` reports are data, not an expectation**: what matters is that seeding produced
-  content, which is why every count is checked for being non-zero rather than against a figure.
+- **Every count is checked for being above `0`, never against a figure**: what matters is that seeding produced
+  content, and a source's size changes whenever a source or a correction does.
+- **Sources are read through the REST server**, so nothing stops the container or copies its database. Titles compare
+  ignoring case, so a case-only difference counts as a duplicate: that is the point, since the alias mechanism exists to
+  prevent exactly that.
+- **`seed-sources` and `seed-noops` are proven able to fail by their own unit tests**, `BundledSeedCommandTests`, which
+  supply a row of each shape they must flag. A check that reads an empty list fails, since an empty list would satisfy
+  it, so a pass here means real rows were read and none was flagged.
+- **Step 6 needs its own container with the bundled batch auto-purge off.** The profile's setting deletes a cleanly applied
+  batch's `Import_Action` rows the moment it applies, which is correct behaviour and exactly what makes them unreadable.
 
 ## Steps
 
 ### 1. Create this test's own environment
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-import-14 --port 18614
-$base = "http://localhost:18614/api/v1"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-import-14-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-14 --port 18614 --image quotinator:local
 ```
 
 **Expected:** the app reports healthy: the bundled seed has finished.
@@ -51,333 +53,140 @@ never became healthy.
 
 ### 2. Read what the first boot seeded
 
-```powershell
-$database = (Invoke-RestMethod "$base/version").database
-$database
-"zeroCounts=$(@($database.PSObject.Properties | Where-Object { $_.Name -ne 'schemaVersion' -and $_.Value -eq 0 }).Name -join ', ')"
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18614/api/v1/version --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-14-out\version.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-14-out\version.json --greater-than database.quotes=0 --greater-than database.sources=0 --greater-than database.characters=0 --greater-than database.people=0 --greater-than database.series=0 --greater-than database.seasons=0 --greater-than database.universes=0 --greater-than database.stageDirections=0 --greater-than database.soundCues=0 --greater-than database.conversations=0
 ```
 
-**Expected:** every entity count is non-zero, so `zeroCounts` is empty. Named rather than counted, so a
-newly-added entity type that seeds nothing reads as its own name rather than shifting a total.
+**Expected:** every entity count is above `0`, each named on its own, so a type that seeds nothing reads as its own name
+rather than shifting a total.
 
 ### 3. Confirm nothing is left staged awaiting review
 
-```powershell
-$pending = dotnet script scripts/testing/http.csx -- --url "$base/import/actions?status=pending&pageSize=0" --expect 200 | ConvertFrom-Json
-"pending=$($pending.totalCount)"
+```
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18614/api/v1/import/actions?status=pending&pageSize=0" --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-14-out\pending.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-14-out\pending.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18614/api/v1/import/actions?status=PENDING&pageSize=0" --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-14-out\pending-upper.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-14-out\pending-upper.json --equals totalCount=0
 ```
 
-**Expected:** `200` and `pending=0`. No file is left staged awaiting review.
+**Expected:** none pending, with `status` in either case. That this filter finds a pending action when one exists is what
+[`01`](01-staged-action-review-workflow.md) shows, in both cases.
 
-**On failure:** if anything is left pending, `docker logs` shows
-`"<file>" left staged awaiting review — batch "<id>", N action(s) pending a decision`. Inspect via
+**On failure:** look for the line naming `left staged awaiting review` in the log, then read
 `GET /import/actions?batchId=<id>` to see which entity or field lacks a rule or alias.
 
 ### 4. Cross-check for duplicate Sources
 
-```powershell
-docker stop -t 15 qt-import-14
-docker cp qt-import-14:/data/quotinatordata.db .claude/temp/inspect-181.db
-docker cp qt-import-14:/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal 2>$null
-docker cp qt-import-14:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm 2>$null
-docker start qt-import-14
-dotnet script scripts/testing/http.csx -- --url "$base/health" --wait-for 200 --status
-
-# A: exact duplicates, the same work stored twice under the same date.
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" `
-  --sql "SELECT Title, Type, Date, COUNT(*) AS c FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type, COALESCE(Date,'') HAVING c > 1"
-
-# B: casing-only duplicates, the alias mechanism's own job, and never legitimate.
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" `
-  --sql "SELECT LOWER(Title) AS t, Type, COUNT(DISTINCT Title) AS spellings FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING spellings > 1"
-
-# C: every date variant is one somebody declared. An undeclared second date is the ambiguous case.
-$declared = @{}
-Get-ChildItem data/sources/*.json | ForEach-Object {
-  $doc = Get-Content $_.FullName -Raw | ConvertFrom-Json
-  foreach ($s in @($doc.sources)) {
-    if ($s.title) { $declared["$($s.title.ToLower())|$($s.type.ToLower())|$($s.date)"] = $true }
-  }
-}
-
-$variantRows = dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" `
-  --sql "SELECT Title, Type, Date FROM Quotinator_Source WHERE IsDeleted = 0 AND LOWER(Title) IN (SELECT LOWER(Title) FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING COUNT(*) > 1)"
-
-$undeclared = @($variantRows | Select-Object -Skip 1 | Where-Object { $_ -match '\S' } | ForEach-Object {
-  $cols = ($_ -split '\s{2,}') | Where-Object { $_ -match '\S' }
-  if ($cols.Count -ge 3 -and -not $declared["$($cols[0].Trim().ToLower())|$($cols[1].Trim().ToLower())|$($cols[2].Trim())"]) { $_.Trim() }
-})
-"undeclared date variants = $($undeclared.Count)"
-$undeclared
+```
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18614/api/v1/masterdata/sources?pageSize=0" --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-14-out\sources.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- seed-sources --sources C:\repos\Quotinator\.claude\temp\qt-import-14-out\sources.json --declared C:\repos\Quotinator\data\sources
 ```
 
-**Expected:** **A**, **B** and **C** all return **no rows**. `undeclared date variants = 0`.
+**Expected:** no exact duplicate, no casing duplicate, and no undeclared date variant.
 
-**C asserts; it does not list.** A title carrying two dates is ambiguous only while nobody has said
-which reading applies, and there are exactly two ways to say it: a dated `SourceAliasRule` when one of
-the dates is wrong, or a pair of `sources[]` declarations when the title really does name two works.
-Once either is in place the variant is *permitted*, and C passes. Until then it fails, which is the
-point: a wrong date must not reach the database unremarked just because nothing crashed.
+An **exact duplicate** is the same title, type and date stored twice, which nothing legitimises. A **casing duplicate** is
+two spellings of one title that `sourceAliasFile` should have merged onto a canonical form. An **undeclared date variant**
+is a title carrying two dates with nobody having said which reading applies, and there are exactly two ways to say it: a
+dated `SourceAliasRule` when one of the dates is wrong, or a pair of `sources[]` declarations when the title really does
+name two works. Once either is in place the variant is permitted and passes. Until then it fails, because a wrong date
+must not reach the database unremarked just because nothing crashed.
 
-**It was a listing until 2026-09-08, and that was the defect.** A row a human is asked to eyeball is a
-promise rather than a verification (`process.md` refuses exactly that shape), so the check passed while
-nine wrong dates sat in the database. Making it assert is what forced them to be resolved.
-
-**A** is a true duplicate: nothing legitimises the same title, type *and* date stored twice.
-**B** is an alias failure: two spellings of one title that `sourceAliasFile` should have merged onto a
-canonical form. Neither is confounded by dates, which is what makes them assertable.
-
-**Rewritten 2026-09-08, because the previous query could not pass.** It grouped on
-`(LOWER(Title), Type)` alone and expected no rows: an assertion that
-[#374](https://github.com/DutchJaFO/Quotinator/issues/374) had already made unsatisfiable:
-`ImportActionPlanner`'s `ResolveSourceAsync` deliberately gives a second-or-later variant with a
-different date its own Source row, *"to avoid colliding with the first"*. The proof it was the query
-and not the data: **The Lion King** (1994 / 2019) is two genuinely distinct films, and the seed log
-*warns about it by name* asking for exactly the confirmation **C** now collects, so the test failed on
-behaviour the application announces as expected.
-
-Measured on a fresh container the same day: the old query returned **11 rows**, of which **0** were
-true duplicates (**A** empty), **2** were casing failures (**B**: `Back to the future` beside
-`Back to the Future`, `The Silence of the lambs` beside `The Silence of the Lambs`) and the rest were
-date variants. Eleven rows of mixed signal, where two of them were the real finding.
-
-**Those two were then resolved, and B now returns no rows** (re-measured 2026-09-08 against a rebuilt
-image). Not by changing how the importer behaves, but by **declaring the canonical spelling**, two new
-entries in `nikhilnamal17-source-aliases.json`.
-
-**A code fix was written first and reverted, and the reason it was wrong is the rule this check now
-enforces.** `ResolveSourceAsync` was made to adopt the stored title's casing when creating a variant.
-That cleared B, but by hiding the disagreement: whichever spelling was stored first would become
-canonical, so a first-seen `the mOvie Title` would silently absorb every later, correct
-`The Movie Title` with nothing left to notice. Developer rule, 2026-09-08: **casing duplicates need to
-be explicitly permitted; they must not be hidden.** The importer therefore keeps the incoming spelling
-(`ResolveSourceAsync_DateVariantOfDifferentlyCasedTitle_KeepsBothSpellingsVisible`), both spellings
-reach the database, this check reports them, and a reviewed `SourceAliasRule` is what resolves it
+**Casing duplicates are explicitly permitted, never hidden** (developer rule, 2026-09-08). The importer keeps the incoming
+spelling (`ResolveSourceAsync_DateVariantOfDifferentlyCasedTitle_KeepsBothSpellingsVisible`), both reach the database, this
+check reports them, and a reviewed `SourceAliasRule` is what resolves it
 (`ResolveSourceAsync_DifferentlyCasedTitle_WithAliasDeclared_ResolvesToTheCanonicalSpelling`).
-
-That is also why the matching itself was never at fault: with agreeing dates a case-only difference
-already resolves to the existing row, proved by
-`ResolveSourceAsync_QuoteWithDifferentlyCasedTitle_SameDate_ReusesTheExistingSource`. Only a
-legitimately-created date variant could carry a second spelling into the database.
-
-**C still lists 11 rows and is expected to**, because a wrong date is a data question, not a code one.
-`Back to the Future` (`1985,1958`) and `The Silence of the Lambs` (`1991,1998`) are one film each with
-one wrong date, now under a single spelling, visible in C rather than misreported by B.
-
-The container is stopped for the copy, which this step did not do before: a copy taken while the app
-holds the database open can omit rows the WAL has not yet checkpointed, and a *missing* duplicate reads
-as a pass.
 
 ### 5. Confirm each bundled file still matches what its own converter produces
 
-**This is the step that makes this document the suite's external-data sentinel**, and the only place in
-the project allowed to go red because the outside world changed rather than because this project broke.
-Developer rule, 2026-09-08: *tests should not rely on bundled data to stay green, with the exception of
-the feature smoke test that exists purely to be aware of changes in the external data that may affect
-our rules.* Unit tests therefore use fixtures; this step watches the real thing.
+**There is nothing to run here until [#400](https://github.com/DutchJaFO/Quotinator/issues/400) delivers this step.** It
+is this document's watch on external data, the only place in the project allowed to go red because the outside world
+changed rather than because this project broke (developer rule, 2026-09-08). What it was written to run could not run for
+anybody: it looped over a manifest property that does not exist, and called a `--convert` option the application does not
+have. #400 item 6 replaces it with a runnable step, reached through the source refresh. `Quotinator:AutoUpdateSources` is
+off by default (#424), so a container seeds the checked-in copy and that step will have to turn the refresh on for its run.
 
-**This step cannot run, by anybody, and [#441](https://github.com/DutchJaFO/Quotinator/issues/441)
-owns fixing it.** Two faults, neither of which the correction below touches:
-
-- **`$manifest.sources` names an array the manifest does not have.** Its array is `files`, confirmed
-  by reading `data/sources/manifest.json` on 2026-10-21. So the `foreach` iterates nothing, the step
-  prints nothing, and that is indistinguishable from `0 diverging date(s)`: the sentinel reads as a
-  pass whatever the outside world did. #441 calls this the most serious of its six, because the
-  measurement recorded below cannot have come from this command and cannot currently be reproduced.
-- **`--convert` does not exist.** `src/Quotinator.Api` has no such argument, so even with the array
-  name corrected there is nothing to run. #441's own correction column says so.
-
-An AI assistant must not run `dotnet run` against `src/Quotinator.Api` either, per `CLAUDE.md`, which
-names a real IIS Express outage that needed a reboot. That is a separate reason and a weaker one: this
-step is blocked for a developer too.
-
-Do not repair the two faults above as part of another issue. #441's first item is the developer
-deciding which PowerShell edition the suite targets, and these steps are the evidence that decision
-rests on.
-
-```powershell
-$manifest = Get-Content data/sources/manifest.json -Raw | ConvertFrom-Json
-foreach ($entry in $manifest.sources | Where-Object { $_.converter -and $_.github }) {
-  $raw = "scripts/cache/$($entry.file)"
-  if (-not (Test-Path $raw)) { "$($entry.file): no cached raw; skipped"; continue }
-
-  $out = Join-Path $env:TEMP "regen-$($entry.file)"
-  dotnet run --project src/Quotinator.Api -- --convert $raw $out --converter $entry.converter 2>$null
-
-  $regen = (Get-Content $out -Raw | ConvertFrom-Json)
-  $live  = (Get-Content "data/sources/$($entry.file)" -Raw | ConvertFrom-Json)
-
-  # Windows PowerShell 5.1 has no ?? operator: both shapes are read explicitly instead.
-  $liveQuotes  = if ($null -ne $live.quotes)  { $live.quotes }  else { $live }
-  $regenQuotes = if ($null -ne $regen.quotes) { $regen.quotes } else { $regen }
-
-  $liveByKey = @{}; foreach ($q in $liveQuotes) { $liveByKey["$($q.quote) $($q.source)"] = $q.date }
-
-  $drift = foreach ($q in $regenQuotes) {
-    $k = "$($q.quote) $($q.source)"
-    if ($liveByKey.ContainsKey($k) -and $liveByKey[$k] -ne $q.date) {
-      "  $($q.source): checked-in=$($liveByKey[$k]) upstream=$($q.date)"
-    }
-  }
-  "$($entry.file): $(@($drift).Count) diverging date(s)"
-  $drift
-}
-```
-
-**Expected:** `0 diverging date(s)` for every file.
-
-**`??` was a parse error here, and removing it is the smallest of the three faults.** Null-coalescing
-is PowerShell 7; Windows PowerShell 5.1 rejects the whole block before its first statement, so the
-step failed on syntax rather than reporting divergences. Corrected 2026-10-21 so the block at least
-parses, which changes nothing about the two faults above: the step still iterates nothing and still
-calls an argument that does not exist. #441 found this on 2026-10-10 as four of its six items, before
-#327's own run reached the step.
-
-**A divergence is not a converter bug: it means a correction was put somewhere that does not survive.**
-`Quotinator:AutoUpdateSources` is off by default (#424), so a container seeds the checked-in copy. Turned
-on, it re-downloads the raw upstream file and re-runs the converter over it at startup, overwriting that
-copy, and a bundled file refreshed by hand is regenerated the same way. Either way, anything
-hand-edited into `data/sources/` is lost the next time the file is regenerated, while still reading as
-fixed in the repository until then. The
-supported mechanism is a `ConflictResolutionRule` in that file's own `ruleFile`, which survives
-regeneration.
-
-**Measured 2026-09-08: five divergences in `NikhilNamal17_popular-movie-quotes.json`,** and in three
-of them the checked-in value is the *correct* year while upstream's is wrong, so the live container
-seeds worse data than the repository appears to hold:
-
-| Quote / Source | Checked in | Seeded |
-|---|---|---|
-| "Do, or do not…" (Empire Strikes Back) | `null` | 1890 |
-| "Life is a banquet…" (Auntie Mame) | 2005 | 1958 |
-| "Even the smallest person…" (LOTR Fellowship) | 2002 | 2001 |
-| "Following's not really my style." (The Avengers) | 2019 | 2012 |
-| "I have nothing to prove to you" (Captain Marvel) | 2019 | 2013 |
-
-**Written as a unit test first, and that was the wrong place.** It lived in
-`BasicJsonArrayConverterTests` for one commit; pinned to bundled and upstream-derived data, it would go
-red whenever the outside world moved rather than when this project regressed. The converter's own
-behaviour stays covered there by fixtures.
+**Expected:** no command, and nothing to record. This is not a pass: the comparison has not been made.
 
 ### 6. Confirm every no-op resolution is one somebody has accounted for
 
 **This is the step that makes a missing rule visible.** Since [#377](https://github.com/DutchJaFO/Quotinator/issues/377)
-an import action whose resolution settles on the values already stored is classified
-`ResolvedToExisting` rather than `Modify`, so for the first time these rows are a countable
-population instead of being hidden inside the modified count. Each one is either a rule somebody should
-declare, or legitimately nothing; the two answers are both present in the bundled corpus today and
-neither is currently written down anywhere.
+an import action whose resolution settles on the values already stored is classified `ResolvedToExisting` rather than
+`Modify`, so these rows are a countable population. Each is either a rule somebody should declare, or legitimately nothing.
 
-**This step needs its own environment, with the batch auto-purge turned off.** The smoke profile sets
-`Quotinator__AutoPurgeBundledImportActions=true`, so a cleanly-applied batch's `Import_Action` rows are
-deleted the moment it applies, which is correct behaviour and exactly what makes these rows invisible
-to `GET /import/actions` in the shared environment. Found by running this step as first written against
-the shared container and getting an empty list.
-
-```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-import-14-noop --port 18653 `
-  --env Quotinator__AutoPurgeBundledImportActions=false
-$noopBase = "http://localhost:18653/api/v1"
-dotnet script scripts/testing/http.csx -- --url "$noopBase/admin/database/reseed" --method POST --header "X-Api-Key: smoketest" --expect 200 | Out-Null
-
-$actions = dotnet script scripts/testing/http.csx -- --url "$noopBase/import/actions?pageSize=0" --expect 200 | ConvertFrom-Json
-$noOps   = @($actions.items | Where-Object { $_.actionType -eq 'ResolvedToExisting' })
-
-"resolvedToExisting = $($noOps.Count)"
-$noOps | Group-Object entityType | ForEach-Object { "  $($_.Name) = $($_.Count)" }
-
-# Every no-op must fall into one of the two shapes we understand. Anything else is a new one, and the
-# question this step exists to ask is whether it wants a rule nobody has written yet.
-#
-#   1. A rule already covers this entity: an AlreadyApplied ConflictResolutionRule. Still doing work
-#      (it is what stops the incoming file re-imposing the wrong value), so permanent and not
-#      retirable, per #374.
-#   2. The incoming side simply does not carry the field, and the stored value legitimately wins:
-#      vilaboim's raw format has no year where NikhilNamal17's does. No rule is wanted or needed.
-$declaredRuleIds = @{}
-Get-ChildItem data/sources/*conflict-rules.json | ForEach-Object {
-  (Get-Content $_.FullName -Raw | ConvertFrom-Json).rules | ForEach-Object { $declaredRuleIds[$_.entityId.ToLower()] = $true }
-}
-
-$isUnexplained = {
-  param($action)
-  if ($declaredRuleIds[$action.entityId.ToLower()]) { return $false }   # shape 1
-  $differing = @($action.existingFields.PSObject.Properties | Where-Object {
-    "$($action.incomingFields.($_.Name))" -ne "$($_.Value)" })
-  # shape 2: every difference is a field the incoming side left empty
-  @($differing | Where-Object { "$($action.incomingFields.($_.Name))" -ne "" }).Count -gt 0
-}
-
-$unexplained = @($noOps | Where-Object { & $isUnexplained $_ })
-"unexplained no-ops = $($unexplained.Count)"
-$unexplained | Select-Object -First 10 | ForEach-Object { "  $($_.entityType) $($_.entityId)" }
-
-# Control: a row whose incoming side genuinely disagrees, with no rule declared for it.
-$control = [pscustomobject]@{ entityId = 'control'
-  existingFields = [pscustomobject]@{ date = '1972' }; incomingFields = [pscustomobject]@{ date = '1980' } }
-"control flagged = $(& $isUnexplained $control)"
-
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-14-noop
+```
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-14-noop --port 19614 --image quotinator:local --env Quotinator__AutoPurgeBundledImportActions=false
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:19614/api/v1/admin/database/reseed --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:19614/api/v1/import/actions?pageSize=0" --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-14-out\actions.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- seed-noops --actions C:\repos\Quotinator\.claude\temp\qt-import-14-out\actions.json --rules C:\repos\Quotinator\data\sources
 ```
 
-**Expected:** `resolvedToExisting` is **non-zero** and names real entity types,
-`unexplained no-ops = 0`, and `control flagged = True`.
+**Expected:** at least one no-op, counted by entity type, and each accounted for in one of two ways. A rule already covers
+the entity: an `AlreadyApplied` `ConflictResolutionRule`, still doing work and not retirable, per #374. Or the incoming side
+does not carry the field and the stored value legitimately wins, so no rule is wanted.
 
-**The control is what makes the `= 0` mean anything.** The endpoint returns `existingFields` and
-`incomingFields` as objects. A predicate that reads a property the response does not carry finds no
-differences on any row and reports `0` whatever the data holds, which is how this step was first
-written. Only a row the same predicate *does* flag separates a real pass from that.
+**On failure:** a new unexplained no-op after a source refresh means the outside world moved in a way our rules do not yet
+cover. Read that row's `existingFields` and `incomingFields`, and decide whether it wants a `ConflictResolutionRule`, a
+`SourceAliasRule`, or nothing at all. Deciding "nothing at all" is a legitimate outcome; leaving it undecided is not.
 
-**Both halves matter and neither substitutes for the other.** The `= 0` assertion alone is satisfied by
-a build that produces no actions at all (including one where the classification broke the import
-outright), which is why the count being non-zero is asserted first. This is
-`docs/testing-policy.md`'s "every test proves the positive result as well as the negative", applied to
-a document rather than a unit test.
+### 7. Nothing unexpected was thrown
 
-**It asserts; it does not list**: the same correction step 4C needed on 2026-09-08, and for the same
-reason. A row a human is asked to eyeball is a promise rather than a verification, and this document's
-own history records nine wrong dates sitting in the database while a listing passed.
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-14 --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-14-noop --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18614/api/v1/import --file C:\repos\Quotinator\docs\automated-testing\startup-and-degradation\fixtures\malformed-import.json --duplicate-resolution review --expect 422 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-14 --pattern "thrown: JsonReaderException" --at-least 1
+```
 
-**On failure:** a new unexplained no-op after a source refresh means the outside world moved in a way
-our rules do not yet cover: read the row's `existingValue`/`incomingValue` and decide whether it wants
-a `ConflictResolutionRule`, a `SourceAliasRule`, or nothing at all. Deciding "nothing at all" is a
-legitimate outcome; leaving it undecided is not.
+**Expected:** no exception has been logged by either container, the seed and the reseed included. The malformed upload then
+answers `422` and its `JsonReaderException` is logged, which is the positive control: the same channel that read zero can
+see an exception, so the zero means something.
+
+**The count comes first**, because the upload throws more than the type its control names.
+
+**On failure:** a count above zero is an issue, unless a Knowledgebase entry says otherwise. Report it with the
+line that names it.
 
 ## Observed effect
 
-Not yet established as a captured record beyond the empty pending list, the two duplicate queries and
-the drift listing, which are the observations this test exists for.
+**Measured 2026-11-01** against `quotinator:local` built from `00a9dfe2`. These figures describe the bundled sources as
+they stood, and only the checks above are asserted.
+
+| Reading | Value |
+|---|---|
+| `/version` after first boot | 795 quotes, 473 sources, 15 characters, 3 people, 31 series, 3 seasons, 8 universes, 2 stage directions, 1 sound cue, 4 conversations |
+| `status=pending`, and `status=PENDING` | `0` both ways |
+| `seed-sources` | 473 sources, 6 titles carrying more than one row, nothing flagged |
+| `seed-noops` after a reseed | 25 no-ops, 24 `Quote` and 1 `Source`, every one accounted for |
+
+Step 5 ran nothing, so the bundled files have not been compared with their converters.
+
+**No exception was logged by either container before the malformed upload**, the seed and the reseed included. That
+upload's `JsonReaderException` was then logged once.
 
 ## Canary
 
-**Step 3 asserts an absence, and on its own it is the weakest shape this suite has.** Nothing left
-staged awaiting review is what a clean seed produces, and also what a seed that imported nothing, a
-broken staging path and a regressed status filter all produce. Steps 2 and 6 are what give it meaning:
-step 2 reads what the boot actually seeded, so the container is known to have content, and step 6
-requires every no-op resolution to be one somebody has accounted for, so an empty list is not accepted
-as self-explanatory.
+**Step 3 asserts an absence, and on its own it is the weakest shape this suite has.** Nothing left staged awaiting review
+is what a clean seed produces, and also what a seed that imported nothing, a broken staging path and a regressed status
+filter all produce. Steps 2 and 6 are what give it meaning: step 2 reads what the boot actually seeded, and step 6 requires
+at least one no-op and every no-op accounted for, so an empty list is not accepted as self-explanatory.
 
-A run that reports step 3 green without step 2's non-zero reading has established nothing at all.
+For the pre-fix form, build the commit before [#181](https://github.com/DutchJaFO/Quotinator/issues/181)'s first code
+change, under a distinct tag, and run steps 2 to 4 against it: the bundled files do not all resolve cleanly there, so step 3
+finds rows awaiting review and step 4 finds the duplicate Sources that went with them.
 
-For the pre-fix form, build the commit before
-[#181](https://github.com/DutchJaFO/Quotinator/issues/181)'s first code change, under a distinct tag,
-and run steps 2 to 4 against it: the bundled files do not all resolve cleanly there, so step 3 finds
-rows awaiting review and step 4 finds the duplicate Sources that went with them.
-
-**Step 5 cannot run**, for the reason the `Fully green after:` field states, and
-[#400](https://github.com/DutchJaFO/Quotinator/issues/400) owns it. Pin
-`Quotinator__AutoPurgeBundledImportActions` for every run: an empty list produced by auto-purge is
-indistinguishable from an empty list produced by the behaviour under test.
+**Step 5 has no canary**, for the reason the `Fully green after:` field states. Pin
+`Quotinator__AutoPurgeBundledImportActions` for every run: an empty list produced by auto-purge is indistinguishable from an
+empty list produced by the behaviour under test.
 
 Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-```powershell
+```
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-14
-Get-ChildItem .claude/temp -Filter 'inspect-181.db*' | Remove-Item
-Get-ChildItem .claude/temp -Filter 'inspect-181.db*'
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-14-noop
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-import-14-out
 ```
 
-**Expected:** the second listing is empty. The copy gains `-wal`/`-shm` sidecars when DbInspector opens
-it in step 4, whether or not the `docker cp` of those files found any.
+**Expected:** both containers, their volumes and the output directory are gone.
