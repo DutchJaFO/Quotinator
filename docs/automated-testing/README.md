@@ -715,13 +715,13 @@ already stored, and since #373 that is an `Unchanged` no-op applied at once: `20
 review. Every document that uploaded `quotinator-curated.json` expecting `202` stopped running as written
 for that reason (#411).
 
-**Two needs have no tool option yet**, so a document that needs one gets that option first, tested, in
-the work that converts it, never a variable or a pipe in its place:
+**A need with no tool option yet gets that option first, tested, in the work that converts the document**,
+never a variable or a pipe in its place. Two were met that way:
 
-- **A JSON request body.** `http.csx` reads one only from stdin (`--json-stdin`), which takes a pipe.
-- **A value from one response used in a later command**, an id in a URL. A step reading
-  `…/apply?batchId=<batchId>` cannot run unattended, and capturing the value in a shell variable breaks
-  the rule above.
+- **A JSON request body** is a committed fixture, sent with `http.csx --json-file`.
+- **A value from one response used in a later command**, an id in a URL, goes through `TestProbe url`, which
+  writes the URL to a file for `http.csx --url-file`. A step reading `…/apply?batchId=<batchId>` could not run
+  unattended, and capturing the value in a shell variable breaks the rule above.
 
 A value a document genuinely cannot derive, one a *person* chooses, such as which of several rows to
 corrupt, stays explicit, and the step says how to choose it.
@@ -1098,7 +1098,7 @@ an entry needs; a happy-path-only test has nothing to contribute.
 
 ## Observed effects awaiting measurement
 
-**44 of 81 documents describe their effect without having measured it.** Each row below names the
+**43 of 81 documents describe their effect without having measured it.** Each row below names the
 quantity its next run must read, so the measurement is a specific act rather than a vague intention to
 look. A document leaves this list by recording `**Measured <date>**` in its own section, and
 `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails if it does so while its row is still
@@ -1119,7 +1119,6 @@ asserts what it should; what is missing is a reading an entry can quote.
 | [identity-and-casing/03-conversation-line-quote-id-fk-safety.md](identity-and-casing/03-conversation-line-quote-id-fk-safety.md) | The foreign-key violation count either side of the mismatched line |
 | [identity-and-casing/04-read-time-presentation-of-string-typed-ids.md](identity-and-casing/04-read-time-presentation-of-string-typed-ids.md) | The `checked` field count each of the three reads inspects |
 | [identity-and-casing/05-generic-repository-select-list-wrapping.md](identity-and-casing/05-generic-repository-select-list-wrapping.md) | The `items` and `checked` counts per generic-repository-backed endpoint |
-| [import-and-staged-actions/01-staged-action-review-workflow.md](import-and-staged-actions/01-staged-action-review-workflow.md) | The status tally after each stage: staged, decided, undone, applied |
 | [import-and-staged-actions/02-two-phase-decide-apply-reversal.md](import-and-staged-actions/02-two-phase-decide-apply-reversal.md) | The preview's own count, and the rows the reversal restores |
 | [import-and-staged-actions/03-batch-id-mode-alias.md](import-and-staged-actions/03-batch-id-mode-alias.md) | The staged state before the apply and after it |
 | [import-and-staged-actions/04-discard.md](import-and-staged-actions/04-discard.md) | The action states either side of the discard, and the refusal body when it is refused |

@@ -450,6 +450,11 @@
     <File Path="docs/automated-testing/notifications-and-changelog/15-a-created-database-says-so.md" />
     <File Path="docs/automated-testing/notifications-and-changelog/16-each-applied-migration-says-what-it-did.md" />
   </Folder>
+  <Folder Name="/docs/automated-testing/import-and-staged-actions/fixtures/">
+    <File Path="docs/automated-testing/import-and-staged-actions/fixtures/decide-keep.json" />
+    <File Path="docs/automated-testing/import-and-staged-actions/fixtures/review-quote-conflict.json" />
+    <File Path="docs/automated-testing/import-and-staged-actions/fixtures/review-quote.json" />
+  </Folder>
   <Folder Name="/docs/automated-testing/import-and-staged-actions/">
     <File Path="docs/automated-testing/import-and-staged-actions/01-staged-action-review-workflow.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/02-two-phase-decide-apply-reversal.md" />

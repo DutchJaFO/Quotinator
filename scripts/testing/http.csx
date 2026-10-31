@@ -25,7 +25,9 @@
 //   dotnet-script scripts/testing/http.csx -- --url <url> [options]
 //
 // Options:
-//   --url    <url>        The full URL to call, including the host port (required)
+//   --url    <url>        The full URL to call, including the host port (this or --url-file is required)
+//   --url-file <path>     Read the URL from this file, written by TestProbe url, for a URL carrying a value
+//                         an earlier response returned
 //   --method <verb>       GET (default), POST, PUT, PATCH or DELETE
 //   --api-key <key>       Value for the X-Api-Key header (default: smoketest, what the test
 //                         environment sets). --no-key omits the header entirely, which is how a test
@@ -47,6 +49,7 @@
 //   --json-stdin          Read the request body from stdin and send it as application/json. A leading
 //                         BOM is stripped: PowerShell 5.1 adds one when it pipes a string to a native
 //                         process, and it would otherwise reach the server as part of the body
+//   --json-file <path>    Send this file as the application/json request body, which needs no pipe
 //   --expect <code>       Exit 1 unless the response status is exactly this. What makes a failing step
 //                         stop the run at the step that caused it
 //   --wait-for <code>     Poll until the response status is exactly this, then carry on and report it
@@ -79,10 +82,25 @@ List<string> Values(string flag)
 }
 
 string? url = Value("--url");
+string? urlFile = Value("--url-file");
+string? jsonFile = Value("--json-file");
+
+foreach (string? named in new[] { urlFile, jsonFile })
+{
+    if (named is not null && !File.Exists(named))
+    {
+        Console.Error.WriteLine($"File not found: {named}");
+        Environment.Exit(1);
+        return;
+    }
+}
+
+if (urlFile is not null)
+    url = File.ReadAllText(urlFile).Trim();
 
 if (string.IsNullOrEmpty(url))
 {
-    Console.Error.WriteLine("Usage: dotnet-script scripts/testing/http.csx -- --url <url> [--method <verb>] [...]");
+    Console.Error.WriteLine("Usage: dotnet-script scripts/testing/http.csx -- --url <url> | --url-file <path> [--method <verb>] [...]");
     Environment.Exit(1);
     return;
 }
@@ -150,6 +168,10 @@ if (file is not null)
     }
 
     content = form;
+}
+else if (jsonFile is not null)
+{
+    content = new StringContent(File.ReadAllText(jsonFile), System.Text.Encoding.UTF8, "application/json");
 }
 else if (Flag("--json-stdin"))
 {

@@ -1,0 +1,14 @@
+{
+  "quotes": [
+    {
+      "id": "a4c17e30-6d2b-4e8a-9f15-3c70e1b8d401",
+      "quote": "A different test text, which conflicts with the stored one.",
+      "originalLanguage": "en",
+      "source": "Xyzzyreview Harbour",
+      "date": "2026",
+      "type": "movie",
+      "genres": ["drama"],
+      "translations": {}
+    }
+  ]
+}

@@ -106,6 +106,18 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-star
 after it. The timestamps are the Docker daemon's own (`docker logs --timestamps`), so the host clock
 plays no part.
 
+### `url`: use a value from a saved response in a later request's URL
+
+```bash
+dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18601/api/v1/import/actions/{actionId}/undo" --value actionId=C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending.json#items.0.id --out C:\repos\Quotinator\.claude\temp\qt-import-01-out\undo-url.txt
+dotnet script scripts/testing/http.csx -- --method POST --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\undo-url.txt --expect 204 --status
+```
+
+Fills each `{name}` in `--template` and writes the URL to `--out`, printing it. `--value <name>=<file>#<path>` takes a
+field from a saved JSON response, with the same path syntax as `json`, and `--upper-value` does the same in upper
+case, for a test proving a comparison ignores case. A missing file or field, a value with no placeholder, or a
+placeholder with no value exits `1` and writes nothing, so a later request cannot run against a half-built URL.
+
 ## Design notes
 
 - Each command is its own class with one job (`Commands/`); `CommandDispatcher` only selects the command

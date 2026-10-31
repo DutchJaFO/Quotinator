@@ -11,6 +11,7 @@ internal static class CommandDispatcher
         ["json"] = new JsonCommand(),
         ["file"] = new FileCommand(),
         ["log"] = new LogCommand(),
+        ["url"] = new UrlCommand(),
     };
 
     /// <summary>
