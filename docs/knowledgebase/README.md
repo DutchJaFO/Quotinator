@@ -24,3 +24,4 @@ per `knowledgebase.md`'s bootstrapping rule, entries come first and codes are as
 | [Startup reports that database initialisation failed, and a Reset is refused](the-database-file-cannot-be-read.md) | Yes | 1.9.0-alpha onwards |
 | [A test environment reports it was removed, but docker could not remove it](a-test-environment-reports-removal-that-did-not-happen.md) | No | test tooling, not the application |
 | [A source refresh test fails when GitHub does not answer](a-source-refresh-test-fails-when-github-does-not-answer.md) | No | test suite, not the application |
+| [/version reports old counts after an import](version-counts-are-stale-after-an-import.md) | No | 1.9.0-alpha, the only version measured |

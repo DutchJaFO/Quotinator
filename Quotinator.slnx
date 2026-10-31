@@ -362,6 +362,7 @@
     <File Path="docs/knowledgebase/the-database-file-cannot-be-read.md" />
     <File Path="docs/knowledgebase/a-test-environment-reports-removal-that-did-not-happen.md" />
     <File Path="docs/knowledgebase/a-source-refresh-test-fails-when-github-does-not-answer.md" />
+    <File Path="docs/knowledgebase/version-counts-are-stale-after-an-import.md" />
     <File Path="docs/knowledgebase/a-quote-id-stops-working-after-an-upgrade.md" />
     <File Path="docs/knowledgebase/antiforgery-token-could-not-be-decrypted.md" />
     <File Path="docs/knowledgebase/degraded-startup-shows-every-count-as-zero.md" />

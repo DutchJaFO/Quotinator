@@ -449,6 +449,7 @@ public partial class RepositoryStructureTests
         List<string> routes =
         [
             .. ContentListRoute().Matches(endpoints).Select(match => match.Groups["route"].Value),
+            .. ResetDocumentOtherReads,
         ];
 
         Assert.IsNotEmpty(counters, "DatabaseSeedSummaryResponse has no counters to check.");
@@ -857,6 +858,9 @@ public partial class RepositoryStructureTests
         Path.Combine(RepoRoot, "docs", "automated-testing");
 
     private static readonly string[] ResetDocumentPorts = ["18303", "19303"];
+
+    // /version must agree with the list routes, and Reset's own notification is part of what it does.
+    private static readonly string[] ResetDocumentOtherReads = ["/api/v1/version", "/api/v1/notifications"];
 
     /// <summary>
     /// Test documents live in category subfolders; the index itself sits at the folder root and is not

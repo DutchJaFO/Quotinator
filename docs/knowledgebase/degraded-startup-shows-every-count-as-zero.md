@@ -47,3 +47,6 @@ Measured 2026-09-26: a database holding 799 quotes, started with a read-only dat
 database holding 795 quotes whose migration was refused for want of a backup, both showed every count as
 `0`. The popup and the Statistics page first shipped in 1.8.3; that release was not measured. #428 makes
 both surfaces withhold the counts while the database is degraded, instead of showing a number.
+
+Counts that lag while the application is healthy, with `/version` answering `200` and `status=ready`, are
+[a different condition](version-counts-are-stale-after-an-import.md).
