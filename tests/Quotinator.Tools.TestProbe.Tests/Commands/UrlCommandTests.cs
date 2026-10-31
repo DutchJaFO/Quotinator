@@ -44,6 +44,15 @@ public sealed class UrlCommandTests
     }
 
     [TestMethod]
+    public void Url_LowerValue_FillsItInLowerCase()
+    {
+        File.WriteAllText(_body, """{"batchId":"AB12"}""");
+
+        Assert.AreEqual(0, Run("http://h/x?batchId={batchId}", "--lower-value", $"batchId={_body}#batchId"));
+        Assert.AreEqual("http://h/x?batchId=ab12", File.ReadAllText(_out));
+    }
+
+    [TestMethod]
     public void Url_FieldMissingFromTheFile_ExitsOneAndWritesNothing()
     {
         Assert.AreEqual(1, Run("http://h/x/{id}", "--value", $"id={_body}#absent"));

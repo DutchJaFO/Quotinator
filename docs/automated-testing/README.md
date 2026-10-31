@@ -698,6 +698,13 @@ instrument bugs came from: `grep -c` counts lines, not matches; a pattern misses
 pretty-printed spec; a check for a case variant matches the correctly-cased row. `TestProbe json`
 asserts on a parsed field, and `TestProbe log` counts occurrences, not lines.
 
+**A comparison that ignores case is tested with both casings, and with a value that must not match** (developer
+direction, 2026-10-31). Send the value upper-cased and lower-cased with `TestProbe url --upper-value` and
+`--lower-value`, and read both answers. **Never assume how a value is stored:** a test reaches the data only through
+the REST server, which may correct a value as it is read or filtered, so what a response shows says nothing about what
+the database holds. Found live: `import-and-staged-actions/01` sent a lower-cased id because ids "are stored lowercase",
+then an upper-cased one for the same reason, each proving one form and resting on an assumption.
+
 **Wait for a condition, never a duration**, and give up rather than hang: `TestProbe wait-field` for a
 field's value, `http.csx --wait-for` for a status code.
 

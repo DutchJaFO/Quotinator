@@ -20,9 +20,13 @@ run stages through it.
 - **Nothing here depends on a bundled file.** The conflict is between this document's two fixtures.
 - **`review` policy is forced explicitly.** The conflicting text would otherwise be resolved on the spot,
   leaving nothing pending.
-- **`status=pending` is deliberately lowercase, and the `batchId` on the apply call is deliberately uppercase.** Both
-  prove the case-insensitive query filter (#154) is still in effect: matching the stored casing, which is lowercase
-  for an id and capitalised for a status, would pass without testing anything.
+- **Every id and status filter is sent in both cases, and with a value that must not match** (#154). Nothing here
+  assumes how a value is stored: the REST server is all this document can see. So `status` and `batchId` are read
+  upper-cased and lower-cased in step 5, an action id is used in each case across steps 6 to 9, and `batchId` in each
+  case on `apply` in step 8.
+- **Apply is refused in both cases rather than succeeding in both**, because only one apply can succeed on a batch. The
+  refusal names the pending action, so it shows the batch was found. It is also what separates the two forms from no
+  match at all: step 8 applies a batch that does not exist and reads this batch's action unchanged.
 - **The fixture stages exactly one pending `Quote`**, and the batch also carries its already-stored source as a no-op,
   so the final tally covers more actions than were ever pending.
 - **Every listing is scoped to this batch's own `batchId`.** Step 4's first import writes actions of its own, already
@@ -80,35 +84,46 @@ an empty batch. Stop.
 ### 5. List this batch's pending actions
 
 ```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18601/api/v1/import/actions?status=pending&batchId={batchId}&pageSize=0" --value batchId=C:\repos\Quotinator\.claude\temp\qt-import-01-out\conflict.json#batchId --out C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-url.txt
+dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18601/api/v1/import/actions?status=pending&batchId={batchId}&pageSize=0" --lower-value batchId=C:\repos\Quotinator\.claude\temp\qt-import-01-out\conflict.json#batchId --out C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-url.txt
 dotnet script scripts/testing/http.csx -- --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-url.txt --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending.json --equals totalCount=1 --equals items.0.entityType=Quote --equals items.0.status=Pending
+dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18601/api/v1/import/actions?status=PENDING&batchId={batchId}&pageSize=0" --upper-value batchId=C:\repos\Quotinator\.claude\temp\qt-import-01-out\conflict.json#batchId --out C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-upper-url.txt
+dotnet script scripts/testing/http.csx -- --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-upper-url.txt --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-upper.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-upper.json --equals totalCount=1 --equals items.0.entityType=Quote
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18601/api/v1/import/actions?status=pending&batchId=00000000-0000-4000-8000-000000000000&pageSize=0" --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-other-batch.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-other-batch.json --equals totalCount=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18601/api/v1/import/actions?status=decided&batchId={batchId}&pageSize=0" --value batchId=C:\repos\Quotinator\.claude\temp\qt-import-01-out\conflict.json#batchId --out C:\repos\Quotinator\.claude\temp\qt-import-01-out\other-status-url.txt
+dotnet script scripts/testing/http.csx -- --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\other-status-url.txt --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-other-status.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-other-status.json --equals totalCount=0
 ```
 
-**Expected:** exactly the one quote action the conflict created, found through a lowercase `status`.
+**Expected:** exactly the one quote action the conflict created, with `status` and `batchId` both lower-cased and both
+upper-cased. A different batch and a different status each read none, so the filters are filtering.
 
 ### 6. Decide that action, and confirm it moved
 
 ```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18601/api/v1/import/actions/{actionId}/decide" --value actionId=C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending.json#items.0.id --out C:\repos\Quotinator\.claude\temp\qt-import-01-out\decide-url.txt
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18601/api/v1/import/actions/00000000-0000-4000-8000-000000000000/decide --json-file C:\repos\Quotinator\docs\automated-testing\import-and-staged-actions\fixtures\decide-keep.json --expect 404 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18601/api/v1/import/actions/{actionId}/decide" --lower-value actionId=C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending.json#items.0.id --out C:\repos\Quotinator\.claude\temp\qt-import-01-out\decide-url.txt
 dotnet script scripts/testing/http.csx -- --method POST --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\decide-url.txt --json-file C:\repos\Quotinator\docs\automated-testing\import-and-staged-actions\fixtures\decide-keep.json --expect 204 --status
 dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18601/api/v1/import/actions?status=Decided&batchId={batchId}&pageSize=0" --value batchId=C:\repos\Quotinator\.claude\temp\qt-import-01-out\conflict.json#batchId --out C:\repos\Quotinator\.claude\temp\qt-import-01-out\decided-url.txt
 dotnet script scripts/testing/http.csx -- --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\decided-url.txt --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-01-out\decided.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\decided.json --equals totalCount=1 --equals items.0.entityType=Quote
 ```
 
-**Expected:** the decide returns `204`, and the `Decided` listing holds that action.
+**Expected:** an action that does not exist answers `404`. The real one, with its id lower-cased, returns `204`, and the
+`Decided` listing holds it.
 
 ### 7. Undo the decision
 
 ```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18601/api/v1/import/actions/{actionId}/undo" --value actionId=C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending.json#items.0.id --out C:\repos\Quotinator\.claude\temp\qt-import-01-out\undo-url.txt
+dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18601/api/v1/import/actions/{actionId}/undo" --upper-value actionId=C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending.json#items.0.id --out C:\repos\Quotinator\.claude\temp\qt-import-01-out\undo-url.txt
 dotnet script scripts/testing/http.csx -- --method POST --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\undo-url.txt --expect 204 --status
 dotnet script scripts/testing/http.csx -- --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-url.txt --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-after-undo.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-after-undo.json --equals totalCount=1 --equals items.0.status=Pending
 ```
 
-**Expected:** `204`, and the action is back under `Pending`.
+**Expected:** `204` with the id upper-cased, and the action is back under `Pending`.
 
 ### 8. Confirm apply is refused while anything is pending
 
@@ -116,21 +131,30 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18601/api/v1/import/actions/apply?batchId={batchId}" --upper-value batchId=C:\repos\Quotinator\.claude\temp\qt-import-01-out\conflict.json#batchId --out C:\repos\Quotinator\.claude\temp\qt-import-01-out\apply-url.txt
 dotnet script scripts/testing/http.csx -- --method POST --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\apply-url.txt --expect 422 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-01-out\apply-refused.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\apply-refused.json --length-equals pendingActionIds=1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18601/api/v1/import/actions/apply?batchId={batchId}" --lower-value batchId=C:\repos\Quotinator\.claude\temp\qt-import-01-out\conflict.json#batchId --out C:\repos\Quotinator\.claude\temp\qt-import-01-out\apply-lower-url.txt
+dotnet script scripts/testing/http.csx -- --method POST --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\apply-lower-url.txt --expect 422 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-01-out\apply-refused-lower.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\apply-refused-lower.json --length-equals pendingActionIds=1
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18601/api/v1/import/actions/apply?batchId=00000000-0000-4000-8000-000000000000" --status
+dotnet script scripts/testing/http.csx -- --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-url.txt --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-after-other-apply.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-after-other-apply.json --equals totalCount=1 --equals items.0.status=Pending
 ```
 
-**Expected:** `422`, naming the one undecided action. That is the batch-apply-atomicity contract working as designed.
+**Expected:** `422` in both cases, naming the one undecided action. That is the batch-apply-atomicity contract working as
+designed. Applying a batch that does not exist touches nothing: this batch's action is still `Pending`. That call's
+status is printed, not asserted, because whether it should answer `200` is not settled.
 
 ### 9. Decide it again
 
 ```
-dotnet script scripts/testing/http.csx -- --method POST --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\decide-url.txt --json-file C:\repos\Quotinator\docs\automated-testing\import-and-staged-actions\fixtures\decide-keep.json --expect 204 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18601/api/v1/import/actions/{actionId}/decide" --upper-value actionId=C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending.json#items.0.id --out C:\repos\Quotinator\.claude\temp\qt-import-01-out\decide-upper-url.txt
+dotnet script scripts/testing/http.csx -- --method POST --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\decide-upper-url.txt --json-file C:\repos\Quotinator\docs\automated-testing\import-and-staged-actions\fixtures\decide-keep.json --expect 204 --status
 dotnet script scripts/testing/http.csx -- --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-url.txt --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-none.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-none.json --equals totalCount=0
 ```
 
-**Expected:** `204`, and nothing left pending, so `apply` can succeed.
+**Expected:** `204` with the id upper-cased, and nothing left pending, so `apply` can succeed.
 
-### 10. Apply the batch, with the `batchId` in upper case
+### 10. Apply the batch
 
 ```
 dotnet script scripts/testing/http.csx -- --method POST --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\apply-url.txt --expect 200 --status
@@ -146,9 +170,13 @@ dotnet script scripts/testing/http.csx -- --url-file C:\repos\Quotinator\.claude
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\batch.json --equals totalCount=2 --equals items.0.status=Applied --equals items.1.status=Applied
 dotnet script scripts/testing/http.csx -- --url http://localhost:18601/api/v1/quotes/a4c17e30-6d2b-4e8a-9f15-3c70e1b8d401 --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-01-out\quote.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\quote.json --equals "quote=The original test text owned by the review document."
+dotnet script scripts/testing/http.csx -- --url http://localhost:18601/api/v1/quotes/A4C17E30-6D2B-4E8A-9F15-3C70E1B8D401 --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-01-out\quote-upper.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\quote-upper.json --equals "quote=The original test text owned by the review document."
+dotnet script scripts/testing/http.csx -- --url http://localhost:18601/api/v1/quotes/00000000-0000-4000-8000-000000000000 --expect 404 --status
 ```
 
-**Expected:** both of the batch's actions read `Applied`, and the quote still holds the text the decision kept.
+**Expected:** both of the batch's actions read `Applied`. The quote still holds the text the decision kept, read with
+its id in either case, and an id that does not exist answers `404`.
 
 ### 12. Nothing unexpected was thrown
 
@@ -169,6 +197,7 @@ line that names it.
 
 ## Observed effect
 
+
 **Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
 
 | Stage | Answer | This batch's actions |
@@ -177,14 +206,21 @@ line that names it.
 | `GET /import/conflicts` | `404` | |
 | Import the quote | `200` | |
 | Import the conflict under `review` | `202`, one `pendingActionIds` entry | |
-| `status=pending` | `200` | 1, `Quote`, `Pending` |
-| Decide | `204` | 1 `Decided` |
-| Undo | `204` | 1 `Pending` |
-| Apply with an upper-case `batchId`, one still pending | `422`, one `pendingActionIds` entry | |
-| Decide again | `204` | 0 `Pending` |
-| Apply with the same upper-case `batchId` | `200` | 2, both `Applied` |
+| `status=pending`, `batchId` lower-cased | `200` | 1, `Quote`, `Pending` |
+| `status=PENDING`, `batchId` upper-cased | `200` | 1, `Quote` |
+| A `batchId` that does not exist | `200` | 0 |
+| `status=decided` while it is pending | `200` | 0 |
+| Decide an action that does not exist | `404` | |
+| Decide, id lower-cased | `204` | 1 `Decided` |
+| Undo, id upper-cased | `204` | 1 `Pending` |
+| Apply, `batchId` upper-cased, one still pending | `422`, one `pendingActionIds` entry | |
+| Apply, `batchId` lower-cased, one still pending | `422`, one `pendingActionIds` entry | |
+| Apply a batch that does not exist | `200` | 1 `Pending`, untouched |
+| Decide, id upper-cased | `204` | 0 `Pending` |
+| Apply, `batchId` upper-cased | `200` | 2, both `Applied` |
 
-`GET /quotes/{id}` then read the original text the decision kept.
+`GET /quotes/{id}` read the original text the decision kept with the id in lower case and in upper case, and answered
+`404` for an id that does not exist.
 
 **No exception was logged before the malformed upload**, the refused apply included. That upload's
 `JsonReaderException` was then logged once.

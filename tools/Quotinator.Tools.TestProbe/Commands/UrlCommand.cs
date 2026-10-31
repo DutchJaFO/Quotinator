@@ -14,9 +14,14 @@ namespace Quotinator.Tools.TestProbe.Commands;
 internal sealed partial class UrlCommand : IProbeCommand
 {
     private const string TemplateOption = "--template";
-    private const string ValueOption = "--value";
-    private const string UpperValueOption = "--upper-value";
     private const string OutOption = "--out";
+
+    private static readonly (string Option, Func<string, string> Transform)[] Transforms =
+    [
+        ("--value", text => text),
+        ("--upper-value", text => text.ToUpperInvariant()),
+        ("--lower-value", text => text.ToLowerInvariant()),
+    ];
 
     /// <inheritdoc/>
     public ExpectationResult Run(IReadOnlyList<string> args, TextReader stdin)
@@ -31,11 +36,11 @@ internal sealed partial class UrlCommand : IProbeCommand
 
         string url = template;
 
-        foreach ((string option, bool upper) in new[] { (ValueOption, false), (UpperValueOption, true) })
+        foreach ((string option, Func<string, string> transform) in Transforms)
         {
             foreach (string[] value in OptionReader.All(args, option, 1, out _))
             {
-                string? failure = Fill(ref url, value[0], upper);
+                string? failure = Fill(ref url, value[0], transform);
 
                 if (failure is not null)
                 {
@@ -53,7 +58,7 @@ internal sealed partial class UrlCommand : IProbeCommand
         return ExpectationResult.Passed(url);
     }
 
-    private static string? Fill(ref string url, string argument, bool upper)
+    private static string? Fill(ref string url, string argument, Func<string, string> transform)
     {
         int nameEnd = argument.IndexOf('=');
         int pathStart = argument.LastIndexOf('#');
@@ -86,7 +91,7 @@ internal sealed partial class UrlCommand : IProbeCommand
         }
 
         string text = JsonPathReader.Render(value);
-        url = url.Replace(placeholder, Uri.EscapeDataString(upper ? text.ToUpperInvariant() : text), StringComparison.Ordinal);
+        url = url.Replace(placeholder, Uri.EscapeDataString(transform(text)), StringComparison.Ordinal);
         return null;
     }
 

@@ -114,8 +114,8 @@ dotnet script scripts/testing/http.csx -- --method POST --url-file C:\repos\Quot
 ```
 
 Fills each `{name}` in `--template` and writes the URL to `--out`, printing it. `--value <name>=<file>#<path>` takes a
-field from a saved JSON response, with the same path syntax as `json`, and `--upper-value` does the same in upper
-case, for a test proving a comparison ignores case. A missing file or field, a value with no placeholder, or a
+field from a saved JSON response, with the same path syntax as `json`. `--upper-value` and `--lower-value` do the same
+in that case, so a test proving a comparison ignores case sends both forms without assuming which one the server holds. A missing file or field, a value with no placeholder, or a
 placeholder with no value exits `1` and writes nothing, so a later request cannot run against a half-built URL.
 
 ## Design notes
