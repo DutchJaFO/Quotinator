@@ -25,6 +25,23 @@ public sealed class FileOperationsTests
     }
 
     [TestMethod]
+    public void Copy_CreatesTheMissingDirectoryAndCopiesTheContent()
+    {
+        string source = InRoot("source.json");
+        string destination = Path.Combine(_root, "imports", "copied.json");
+        File.WriteAllText(source, "the content");
+
+        Assert.IsTrue(FileOperations.Copy(source, destination).Holds);
+        Assert.AreEqual("the content", File.ReadAllText(destination));
+    }
+
+    [TestMethod]
+    public void Copy_MissingSource_Fails()
+    {
+        Assert.IsFalse(FileOperations.Copy(InRoot("absent.json"), InRoot("copied.json")).Holds);
+    }
+
+    [TestMethod]
     public void ExpectText_PatternPresent_Holds()
     {
         string path = InRoot("page.html");

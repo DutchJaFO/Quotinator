@@ -467,7 +467,8 @@ divergence as a bug is as wrong as no parity test at all.
 document reaches the database through `Upload` or through the bundled seed. The `{dataDir}/imports/`
 folder, a real, documented, separately-configured path, has never been exercised here. Tracked as
 [#346](https://github.com/DutchJaFO/Quotinator/issues/346); it is new test content, not a gap this
-restructure could close by moving something.
+restructure could close by moving something. [`database-lifecycle/03`](database-lifecycle/03-reset-is-a-full-wipe.md)
+now seeds from that folder as a precondition, which is not coverage of it: it asserts nothing about the route.
 
 **The id-casing guarantees are the sharpest instance.** Every `identity-and-casing/` document proves
 capture-time canonicalization and either-casing lookup by `POST /import`, one origin of three. When

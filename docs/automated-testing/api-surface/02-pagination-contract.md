@@ -10,24 +10,23 @@
 `/quotes`, `/admin/audit` and `/import/actions` share one pagination contract, and this proves it
 holds live on all three rather than at the stub level.
 
-The rows are the test's own: step 2 imports [25 quotes](fixtures/pagination-quotes.json) through
-`POST /api/v1/import`, so a broken import blocks this document. That is the index's second honest
-resolution for a precondition, and it is named here so a blocked run reads as that.
+**Beyond the profile.** The container runs with `Quotinator__IncludeDefaultSources=false`, so nothing bundled is
+in the database. Every row is the test's own: step 2 imports [25 quotes](fixtures/pagination-quotes.json) through
+`POST /api/v1/import`, so a broken import blocks this document. That is the index's second honest resolution for
+a precondition, and it is named here so a blocked run reads as that.
 
 ## Determinism
 
-- **All three tables must hold more rows than one default page before anything is asserted.** On an
-  empty table, page 1 of nothing is not "beyond the last page", so the `422` assertion inverts to a `200`
-  and the test reports a false failure, and the default page size arrives without having limited anything.
-  `PaginationParsingTests.ValidatePageBeyondLast_ZeroTotalPages_ReturnsNull` is the unit-level statement of
-  the same behaviour. Step 3 asserts it for each table before reading anything else from it.
-- **The fixture is what fills `/import/actions`.** The Fresh profile purges the bundled batches' actions after
-  the seed, so this document needs no setting of its own, and the rows it reads there are its import's.
-- **The import adds only a few rows to `/admin/audit`.** What takes that table past one page is the first boot
-  itself, so step 3 is where a smaller first boot would show: as that precondition failing, not as a pagination
-  defect. Nothing here depends on how many rows there are beyond that.
-- **Every assertion relates a response to itself**, or to the fixed limits of the contract. No count of
-  bundled quotes appears anywhere, so a change to a source cannot fail this document.
+- **Counts are exact where the fixture decides them.** 25 quotes, and 26 import actions: one per quote and one for
+  the source they share. A bundled file cannot change them.
+- **`/quotes` and `/import/actions` hold more rows than one default page**, so step 3 shows the default limiting
+  what is returned rather than a table happening to be short.
+- **`/admin/audit` cannot show that limit here.** One import writes only a couple of audit rows, so its step 3
+  assertion is the reported `pageSize`, and the row count only that it is above `0`. The default reaching that
+  reader is what distinguishes it from the old default, `50`.
+- **On an empty table, page 1 of nothing is not "beyond the last page"**, so the `422` assertion inverts to a `200`
+  and the test reports a false failure. `PaginationParsingTests.ValidatePageBeyondLast_ZeroTotalPages_ReturnsNull`
+  is the unit-level statement of that behaviour. Step 3 is what establishes each table holds rows.
 - The admin key `http.csx` sends is what the `/admin/audit` calls need.
 
 ## Explicitly not covered here
@@ -41,11 +40,11 @@ through the full pipeline and asserts the type, so it runs deterministically in 
 ### 1. Create this test's own environment
 
 ```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete .claude/temp/qt-api-02-out
-dotnet script scripts/testing/test-env.csx -- create --name qt-api-02 --port 18102 --image quotinator:local
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-api-02-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-api-02 --port 18102 --image quotinator:local --env Quotinator__IncludeDefaultSources=false
 ```
 
-**Expected:** the app reports healthy, so the bundled seed has finished.
+**Expected:** the app reports healthy.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app
 that never became healthy.
@@ -53,40 +52,36 @@ that never became healthy.
 ### 2. Import this test's own quotes
 
 ```
-dotnet script scripts/testing/http.csx -- --url http://localhost:18102/api/v1/import --method POST --file docs/automated-testing/api-surface/fixtures/pagination-quotes.json --expect 200 --status --body-out .claude/temp/qt-api-02-out/import.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-api-02-out/import.json --equals summary.imported=25 --equals summary.errors=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18102/api/v1/import --method POST --file C:\repos\Quotinator\docs\automated-testing\api-surface\fixtures\pagination-quotes.json --expect 200 --status
 ```
 
-**Expected:** all 25 quotes are imported, with no errors.
+**Expected:** `200`. Step 3 reads what actually arrived.
 
-**On failure:** stop. `/import/actions` has no rows without this import.
+**On failure:** stop. Every table below is empty without this import.
 
 ### 3. Omit `pageSize` and read the applied default
 
 ```
-dotnet script scripts/testing/http.csx -- --url http://localhost:18102/api/v1/quotes --expect 200 --status --body-out .claude/temp/qt-api-02-out/quotes-default.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-api-02-out/quotes-default.json --greater-than totalCount=20 --equals pageSize=20 --length-equals items=20
-dotnet script scripts/testing/http.csx -- --url http://localhost:18102/api/v1/admin/audit --expect 200 --status --body-out .claude/temp/qt-api-02-out/audit-default.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-api-02-out/audit-default.json --greater-than totalCount=20 --equals pageSize=20 --length-equals items=20
-dotnet script scripts/testing/http.csx -- --url http://localhost:18102/api/v1/import/actions --expect 200 --status --body-out .claude/temp/qt-api-02-out/actions-default.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-api-02-out/actions-default.json --greater-than totalCount=20 --equals pageSize=20 --length-equals items=20
+dotnet script scripts/testing/http.csx -- --url http://localhost:18102/api/v1/quotes --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-api-02-out\quotes-default.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-api-02-out\quotes-default.json --equals totalCount=25 --equals pageSize=20 --length-equals items=20
+dotnet script scripts/testing/http.csx -- --url http://localhost:18102/api/v1/import/actions --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-api-02-out\actions-default.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-api-02-out\actions-default.json --equals totalCount=26 --equals pageSize=20 --length-equals items=20
+dotnet script scripts/testing/http.csx -- --url http://localhost:18102/api/v1/admin/audit --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-api-02-out\audit-default.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-api-02-out\audit-default.json --greater-than totalCount=0 --equals pageSize=20
 ```
 
-**Expected:** on all three, more rows exist than one page holds, the response reports `20`, and `items` holds
-exactly `20`. That is the default being applied rather than a table happening to be short.
-
-**On failure:** a `totalCount` of `20` or less is the precondition failing, not the contract: every later
-step would read a table too short to mean anything. Stop and report that.
+**Expected:** `/quotes` and `/import/actions` report `20` and return exactly `20` of their `25` and `26` rows.
+`/admin/audit` holds rows and reports `20`.
 
 ### 4. Request every row with `pageSize=0`
 
 ```
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/quotes?pageSize=0" --expect 200 --status --body-out .claude/temp/qt-api-02-out/quotes-all.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-api-02-out/quotes-all.json --greater-than totalCount=20 --equals-field pageSize=totalCount --length-equals-field items=totalCount
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/admin/audit?pageSize=0" --expect 200 --status --body-out .claude/temp/qt-api-02-out/audit-all.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-api-02-out/audit-all.json --greater-than totalCount=20 --equals-field pageSize=totalCount --length-equals-field items=totalCount
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/import/actions?pageSize=0" --expect 200 --status --body-out .claude/temp/qt-api-02-out/actions-all.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-api-02-out/actions-all.json --greater-than totalCount=20 --equals-field pageSize=totalCount --length-equals-field items=totalCount
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/quotes?pageSize=0" --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-api-02-out\quotes-all.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-api-02-out\quotes-all.json --equals totalCount=25 --equals pageSize=25 --length-equals items=25
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/import/actions?pageSize=0" --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-api-02-out\actions-all.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-api-02-out\actions-all.json --equals totalCount=26 --equals pageSize=26 --length-equals items=26
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/admin/audit?pageSize=0" --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-api-02-out\audit-all.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-api-02-out\audit-all.json --greater-than totalCount=0 --equals-field pageSize=totalCount --length-equals-field items=totalCount
 ```
 
 **Expected:** on all three, `items` holds every row, and `pageSize` in the response equals `totalCount`. That is
@@ -116,7 +111,7 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18102/api/v1/i
 
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-02 --pattern "\[Runtime - Exception\]" --exactly 0
-dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18102/api/v1/import --file docs/automated-testing/startup-and-degradation/fixtures/malformed-import.json --duplicate-resolution review --expect 422 --status
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18102/api/v1/import --file C:\repos\Quotinator\docs\automated-testing\startup-and-degradation\fixtures\malformed-import.json --duplicate-resolution review --expect 422 --status
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-02 --pattern "thrown: JsonReaderException" --at-least 1
 ```
 
@@ -133,16 +128,12 @@ line that names it.
 
 **Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
 
-| Request | `/quotes` | `/admin/audit` | `/import/actions` |
+| Request | `/quotes` | `/import/actions` | `/admin/audit` |
 |---|---|---|---|
-| No `pageSize` | `200`, `pageSize=20`, 20 items of 820 | `200`, `pageSize=20`, 20 items of 42 | `200`, `pageSize=20`, 20 items of 26 |
-| `pageSize=0` | `200`, `pageSize=820`, 820 items | `200`, `pageSize=42`, 42 items | `200`, `pageSize=26`, 26 items |
+| No `pageSize` | `pageSize=20`, 20 items of 25 | `pageSize=20`, 20 items of 26 | `pageSize=20`, 2 rows |
+| `pageSize=0` | `pageSize=25`, 25 items | `pageSize=26`, 26 items | `pageSize=2`, 2 items |
 | `pageSize=501` | `422` | `422` | `422` |
 | `pageSize=1&page=999999` | `422` | `422` | `422` |
-
-The 26 actions are the fixture's 25 quotes and the one source they share; the table read `0` before the import.
-The audit table read `40` before the import, so the import itself added 2. These totals are this run's reading,
-not expectations: only the fixture's import count and the relations above are asserted.
 
 **No exception was logged before the malformed upload**, the six rejected requests included. That upload's
 `JsonReaderException` was then logged once.
@@ -166,7 +157,7 @@ Remove the container, image and worktree afterwards.
 
 ```
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-02
-dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete .claude/temp/qt-api-02-out
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-api-02-out
 ```
 
 **Expected:** the container, its volume and the output directory are gone.

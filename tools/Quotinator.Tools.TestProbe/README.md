@@ -70,6 +70,7 @@ into an array (`database.quotes`, `items.0.quote`).
 | Option | Does |
 |---|---|
 | `--write-text <path> <text>` | Writes `<text>` to `<path>`, replacing anything there; a missing directory is created, as for `--sparse` |
+| `--copy <source> <destination>` | Copies a file, replacing anything at the destination; a missing directory is created. For a fixture a container has to find on disk |
 | `--truncate-half <path>` | Cuts the file to half its length and prints both lengths |
 | `--sparse <path> <bytes>` | Creates a sparse file of `<bytes>` bytes |
 | `--create-directory <path>` | Creates the directory if it is missing; fails when a file is in the way |

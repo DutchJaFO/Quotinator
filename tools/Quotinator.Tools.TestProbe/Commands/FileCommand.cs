@@ -12,7 +12,8 @@ internal sealed class FileCommand : IProbeCommand
     private static readonly Dictionary<string, (int Arity, Func<string[], ExpectationResult> Operation)> Operations = new()
     {
         ["--write-text"] = (2, values => FileOperations.WriteText(values[0], values[1])),
-        ["--truncate-half"] = (1, values => FileOperations.TruncateHalf(values[0])),
+        ["--copy"] = (2, values => FileOperations.Copy(values[0], values[1])),
+        ["--truncate-half"] =(1, values => FileOperations.TruncateHalf(values[0])),
         ["--sparse"] = (2, values => WithNumber(values[1], bytes => FileOperations.Sparse(values[0], bytes))),
         ["--create-directory"] = (1, values => FileOperations.CreateDirectory(values[0])),
         ["--delete"] = (1, values => FileOperations.Delete(values[0])),

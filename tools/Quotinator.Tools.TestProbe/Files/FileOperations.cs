@@ -20,6 +20,22 @@ internal static class FileOperations
         return ExpectationResult.Passed($"wrote {path} ({new FileInfo(path).Length} bytes)");
     }
 
+    /// <summary>
+    /// Copies the file at <paramref name="source"/> to <paramref name="destination"/>, replacing anything
+    /// there, creating its directory when missing. Fails when the source does not exist.
+    /// </summary>
+    internal static ExpectationResult Copy(string source, string destination)
+    {
+        if (!File.Exists(source))
+        {
+            return ExpectationResult.Failed($"{source} is not a file; nothing to copy");
+        }
+
+        CreateParentDirectory(destination);
+        File.Copy(source, destination, overwrite: true);
+        return ExpectationResult.Passed($"copied {source} to {destination}");
+    }
+
     /// <summary>Cuts the file to half its length, rounded down, observing both lengths. Fails when the file does not exist.</summary>
     internal static ExpectationResult TruncateHalf(string path)
     {
