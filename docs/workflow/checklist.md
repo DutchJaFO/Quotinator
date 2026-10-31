@@ -143,6 +143,7 @@ full detail behind each item.
 - [ ] Every test named in the plan doc's verification checklist is written first and confirmed red against current code before any production code changes
 - [ ] **Any automated (T2) document the issue adds is confirmed red too**: run against a build from the commit before the work started, then torn down (container, image, worktree). See `process.md` → Implementation, step 1
 - [ ] **Both kinds of test are updated where the issue touches them**: unit tests and `docs/automated-testing/` documents are equally in scope for an issue, never a follow-up
+- [ ] **New stored content is added to the Reset test**: a feature that stores a new kind of data gets rows in [`database-lifecycle/03`](../automated-testing/database-lifecycle/03-reset-is-a-full-wipe.md)'s fixture and is read there before and after Reset, in both variants. `RepositoryStructureTests.TheResetDocument_CoversEveryContentCategory` catches a new counter or list route, not data stored with neither
 - [ ] Issue status set to `In progress` in both the plan doc header and `overview.md` (use `In progress (step N)` in the plan doc header while a specific step is active)
 - [ ] Each plan-doc step's `**Status:**` line is updated as work on that step progresses: this is the only place step progress is tracked, and there is no separate list
 - [ ] Implementation makes each red test green, without weakening the test to pass

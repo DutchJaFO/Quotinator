@@ -428,6 +428,47 @@ public partial class RepositoryStructureTests
     }
 
     /// <summary>
+    /// The Reset document must assert every counter Reset reports, and read every content list route in
+    /// both of its variants, so a category added later cannot be wiped, or left behind, without this
+    /// document noticing. Both lists come from what the application publishes rather than from a list
+    /// here, which would need the same remembering this exists to replace.
+    /// </summary>
+    [TestMethod]
+    public void TheResetDocument_CoversEveryContentCategory()
+    {
+        string document = File.ReadAllText(Path.Combine(AutomatedTestingDir, "database-lifecycle", "03-reset-is-a-full-wipe.md"));
+        string endpoints = File.ReadAllText(Path.Combine(RepoRoot, "docs", "api-endpoints.md"));
+
+        List<string> counters =
+        [
+            .. typeof(Quotinator.Core.Models.DatabaseSeedSummaryResponse).GetProperties()
+                .Where(property => property.PropertyType == typeof(int))
+                .Select(property => JsonNamingPolicy.CamelCase.ConvertName(property.Name)),
+        ];
+
+        List<string> routes =
+        [
+            .. ContentListRoute().Matches(endpoints).Select(match => match.Groups["route"].Value),
+        ];
+
+        Assert.IsNotEmpty(counters, "DatabaseSeedSummaryResponse has no counters to check.");
+        Assert.IsNotEmpty(routes, "docs/api-endpoints.md has no content list routes to check.");
+
+        List<string> failures =
+        [
+            .. counters.Where(counter => !document.Contains($"--equals {counter}=0"))
+                .Select(counter => $"Reset's response counter '{counter}' is never asserted to be 0"),
+            .. routes.SelectMany(route => ResetDocumentPorts.Select(port => (route, port)))
+                .Where(read => !document.Contains($"http://localhost:{read.port}{read.route} "))
+                .Select(read => $"{read.route} is never read on port {read.port}"),
+        ];
+
+        Assert.IsEmpty(failures,
+            "A content category was added without database-lifecycle/03 covering it. Give the fixture rows for "
+            + $"it, and read it before and after Reset in both variants:\n{string.Join("\n", failures)}");
+    }
+
+    /// <summary>
     /// The suite index's smoke-set table must name exactly the documents whose own Smoke field says
     /// yes, so the set a smoke pass runs cannot drift from what the documents claim.
     /// </summary>
@@ -815,6 +856,8 @@ public partial class RepositoryStructureTests
     private static readonly string AutomatedTestingDir =
         Path.Combine(RepoRoot, "docs", "automated-testing");
 
+    private static readonly string[] ResetDocumentPorts = ["18303", "19303"];
+
     /// <summary>
     /// Test documents live in category subfolders; the index itself sits at the folder root and is not
     /// one of them.
@@ -860,6 +903,11 @@ public partial class RepositoryStructureTests
         @"^####\s+(?<name>.+?)\s*$",
         System.Text.RegularExpressions.RegexOptions.Multiline)]
     private static partial System.Text.RegularExpressions.Regex EnvironmentProfileHeading();
+
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"^\| GET \| `(?<route>/api/v1/(?:masterdata/[a-z]+|conversations|quotes))` \|",
+        System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex ContentListRoute();
 
     [System.Text.RegularExpressions.GeneratedRegex(
         @"^\*\*Environment:\*\*\s*(?<name>.+?)\s*$",

@@ -1,0 +1,96 @@
+{
+  "quotes": [
+    {
+      "id": "9e3a6c02-5b7d-4f49-9c3a-8d024f912c01",
+      "quote": "First test line owned by the reset document, spoken in its episode.",
+      "originalLanguage": "en",
+      "source": "Xyzzyreset Episode",
+      "date": "2026",
+      "character": "Xyzzyreset Captain",
+      "type": "tv",
+      "genres": ["drama"],
+      "translations": { "nl": { "quote": "Eerste testregel van het reset-document." } }
+    },
+    {
+      "id": "9e3a6c02-5b7d-4f49-9c3a-8d024f912c02",
+      "quote": "Second test line owned by the reset document, answering the first.",
+      "originalLanguage": "en",
+      "source": "Xyzzyreset Episode",
+      "date": "2026",
+      "character": "Xyzzyreset Pilot",
+      "type": "tv",
+      "genres": ["drama"],
+      "translations": {}
+    },
+    {
+      "id": "9e3a6c02-5b7d-4f49-9c3a-8d024f912c03",
+      "quote": "Third test line owned by the reset document, spoken in its film.",
+      "originalLanguage": "en",
+      "source": "Xyzzyreset Film",
+      "date": "2026",
+      "character": "Xyzzyreset Captain",
+      "type": "movie",
+      "genres": ["sci-fi"],
+      "translations": {}
+    },
+    {
+      "id": "9e3a6c02-5b7d-4f49-9c3a-8d024f912c04",
+      "quote": "Fourth test line owned by the reset document, said by a real person.",
+      "originalLanguage": "en",
+      "source": "Xyzzyreset Speech",
+      "date": "2026",
+      "author": "Xyzzyreset Speaker",
+      "type": "person",
+      "genres": ["non-fiction"],
+      "translations": {}
+    }
+  ],
+  "universe": [
+    { "name": "Xyzzyreset Universe" },
+    { "name": "Xyzzyreset Other Universe" }
+  ],
+  "series": [
+    { "name": "Xyzzyreset Series", "universeName": "Xyzzyreset Universe" },
+    { "name": "Xyzzyreset Other Series", "universeName": "Xyzzyreset Other Universe" }
+  ],
+  "seasons": [
+    { "number": 1, "seriesName": "Xyzzyreset Series", "title": "Book One" },
+    { "number": 2, "seriesName": "Xyzzyreset Series", "title": "Book Two" }
+  ],
+  "sources": [
+    { "title": "Xyzzyreset Episode", "type": "tv", "seriesName": "Xyzzyreset Series", "seasonNumber": 1 },
+    { "title": "Xyzzyreset Film", "type": "movie", "seriesName": "Xyzzyreset Other Series" }
+  ],
+  "people": [
+    { "id": "9e3a6c02-5b7d-4f49-9c3a-8d024f912d01", "name": "Xyzzyreset Writer" }
+  ],
+  "stageDirections": [
+    { "id": "9e3a6c02-5b7d-4f49-9c3a-8d024f912e01", "text": "[Xyzzyreset: the crew gathers]", "translations": {} },
+    { "id": "9e3a6c02-5b7d-4f49-9c3a-8d024f912e02", "text": "[Xyzzyreset: the crew disperses]", "translations": {} }
+  ],
+  "soundCues": [
+    { "id": "9e3a6c02-5b7d-4f49-9c3a-8d024f912f01", "text": "[Xyzzyreset: distant bell]", "translations": {} },
+    { "id": "9e3a6c02-5b7d-4f49-9c3a-8d024f912f02", "text": "[Xyzzyreset: closing door]", "translations": {} }
+  ],
+  "conversations": [
+    {
+      "id": "9e3a6c02-5b7d-4f49-9c3a-8d024f913001",
+      "description": "Xyzzyreset exchange",
+      "lines": [
+        { "order": 1, "type": "stage_direction", "stageDirectionId": "9e3a6c02-5b7d-4f49-9c3a-8d024f912e01" },
+        { "order": 2, "type": "quote", "quoteId": "9e3a6c02-5b7d-4f49-9c3a-8d024f912c01" },
+        { "order": 3, "type": "sound_cue", "soundCueId": "9e3a6c02-5b7d-4f49-9c3a-8d024f912f01" },
+        { "order": 4, "type": "quote", "quoteId": "9e3a6c02-5b7d-4f49-9c3a-8d024f912c02" }
+      ]
+    },
+    {
+      "id": "9e3a6c02-5b7d-4f49-9c3a-8d024f913002",
+      "description": "Xyzzyreset closing",
+      "lines": [
+        { "order": 1, "type": "quote", "quoteId": "9e3a6c02-5b7d-4f49-9c3a-8d024f912c03" },
+        { "order": 2, "type": "stage_direction", "stageDirectionId": "9e3a6c02-5b7d-4f49-9c3a-8d024f912e02" },
+        { "order": 3, "type": "sound_cue", "soundCueId": "9e3a6c02-5b7d-4f49-9c3a-8d024f912f02" }
+      ]
+    }
+  ]
+}

@@ -8,43 +8,52 @@
 ## Preconditions
 
 **Beyond the profile.** Both containers run with `Quotinator__IncludeDefaultSources=false`, so nothing bundled
-is in the database and everything Reset has to remove is this document's own
-[one quote](fixtures/reset-quote.json). Variant A also sets `Quotinator__AutoPurgeUserImportActions=false`: by
+is in the database. Everything Reset has to remove is this document's own [fixture](fixtures/reset-content.json),
+which holds rows in every content category. Variant A also sets `Quotinator__AutoPurgeUserImportActions=false`: by
 default a seeded file's import actions are purged straight after the seed, and an action list that is already
 empty leaves Reset nothing to be seen wiping.
 
-**That quote arrives by two routes, one per variant, in its own container:**
+**The fixture arrives by two routes, one per variant, in its own container:**
 
-| Variant | Port | How the quote arrives | What only this variant can show |
+| Variant | Port | How the content arrives | What only this variant can show |
 |---|---|---|---|
 | A, pre-filled | `18303` | A file in `{dataDir}/imports/`, seeded at first boot | Reset does not reseed: the file is still there for a reseed to read |
 | B, API import | `19303` | `POST /api/v1/import` after startup | `preserveSchemaVersion=true` still wipes content |
 
 **Two variants, so that a broken route blocks only its own.** Reset is the subject here, not either route. If one
-variant cannot establish its quote, record it as blocked, naming the route, and run the other. What is lost is
-that variant's column above. Each route has tests of its own, so this document asserts nothing about how a quote
-arrived, only that it is present.
+variant cannot establish its content, record it as blocked, naming the route, and run the other. What is lost is
+that variant's column above. Each route has tests of its own, so this document asserts nothing about how the
+content arrived, only that it is present.
 
 **This test destroys the database it runs against.** That is its subject, not a side effect.
 
 Reset drops the *entire* database (there is no `System_`/`Import_`/`Audit_` protected-table concept)
 and rebuilds via the baseline path, reversing #141's preserve-on-reset behaviour.
 
+**A new content category changes what Reset has to be shown wiping.** When one is added, in the same work: give
+the fixture rows for it, read it before and after Reset in both variants, and assert its counter in Reset's response.
+
+`RepositoryStructureTests.TheResetDocument_CoversEveryContentCategory` fails until that is done. It takes the
+counters from `DatabaseSeedSummaryResponse` and the routes from `docs/api-endpoints.md`, so it needs no list of
+its own. It sees only what those two publish, so a feature that stores data with neither a counter nor a list
+route is not caught by it, and still belongs here.
+
 ## Determinism
 
 - **Waits for health, not a duration.**
-- **Every count is exact where this document owns the content.** One quote and one source before Reset, none
-  after. A bundled file cannot change them.
-- **Counts are read from `/quotes` and `/masterdata/sources`, not `/api/v1/version`.** An import does not refresh
-  the figures `/version` reports, so it can read `0` beside a quote that `/quotes` returns.
+- **Every category's count is exact, and every one is read before Reset.** Asserting a table becomes empty proves
+  nothing if it already was. The fixture decides the counts, so a bundled file cannot change them.
+- **Each category is read from its own endpoint, not from `/api/v1/version` or Reset's response.** An import does not
+  refresh the figures `/version` reports, so it can read `0` beside rows that `/quotes` returns, and Reset's response
+  comes from the same counters. Those counters saying `0` is asserted too, but it is not what shows the rows have gone.
+- **The fixture's counts are not one per entry.** Its quotes bring a source and a person the fixture does not list,
+  and the same character name in the film and in the series is two characters, since nothing relates the two.
 - **The post-Reset audit count is exactly `1`, not `0`.** Reset writes its own self-trace row
   (`Operation: Reset`) into the freshly rebuilt `Audit_Entry` table immediately after wiping it, the
   same pattern `DELETE /admin/audit` uses for its `Purged` trace. Expecting `0` here is the easy mistake and
   would report a false failure.
 - **The audit trail and the import actions are only asserted to be non-empty before Reset.** How many rows a
   route writes belongs to that route's tests, and this document needs only that there is something to wipe.
-- **A count taken after Reset passes on an empty table**, which is why each is first asserted non-empty in the
-  same variant, before the Reset call.
 
 ## Explicitly not covered here
 
@@ -60,12 +69,12 @@ nothing observable changes in a running container for that part.
 
 ## Steps
 
-**Variant A, steps 1 to 5: the quote is pre-filled.**
+**Variant A, steps 1 to 5: the content is pre-filled.**
 
-### 1. Create the environment, with the quote waiting to be seeded
+### 1. Create the environment, with the content waiting to be seeded
 
 ```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-db-03a-data --delete C:\repos\Quotinator\.claude\temp\qt-db-03-out --copy C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-quote.json C:\repos\Quotinator\.claude\temp\qt-db-03a-data\imports\reset-quote.json --copy C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-imports-manifest.json C:\repos\Quotinator\.claude\temp\qt-db-03a-data\imports\manifest.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-db-03a-data --delete C:\repos\Quotinator\.claude\temp\qt-db-03-out --copy C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-content.json C:\repos\Quotinator\.claude\temp\qt-db-03a-data\imports\reset-content.json --copy C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-imports-manifest.json C:\repos\Quotinator\.claude\temp\qt-db-03a-data\imports\manifest.json
 dotnet script scripts/testing/test-env.csx -- create --name qt-db-03a --port 18303 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-db-03a-data --env Quotinator__IncludeDefaultSources=false --env Quotinator__AutoPurgeUserImportActions=false
 ```
 
@@ -77,17 +86,33 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-db-03a --port 183
 
 ```
 dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/quotes --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-quotes-before.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-quotes-before.json --equals totalCount=1 --equals items.0.id=9e3a6c02-5b7d-4f49-9c3a-8d024f912c01
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-quotes-before.json --equals totalCount=4
 dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/sources --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-sources-before.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-sources-before.json --equals totalCount=1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-sources-before.json --equals totalCount=3
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/characters --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-characters-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-characters-before.json --equals totalCount=3
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/people --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-people-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-people-before.json --equals totalCount=2
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/series --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-series-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-series-before.json --equals totalCount=2
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/seasons --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-seasons-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-seasons-before.json --equals totalCount=2
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/universes --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-universes-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-universes-before.json --equals totalCount=2
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/stagedirections --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-stagedirections-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-stagedirections-before.json --equals totalCount=2
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/soundcues --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-soundcues-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-soundcues-before.json --equals totalCount=2
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/conversations --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-conversations-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-conversations-before.json --equals totalCount=2
 dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/admin/audit --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-audit-before.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-audit-before.json --greater-than totalCount=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-audit-before.json --greater-than totalCount=1
 dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/import/actions --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-actions-before.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-actions-before.json --greater-than totalCount=0
 ```
 
-**Expected:** the fixture's quote is the only quote, its source the only source, and the audit trail and import
-actions both hold something to wipe.
+**Expected:** every category holds exactly what the fixture gives it, and the audit trail and import actions hold
+more than Reset will leave.
 
 **On failure:** the seed did not establish the content, so this variant is blocked. Run its cleanup and go to
 variant B.
@@ -101,14 +126,30 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 
 **Expected:** `200` with every row count `0` and no import reports.
 
-### 4. Confirm it was wiped, and that the waiting file was not reseeded
+### 4. Confirm every category was wiped, and that the waiting file was not reseeded
 
 ```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-file C:\repos\Quotinator\.claude\temp\qt-db-03a-data\imports\reset-quote.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-file C:\repos\Quotinator\.claude\temp\qt-db-03a-data\imports\reset-content.json
 dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/quotes --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-quotes-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-quotes-after.json --equals totalCount=0
 dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/sources --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-sources-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-sources-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/characters --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-characters-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-characters-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/people --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-people-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-people-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/series --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-series-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-series-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/seasons --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-seasons-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-seasons-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/universes --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-universes-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-universes-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/stagedirections --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-stagedirections-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-stagedirections-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/masterdata/soundcues --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-soundcues-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-soundcues-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/conversations --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-conversations-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-conversations-after.json --equals totalCount=0
 dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/admin/audit --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-audit-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-audit-after.json --equals totalCount=1 --equals items.0.operation=Reset
 dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/import/actions --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-actions-after.json
@@ -117,9 +158,9 @@ dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/qu
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-random.json --equals status=NoResults --length-equals items=0
 ```
 
-**Expected:** the imports file is still on disk, and nothing was read back from it: no quote, no source, no import
-action. The audit trail holds only Reset's own trace, and the empty database answers `200` with `status=NoResults`
-rather than `503`.
+**Expected:** the imports file is still on disk, and nothing was read back from it: every category reads `0`, with
+no import action. The audit trail holds only Reset's own trace, and the empty database answers `200` with
+`status=NoResults` rather than `503`.
 
 ### 5. Nothing unexpected was thrown
 
@@ -138,13 +179,13 @@ exception, so the zero means something.
 **On failure:** a count above zero is an issue, unless a Knowledgebase entry says otherwise. Report it with the
 line that names it.
 
-**Variant B, steps 6 to 11: the quote is imported through the API.**
+**Variant B, steps 6 to 11: the content is imported through the API.**
 
-### 6. Create the environment and import the quote
+### 6. Create the environment and import the content
 
 ```
 dotnet script scripts/testing/test-env.csx -- create --name qt-db-03b --port 19303 --image quotinator:local --env Quotinator__IncludeDefaultSources=false
-dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:19303/api/v1/import --file C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-quote.json --expect 200 --status
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:19303/api/v1/import --file C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-content.json --expect 200 --status
 ```
 
 **Expected:** the app reports healthy and the import answers `200`.
@@ -155,11 +196,27 @@ dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:1
 
 ```
 dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/quotes --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-quotes-before.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-quotes-before.json --equals totalCount=1 --equals items.0.id=9e3a6c02-5b7d-4f49-9c3a-8d024f912c01
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-quotes-before.json --equals totalCount=4
 dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/sources --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-sources-before.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-sources-before.json --equals totalCount=1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-sources-before.json --equals totalCount=3
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/characters --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-characters-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-characters-before.json --equals totalCount=3
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/people --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-people-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-people-before.json --equals totalCount=2
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/series --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-series-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-series-before.json --equals totalCount=2
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/seasons --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-seasons-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-seasons-before.json --equals totalCount=2
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/universes --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-universes-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-universes-before.json --equals totalCount=2
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/stagedirections --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-stagedirections-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-stagedirections-before.json --equals totalCount=2
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/soundcues --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-soundcues-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-soundcues-before.json --equals totalCount=2
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/conversations --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-conversations-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-conversations-before.json --equals totalCount=2
 dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/admin/audit --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-audit-before.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-audit-before.json --greater-than totalCount=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-audit-before.json --greater-than totalCount=1
 dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/import/actions --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-actions-before.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-actions-before.json --greater-than totalCount=0
 ```
@@ -178,36 +235,55 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 
 **Expected:** `200` with every row count `0` and no import reports.
 
-### 9. Confirm it was wiped
+### 9. Confirm every category was wiped
 
 ```
 dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/quotes --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-quotes-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-quotes-after.json --equals totalCount=0
 dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/sources --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-sources-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-sources-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/characters --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-characters-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-characters-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/people --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-people-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-people-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/series --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-series-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-series-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/seasons --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-seasons-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-seasons-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/universes --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-universes-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-universes-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/stagedirections --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-stagedirections-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-stagedirections-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/masterdata/soundcues --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-soundcues-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-soundcues-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/conversations --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-conversations-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-conversations-after.json --equals totalCount=0
 dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/admin/audit --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-audit-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-audit-after.json --equals totalCount=1 --equals items.0.operation=Reset
 dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/import/actions --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-actions-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-actions-after.json --equals totalCount=0
 ```
 
-**Expected:** no quote, no source, no import action, and only Reset's own audit trace.
+**Expected:** every category reads `0`, with no import action and only Reset's own audit trace.
 
 ### 10. Reset again with `preserveSchemaVersion=true`
 
-A second import puts content back, so this Reset has something to wipe.
+A second import puts content back, so this Reset has something to wipe. This step reads the two ends of the
+fixture's dependency chain, quotes and the conversations built from them: steps 7 and 9 are what cover each category.
 
 ```
-dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:19303/api/v1/import --file C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-quote.json --expect 200 --status
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:19303/api/v1/import --file C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-content.json --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/quotes --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-quotes-again.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-quotes-again.json --equals totalCount=1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-quotes-again.json --equals totalCount=4
 dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:19303/api/v1/admin/database/reset?preserveSchemaVersion=true" --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-reset-preserve.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-reset-preserve.json --equals quotes=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-reset-preserve.json --equals quotes=0 --equals conversations=0
 dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/quotes --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-quotes-preserve.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-quotes-preserve.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/conversations --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-conversations-preserve.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-conversations-preserve.json --equals totalCount=0
 ```
 
-**Expected:** the quote is back after the import, and the flag still wipes it.
+**Expected:** the quotes are back after the import, and the flag still wipes them and the conversations.
 
 ### 11. Nothing unexpected was thrown
 
@@ -223,17 +299,25 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-db-0
 
 **Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
 
-| Reading | A, before | A, after | B, before | B, after |
+| Read | A, before | A, after | B, before | B, after |
 |---|---|---|---|---|
-| `/quotes`, `totalCount` | `1` | `0` | `1` | `0` |
-| `/masterdata/sources`, `totalCount` | `1` | `0` | `1` | `0` |
-| `/admin/audit`, `totalCount` | `4` | `1`, `operation=Reset` | `2` | `1`, `operation=Reset` |
-| `/import/actions`, `totalCount` | `2` | `0` | `2` | `0` |
+| `/quotes` | `4` | `0` | `4` | `0` |
+| `/masterdata/sources` | `3` | `0` | `3` | `0` |
+| `/masterdata/characters` | `3` | `0` | `3` | `0` |
+| `/masterdata/people` | `2` | `0` | `2` | `0` |
+| `/masterdata/series` | `2` | `0` | `2` | `0` |
+| `/masterdata/seasons` | `2` | `0` | `2` | `0` |
+| `/masterdata/universes` | `2` | `0` | `2` | `0` |
+| `/masterdata/stagedirections` | `2` | `0` | `2` | `0` |
+| `/masterdata/soundcues` | `2` | `0` | `2` | `0` |
+| `/conversations` | `2` | `0` | `2` | `0` |
+| `/admin/audit` | `7` | `1`, `operation=Reset` | `5` | `1`, `operation=Reset` |
+| `/import/actions` | `24` | `0` | `24` | `0` |
 
 Both Resets answered `200`, with all ten row counts `0` and no reports. In variant A the imports file was still on
 disk afterwards, nothing had been read back from it, and `quotes/random` answered `200` with `status=NoResults` and
-no items. In variant B a second import brought the quote back, and `preserveSchemaVersion=true` answered `200` and
-left `/quotes` at `0`.
+no items. In variant B a second import brought the four quotes back, and `preserveSchemaVersion=true` answered `200`
+and left both `/quotes` and `/conversations` at `0`.
 
 **No exception was logged in either variant before its malformed upload**, every Reset included. Each upload's
 `JsonReaderException` was then logged once.
@@ -243,11 +327,13 @@ left `/quotes` at `0`.
 Build the commit before [#156](https://github.com/DutchJaFO/Quotinator/issues/156)'s first code
 change, under a distinct tag, and run variant A's steps 1 to 4 against it.
 
-Step 4 must read `totalCount=1` from `/quotes` rather than `0`. That is exactly the behaviour #156 removed:
-`OnResetAsync` called `SeedIfEmptyInternalAsync`, so a reset reimported content on the caller's behalf, and
-`CLAUDE.md`'s *Endpoint side-effect policy* records it as the defect. The waiting imports file is what that
-reseed would read, and it is why variant A exists: variant B has nothing on disk to reseed from, so it cannot
-show this. Step 4 must also read more than Reset's own single audit row, since the trail survived Reset then.
+Step 4 must read the fixture's counts from `/quotes` and the other categories rather than `0`. That is exactly the
+behaviour #156 removed: `OnResetAsync` called `SeedIfEmptyInternalAsync`, so a reset reimported content on the
+caller's behalf, and `CLAUDE.md`'s *Endpoint side-effect policy* records it as the defect. The waiting imports file
+is what that reseed would read, and it is why variant A exists: variant B has nothing on disk to reseed from, so it
+cannot show this. Step 4 must also read more than Reset's own single audit row, since the trail survived Reset then.
+The fixture may name categories that build predates, which would fail step 2 there instead: remove those sections
+from the canary's copy and say so in its reading.
 
 Step 2 is expected to pass there, and it is the control: both builds seed the same file, so step 4's reading is
 about what Reset did rather than about what the container started with.

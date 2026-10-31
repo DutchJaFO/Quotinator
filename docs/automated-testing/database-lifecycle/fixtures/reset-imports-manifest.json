@@ -1,6 +1,6 @@
 {
   "duplicateResolution": { "default": "review" },
   "files": [
-    { "file": "reset-quote.json", "name": "test/reset-quote" }
+    { "file": "reset-content.json", "name": "test/reset-content" }
   ]
 }
