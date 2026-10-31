@@ -7,10 +7,9 @@
 
 ## Preconditions
 
-Nothing beyond the Fresh profile, whose own first-boot seed is what produces the audit rows this test
-reads, and those rows are what prove the wipe is total rather than selective. A container whose seeding
-produced none would make half this test vacuous, which is why the non-zero check below runs before the
-Reset rather than after.
+The content Reset has to remove is the test's own: step 2 imports [one quote](fixtures/reset-quote.json)
+through `POST /api/v1/import`, so a broken import blocks this document. That is the index's second honest
+resolution for a precondition, and it is named here so a blocked run reads as that.
 
 **This test destroys the database it runs against.** That is its subject, not a side effect.
 
@@ -20,20 +19,23 @@ and rebuilds via the baseline path, reversing #141's preserve-on-reset behaviour
 ## Determinism
 
 - **Waits for health, not a duration.**
-- **Both pre-Reset counts must be non-zero** before the Reset call. Asserting they become zero proves
-  nothing if they were already zero.
+- **Every pre-Reset count is asserted above what it must become** before the Reset call. Asserting a table
+  becomes empty proves nothing if it already was.
 - **The post-Reset audit count is exactly `1`, not `0`.** Reset writes its own self-trace row
-  (`Operation: Reset`) into the freshly-rebuilt `Audit_Entry` table immediately after wiping it, so the
-  same pattern `DELETE /admin/audit` uses for its `Purged` trace. Expecting `0` here is the easy
-  mistake and would report a false failure.
-- **The `preserveSchemaVersion` check compares row *counts* before and after**, not absolute values;
-  the counts themselves move whenever a migration is added.
-- **Under Fresh that comparison is `1` against `1`, and cannot demonstrate preserved history.** A
-  fresh database takes the consolidated baseline path and records one collapsed row per counter, so
-  there is no granular history to preserve in the first place. Steps 7 and 8 say what they do and do
-  not establish; proving the granular half needs the Upgraded profile.
+  (`Operation: Reset`) into the freshly rebuilt `Audit_Entry` table immediately after wiping it, the
+  same pattern `DELETE /admin/audit` uses for its `Purged` trace. Expecting `0` here is the easy mistake and
+  would report a false failure.
+- **No count of bundled quotes appears anywhere.** The total is only asserted to be above `0` before Reset and
+  exactly `0` after it, and the one quote this document names is its own.
 
 ## Explicitly not covered here
+
+**That `preserveSchemaVersion=true` keeps the pre-Reset rows of both schema-version counters.** A database
+created fresh takes the consolidated baseline path and records one collapsed row per counter, so it has no
+granular history to preserve, and a counter rebuilt from scratch reads the same as one preserved. This document's
+environment cannot tell them apart. `DatabaseInitializerTests.ResetAsync_PreserveSchemaVersionTrue_KeepsExistingConsumerVersionRows`
+and `...AlsoKeepsExistingDataVersionRows` establish it against real SQLite by inserting a marker row each. What
+step 9 establishes live is that the flag answers `200` and still wipes the content.
 
 There is no live check for the `SeedSystemContentAsync` extension point. No real system or reference
 table exists in production yet, and it is proven only via test-only fixtures, see #156's plan doc, so
@@ -43,8 +45,9 @@ nothing observable changes in a running container for that part.
 
 ### 1. Create this test's own environment
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-db-03 --port 18303
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete .claude/temp/qt-db-03-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-db-03 --port 18303 --image quotinator:local
 ```
 
 **Expected:** the app reports healthy, so the bundled seed has finished.
@@ -52,153 +55,156 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-db-03 --port 1830
 **On failure:** every step below reads this container. Stop rather than running them against an app
 that never became healthy.
 
-### 2. Record the starting state
+### 2. Import this test's own quote
 
-```powershell
-$quotesBefore = (Invoke-RestMethod "http://localhost:18303/api/v1/version").database.quotes
-$auditBefore  = (Invoke-RestMethod "http://localhost:18303/api/v1/admin/audit").totalCount
-"quotes=$quotesBefore audit=$auditBefore"
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/import --method POST --file docs/automated-testing/database-lifecycle/fixtures/reset-quote.json --expect 200 --status --body-out .claude/temp/qt-db-03-out/import.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-db-03-out/import.json --equals summary.imported=1 --equals summary.errors=0
 ```
 
-**Expected:** both non-zero, a normal seeded install.
+**Expected:** the quote is imported, with no errors.
 
-**On failure:** a zero here makes the whole test vacuous: asserting these become zero proves nothing
-if they were already zero. Stop; this is a seeding problem, not a Reset result.
+### 3. Record the starting state
 
-### 3. Reset the database
-
-```powershell
-dotnet script scripts/testing/http.csx -- --method POST `
-  --url "http://localhost:18303/api/v1/admin/database/reset" --expect 200
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/version --expect 200 --status --body-out .claude/temp/qt-db-03-out/version-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-db-03-out/version-before.json --greater-than database.quotes=0
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18303/api/v1/quotes/search?q=Xyzzyreset&field=source" --expect 200 --status --body-out .claude/temp/qt-db-03-out/search-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-db-03-out/search-before.json --equals status=Ok --equals totalMatching=1
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/admin/audit --expect 200 --status --body-out .claude/temp/qt-db-03-out/audit-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-db-03-out/audit-before.json --greater-than totalCount=1
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/import/actions --expect 200 --status --body-out .claude/temp/qt-db-03-out/actions-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-db-03-out/actions-before.json --greater-than totalCount=0
 ```
 
-**Expected:** `200` with every row count `0`. No reimport happens.
+**Expected:** quotes exist and the fixture's quote is findable, the audit table holds more than the one row
+Reset will leave, and the import left actions.
 
-### 4. Read the quote count after Reset
+**On failure:** stop. Each of these is what a later step asserts has gone, and a table that is already empty
+would pass that assertion without Reset doing anything.
 
-```powershell
-(Invoke-RestMethod "http://localhost:18303/api/v1/version").database.quotes
+### 4. Reset the database
+
+```
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18303/api/v1/admin/database/reset --expect 200 --status --body-out .claude/temp/qt-db-03-out/reset.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-db-03-out/reset.json --equals quotes=0 --equals sources=0 --equals characters=0 --equals people=0 --equals series=0 --equals seasons=0 --equals universes=0 --equals stageDirections=0 --equals soundCues=0 --equals conversations=0 --length-equals reports=0
 ```
 
-**Expected:** `0`.
+**Expected:** `200` with every row count `0` and no import reports. No reimport happens.
 
-### 5. Read the audit count after Reset
+### 5. Read the quote count after Reset
 
-```powershell
-(Invoke-RestMethod "http://localhost:18303/api/v1/admin/audit").totalCount
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/version --expect 200 --status --body-out .claude/temp/qt-db-03-out/version-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-db-03-out/version-after.json --equals database.quotes=0
 ```
 
-**Expected:** exactly `1`, Reset's own self-trace row. The audit trail is wiped along with everything
-else, no longer surviving Reset the way it did before #156.
+**Expected:** `0`, read from a separate endpoint rather than from Reset's own report of itself.
 
-### 6. Confirm the empty database degrades rather than failing
+### 6. Read the audit trail after Reset
 
-```powershell
-$random = dotnet script scripts/testing/http.csx -- --url "http://localhost:18303/api/v1/quotes/random" --expect 200 | ConvertFrom-Json
-"status=$($random.status) items=$(@($random.items).Count)"
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/admin/audit --expect 200 --status --body-out .claude/temp/qt-db-03-out/audit-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-db-03-out/audit-after.json --equals totalCount=1 --equals items.0.operation=Reset
 ```
 
-**Expected:** `200`, `status=NoResults` and `items=0`, not `503`, and not real quote data.
+**Expected:** exactly one row, Reset's own self-trace. The audit trail is wiped along with everything else, no
+longer surviving Reset the way it did before #156.
 
-### 7. Reset again with `preserveSchemaVersion=true`
+### 7. Confirm the import's own traces have gone
 
-This restores pre-reset migration history for both counters. #156 made this symmetric, since Data's
-own `System_SchemaVersion` is wiped by the full drop too, where previously it was never touched.
-
-**Both counts must be read before the `preserveSchemaVersion=true` call as well as after**: the
-assertion is that they are unchanged, which cannot be evaluated from the after-value alone.
-
-```powershell
-docker stop -t 15 qt-db-03
-docker cp qt-db-03:/data/quotinatordata.db .claude/temp/smoke156-before.db
-docker start qt-db-03
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18303/api/v1/health" --wait-for 200 --status
-
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke156-before.db `
-  --sql "SELECT COUNT(*) AS DataVersionsBefore FROM System_SchemaVersion"
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke156-before.db `
-  --sql "SELECT COUNT(*) AS ConsumerVersionsBefore FROM System_ConsumerSchemaVersion"
-
-dotnet script scripts/testing/http.csx -- --method POST `
-  --url "http://localhost:18303/api/v1/admin/database/reset?preserveSchemaVersion=true" --expect 200 | Out-Null
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/import/actions --expect 200 --status --body-out .claude/temp/qt-db-03-out/actions-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-db-03-out/actions-after.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18303/api/v1/quotes/search?q=Xyzzyreset&field=source" --expect 200 --status --body-out .claude/temp/qt-db-03-out/search-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-db-03-out/search-after.json --equals status=NoResults
 ```
 
-**Expected:** `200`, and two before-counts recorded for step 8 to compare against.
+**Expected:** no import action remains and the fixture's quote cannot be found.
 
-**On a Fresh container both before-counts are `1`, and that makes steps 7 and 8 a weaker check than
-they read as.** A database created fresh takes the one-step consolidated baseline path and records a
-single collapsed row per counter, so there is no granular per-version history for `preserveSchemaVersion`
-to preserve: `1` before and `1` after is satisfied just as well by a counter that was rebuilt from
-scratch. Measured during #339's full run, including against a never-reset Fresh container, which also
-reads `1` and `1`.
+### 8. Confirm the empty database degrades rather than failing
 
-**Multi-row history only exists on a database that took the incremental path**, so proving the
-granular half needs the **Upgraded** profile: seed from a published tag, let the current build replay
-its migrations, and only then Reset with `preserveSchemaVersion=true`. That is a different environment
-than this document declares and is not folded in here. What steps 7 and 8 establish under Fresh is
-that the flag returns `200` and does not *reduce* either counter. Read them that way rather than as
-proof that granular history survives.
-
-### 8. Read both schema-version counters
-
-The container is stopped for the copy, and the `-wal`/`-shm` sidecars come with it: a copy taken
-mid-write can be missing exactly what was just written, and reads as a wrong count rather than as an
-error. The two sidecar copies are allowed to fail: a checkpointed database has neither file, and that
-is not an error:
-
-```powershell
-docker stop -t 15 qt-db-03
-docker cp qt-db-03:/data/quotinatordata.db .claude/temp/smoke156.db
-docker cp qt-db-03:/data/quotinatordata.db-wal .claude/temp/smoke156.db-wal 2>$null
-docker cp qt-db-03:/data/quotinatordata.db-shm .claude/temp/smoke156.db-shm 2>$null
-docker start qt-db-03
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18303/api/v1/health" --wait-for 200 --status
-
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke156.db `
-  --sql "SELECT COUNT(*) AS DataVersions FROM System_SchemaVersion"
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke156.db `
-  --sql "SELECT COUNT(*) AS ConsumerVersions FROM System_ConsumerSchemaVersion"
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/quotes/random --expect 200 --status --body-out .claude/temp/qt-db-03-out/random.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-db-03-out/random.json --equals status=NoResults --length-equals items=0
 ```
 
-**Expected:** both counters report the same row count as the before-readings step 7 recorded, and
-neither is lower.
+**Expected:** `200`, `status=NoResults` and no items, not `503`, and not real quote data.
 
-**Under Fresh both readings are `1`, which is the collapsed baseline row rather than preserved
-history**; see step 7 for why, and for what this does and does not establish. A run wanting to prove
-granular history survives has to start from an Upgraded database, where the counters hold more than
-one row to begin with.
+### 9. Reset again with `preserveSchemaVersion=true`
+
+A second import puts content back, so this Reset has something to wipe.
+
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/import --method POST --file docs/automated-testing/database-lifecycle/fixtures/reset-quote.json --expect 200 --status --body-out .claude/temp/qt-db-03-out/import-again.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-db-03-out/import-again.json --equals summary.imported=1
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18303/api/v1/admin/database/reset?preserveSchemaVersion=true" --expect 200 --status --body-out .claude/temp/qt-db-03-out/reset-preserve.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-db-03-out/reset-preserve.json --equals quotes=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/version --expect 200 --status --body-out .claude/temp/qt-db-03-out/version-preserve.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-db-03-out/version-preserve.json --equals status=ready --equals database.quotes=0
+```
+
+**Expected:** the import succeeds, and the flag still wipes it: `200`, no quotes, and the application still ready.
+
+### 10. Nothing unexpected was thrown
+
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-db-03 --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18303/api/v1/import --file docs/automated-testing/startup-and-degradation/fixtures/malformed-import.json --duplicate-resolution review --expect 422 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-db-03 --pattern "thrown: JsonReaderException" --at-least 1
+```
+
+**Expected:** no exception has been logged by anything so far, both Resets included. The malformed upload then
+answers `422` and its `JsonReaderException` is logged, which is the positive control: the same channel that
+read zero can see an exception, so the zero means something.
+
+**The count comes first**, because the upload throws more than the type its control names.
+
+**On failure:** a count above zero is an issue, unless a Knowledgebase entry says otherwise. Report it with the
+line that names it.
 
 ## Observed effect
 
-Partially established. The row counts and the self-trace row are observed state and are asserted
-above. What the container logs during the drop and rebuild has not been captured.
+**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
+
+| Reading | Before Reset | After Reset |
+|---|---|---|
+| `GET /api/v1/version`, `database.quotes` | `795` | `0` |
+| `search?q=Xyzzyreset&field=source` | `status=Ok`, `totalMatching=1` | `status=NoResults` |
+| `GET /api/v1/admin/audit`, `totalCount` | `42` | `1`, with `operation=Reset` |
+| `GET /api/v1/import/actions`, `totalCount` | `2` | `0` |
+| `GET /api/v1/quotes/random` | not read | `200`, `status=NoResults`, no items |
+
+`POST /api/v1/admin/database/reset` answered `200`, with all ten row counts `0` and no reports. Importing the
+fixture again and resetting with `preserveSchemaVersion=true` answered `200` with `quotes=0`, and
+`/api/v1/version` then read `status=ready` and `database.quotes=0`.
+
+The before-counts are this run's reading, not expectations: only the comparisons in step 3 are asserted.
+
+**No exception was logged before the malformed upload**, both Resets included. That upload's
+`JsonReaderException` was then logged once.
 
 ## Canary
 
 Build the commit before [#156](https://github.com/DutchJaFO/Quotinator/issues/156)'s first code
-change, under a distinct tag, and run steps 2 to 6 against it.
+change, under a distinct tag, and run steps 2 to 8 against it.
 
-Step 4 must read the full bundled quote count rather than `0`. That is exactly the behaviour #156
-removed: `OnResetAsync` called `SeedIfEmptyInternalAsync`, so a reset reimported the bundled content
-on the caller's behalf, and `CLAUDE.md`'s *Endpoint side-effect policy* records it as the defect.
-Step 5 must read more than Reset's own single self-trace row for the same reason.
+Step 5 must read a quote count above `0` rather than `0`. That is exactly the behaviour #156 removed:
+`OnResetAsync` called `SeedIfEmptyInternalAsync`, so a reset reimported the bundled content on the caller's
+behalf, and `CLAUDE.md`'s *Endpoint side-effect policy* records it as the defect. Step 6 must read more than
+Reset's own single self-trace row for the same reason.
 
-Step 2 is expected to pass there, and it is the control: both builds produce a normally seeded
-install, so step 4's reading is about what Reset did rather than about what the container started
+Step 3 is expected to pass there, and it is the control: both builds produce a normally seeded install with
+the fixture imported, so step 5's reading is about what Reset did rather than about what the container started
 with.
 
 Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-```powershell
+```
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-03
-Get-ChildItem .claude/temp -Filter 'smoke156*' | Remove-Item
-Get-ChildItem .claude/temp -Filter 'smoke156*'
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete .claude/temp/qt-db-03-out
 ```
 
-**Expected:** the second listing is empty.
-
-**Both copies have sidecars.** DbInspector opens `smoke156-before.db` as well as `smoke156.db`, and
-opening a database in WAL mode creates its `-wal`/`-shm` files beside it, so the copy step 7 never
-copied sidecars for still gains them.
+**Expected:** the container, its volume and the output directory are gone.
