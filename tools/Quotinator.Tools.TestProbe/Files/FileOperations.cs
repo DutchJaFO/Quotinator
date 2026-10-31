@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Quotinator.Tools.TestProbe.Results;
 
 namespace Quotinator.Tools.TestProbe.Files;
@@ -148,6 +149,32 @@ internal static class FileOperations
     /// <summary>Holds when exactly <paramref name="count"/> files directly in <paramref name="directory"/> match <paramref name="pattern"/>.</summary>
     internal static ExpectationResult ExpectMatchCount(string directory, string pattern, int count)
         => CheckMatches(directory, pattern, found => found == count, $"exactly {count}");
+
+    /// <summary>Holds when the file's text matches the regular expression <paramref name="pattern"/>, ignoring case.</summary>
+    internal static ExpectationResult ExpectText(string path, string pattern)
+    {
+        if (!File.Exists(path))
+        {
+            return ExpectationResult.Failed($"{path} is not a file", Describe(path));
+        }
+
+        return Regex.IsMatch(File.ReadAllText(path), pattern, RegexOptions.IgnoreCase)
+            ? ExpectationResult.Passed($"{path} matches {pattern}")
+            : ExpectationResult.Failed($"expected {path} to match {pattern}");
+    }
+
+    /// <summary>Holds when the file exists and its text does not match the regular expression <paramref name="pattern"/>, ignoring case.</summary>
+    internal static ExpectationResult ExpectNoText(string path, string pattern)
+    {
+        if (!File.Exists(path))
+        {
+            return ExpectationResult.Failed($"{path} is not a file", Describe(path));
+        }
+
+        return Regex.IsMatch(File.ReadAllText(path), pattern, RegexOptions.IgnoreCase)
+            ? ExpectationResult.Failed($"expected {path} not to match {pattern}")
+            : ExpectationResult.Passed($"{path} does not match {pattern}");
+    }
 
     private static void CreateParentDirectory(string path)
     {

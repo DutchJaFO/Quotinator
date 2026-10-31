@@ -683,6 +683,8 @@ command reads that file:
 | Reads | Writes with | Asserted by |
 |---|---|---|
 | an HTTP response, [`http.csx`](../../scripts/testing/http.csx) | `--body-out <path>` | `TestProbe json --file <path>` |
+| an HTTP response that is not JSON, such as an HTML page | `--body-out <path>` | `TestProbe file --expect-text <path> <regex>` or `--expect-no-text` |
+| HTTP response headers | `--headers-out <path>` | `TestProbe json --file <path>` |
 | a page, [`capture-page.csx`](../../scripts/testing/capture-page.csx) | `--result-out <path>` | `TestProbe json --file <path>` |
 | a field reaching a value, `TestProbe wait-field` | `--out <path>` | `TestProbe json --file <path>` |
 
@@ -1095,7 +1097,7 @@ an entry needs; a happy-path-only test has nothing to contribute.
 
 ## Observed effects awaiting measurement
 
-**49 of 75 documents describe their effect without having measured it.** Each row below names the
+**47 of 81 documents describe their effect without having measured it.** Each row below names the
 quantity its next run must read, so the measurement is a specific act rather than a vague intention to
 look. A document leaves this list by recording `**Measured <date>**` in its own section, and
 `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails if it does so while its row is still
@@ -1153,7 +1155,6 @@ asserts what it should; what is missing is a reading an entry can quote.
 | [notifications-and-changelog/11-clean-reseed-confirmation.md](notifications-and-changelog/11-clean-reseed-confirmation.md) | The confirmation count per file, and the breakdown's own totals against its parts |
 | [notifications-and-changelog/12-running-action-state.md](notifications-and-changelog/12-running-action-state.md) | The badge text and the control set while the action runs, and the quote count after an interrupted run |
 | [notifications-and-changelog/13-notification-layout.md](notifications-and-changelog/13-notification-layout.md) | The computed `white-space`, the line-box count, and the dialog's height against a non-zero viewport |
-| [startup-and-degradation/02-startup-backup-gating-and-storage-budget.md](startup-and-degradation/02-startup-backup-gating-and-storage-budget.md) | The backup count at each of the five checkpoints |
 
 ---
 
@@ -1173,7 +1174,8 @@ The tools this suite runs on:
 | Tool | What it is for |
 |---|---|
 | [`test-env.csx`](../../scripts/testing/test-env.csx) | Create, re-enter and destroy a test's own container and volume |
-| [`http.csx`](../../scripts/testing/http.csx) | One HTTP call: upload a file, expect a status, wait for one, write the body to a file (`--body-out`) |
+| [`http.csx`](../../scripts/testing/http.csx) | One HTTP call: upload a file, expect a status, wait for one, write the body (`--body-out`) or the headers (`--headers-out`) to a file |
+| [`startup-window.csx`](../../scripts/testing/startup-window.csx) | Sends [`startup-and-degradation/03`](startup-and-degradation/03-startup-wait-page.md)'s requests together during the startup window, which separate commands cannot reach, and saves what each answered |
 | [`capture-page.csx`](../../scripts/testing/capture-page.csx) | Load a page headless, run a committed page script (`--script-file`), write its result (`--result-out`) and a PNG |
 | [`TestProbe`](../../tools/Quotinator.Tools.TestProbe/README.md) | Every assertion and set-up step between commands: wait for a field, assert on JSON from a file, set up and check files, count a container's log |
 | [`execute-sql.csx`](../../scripts/testing/execute-sql.csx) | Run SQL against a database file, to break or repair it from the host side |

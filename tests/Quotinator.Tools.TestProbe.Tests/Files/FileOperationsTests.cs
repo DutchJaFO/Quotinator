@@ -25,6 +25,54 @@ public sealed class FileOperationsTests
     }
 
     [TestMethod]
+    public void ExpectText_PatternPresent_Holds()
+    {
+        string path = InRoot("page.html");
+        File.WriteAllText(path, "<META http-equiv=\"refresh\" content=\"2\">");
+
+        Assert.IsTrue(FileOperations.ExpectText(path, "http-equiv\\s*=\\s*.refresh").Holds);
+    }
+
+    [TestMethod]
+    public void ExpectText_PatternAbsent_Fails()
+    {
+        string path = InRoot("page.html");
+        File.WriteAllText(path, "<p>no refresh meta here</p>");
+
+        Assert.IsFalse(FileOperations.ExpectText(path, "http-equiv").Holds);
+    }
+
+    [TestMethod]
+    public void ExpectText_MissingFile_Fails()
+    {
+        Assert.IsFalse(FileOperations.ExpectText(InRoot("absent.html"), "anything").Holds);
+    }
+
+    [TestMethod]
+    public void ExpectNoText_PatternAbsent_Holds()
+    {
+        string path = InRoot("page.html");
+        File.WriteAllText(path, "<link href=\"lib/site.css\">");
+
+        Assert.IsTrue(FileOperations.ExpectNoText(path, "href\\s*=\\s*.https?://").Holds);
+    }
+
+    [TestMethod]
+    public void ExpectNoText_PatternPresent_Fails()
+    {
+        string path = InRoot("page.html");
+        File.WriteAllText(path, "<link href=\"https://example.test/site.css\">");
+
+        Assert.IsFalse(FileOperations.ExpectNoText(path, "href\\s*=\\s*.https?://").Holds);
+    }
+
+    [TestMethod]
+    public void ExpectNoText_MissingFile_Fails()
+    {
+        Assert.IsFalse(FileOperations.ExpectNoText(InRoot("absent.html"), "anything").Holds);
+    }
+
+    [TestMethod]
     public void WriteText_WritesTheTextWithoutAByteOrderMark()
     {
         string path = InRoot("a.json");

@@ -4,9 +4,6 @@
 **Environment:** Fresh
 **Deterministic:** no
 **Traces to:** #280, #419
-**Fully green after:** [#438](https://github.com/DutchJaFO/Quotinator/issues/438): step 1 asks
-`/version` for `200` where its own prose says `503`, and never sends a browser `Accept`, so its
-`autoRefresh` assertion cannot hold; steps 2, 3 and 4 pass
 
 ## Preconditions
 
@@ -18,192 +15,136 @@ startup completes almost immediately and the window this test observes does not 
 
 ## Determinism
 
-**This test deliberately observes a transient state, and that is why it keeps a fixed `Start-Sleep`.**
-The first set of requests must land *before* seeding completes.
+**This test deliberately observes a transient state.** The first set of requests must land *before*
+seeding completes, so polling for readiness would defeat it.
 
-Polling for readiness would defeat the test outright. **And polling for the `starting` state itself is
-worse than the sleep, not better**, because a transient state may already have passed by the first poll, so
-`--wait-for 503` would spend its whole timeout on a fast machine, where the sleep merely fails. A poll
-is the right tool for waiting until something *becomes* true and stays true; it cannot catch a window
-that has closed.
+**All five requests go together, in one command.** The window lasts seconds, and a separate command per
+request spends it: measured when this document first ran that way, `/health` and `/version` answered `503`
+and everything after them `200`. [`startup-window.csx`](../../../scripts/testing/startup-window.csx) waits for
+the first `503` and then sends them at once. Kestrel needs a moment to bind, and until it does the port
+refuses connections, so the wait retries, up to a short limit.
 
-The exposure is a race: on a fast enough machine seeding could finish inside the first second and the
-requests would hit a ready app. **That failure mode is loud, not silent**: the assertions require
-`503` and `status=starting`, so catching the wrong state fails the test rather than passing it against
-the wrong thing. A false negative, never a false positive. If it starts failing spuriously, the fix is
-a larger seed or a slower start, not a longer sleep.
+**Requests first, assertions afterwards.** Step 1 only sends requests and saves what comes back; step 2
+reads the saved answers, after the window has closed.
 
-The second wait is an ordinary readiness wait and polls.
+**The script is compiled before the container starts.** `dotnet script` compiles a changed script on first
+use, which takes longer than the window. Its first command only prints its usage and exits `1`, so the
+compile is spent before anything is being timed.
 
-**What varies:** whether the first set of requests lands inside the startup window at all, which
-depends on how fast the machine seeds. The window cannot be pinned from outside the application, and
-it cannot be polled for, since a poll waits for a state to arrive and stays blind to one that has
-already gone. The variability is bounded in the safe direction: missing the window fails the
-assertions rather than passing them, so the result is a false negative and never a false positive.
+**What varies:** whether the requests land inside the startup window at all, which depends on how fast the
+machine seeds. The window cannot be pinned from outside the application. The variability is bounded in the
+safe direction: a missed window fails the command rather than passing it, so the result is a false negative
+and never a false positive. If it starts failing spuriously, the fix is a larger seed or a slower start, not
+a longer limit.
+
+The wait in step 3 is an ordinary readiness wait and polls.
 
 ## Steps
 
-### 1. Request the three surfaces during initialisation, before seeding completes
+### 1. Send the requests during initialisation, before seeding completes
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-03 --port 18403 --no-wait
-Start-Sleep 1
-
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/api/v1/health" --expect 503
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/api/v1/version" --expect 503 --status
-
-$page = dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/" --accept text/html --expect 503 | Out-String
-"autoRefresh=$([bool]($page -match '(?i)<meta[^>]+http-equiv\s*=\s*.refresh'))"
-"externalAssets=$(([regex]::Matches($page, '(?i)(src|href)\s*=\s*["'']https?://')).Count)"
+```
+dotnet script scripts/testing/startup-window.csx
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-03-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-03 --port 18403 --image quotinator:local --no-wait
+dotnet script scripts/testing/startup-window.csx -- --port 18403 --out C:\repos\Quotinator\.claude\temp\qt-startup-03-out
 ```
 
-**Expected:**
+**Expected:** the first command prints its usage and exits `1`. The last exits `0`, printing `503` for each
+of `health`, `version`, `page`, `reset` and `random`. Never a hang, never a raw error, and never a `200` for
+a page the caller did not ask for.
 
-- `/health` returns `503` with `{"status":"starting"}`
-- `/version` returns `503`. It is gated like everything else (#419): it cannot report complete version
-  information or a ready state before startup finishes, and a caller could otherwise reach for it as a
-  readiness endpoint in `/health`''s place. Measured 2026-10-21: `503` with the problem-details body
-  *"Quotinator is starting up"*, carrying no `status` field and no `database` block, which is what
-  step 3 then contrasts against. **Until that date this step's command read `--expect 200` and then
-  parsed `.status` off the response**, so the command asserted the opposite of the expectation above it
-  and the step could not pass. Found by
-  [#441](https://github.com/DutchJaFO/Quotinator/issues/441) on 2026-10-10, items 4 and 5, which
-  recorded the same reading; corrected here while #327 ran this category, having re-found it rather
-  than read the issue first
-- `/` returns `503` carrying the self-contained HTML wait page, with `autoRefresh=True` and
-  `externalAssets=0`: it refreshes itself and pulls in nothing from outside. Never a hang, never a raw
-  error, and never a `200` for a page the caller did not ask for. **`--accept text/html` is what makes
-  this request a browser's**, and without it the step cannot pass: `StartupWaitMiddleware.WantsHtml`
-  looks for `text/html` in the Accept header and `http.csx` sent none, so the request received
-  `application/problem+json` with no meta refresh in it. **[#441](https://github.com/DutchJaFO/Quotinator/issues/441)
-  prescribed this fix on 2026-10-10**, measuring exactly what the flag now produces; the flag itself
-  was added 2026-10-21. Measured both ways: `autoRefresh=False` without it, and with it `503`,
-  `text/html; charset=utf-8`, 664 bytes, refresh present, `externalAssets=0`
+**On failure:** a `200` means seeding finished before the requests landed: the window was missed rather
+than the wait page being broken (see Determinism). Destroy the container and re-run; do not lengthen the
+limit.
 
-**On failure:** a `200` from `/health` means seeding finished before the requests landed: the window
-was missed rather than the wait page being broken (see Determinism). Stop and re-run; do not lengthen
-the sleep.
+### 2. Read what the window answered
 
-### 2. A write during that same window is refused, and the body follows what the caller asked for
+The `page` request is a browser's, sending `Accept: text/html`. `reset` and `random` are an API client's,
+sending `Accept: application/json`, in the same window, from the same container.
 
-The requests above are a browser''s. These are an API client''s, in the same window, from the same
-container.
-
-```powershell
-$api = @{ "X-Api-Key" = "smoketest"; "Accept" = "application/json" }
-try {
-  Invoke-RestMethod "http://localhost:18403/api/v1/admin/database/reset?allowNoBackup=true" -Method POST -Headers $api -TimeoutSec 20
-  "reset during startup = 200 UNEXPECTED"
-} catch {
-  $r = $_.Exception.Response
-  "reset during startup = $([int]$r.StatusCode)  contentType=$($r.ContentType)  retryAfter=$($r.Headers['Retry-After'])"
-}
-
-try { Invoke-RestMethod "http://localhost:18403/api/v1/quotes/random" -Headers $api -TimeoutSec 20 }
-catch { "GET json during startup = $([int]$_.Exception.Response.StatusCode)  contentType=$($_.Exception.Response.ContentType)" }
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-03-out\health.body --equals status=starting
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-03-out\version.body --contains "title=starting up"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-03-out\page.headers.json --contains Content-Type=text/html
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-text C:\repos\Quotinator\.claude\temp\qt-startup-03-out\page.body "<meta[^>]+http-equiv\s*=\s*.refresh" --expect-no-text C:\repos\Quotinator\.claude\temp\qt-startup-03-out\page.body "(src|href)\s*=\s*.https?://"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-03-out\reset.headers.json --contains Content-Type=application/problem+json --not-empty Retry-After
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-03-out\random.headers.json --contains Content-Type=application/problem+json
 ```
 
-**Expected:** both report `503`. The reset carries `application/problem+json` and a `Retry-After`; the
-JSON GET carries `application/problem+json` too, not the HTML page step 1 received.
+**Expected:** every command exits `0`. `/health` reads `starting`. `/version` carries the problem-details
+*starting up* title rather than a version. The page is HTML, refreshes itself and pulls in nothing from
+outside. The reset carries `application/problem+json` and a `Retry-After`; the JSON GET carries
+`application/problem+json` too, not the HTML page.
 
-**This is the defect #419 exists to remove.** Before it, this exact reset answered **`200` with
-`text/html`**: an API caller was told its reset had succeeded, handed a web page, and nothing was reset.
-Measured 2026-10-03.
+**`/version` is gated like everything else** (#419): it cannot report complete version information or a
+ready state before startup finishes, and a caller could otherwise reach for it as a readiness endpoint in
+`/health`'s place.
 
-**The two bodies in one window are the point.** Step 1 asked for a page and got one; this step asked for
+**The reset's refusal is the defect #419 exists to remove.** Before it, this exact reset answered **`200`
+with `text/html`**: an API caller was told its reset had succeeded, handed a web page, and nothing was reset.
+
+**The two bodies in one window are the point.** One caller asked for a page and got one; another asked for
 data and got problem details. Either assertion alone passes against a middleware that serves one body to
-everybody.
+everybody. `Accept: text/html` is what makes a request a browser's: without it the page cannot be reached.
 
-**On failure:** a `200` from either means the window was missed, as in step 1. A `503` carrying
-`text/html` for the JSON request means the refusal ignores `Accept`.
+**That these requests were answered at all is what shows Kestrel bound before initialisation finished.**
+A server that bound only afterwards would have refused them, so step 1 would have read no `503`.
 
-**The property names are the Windows PowerShell 5.1 ones**, `$r.ContentType` and
-`$r.Headers['Retry-After']`. `Invoke-RestMethod`'s exception carries an `HttpWebResponse` in 5.1, so
-the PowerShell 7 shapes this step used, `$r.Content.Headers.ContentType` and `$r.Headers.RetryAfter`,
-resolve to nothing: the step printed two blank values and read as a pass.
-[#441](https://github.com/DutchJaFO/Quotinator/issues/441) found that on 2026-10-10 as its item 6 and
-recorded the same corrected readings; applied here 2026-10-21, `application/problem+json` and `2`.
-
-**#441's first item is the developer deciding which edition the suite targets**, and these two steps
-are part of the evidence for it. Rewriting them to 5.1 forms treats that as settled, which it is not:
-if the suite targets 7, the correction is to install it rather than to reword every step.
+**On failure:** a reset or JSON GET carrying `text/html` means the refusal ignores `Accept`.
 
 ### 3. Re-read health and version after seeding completes
 
-```powershell
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/api/v1/health" --wait-for 200 --status
-(Invoke-RestMethod "http://localhost:18403/api/v1/health").status
-$ready = Invoke-RestMethod "http://localhost:18403/api/v1/version"
-"status=$($ready.status) quotes=$($ready.database.quotes)"
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18403/api/v1/health --wait-for 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-03-out\health-ready.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-03-out\health-ready.json --equals status=healthy
+dotnet script scripts/testing/http.csx -- --url http://localhost:18403/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-03-out\version-ready.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-03-out\version-ready.json --equals status=ready --present database
 ```
 
-**Expected:** `/health` returns `200` and `healthy`; `/version` reports `status=ready` with a non-zero
-`quotes` count: the same two fields that were absent in step 1, now populated.
-
-### 4. Confirm Kestrel bound before the app's own banner
-
-```powershell
-$log = docker logs qt-startup-03 2>&1 | Out-String
-$kestrel = $log.IndexOf('Now listening on')
-$banner  = $log.IndexOf('Quotinator ready')
-"kestrelAt=$kestrel bannerAt=$banner kestrelFirst=$(($kestrel -ge 0) -and ($banner -gt $kestrel))"
-```
-
-**Expected:** **log ordering is itself an assertion.** `kestrelFirst=True`:
-`Microsoft.Hosting.Lifetime`'s own `Now listening on`, meaning Kestrel actually bound, appears
-**before** the app's own `Quotinator ready` banner. That ordering is what proves Kestrel accepted
-connections for the whole wait-page window rather than only after it. Compared by position rather than
-read by eye, so a reversed order fails rather than being scrolled past.
+**Expected:** `/health` returns `200` and `healthy`; `/version` returns `200`, `status=ready`, with a
+`database` block: the fields absent in step 1, now populated. What the database holds is not asserted, since
+that depends on the bundled sources.
 
 ## Observed effect
 
-Well established. The log ordering above *is* an observed effect, and the wait page's own content,
-self-contained, auto-refreshing, localized, is the user-visible state during a window that would
-otherwise look like a dead server.
+**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
 
-**Measured 2026-10-03**, #419's half, red against `quotinator:canary419` (built from the commit before any of
-this issue's code) and green against `quotinator:local`:
+| In the startup window | Answer |
+|---|---|
+| `GET /api/v1/health` | `503`, `{"status":"starting"}` |
+| `GET /api/v1/version` | `503`, problem details titled *Quotinator is starting up* |
+| `GET /`, `Accept: text/html` | `503`, `text/html; charset=utf-8`, auto-refreshing, no external assets |
+| `POST /admin/database/reset?allowNoBackup=true`, `Accept: application/json` | `503`, `application/problem+json`, `Retry-After: 2` |
+| `GET /quotes/random`, `Accept: application/json` | `503`, `application/problem+json` |
 
-| In the startup window | canary (before) | local (after) |
-|---|---|---|
-| `POST /admin/database/reset` | `200`, `text/html` | `503`, `application/problem+json`, `Retry-After: 2` |
-| `GET /quotes/random`, `Accept: application/json` | `200`, `text/html` | `503`, `application/problem+json` |
-| `GET /`, `Accept: text/html` | `200` | `503`, `text/html`, still auto-refreshing, no external assets |
-| `GET /version` | `200`, reduced shape | `503` |
-| `GET /health` | `503 starting` | `503 starting`, unchanged |
-
-After the same container reached ready, 11.5 s later: `/version` reported `status=ready`,
-`hasDatabase=True`, `795` quotes, and the same reset answered `200`. No `[Runtime - Exception]` line in
-the run.
-
-The `200` with `text/html` for a reset is the whole of what this issue removes: an API caller was told
-its write had succeeded, handed a web page, and nothing had been written.
+After the same container reached ready, `/health` read `healthy` and `/version` `status=ready` with a
+`database` block.
 
 ## Canary
 
 Build the commit before [#280](https://github.com/DutchJaFO/Quotinator/issues/280)'s first code
-change, under a distinct tag, and run steps 1, 3 and 4 against it.
+change, under a distinct tag, and run steps 1 and 3 against it.
 
-Step 4 must read `kestrelFirst=False`, and step 1's three surfaces must refuse the connection outright
-rather than answering `503`. Binding Kestrel before initialisation runs is what #280 added, and the
-difference between *no answer* and *an answer that says wait* is this document's whole subject.
+Step 1 must find no `503` to read: the port refuses connections until initialisation finishes, and the first
+answer is a `200`. Binding Kestrel before initialisation runs is what #280 added, and the difference between
+*no answer* and *an answer that says wait* is this document's whole subject.
 
-Step 2 belongs to [#419](https://github.com/DutchJaFO/Quotinator/issues/419) and needs its own
-pre-fix build, the commit before #419's first code change: there a write issued during the startup
-window is not refused, so the reset does not answer `503` with `application/problem+json` and a
-`Retry-After`.
+The `reset` and `random` requests belong to [#419](https://github.com/DutchJaFO/Quotinator/issues/419) and
+need their own pre-fix build, the commit before #419's first code change: there a write issued during the
+startup window is not refused, so the reset does not answer `503`.
 
 Step 3 is the control on both builds: once seeding completes the application must be healthy and
 report a version, so a run that never reaches ready has not tested the window at all.
-
-**Step 1 does not pass on the current build either**, for the reason the `Fully green after:` field
-states. That is [#438](https://github.com/DutchJaFO/Quotinator/issues/438)'s to resolve, and until it
-does, a canary run cannot distinguish step 1's two failures from each other.
 
 Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-03
 ```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-03
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-03-out
+```
+
+**Expected:** the container, its volume and the output directory are gone, so the next run seeds from
+nothing.

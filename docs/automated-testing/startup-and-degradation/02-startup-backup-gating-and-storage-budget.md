@@ -7,11 +7,11 @@
 
 ## Preconditions
 
-**Beyond the profile.** The volume is *reused across restarts* rather than being a one-boot
+**Beyond the profile.** The data directory is *reused across restarts* rather than being a one-boot
 environment: the whole test is about what successive startups against the same data directory do, and
 a fresh container each time would never reach the states being checked. It therefore runs its own
-container and volume (`qt-startup-02` / `qt-startup-02-data`), and the final step **re-enters** that
-same volume with `Quotinator__MaxBackupStorageGb=0` set.
+container on a bind directory (`qt-startup-02`), so the host can count the backups, and the final step
+**re-enters** that same directory with `Quotinator__MaxBackupStorageGb=0` set.
 
 The sequence matters and each step depends on the one before it: fresh baseline → healthy restart →
 Reset → restart-after-Reset → budget exceeded.
@@ -19,153 +19,146 @@ Reset → restart-after-Reset → budget exceeded.
 **A backup protects a specific risky action, not a startup.** One is taken before a migration and
 before a reseed, so that a partial failure still leaves a working database and a user can recover:
 which is why Reset is what the app offers after a failed migration. A startup with no migration pending
-and nothing to seed puts nothing at risk. That is #277's gating, and it is why the counts below read
-`0, 0, 1, 2, 2` rather than incrementing on every start.
+and nothing to seed puts nothing at risk. That is #277's gating, and it is why the count reads none,
+none, `1`, `1`, `1` rather than incrementing on every start.
 
 ## Determinism
 
 - **Waits for health, not a duration**, at every start.
-- **The backup count is cumulative and asserted at each step** (`0`, then `0`, then `1`, then `2`, then
-  still `2`). Checking only the final number would not distinguish which startup took which backup.
-- **The budget run re-enters the same volume rather than starting a second container.** The budget is
+- **The backup count is read from the folder at each step.** Checking only the final number would not
+  distinguish which startup took which backup. One file per backup; its `-shm`/`-wal` sidecars do not
+  match `*.db`.
+- **The budget run re-enters the same directory rather than starting a second container.** The budget is
   configuration and cannot be applied to a running container, but `reenter` replaces the container
-  while keeping the data, which is what this step needs, and it leaves exactly one container whose
-  log cannot be confused with a sibling's. That is why the `docker logs --since` windows this document
-  used are gone: there is no earlier container's output left to scope past.
+  while keeping the data, which is what this step needs.
+- **The refused Reset is proven by the test's own content.** Step 4 stores the
+  [sentinel quote](fixtures/sentinel-quote.json), and step 5 finds it still there after the refusal. A Reset
+  that ran would have removed it, whatever the bundled sources hold.
+- **The zero exception counts are given a positive control in the same run.** Step 4's malformed upload
+  shows the log recording an exception it expects, so a zero read elsewhere in this run means something.
 
 ## Steps
 
 ### 1. Install a fresh baseline
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-02 --port 18402
-function Count-Thrown { @(docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count }
-docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'Database - Backup'
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-02 --delete C:\repos\Quotinator\.claude\temp\qt-startup-02-out --create-directory C:\repos\Quotinator\.claude\temp\qt-startup-02 --create-directory C:\repos\Quotinator\.claude\temp\qt-startup-02-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-02 --port 18402 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-02
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-file C:\repos\Quotinator\.claude\temp\qt-startup-02\quotinatordata.db --expect-absent C:\repos\Quotinator\.claude\temp\qt-startup-02\backups
 ```
 
-**Expected:** no `[Database - Backup]` lines at all. Nothing exists to lose.
+**Expected:** the `file` command exits `0`: the database exists and there is no `backups` directory.
+Nothing exists to lose.
 
-**On failure:** a backup line here means the volume was not new, so the run is not a baseline at all:
-and the cumulative counts every later step asserts (`0`, `0`, `1`, `2`, `2`) are then measuring a
-different sequence. Stop and remove the volume before re-running.
+**On failure:** a `backups` directory here means the directory was not new, so the run is not a baseline at
+all, and every later step is measuring a different sequence. Stop and re-run from the first command.
 
 ### 2. Restart while healthy
 
-```powershell
-"before the restart: thrown=$(Count-Thrown)"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-02 --pattern "\[Runtime - Exception\]" --exactly 0
 docker restart qt-startup-02
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18402/api/v1/health" --wait-for 200 --status
-$afterRestart = Count-Thrown
-
-docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'Database - Backup', 'schema is up to date'
-"backups=$(@(docker exec qt-startup-02 ls /data/backups 2>$null).Count)"
+dotnet script scripts/testing/http.csx -- --url http://localhost:18402/api/v1/health --wait-for 200 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-02 --mark C:\repos\Quotinator\.claude\temp\qt-startup-02-out\after-first-restart.mark
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-absent C:\repos\Quotinator\.claude\temp\qt-startup-02\backups
 ```
 
-**Expected:** `thrown=0` before the restart, `schema is up to date`, **no** `[Database - Backup]` line, and `backups=0`: the
-`/data/backups` directory does not even exist yet, which is why the listing is allowed to fail.
+**Expected:** every command exits `0`: nothing thrown before the restart, the restarted application
+healthy, and still no `backups` directory. No migration is pending and the content already exists, so
+there is nothing to protect. The mark puts the restart's own documented shutdown lines behind what step 4
+counts (index: *Read the log before the application stops*).
 
 ### 3. Reset the database
 
-```powershell
-dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18402/api/v1/admin/database/reset" --expect 200 | Out-Null
-"backups=$(@(docker exec qt-startup-02 ls /data/backups 2>$null).Count)"
+```
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18402/api/v1/admin/database/reset --expect 200 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-match-count C:\repos\Quotinator\.claude\temp\qt-startup-02\backups "*.db" 1
 ```
 
-**Expected:** `backups=1`. Reset backs up unconditionally, being the highest-risk operation.
+**Expected:** `200`, and exactly one backup. Reset backs up unconditionally, being the highest-risk
+operation.
 
-### 4. Restart immediately after the Reset
+### 4. Restart immediately after the Reset, then store the test's own content
 
-```powershell
-"before the restart: new=$((Count-Thrown) - $afterRestart)"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-02 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-02-out\after-first-restart.mark --pattern "\[Runtime - Exception\]" --exactly 0
 docker restart qt-startup-02
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18402/api/v1/health" --wait-for 200 --status
-$afterRestart = Count-Thrown
-
-docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'Database - Backup'
-"backups=$(@(docker exec qt-startup-02 ls /data/backups 2>$null).Count)"
+dotnet script scripts/testing/http.csx -- --url http://localhost:18402/api/v1/health --wait-for 200 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-02 --mark C:\repos\Quotinator\.claude\temp\qt-startup-02-out\after-second-restart.mark
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-match-count C:\repos\Quotinator\.claude\temp\qt-startup-02\backups "*.db" 1
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18402/api/v1/import --file docs/automated-testing/startup-and-degradation/fixtures/malformed-import.json --duplicate-resolution review --expect 422
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-02 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-02-out\after-second-restart.mark --pattern "thrown: JsonReaderException" --at-least 1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-02 --mark C:\repos\Quotinator\.claude\temp\qt-startup-02-out\after-control.mark
+dotnet script scripts/testing/http.csx -- --url http://localhost:18402/api/v1/import --method POST --file docs/automated-testing/startup-and-degradation/fixtures/sentinel-quote.json --expect 200
 ```
 
-**Expected:** `new=0` before the restart, counted from step 2's restart whose own shutdown lines stay
-in the log; **no new `[Database - Backup]` line from this restart**, so the only one in the log is
-step 3's Reset; and `backups=1`, unchanged.
+**Expected:** nothing thrown since step 2's restart; the restarted application healthy; **still exactly one
+backup**; the malformed upload answering `422` and its `JsonReaderException` logged; and the sentinel
+stored.
 
-**This step asserted the opposite until 2026-10-21, and the application is right rather than the
-document.** It expected a backup and `backups=2`, on the premise that "content-seed has real work to do
-again (Quotes are empty)". Startup seeds only a database it *created*, not one that merely holds no
-rows, so the empty database a Reset leaves behind is not re-seeded: nothing is written, nothing is at
-risk, and no backup is taken. Measured that day: one backup pair in the whole container log, at the
-Reset, and the restart one second later logging only `schema is up to date`, with `quotes` staying `0`.
-
-That is #156's intent holding. An operator who resets to start fresh with their own content is not
-made to re-accept the bundled dataset, and a restart that re-seeded would hand it back to them. The
-historical point the old wording carried still stands and is worth keeping: the gate is **not** based
-on `MigrationApplied`, which would have missed a content load that had real work to do. What changed
-is that this particular restart no longer has any.
+**This restart takes no backup, and that is the application being right.** Startup seeds only a database
+it *created*, not one that merely holds no rows, so the empty database a Reset leaves behind is not
+re-seeded: nothing is written, nothing is at risk. That is #156's intent holding: an operator who resets
+to start fresh with their own content is not made to re-accept the bundled dataset. The gate is **not**
+based on whether a migration applied, which would miss a content load that had real work to do; this
+particular restart has none.
 
 ### 5. Reset again with the backup budget already exceeded
 
-```powershell
-"before the stop: new=$((Count-Thrown) - $afterRestart)"
-dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-02 --port 18402 `
-  --env Quotinator__MaxBackupStorageGb=0
-
-$completedBefore = @(docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'reset complete').Count
-
-dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18402/api/v1/admin/database/reset" --expect 409
-docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'reset refused'
-"backups=$(@(docker exec qt-startup-02 ls /data/backups 2>$null).Count)"
-"reset ran = $(@(docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'reset complete').Count -gt $completedBefore)"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-02 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-02-out\after-control.mark --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-02 --port 18402 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-02 --env Quotinator__MaxBackupStorageGb=0
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18402/api/v1/admin/database/reset --expect 409 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-02-out\reset-refused.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-02-out\reset-refused.json --equals backupObstacle=BudgetExceeded --contains remedies=/api/v1/admin/backups --contains remedies=MaxBackupStorageGb
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-match-count C:\repos\Quotinator\.claude\temp\qt-startup-02\backups "*.db" 1
+dotnet script scripts/testing/http.csx -- --url http://localhost:18402/api/v1/quotes/5e7a1c3d-9b2f-4e6a-8d0c-b1f2a3e4c5d6 --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-02-out\sentinel-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-02-out\sentinel-after.json --equals source="Quotinator Test Harness"
 ```
 
-**Expected:** `new=0`, then `409` with `backupObstacle` `BudgetExceeded` and remedies naming the backup
-endpoints and the quota setting; a `reset refused: no backup could be taken` line, logged at `ERR`,
-not an exception; `backups=1`, unchanged from step 4; and `reset ran = False`, because the refusal
-stopped before the destructive step.
+**Expected:** nothing thrown before the stop; `409` with `backupObstacle` `BudgetExceeded` and remedies
+naming the backup endpoints and the quota setting; still exactly one backup; and the sentinel still there,
+because the refusal stopped before the destructive step.
 
-**`reset ran` replaced a quote count on 2026-10-21, and the replacement is the point.** This step read
-"a non-zero quote count, because the refused reset changed nothing", which stopped working when step 4
-stopped re-seeding: the count is already `0` when this step runs, so `0` before and `0` after cannot
-tell a refused reset from one that ran. An assertion that cannot fail is worse than a wrong one. The
-`reset complete` line is written only on the path that rebuilds, so counting it before and after
-distinguishes the two outcomes whatever the database holds.
+**Reset refuses rather than proceeding without a backup**, unless the caller passes `allowNoBackup=true`.
+[`../backup/05-a-full-quota-is-resolvable-from-inside-the-application.md`](../backup/05-a-full-quota-is-resolvable-from-inside-the-application.md)
+asserts the remedies end to end; what this step keeps is that the budget is applied to a directory that
+already holds a backup.
 
-**Reset refuses rather than proceeding without a backup.** This step expected `200` with the backup
-skipped until the full-quota work changed Reset to refuse whenever no backup can be taken, unless the
-caller passes `allowNoBackup=true` (measured 2026-09-22: `409`, `backups=2`, `795` quotes still
-present). [`../backup/05-a-full-quota-is-resolvable-from-inside-the-application.md`](../backup/05-a-full-quota-is-resolvable-from-inside-the-application.md)
-asserts the remedies end to end; what this step keeps is that the budget is applied to a volume that
-already holds backups.
-
-**On failure:** `backups=3` means the budget was not applied. Check that `reenter` (not `create`) was
-used: `create` would have wiped the volume and taken the count back to zero, which reads as a budget
-failure while actually being a lost environment.
+**On failure:** a second backup means the budget was not applied. Check that `reenter` (not `create`) was
+used. A missing sentinel means the refused Reset ran anyway, which is the defect #348 removed.
 
 ## Observed effect
 
-Partially established. The backup counts and the presence or absence of the `[Database - Backup]` line
-are observed state and are asserted above.
+**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
+
+A fresh install and a healthy restart leave no `backups` directory. The Reset leaves one backup, the restart
+after it none further. With the budget at `0`, the Reset answers `409`, obstacle `BudgetExceeded`, naming
+removing old backups first, raising `Quotinator:MaxBackupStorageGb` second and `allowNoBackup=true` third;
+the backup count stays at one and the sentinel quote stays. The malformed upload answers `422` with one
+`JsonReaderException` logged, and no other exception was logged at any read.
 
 ## Canary
 
 Build the commit before [#277](https://github.com/DutchJaFO/Quotinator/issues/277)'s first code
-change, under a distinct tag, and run steps 1 to 4 against it.
+change, under a distinct tag, and run steps 1 to 3 against it.
 
-Step 2 must read a `[Database - Backup]` line and `backups=1`. Gating each action's backup on its own
-real-work signal is what #277 added, so on that build a healthy restart with no migration pending and
-no content to load backs up anyway, which is the waste this document exists to keep from returning.
+Step 2 must find a `backups` directory holding a backup. Gating each action's backup on its own real-work
+signal is what #277 added, so on that build a healthy restart with no migration pending and no content to
+load backs up anyway, which is the waste this document exists to keep from returning.
 
-**Step 3 is the control, and it must read `backups=1` on both builds.** Reset backs up
-unconditionally, being the highest-risk operation, so a run where step 3 also reports zero has broken
-backups rather than working gating, and step 2's zero would mean nothing.
+**Step 3 is the control.** Reset backs up unconditionally, being the highest-risk operation, so a run where
+step 3 finds no backup has broken backups rather than working gating, and step 2's reading would mean
+nothing.
 
 Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-```powershell
-docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-02
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-02 --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-02 --bind C:\repos\Quotinator\.claude\temp\qt-startup-02
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-02 --delete C:\repos\Quotinator\.claude\temp\qt-startup-02-out
 ```
 
-**Expected:** the read finds nothing: `reenter` replaced the container in step 5, so its log starts
-there, and the refusal is a warning.
+**Expected:** the `log` command exits `0`: `reenter` replaced the container in step 5, so its log starts
+there, and a refusal is not an exception.

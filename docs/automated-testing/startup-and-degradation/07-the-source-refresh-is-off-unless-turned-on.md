@@ -2,12 +2,13 @@
 
 **Smoke:** no
 **Environment:** Fresh
-**Deterministic:** yes
+**Deterministic:** no
 **Traces to:** #424
 
 ## Preconditions
 
-**Beyond the profile.** Two containers of this test's own:
+**Beyond the profile.** Two containers of this test's own, each on a bind directory so the host can see
+whether anything was downloaded:
 
 - `qt-startup-07`, publishing `18407`, created with `--unset Quotinator__AutoUpdateSources`, so the
   setting is absent and the application's own default decides;
@@ -23,92 +24,105 @@ off, and that turning it on still reaches the network.
 nothing outside the project unless that is what it tests (`docs/testing-policy.md`); the refresh reaching
 GitHub is what step 2 tests. Step 1 depends on nothing outside: its point is that nothing is fetched.
 
+**What varies:** whether GitHub answers during step 2. When it does not, the step fails, because a refresh
+that could not download cannot show that it would have. That is the index's *A test that cannot be
+confirmed has failed*: wait and run it again, and do not read a `failed` outcome as a pass.
+
 **Step 1 needs the setting absent, not `false`.** The Fresh profile pins it to `false`, which would pass
 step 1 whatever the default was. `--unset` leaves the pin out, and the step confirms from inside the
 container that the variable is not set before it reads anything else.
 
-**Step 2 accepts either outcome for each source.** Whether GitHub answers decides whether a source logs
-`updated … from …` or `could not reach …; using local …`, and both prove the refresh ran. What it may not
-do is log nothing: a fresh volume holds no cached copy, so the refresh always has something to fetch.
+**Absence alone proves nothing**, so step 2 is step 1's positive control: the same directory check that
+finds nothing there finds the downloaded files here, so the check can see a refresh when there is one.
 
-**Absence alone proves nothing**, so step 1 asserts a positive line first: the seed importing the
-bundled files, which shows startup reached the point where a refresh would have run.
+**The downloaded files are in `sources/download`.** A fresh directory holds no cached copy, so with the
+refresh on there is always something to fetch.
+
+**The response tells the two states apart.** `POST /api/v1/admin/sources/refresh` asks the same updater
+startup uses, and names an outcome per source: `uptodate` with the network not allowed, `updated` when it
+downloaded, `failed` when it could not. The default itself is also proven in-process by
+`SourceRefreshDefaultTests.AutoUpdateSources_KeyAbsent_IsOff`, and the wiring by
+`SourceRefreshDefaultTests.Startup_AutoUpdateSourcesExplicitlyTrue_AllowsNetwork`.
 
 ## Steps
 
-### 1. With the setting absent, startup seeds the bundled files and fetches nothing
+### 1. With the setting absent, startup fetches nothing, and neither does a refresh
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-07 --port 18407 --image quotinator:local `
-  --unset Quotinator__AutoUpdateSources
-"setting inside the container: [$(docker exec qt-startup-07 printenv Quotinator__AutoUpdateSources)]"
-$log = docker logs qt-startup-07 2>&1
-"seed imports: $(@($log | Select-String -SimpleMatch '[Database - Seed] importing').Count)"
-"refresh lines: $(@($log | Select-String -SimpleMatch '[Database - SourceRefresh]').Count)"
-"requests to GitHub: $(@($log | Select-String -SimpleMatch 'raw.githubusercontent.com').Count)"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-07 --delete C:\repos\Quotinator\.claude\temp\qt-startup-07b --delete C:\repos\Quotinator\.claude\temp\qt-startup-07-out --create-directory C:\repos\Quotinator\.claude\temp\qt-startup-07 --create-directory C:\repos\Quotinator\.claude\temp\qt-startup-07b
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-07 --port 18407 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-07 --unset Quotinator__AutoUpdateSources
+docker inspect -f "{{.Config.Env}}" qt-startup-07
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-absent C:\repos\Quotinator\.claude\temp\qt-startup-07\sources\download
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18407/api/v1/admin/sources/refresh?force=true" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-07-out\refresh-off.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-07-out\refresh-off.json --contains results=uptodate
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-absent C:\repos\Quotinator\.claude\temp\qt-startup-07\sources\download
 ```
 
-**Expected:** `setting inside the container: []`, `seed imports` at least `1`, `refresh lines: 0` and
-`requests to GitHub: 0`.
+**Expected:** the environment list printed by `docker inspect` has no `Quotinator__AutoUpdateSources`, nothing
+is at `sources/download` either time, and the forced refresh reads `uptodate`: even when asked, it does not
+reach out.
 
-**On failure:** a non-empty setting means `--unset` did not remove the profile's pin, and the rest of the
-step tests the pin rather than the default. A refresh line or a request with the setting confirmed absent
-means the default is still on. Stop either way.
+**On failure:** the variable in the list means `--unset` did not remove the profile's pin, and the rest of
+the step tests the pin rather than the default. A `sources/download` directory, or an outcome other than
+`uptodate`, with the setting confirmed absent means the default is still on. Stop either way.
 
-### 2. With the setting turned on, startup refreshes every downloadable source
+### 2. With the setting turned on, startup downloads every downloadable source
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-07b --port 19407 --image quotinator:local `
-  --env Quotinator__AutoUpdateSources=true
-$log = docker logs qt-startup-07b 2>&1
-$log | Select-String -SimpleMatch '[Database - SourceRefresh]' |
-  ForEach-Object { ($_.Line -split '\[Database - SourceRefresh\] ')[1] }
+```
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-07b --port 19407 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-07b --env Quotinator__AutoUpdateSources=true
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-matches C:\repos\Quotinator\.claude\temp\qt-startup-07b\sources\download "*.json" 2
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:19407/api/v1/admin/sources/refresh?force=true" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-07-out\refresh-on.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-07-out\refresh-on.json --contains results=updated
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-07b --pattern "thrown: (?!SocketException|TaskCanceledException|OperationCanceledException|HttpRequestException|IOException)" --exactly 0
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:19407/api/v1/import --file docs/automated-testing/startup-and-degradation/fixtures/malformed-import.json --duplicate-resolution review --expect 422 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-07b --pattern "thrown: JsonReaderException" --at-least 1
 ```
 
-**Expected:** one line for each manifest entry that declares a download URL, two for the bundled
-sources, each reading `updated <file> from <url>` or `could not reach <url> (…); using local <file>`.
+**Expected:** at least two files at `sources/download`, written by startup itself before anything asked, and
+the forced refresh reads `updated`. No exception of a type a network call does not explain was thrown; the
+malformed upload answers `422` and its `JsonReaderException` is logged, which is the positive control that
+makes that zero mean something.
 
-**On failure:** no line at all with the setting explicitly on means the setting no longer reaches the
-refresh, which `SourceRefreshDefaultTests.Startup_AutoUpdateSourcesExplicitlyTrue_AllowsNetwork` should
-have caught first.
+**A download cut short or timed out can throw the five types excluded there**, intermittently, at no cost
+to the result: see the Knowledgebase entry *A cancelled socket or transport connection*. Any other type is
+an issue.
+
+**On failure:** a `failed` outcome, or no files with a `failed` outcome, means GitHub did not answer (see
+Determinism). `uptodate` with the setting explicitly on means the setting no longer reaches the refresh,
+which `SourceRefreshDefaultTests.Startup_AutoUpdateSourcesExplicitlyTrue_AllowsNetwork` should have caught
+first.
 
 ## Observed effect
 
-**Measured 2026-09-27** against `quotinator:local`. With the setting absent, the container reported it
-unset, seeded from the five bundled files, and logged no refresh line and no request to GitHub. With it
-turned on, both downloadable sources logged `updated "<file>" from "<url>"`. Neither container logged an
-exception.
+**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
+
+With the setting absent, the container's environment did not carry it, nothing appeared at `sources/download`,
+and a forced refresh read `uptodate` for both downloadable sources with still nothing downloaded. With it
+turned on, startup wrote both files to `sources/download` and a forced refresh read `updated` for both, with
+a `lastRefreshedAtUtc`. The refresh ran within seconds of the application starting to listen.
+
+**Exceptions with the setting on were intermittent.** One run logged four `[Runtime - Exception]` lines and
+the next, on the same steps, none. The four were not identified before that container was removed, which is
+why step 2 now counts by type.
 
 ## Canary
 
-Built from `29b55805` (the commit before #424's first code change) as `quotinator:canary424`, via
-`git worktree add` and `docker build`, 2026-09-27:
+Built from `29b55805`, the commit before #424's first code change, as `quotinator:canary424`, via
+`git worktree add` and `docker build`. Step 1 must find `sources/download` populated: on that build the
+refresh is on by default.
 
-| Step | Assertion | Pre-work result |
-|---|---|---|
-| 1 | the setting is absent inside the container | passes: `--unset` is independent of the build |
-| 1 | seeding ran | passes: `5` imports |
-| 1 | no refresh line | **fails**: `2`, both sources `updated` |
-| 1 | no request to GitHub | **fails**: `6` log lines naming it |
-| 2 | every downloadable source logs a refresh outcome | passes: the control, unchanged by #424 |
-
-**The first attempt at this canary tested nothing, and is recorded because the trap is general.** Both
-`create` commands named no `--image`, so `test-env.csx` used its default, `quotinator:local`, and
-`run-doc.ps1`'s image swap, which rewrites that literal, had nothing to rewrite: the "canary" run was the
-current build twice. A document that is ever run against more than one build names its image in every
-`create`.
+**A document that is ever run against more than one build names its image in every `create`.** The first
+attempt at this canary named none, so `test-env.csx` used its default, `quotinator:local`, and the "canary"
+run was the current build twice.
 
 ## Cleanup
 
-Read what each container logged, then remove both:
-
-```powershell
-foreach ($name in 'qt-startup-07', 'qt-startup-07b') {
-  "${name}: thrown=$(@(docker logs $name 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count)"
-  dotnet script scripts/testing/test-env.csx -- destroy --name $name
-}
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-07 --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-07 --bind C:\repos\Quotinator\.claude\temp\qt-startup-07
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-07b --bind C:\repos\Quotinator\.claude\temp\qt-startup-07b
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-startup-07 --delete C:\repos\Quotinator\.claude\temp\qt-startup-07b --delete C:\repos\Quotinator\.claude\temp\qt-startup-07-out
 ```
 
-**Expected:** `qt-startup-07: thrown=0`. `qt-startup-07b` may log exceptions when a download is cut
-short or times out; see the Knowledgebase entry *A cancelled socket or transport connection* for why that
-costs nothing.
+**Expected:** the `log` command exits `0`: with the setting absent nothing reaches the network, so nothing
+has a reason to throw, which step 2's positive control lets this zero mean.

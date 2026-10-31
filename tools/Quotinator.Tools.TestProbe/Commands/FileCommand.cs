@@ -23,6 +23,8 @@ internal sealed class FileCommand : IProbeCommand
         ["--expect-absent"] = (1, values => FileOperations.ExpectAbsent(values[0])),
         ["--expect-match-count"] = (3, values => WithNumber(values[2], count => FileOperations.ExpectMatchCount(values[0], values[1], (int)count))),
         ["--expect-matches"] = (3, values => WithNumber(values[2], minimum => FileOperations.ExpectMatches(values[0], values[1], (int)minimum))),
+        ["--expect-text"] = (2, values => FileOperations.ExpectText(values[0], values[1])),
+        ["--expect-no-text"] = (2, values => FileOperations.ExpectNoText(values[0], values[1])),
     };
 
     /// <inheritdoc/>

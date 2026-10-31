@@ -694,7 +694,19 @@ unique ports per document, and every document listed in `Quotinator.slnx`.
 
 ### 18. Run the end-of-issue T2 scope
 
-**Status:** 🚧 In progress
+**Status:** 🚧 In progress. Every document in `startup-and-degradation/` is converted and has run from its own
+steps, 2026-10-31, including `02`, `03` and `07`, whose conversion replaced their log-wording assertions with
+responses and files. Next action: the rest of the smoke set, then every document invoking `http.csx`, each
+brought into line with the index's three rules before it runs.
+
+**Findings from `02`, `03` and `07`.** `03` is no longer held back by #438's first item: its command and
+`Accept` were already corrected, and it now passes, so its `Fully green after` line is gone. #438 stays open
+for its second item, which is `import-and-staged-actions/19`'s. Separate commands could not reach `03`'s
+startup window, so `scripts/testing/startup-window.csx` sends its requests together. `07` logged four
+exception lines on one run and none on the next; the four were not identified before the container was
+removed, so its step 2 now counts by type. `03` has no canary reading, and neither `02`, `03` nor `07` was run
+against a pre-fix build after this conversion; `07`'s earlier reading against `29b55805` was of the removed
+log assertions, so it was dropped rather than carried forward.
 
 **First attempt, 2026-10-24, discarded.** All 67 documents were run by extracting their PowerShell
 blocks into one script per document with a scratch runner outside the repository, not by following

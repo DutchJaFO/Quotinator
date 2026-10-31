@@ -76,6 +76,8 @@ Every option is repeatable. A `<path>` is property names joined by dots (`databa
 | `--expect-absent <path>` | Holds when nothing, file or directory, exists at `<path>` |
 | `--expect-matches <directory> <pattern> <minimum>` | Holds when at least `<minimum>` files in `<directory>` match `<pattern>` |
 | `--expect-match-count <directory> <pattern> <count>` | Holds when exactly `<count>` files in `<directory>` match `<pattern>` |
+| `--expect-text <path> <regex>` | Holds when the file's text matches `<regex>`, ignoring case: for a saved body that is not JSON, such as an HTML page |
+| `--expect-no-text <path> <regex>` | Holds when the file exists and its text does not match `<regex>`, ignoring case |
 
 ### `log`: count a pattern in a container's log
 

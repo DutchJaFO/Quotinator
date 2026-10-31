@@ -57,6 +57,8 @@
 //   --body-out <path>     Also write the response body to this file (UTF-8, no BOM), parent directories
 //                         created, so a following command reads it from the file rather than through a
 //                         shell pipe (ADR 010: a document step is a single command)
+//   --headers-out <path>  Also write the response headers to this file as a JSON object, name to value,
+//                         so a following command can assert on them with TestProbe json
 //   --timeout <seconds>   Request timeout (default: 100)
 
 using System.Net;
@@ -251,6 +253,16 @@ if (Value("--body-out") is string bodyOut)
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(bodyOut))!);
     File.WriteAllText(bodyOut, responseBody, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     Console.Error.WriteLine($"Wrote the body to {bodyOut}");
+}
+
+if (Value("--headers-out") is string headersOut)
+{
+    Dictionary<string, string> headers = response.Headers.Concat(response.Content.Headers)
+        .ToDictionary(header => header.Key, header => string.Join(", ", header.Value));
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(headersOut))!);
+    File.WriteAllText(headersOut, System.Text.Json.JsonSerializer.Serialize(headers), new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    Console.Error.WriteLine($"Wrote the headers to {headersOut}");
 }
 
 if (expect is not null && status != int.Parse(expect))
