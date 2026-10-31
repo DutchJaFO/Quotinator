@@ -139,32 +139,26 @@ that degraded on everything.
 assertion above worthless.
 ## Observed effect
 
-**Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`, seeded to 795 quotes and
-truncated from 4,730,880 to 2,365,440 bytes.
+**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`, truncated from 4,665,344 to
+2,332,672 bytes.
 
-The process stays up and `/health` settles at `503 unhealthy`, its reason naming the file-deletion
-remedy. `/`, `/stats` and `/notifications` each return `200`,
-`/openapi/v1.json` returns `200`, the home page carries *started with a problem*, and no page matches
-`at [A-Za-z.]+\(`. Every data-serving endpoint answers `503`.
+The process stays up and `/health` settles at `503 unhealthy` with the generic initialisation-failure
+reason. `/`, `/stats` and `/notifications` each return `200`, `/openapi/v1.json` returns `200`, and the
+home page carries the degraded text with no stack trace. All seven database reads answer `503`,
+`GET /api/v1/version` with `"status":"degraded"` and no `database` block.
 
 **The API surface is indistinguishable from `08`'s**, which is why each document pins its own variable
 rather than one standing in for both: the faults differ at the SQLite boundary, and only the recipe
 proves which one was provoked.
 
-**`GET /api/v1/version` answers `503` here too**, with `"status":"degraded"` and no `database` block.
-It did not when these documents were written: it answered `200` with `"status":"ready"` and every
-count at `0`, and
-[`08`](08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md)'s Observed effect records
-that finding once, with #419's rule and the startup-state control behind it.
-
-**The six admin endpoints that answer an unhandled `500` in this state** are recorded there too, for
-the same reason: one finding, one place, rather than the same paragraph in both documents drifting
-apart.
+**The six admin endpoints [`08`](08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md)
+lists answer an unhandled `500` here too**, read in this run. That document holds the finding, so the
+same paragraph does not drift apart in both.
 
 **Recovery route, recorded rather than asserted.** Reachable: `POST /api/v1/admin/database/reset` reaches
-its handler and answers `409 Conflict`. **Not workable as offered**: the reset refuses, handing back a
-remedy that points at the file. Deleting the database file and restarting returns the container to
-`200`, which is step 5's positive control.
+its handler and answers `409 Conflict`, obstacle `SourceUnreadable`. **Not workable as offered**: its
+remedies are moving or deleting the file and restarting, or restoring an older backup. Deleting the file
+and restarting returns the container to `200`, which is step 5's positive control.
 
 ## Canary
 
@@ -177,7 +171,7 @@ the same environment, so a build that degraded unconditionally fails there. Step
 other half: it ends the run when the truncation did not take, so step 4 cannot pass against a healthy
 container.
 
-**Where the canary has been run, 2026-10-24.** Against `e4078444`, the commit before #327, as `quotinator:canary-327`: steps 1 to 3 passed, step 4 read `200` from `/api/v1/version`, and step 5 read `healthy`.
+**Where the canary has been run, 2026-10-31.** Against `e4078444`, the commit before #327, as `quotinator:canary-327`: step 3 read `unhealthy` with the generic reason, and step 4 read `200` from `/api/v1/version`.
 
 ## Cleanup
 

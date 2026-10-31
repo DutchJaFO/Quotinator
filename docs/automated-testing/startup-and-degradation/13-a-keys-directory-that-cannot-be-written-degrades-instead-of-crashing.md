@@ -108,17 +108,17 @@ writes its key ring, so the degraded state above is about the read-only mount an
 
 ## Observed effect
 
-**Measured 2026-10-24** against `quotinator:local` built with #327's step 14 fix.
+**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
 
-The process stays up, the database is created and seeded, and `/health` settles at `503 unhealthy` with
-the data-directory reason, no key file written. `/openapi/v1.json` answers `200` and all seven database
-reads `503`. With `keys/` writable again, the same data directory starts healthy, writes its key ring,
-and every one of the seven reads answers `200`.
+The process stays up and `/health` settles at `503 unhealthy` with the data-directory reason, no key file
+written. `/openapi/v1.json` answers `200`, all seven database reads `503`, and `/` `500`. With `keys/`
+writable again, the same data directory starts healthy, writes one key file, and every one of the seven
+reads answers `200`.
 
 **The reason names the data directory, not `keys/`.** The data directory here is writable; the reason
 is #326's, reused until [#455](https://github.com/DutchJaFO/Quotinator/issues/455) gives `keys/` a reason
-of its own. The pages fail on the key ring, as for an uncreatable `keys/`, which is
-[#454](https://github.com/DutchJaFO/Quotinator/issues/454)'s. The Knowledgebase entry
+of its own. The page failure is [#454](https://github.com/DutchJaFO/Quotinator/issues/454)'s. The
+Knowledgebase entry
 `every-page-fails-when-the-keys-directory-cannot-be-created.md` covers what an operator does about it.
 
 ## Canary
@@ -126,14 +126,10 @@ of its own. The pages fail on the key ring, as for an uncreatable `keys/`, which
 **A pre-fix build.** Run against the build from before #327's step 14 fix, step 1 reads
 `status=healthy`: the application does not notice the key ring cannot be written.
 
-**Where the canary has been run:** 2026-10-24 against `quotinator:local` built from `eb8c1a19`, before
-the fix. Step 1 read `status=healthy`, `reasonGiven=False`, `keyFilesWritten=0`; step 2 read `200` from
-every database read. Step 3 read `200`.
-
 **The positive control this run produces for itself.** Step 3 removes the sabotage and reads `200`, so a
 build that degraded unconditionally fails there.
 
-**Also run, 2026-10-24,** against `e4078444`, the commit before #327, as `quotinator:canary-327`: step 1 read `status=healthy` with no reason and no key file, and step 2 read `200` from all seven database reads.
+**Where the canary has been run, 2026-10-31.** Against `72b39c02`, the commit before the step 14 fix, as `quotinator:canary-327-keys`: step 1 read `status=healthy` with no reason and no key file. Against `e4078444`, the commit before #327, as `quotinator:canary-327`: step 1 read `status=healthy` with no reason.
 
 ## Cleanup
 

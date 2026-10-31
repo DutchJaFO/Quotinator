@@ -16,9 +16,9 @@ has ever been written, so there is no database to open either.
 The container binds its data directory to a host path (`--bind`), so the host can confirm nothing was
 written into it.
 
-**The state this establishes, measured 2026-10-23.** The configuration-time guard records the failure,
-Kestrel binds, and the initializer's own attempt to open the database then fails with `SQLite Error 14`.
-`/health` answers `503` with the data-directory reason.
+**The state this establishes.** The configuration-time guard records the failure, Kestrel binds, and the
+initializer's own attempt to open the database then fails too. `/health` answers `503` with the
+data-directory reason.
 
 ## Determinism
 
@@ -119,26 +119,24 @@ configuration on a writable mount creates the directory and the database.
 every assertion above worthless.
 ## Observed effect
 
-**Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`.
+**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
 
 The process stays up, `/health` answers `503` with the data-directory reason, and the host directory stays
-empty. `/openapi/v1.json` answers `200` and all seven database-reading endpoints answer `503`. The log
-carries the configuration-time `[Config]` warning, two `IOException`s for the two directories that could
-not be created, and then `SQLite Error 14: 'unable to open database file'` from the initializer.
+empty. `/openapi/v1.json` answers `200` and all seven database-reading endpoints answer `503`. By the end
+of the reads below, the log held 12 `IOException` and 27 `SqliteException` throws.
 
-**All three pages answer `500`, recorded rather than asserted.** With no `keys/` directory, every request
-that renders a page fails to read the DataProtection key ring (`ErrorOccurredWhileReadingKeyRing`, five
-times for five page requests), while `/health` correctly reports the fault, so the application still says
-it is degraded. A finding for its own issue, not this document's contract. The same holds for an uncreatable
-`keys/` alone, which [`11`](11-a-keys-directory-that-cannot-be-created-degrades-instead-of-crashing.md)
-covers.
+**All three pages answer `500`, recorded rather than asserted**, while `/health` correctly reports the
+fault, so the application still says it is degraded. That is
+[#454](https://github.com/DutchJaFO/Quotinator/issues/454)'s, not this document's contract. The same holds
+for an uncreatable `keys/` alone, which
+[`11`](11-a-keys-directory-that-cannot-be-created-degrades-instead-of-crashing.md) covers.
 
 **Recovery route, recorded rather than asserted.** Reachable: `POST /api/v1/admin/database/reset` reaches
 its handler and refuses with `409`, obstacle `DestinationDirectoryNotWritable`, naming *restore write
 access* first. **Not workable**: a Reset writes. The refusal's second remedy, *Retry with
-`allowNoBackup=true`*, answers an unhandled `500` here, since the reset still has to write; this document
-does not assert it, so as not to write the `500` in as the contract. Remounting `/data` writable and
-restarting returns the container to `200`, which is step 3's positive control.
+`allowNoBackup=true`*, answers an unhandled `500` here; this document does not assert it, so as not to
+write the `500` in as the contract. Remounting `/data` writable and restarting returns the container to
+`200`, which is step 3's positive control.
 
 ## Canary
 
@@ -150,7 +148,7 @@ so on that build the configuration-time `CreateDirectory` throws before Kestrel 
 Step 3 is the positive control inside every run: it removes the sabotage and reads `200`, so a build
 that degraded unconditionally fails there.
 
-**Where the canary has been run, 2026-10-24.** Against `c8322590`, the commit before #326, as `quotinator:canary-326`: step 1 read `false` from `docker inspect` and `status=down`, the process gone before Kestrel bound. Against `e4078444`, the commit before #327, as `quotinator:canary-327`: step 1 passed and step 2 read `200` from `/api/v1/version`.
+**Where the canary has been run, 2026-10-31.** Against `c8322590`, the commit before #326, as `quotinator:canary-326`: nothing answered on the port, and `docker inspect` read `false` with exit code `139`. Against `e4078444`, the commit before #327, as `quotinator:canary-327`: step 1 read `unhealthy` with the data-directory reason, and step 2 read `200` from `/api/v1/version`.
 
 ## Cleanup
 

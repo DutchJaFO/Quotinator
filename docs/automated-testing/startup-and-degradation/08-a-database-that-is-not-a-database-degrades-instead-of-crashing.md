@@ -15,7 +15,7 @@ degraded state is about.
 The container binds its data directory to a host path (`--bind`) rather than using a named volume, so
 the file can be replaced from the host.
 
-**The state this establishes, measured 2026-10-21.** SQLite is handed a file it cannot recognise, so
+**The state this establishes.** SQLite is handed a file it cannot recognise, so
 the initializer fails before any schema version is read. The application records the failure and
 continues: Kestrel binds, `/health` answers `503`, and the Blazor pages render their degraded form.
 
@@ -138,58 +138,35 @@ passing case this document would stay green against a build that degraded on eve
 assertion above worthless.
 ## Observed effect
 
-**Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`, seeded to 795 quotes and then
-replaced with 34 bytes of text.
+**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`, the database replaced with 34
+bytes of text.
 
-The process stays up and `/health` settles at `503 unhealthy`, its reason naming the file-deletion
-remedy. `/`, `/stats` and `/notifications` each return `200`,
-`/openapi/v1.json` returns `200`, the home page carries *started with a problem*, and no page matches
-`at [A-Za-z.]+\(`. Every database-reading endpoint is gated: `/api/v1/quotes`,
-`/api/v1/quotes/random`, `/api/v1/quotes/search`, `/api/v1/conversations`, `/api/v1/notifications`,
-`/api/v1/masterdata/sources` and `/api/v1/version` all answer `503`.
-
-**`GET /api/v1/version` reached that list by being a defect this document found.** On the build this
-document was first written against it answered `200` with `"status":"ready"` and a `database` block
-reporting every count as `0`, so a caller could neither tell an empty database from an unopenable one
-nor see that the application was not ready. [`03`](03-startup-wait-page.md) records the rule that
-broke, from #419: the endpoint is gated *while starting* precisely because "a caller could otherwise
-reach for it as a readiness endpoint in `/health`'s place", and during startup it does answer `503`.
-The gate existed and the degraded state was not behind it. It now answers
-`503 {"status":"degraded","version":...,"environment":...}` with no `database` block, and it still
-answers `200` when healthy.
+The process stays up and `/health` settles at `503 unhealthy` with the generic initialisation-failure
+reason. `/`, `/stats` and `/notifications` each return `200`, `/openapi/v1.json` returns `200`, and the
+home page carries the degraded text with no stack trace. All seven database reads answer `503`.
+`GET /api/v1/version` answers `503 {"status":"degraded","version":...,"environment":...}` with no
+`database` block, and `200` when healthy.
 
 **Six admin endpoints answer an unhandled `500` in this state, and this document does not assert
-them.** Measured 2026-10-21, each returning a bare *"An error occurred while processing your request"*
-and a trace id: `GET /api/v1/admin/database/seed/preview`, `GET /api/v1/admin/audit`,
+them:** `GET /api/v1/admin/database/seed/preview`, `GET /api/v1/admin/audit`,
 `GET /api/v1/admin/audit/date-range`, `GET /api/v1/admin/audit/export`,
-`POST /api/v1/admin/database/reseed` and `DELETE /api/v1/admin/audit`. The admin surface is exempt
-from the health gate so it can be the recovery route, which is why the reset reaching its handler matters
-handler; these six reach theirs and throw, and two of them are writes.
-
-Correct in the same run, which is what shows the fault is specific rather than the surface being
-broken: `POST /api/v1/admin/backups/create` answers `409`, and `GET /api/v1/admin/backups` and
-`/backups/status` answer `200` off the filesystem. `POST /api/v1/admin/sources/refresh` answers `200`,
-having really fetched from GitHub, since it writes files and never reads the database.
-
-That is the same defect class #348 removed from `POST /admin/database/reset`, which returned an
-unhandled `500` for its own reason until it was taught to refuse with a stated obstacle, and the
-endpoints carrying #348's preflight are exactly the ones answering correctly.
+`POST /api/v1/admin/database/reseed` and `DELETE /api/v1/admin/audit`. The admin surface is exempt from
+the health gate so it can be the recovery route; these six reach their handlers and throw, and two of
+them are writes. `GET /api/v1/admin/backups` answers `200` in the same run, off the filesystem.
 [#453](https://github.com/DutchJaFO/Quotinator/issues/453) owns the fix: narrowing the gate's exemption
-to the reset and the backup category, which is the repair route an operator can actually use. ADR 022
-governs it, since a condition the code has already detected is being thrown rather than returned.
+to the reset and the backup category. ADR 022 governs it, since a condition the code has already
+detected is being thrown rather than returned.
 
 **Recovery route, recorded rather than asserted.** Reachable: `POST /api/v1/admin/database/reset` reaches
-its handler and answers `409 Conflict` rather than being gated away by the `503`. **Not workable as
-offered**: the reset refuses, naming the obstacle and handing back a remedy that points at the file.
-Deleting the database file and restarting returns the container to `200`, which is step 5's positive control.
+its handler and answers `409 Conflict`, obstacle `SourceUnreadable`, rather than being gated away by the
+`503`. **Not workable as offered**: its remedies are moving or deleting the file and restarting, or
+restoring an older backup. Deleting the file and restarting returns the container to `200`, which is
+step 5's positive control.
 
-**The reason names a remedy that works, second.** `/health` carries the generic initialisation-failure
-reason, which recommends a database Reset first, and that reset refuses. Its second remedy, *stopping
-the app, deleting the database file, and restarting*, is the one that works. The reason's diagnosis does not fit this fault, though: it says the recorded schema version
-probably does not match the on-disk schema, for a file that is not a database at all. Contrast
-[`05`](05-degraded-pages-survive-a-migration-failure.md), where #326 gave the unwritable-directory fault
-its own reason, matched on SQLite error codes 14 and 8; an unreadable file raises neither, so it falls
-through to the generic text.
+**The reason names a remedy that works, second.** `/health` recommends a database Reset first, and that
+reset refuses. Its second remedy, *stopping the app, deleting the database file, and restarting*, is the
+one that works. The reason's diagnosis does not fit this fault: it says the recorded schema version
+probably does not match the on-disk schema, for a file that is not a database at all.
 
 ## Canary
 
@@ -201,7 +178,7 @@ step. That build predates the gating of `/version` while degraded, so step 4 rea
 same environment, so a build that degraded unconditionally fails there. Step 3's `unhealthy` is the other
 half: it ends the run when the sabotage did not land, so step 4 cannot pass against a healthy container.
 
-**Where the canary has been run, 2026-10-24.** Against `e4078444`, the commit before #327, as `quotinator:canary-327`: steps 1 to 3 passed, step 4 read `200` from `/api/v1/version`, and step 5 read `healthy`.
+**Where the canary has been run, 2026-10-31.** Against `e4078444`, the commit before #327, as `quotinator:canary-327`: step 3 read `unhealthy` with the generic reason, and step 4 read `200` from `/api/v1/version`.
 
 ## Cleanup
 

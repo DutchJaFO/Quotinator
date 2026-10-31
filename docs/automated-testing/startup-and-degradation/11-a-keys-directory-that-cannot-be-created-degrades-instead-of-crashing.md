@@ -17,7 +17,7 @@ all can be written.
 The container binds its data directory to a host path (`--bind`), so the file can be placed and removed
 from the host, and uses `--own-keys`, so `test-env.csx` mounts no shared key ring over the file.
 
-**The state this establishes, measured 2026-10-23.** The configuration-time guard records the failure as
+**The state this establishes.** The configuration-time guard records the failure as
 the data-directory reason, startup continues, the database is created and seeded, and `/health` settles at
 `503` once initialisation finishes.
 
@@ -116,26 +116,23 @@ a build that degraded on everything. With the path free, the application creates
 makes every assertion above worthless.
 ## Observed effect
 
-**Measured 2026-10-23** against `quotinator:local` built from `eb8c1a19`.
+**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
 
-The process stays up and the database is created and seeded, while `/health` settles at `503` with the
+The process stays up and the database file is created, while `/health` settles at `503` with the
 data-directory reason: *"The data directory cannot be written … Restore write access to the data
 directory and restart. A database Reset cannot resolve this: it writes too."* None of that describes this
 fault: the data directory is writable, and the Reset runs. `/openapi/v1.json` answers `200` and all
 seven database reads answer `503`.
 
-**All three pages answer `500`, recorded rather than asserted**, failing to read the DataProtection key ring
-(`ErrorOccurredWhileReadingKeyRing`, once per page request), as in
+**All three pages answer `500`, recorded rather than asserted**, as in
 [`10`](10-a-data-directory-that-cannot-be-created-degrades-instead-of-crashing.md).
 
-**A Reset answers `200` and turns `/health` healthy while the fault remains.** Measured: after the reset,
-`/health` `200`, `/api/v1/quotes` `200` with the emptied database, and `/` still `500`, with `keys` still
-a file. The Reset path calls `DatabaseHealthState.MarkHealthy`, which clears every recorded failure
-rather than only a database one, because #326 records the keys failure in the database's health state.
+**A Reset answers `200` and turns `/health` healthy while the fault remains.** After the reset, `/health`
+reads `healthy`, `/api/v1/quotes` answers `200`, and `/` still answers `500`, with `keys` still a file.
 
-**Recovery route, recorded rather than asserted.** Reachable, and it runs, but it is not a remedy: nothing
-the admin surface offers can create `keys/` while a file occupies its path. Removing the file and
-restarting returns the container to `200` with every page rendering, which is step 3's positive control.
+**Recovery route, recorded rather than asserted.** Reachable, and it runs, but it is not a remedy: `keys`
+is still a file after it. Removing the file and restarting returns the container to `200` with `/`
+rendering, which is step 3's positive control.
 
 All three readings trace to one decision: #326 folds an uncreatable `keys/` directory into the database
 health state with the data-directory reason. None of them is a crash, since the application still says it
@@ -151,7 +148,7 @@ the port.
 Step 3 is the positive control inside every run: it removes the sabotage and reads `200`, so a build that
 degraded unconditionally fails there.
 
-**Where the canary has been run, 2026-10-24.** Against `c8322590`, the commit before #326, as `quotinator:canary-326`: step 1 read `false` from `docker inspect` and `status=down`. Against `e4078444`, the commit before #327, as `quotinator:canary-327`: step 1 passed and step 2 read `200` from `/api/v1/version`.
+**Where the canary has been run, 2026-10-31.** Against `c8322590`, the commit before #326, as `quotinator:canary-326`: `/health` never answered, and `docker inspect` read `false` with exit code `139`. Against `e4078444`, the commit before #327, as `quotinator:canary-327`: step 1 read `unhealthy` with the data-directory reason, and step 2 read `200` from `/api/v1/version`.
 
 ## Cleanup
 

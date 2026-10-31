@@ -1,6 +1,6 @@
 # #327: Smoke tests that prove startup problems degrade rather than crash
 
-**Status:** In progress (step 16)
+**Status:** In progress (step 18)
 **GitHub issue:** #327
 **Tiers required:** T1, T2
 **Depends on:** #326, #339, #350
@@ -594,7 +594,7 @@ script"* to a `tools/` project; no repository document describes sharing code be
   also cover. Measurements posted to both on 2026-10-27; `06` carries `**Fully green after:** #445`.
 ### 16. Run each document against a build from before this issue
 
-**Status:** 🚧 Evidence re-gathered from the documents' own steps for `01`, `04`, `05`, `06` and `12` (third run, below). Next action: do the same for `08`, `09`, `10`, `11` and `13`, whose images and worktrees were removed and must be rebuilt from the commits named below
+**Status:** ✅ Done 2026-10-31, from the documents' own steps (third run, below)
 
 Per `process.md` → Implementation, step 1. The parent of the first `[#327]` commit
 (`git log --reverse --format=%H --grep "\[#327\]" | Select-Object -First 1`) is added as a worktree,
@@ -663,7 +663,13 @@ each fails on its canary build:
 | `05` | `canary-293` | step 5: all three pages `500` |
 | `05` | `canary-327` | step 3: `/version` `200`; step 4: reset `500` |
 | `06` | `canary-327` | step 3: `healthy`, no overshoot reason |
+| `08`, `09` | `canary-327` | step 4: `/version` `200` |
+| `10`, `11` | `canary-326` | step 1: the container exits with code `139`, nothing answers |
+| `10`, `11` | `canary-327` | step 2: `/version` `200` |
 | `12` | `canary-327` | step 2: `healthy`, the migration ran without its backup |
+| `13` | `canary-327-keys` (`72b39c02`) and `canary-327` | step 1: `healthy`, no reason |
+
+Worktrees and images were removed afterwards.
 
 **The `01` / `canary-254` reading in both tables above is false.** That commit's quote table is `Quotes`,
 so step 3's `DROP TABLE Quotinator_Quote` broke nothing and `healthy` said nothing about #254. Dropping
