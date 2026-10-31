@@ -25,3 +25,4 @@ per `knowledgebase.md`'s bootstrapping rule, entries come first and codes are as
 | [A test environment reports it was removed, but docker could not remove it](a-test-environment-reports-removal-that-did-not-happen.md) | No | test tooling, not the application |
 | [A source refresh test fails when GitHub does not answer](a-source-refresh-test-fails-when-github-does-not-answer.md) | No | test suite, not the application |
 | [/version reports old counts after an import](version-counts-are-stale-after-an-import.md) | No | 1.9.0-alpha, the only version measured |
+| [Applying an import batch answers 200, but nothing was imported](applying-a-batch-that-does-not-exist-answers-200.md) | No | 1.9.0-alpha, the only version measured |

@@ -141,7 +141,10 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 
 **Expected:** `422` in both cases, naming the one undecided action. That is the batch-apply-atomicity contract working as
 designed. Applying a batch that does not exist touches nothing: this batch's action is still `Pending`. That call's
-status is printed, not asserted, because whether it should answer `200` is not settled.
+status is printed, not asserted: it answers `200` where it should answer with a clear error, which is
+[#469](https://github.com/DutchJaFO/Quotinator/issues/469), a known issue described in the
+[Knowledgebase](../../knowledgebase/applying-a-batch-that-does-not-exist-answers-200.md). When #469 is fixed, this step
+asserts that error.
 
 ### 9. Decide it again
 
