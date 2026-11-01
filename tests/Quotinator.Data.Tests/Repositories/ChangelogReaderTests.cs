@@ -140,9 +140,8 @@ public class ChangelogReaderTests
     /// A successful database-backed read says so in the log. Verification that the database actually
     /// served the changelog previously rested on the *absence* of a fallback warning, which the
     /// silent empty-database path at the time made unsound — an absent message proves nothing about
-    /// which source answered. This positive statement is what
-    /// docs/automated-testing/notifications-and-changelog/07-changelog-served-from-its-own-database.md
-    /// and this issue's own T1/T2 rows assert on instead.
+    /// which source answered. This positive statement is what a reader of the log goes by; no T2
+    /// document asserts on its wording.
     /// </summary>
     [TestMethod]
     public async Task GetDocumentAsync_DatabasePopulated_LogsThatTheDatabaseServedIt()

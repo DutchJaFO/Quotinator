@@ -59,44 +59,6 @@ internal static partial class LogCounter
     internal static int Count(string text, string pattern) => Regex.Count(text, pattern);
 
     /// <summary>
-    /// Holds when every occurrence of both patterns captures the same number in its first group, and each
-    /// pattern occurs at least once; observes the number. Neither figure has to be predicted.
-    /// </summary>
-    internal static ExpectationResult SameNumber(string text, string first, string second)
-    {
-        string[] firsts = [.. Regex.Matches(text, first).Select(match => match.Groups[1].Value)];
-        string[] seconds = [.. Regex.Matches(text, second).Select(match => match.Groups[1].Value)];
-        string observed = $"first: {string.Join(", ", firsts)}; second: {string.Join(", ", seconds)}";
-
-        if (firsts.Length == 0 || seconds.Length == 0)
-        {
-            return ExpectationResult.Failed("each pattern must occur at least once", observed);
-        }
-
-        return firsts.Concat(seconds).Distinct().Count() == 1
-            ? ExpectationResult.Passed(observed)
-            : ExpectationResult.Failed("the numbers differ", observed);
-    }
-
-    /// <summary>
-    /// Runs <paramref name="check"/> until it holds or <paramref name="seconds"/> have passed, always at
-    /// least once, and returns its last result, so a wait that never succeeds still ends the run.
-    /// </summary>
-    internal static ExpectationResult WaitUntil(Func<ExpectationResult> check, int seconds, TimeSpan pause)
-    {
-        DateTime deadline = DateTime.UtcNow.AddSeconds(seconds);
-        ExpectationResult result = check();
-
-        while (!result.Holds && DateTime.UtcNow < deadline)
-        {
-            Thread.Sleep(pause);
-            result = check();
-        }
-
-        return result;
-    }
-
-    /// <summary>
     /// Holds when <paramref name="count"/> is at least <paramref name="atLeast"/> or exactly
     /// <paramref name="exactly"/>, whichever is given; observes the count. Neither, or both, is a failure.
     /// </summary>

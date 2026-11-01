@@ -103,11 +103,6 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-star
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\after-restart.mark --pattern "\[Runtime - Exception\]" --exactly 0
 ```
 
-`--same-number <regex> <regex>` holds when every occurrence of both patterns captures the same number in its first
-group, and each occurs at least once, for two figures that must agree when neither can be predicted.
-`--wait-seconds <n>` repeats the check until it holds or `<n>` seconds have passed, for a line that is written after
-the application already answers.
-
 `--mark <file>` records the newest line's timestamp; `--since-mark <file>` counts only lines stamped
 after it. The timestamps are the Docker daemon's own (`docker logs --timestamps`), so the host clock
 plays no part.

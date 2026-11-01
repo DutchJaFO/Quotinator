@@ -17,35 +17,6 @@ public sealed class LogCounterTests
     public void Count_NoOccurrence_IsZero()
         => Assert.AreEqual(0, LogCounter.Count("all fine", "ERR"));
 
-    [TestMethod]
-    public void SameNumber_EveryOccurrenceAgrees_Holds()
-        => Assert.IsTrue(LogCounter.SameNumber("wrote 126 rows\nread 126 rows\nwrote 126 rows", @"wrote (\d+)", @"read (\d+)").Holds);
-
-    [TestMethod]
-    public void SameNumber_TheTwoPatternsDisagree_Fails()
-        => Assert.IsFalse(LogCounter.SameNumber("wrote 126 rows\nread 120 rows", @"wrote (\d+)", @"read (\d+)").Holds);
-
-    [TestMethod]
-    public void SameNumber_TwoOccurrencesOfOnePatternDisagree_Fails()
-        => Assert.IsFalse(LogCounter.SameNumber("wrote 126 rows\nread 126 rows\nwrote 252 rows", @"wrote (\d+)", @"read (\d+)").Holds);
-
-    [TestMethod]
-    public void SameNumber_APatternNeverMatches_Fails()
-        => Assert.IsFalse(LogCounter.SameNumber("wrote 126 rows", @"wrote (\d+)", @"read (\d+)").Holds);
-
-    [TestMethod]
-    public void WaitUntil_HoldsOnALaterAttempt_Holds()
-    {
-        int attempts = 0;
-
-        Assert.IsTrue(LogCounter.WaitUntil(() => LogCounter.Check(++attempts, 3, null), 10, TimeSpan.Zero).Holds);
-        Assert.AreEqual(3, attempts);
-    }
-
-    [TestMethod]
-    public void WaitUntil_NeverHolds_ReturnsTheLastFailure()
-        => Assert.IsFalse(LogCounter.WaitUntil(() => LogCounter.Check(0, 1, null), 0, TimeSpan.Zero).Holds);
-
     private const string Timestamped =
         "2026-10-24T19:51:50.1Z first\n" +
         "2026-10-24T19:51:58.123456789Z second ERR\n" +

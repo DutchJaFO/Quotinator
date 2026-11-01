@@ -35,16 +35,6 @@ internal sealed class LogCommand : IProbeCommand
             return ExpectationResult.Failed($"--since-mark {sinceMark} is not a mark file written by --mark");
         }
 
-        if (!TryReadBound(args, "--wait-seconds", out int? waitSeconds))
-        {
-            return ExpectationResult.Failed("--wait-seconds takes a whole number");
-        }
-
-        return LogCounter.WaitUntil(() => CheckOnce(args, container, markOut, since), waitSeconds ?? 0, TimeSpan.FromSeconds(1));
-    }
-
-    private static ExpectationResult CheckOnce(IReadOnlyList<string> args, string container, string? markOut, DateTimeOffset since)
-    {
         string? logs = ReadLogs(container, out string? failure);
 
         if (logs is null)
@@ -59,18 +49,11 @@ internal sealed class LogCommand : IProbeCommand
             return ExpectationResult.Passed($"marked {container} at {last:O} in {markOut}");
         }
 
-        string lines = LogCounter.LinesAfter(logs, since);
-
-        if (OptionReader.All(args, "--same-number", 2, out _) is [string[] pair, ..])
-        {
-            return LogCounter.SameNumber(lines, pair[0], pair[1]);
-        }
-
         string? pattern = OptionReader.Single(args, "--pattern");
 
         if (pattern is null)
         {
-            return ExpectationResult.Failed("log needs --pattern, --same-number or --mark");
+            return ExpectationResult.Failed("log needs --pattern, or --mark");
         }
 
         if (!TryReadBound(args, "--at-least", out int? atLeast) || !TryReadBound(args, "--exactly", out int? exactly))
@@ -78,7 +61,7 @@ internal sealed class LogCommand : IProbeCommand
             return ExpectationResult.Failed("--at-least and --exactly take a whole number");
         }
 
-        return LogCounter.Check(LogCounter.Count(lines, pattern), atLeast, exactly);
+        return LogCounter.Check(LogCounter.Count(LogCounter.LinesAfter(logs, since), pattern), atLeast, exactly);
     }
 
     private static bool TryReadMark(string path, out DateTimeOffset mark)

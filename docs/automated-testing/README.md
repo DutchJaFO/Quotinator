@@ -64,7 +64,7 @@ not asserted: the contract is that the application says it is degraded instead o
 | [A migration refused for want of a backup degrades instead of crashing](startup-and-degradation/12-a-migration-refused-for-want-of-a-backup-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
 | [A keys directory that cannot be written degrades instead of crashing](startup-and-degradation/13-a-keys-directory-that-cannot-be-written-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
 | [Startup notification system](notifications-and-changelog/01-notification-system.md) | `notifications-and-changelog/` |
-| [Changelog is served from its own on-disk database](notifications-and-changelog/07-changelog-served-from-its-own-database.md) | `notifications-and-changelog/` |
+| [Changelog lives in its own on-disk database and survives a restart](notifications-and-changelog/07-changelog-served-from-its-own-database.md) | `notifications-and-changelog/` |
 
 Every test document states its own membership in its `Smoke` field. This table is the index of that
 field, not a second source of truth: if the two disagree, the document is right and this table needs
@@ -1264,7 +1264,7 @@ different question in each.
 | 04 | [Upgrading enriches the legacy notification rather than duplicating it](notifications-and-changelog/04-upgrade-does-not-duplicate-the-legacy-notification.md) | no |
 | 05 | [The legacy notification gains provenance](notifications-and-changelog/05-legacy-notification-provenance.md) | no |
 | 06 | [A what's-new row predating release state is backfilled](notifications-and-changelog/06-whats-new-row-predating-release-state.md) | no |
-| 07 | [The changelog is served from its own on-disk database](notifications-and-changelog/07-changelog-served-from-its-own-database.md) | yes |
+| 07 | [The changelog lives in its own on-disk database and survives a restart](notifications-and-changelog/07-changelog-served-from-its-own-database.md) | yes |
 | 08 | [A notification's title and body resolve to the requested language](notifications-and-changelog/08-notification-text-resolves-per-language.md) | no |
 | 09 | [Upgrading translates the notification a released build already wrote](notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md) | no |
 | 10 | [A reset recommends a reseed, and running it resolves the condition](notifications-and-changelog/10-reseed-recommendation-and-action.md) | no |
