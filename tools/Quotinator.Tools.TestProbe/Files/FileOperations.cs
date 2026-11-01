@@ -20,6 +20,21 @@ internal static class FileOperations
         return ExpectationResult.Passed($"wrote {path} ({new FileInfo(path).Length} bytes)");
     }
 
+    /// <summary>Holds when <paramref name="path"/> is a file holding at least one byte, observing its length.</summary>
+    internal static ExpectationResult ExpectNotEmpty(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return ExpectationResult.Failed($"{path} is not a file");
+        }
+
+        long length = new FileInfo(path).Length;
+
+        return length > 0
+            ? ExpectationResult.Passed($"{path} holds {length} bytes")
+            : ExpectationResult.Failed($"{path} is empty");
+    }
+
     /// <summary>
     /// Copies the file at <paramref name="source"/> to <paramref name="destination"/>, replacing anything
     /// there, creating its directory when missing. Fails when the source does not exist.

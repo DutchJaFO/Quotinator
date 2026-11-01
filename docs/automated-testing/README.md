@@ -1105,7 +1105,7 @@ an entry needs; a happy-path-only test has nothing to contribute.
 
 ## Observed effects awaiting measurement
 
-**41 of 81 documents describe their effect without having measured it.** Each row below names the
+**40 of 81 documents describe their effect without having measured it.** Each row below names the
 quantity its next run must read, so the measurement is a specific act rather than a vague intention to
 look. A document leaves this list by recording `**Measured <date>**` in its own section, and
 `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails if it does so while its row is still
@@ -1151,7 +1151,6 @@ asserts what it should; what is missing is a reading an entry can quote.
 | [notifications-and-changelog/02-notification-metadata-and-provenance.md](notifications-and-changelog/02-notification-metadata-and-provenance.md) | The stored payload and its provenance, as read, with the date of the reading |
 | [notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md](notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md) | The version history after the upgrade from the intermediate state |
 | [notifications-and-changelog/05-legacy-notification-provenance.md](notifications-and-changelog/05-legacy-notification-provenance.md) | The order of the version-history rows, and the fresh database's absence of a released row |
-| [notifications-and-changelog/07-changelog-served-from-its-own-database.md](notifications-and-changelog/07-changelog-served-from-its-own-database.md) | The read path in use, and how long after health the import line appears |
 | [notifications-and-changelog/08-notification-text-resolves-per-language.md](notifications-and-changelog/08-notification-text-resolves-per-language.md) | The text each language returns for the same notification |
 | [notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md](notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md) | The text each language returns after the upgrade, and the English row either side |
 | [notifications-and-changelog/11-clean-reseed-confirmation.md](notifications-and-changelog/11-clean-reseed-confirmation.md) | The confirmation count per file, and the breakdown's own totals against its parts |

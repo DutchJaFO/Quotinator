@@ -36,6 +36,28 @@ public sealed class FileOperationsTests
     }
 
     [TestMethod]
+    public void ExpectNotEmpty_FileWithContent_Holds()
+    {
+        string path = InRoot("full.db");
+        File.WriteAllText(path, "x");
+
+        Assert.IsTrue(FileOperations.ExpectNotEmpty(path).Holds);
+    }
+
+    [TestMethod]
+    public void ExpectNotEmpty_EmptyFile_Fails()
+    {
+        string path = InRoot("empty.db");
+        File.WriteAllText(path, string.Empty);
+
+        Assert.IsFalse(FileOperations.ExpectNotEmpty(path).Holds);
+    }
+
+    [TestMethod]
+    public void ExpectNotEmpty_MissingFile_Fails()
+        => Assert.IsFalse(FileOperations.ExpectNotEmpty(InRoot("absent.db")).Holds);
+
+    [TestMethod]
     public void Copy_MissingSource_Fails()
     {
         Assert.IsFalse(FileOperations.Copy(InRoot("absent.json"), InRoot("copied.json")).Holds);

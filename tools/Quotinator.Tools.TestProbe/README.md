@@ -79,6 +79,7 @@ into an array (`database.quotes`, `items.0.quote`).
 | `--expect-directory <path>` | Holds when `<path>` is a directory |
 | `--expect-empty-directory <path>` | Holds when `<path>` is a directory with nothing in it |
 | `--expect-length <path> <bytes>` | Holds when the file is exactly `<bytes>` long |
+| `--expect-not-empty <path>` | Holds when `<path>` is a file holding at least one byte |
 | `--expect-absent <path>` | Holds when nothing, file or directory, exists at `<path>` |
 | `--expect-matches <directory> <pattern> <minimum>` | Holds when at least `<minimum>` files in `<directory>` match `<pattern>` |
 | `--expect-match-count <directory> <pattern> <count>` | Holds when exactly `<count>` files in `<directory>` match `<pattern>` |
@@ -101,6 +102,11 @@ that stops or restarts its container:
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\after-restart.mark
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\after-restart.mark --pattern "\[Runtime - Exception\]" --exactly 0
 ```
+
+`--same-number <regex> <regex>` holds when every occurrence of both patterns captures the same number in its first
+group, and each occurs at least once, for two figures that must agree when neither can be predicted.
+`--wait-seconds <n>` repeats the check until it holds or `<n>` seconds have passed, for a line that is written after
+the application already answers.
 
 `--mark <file>` records the newest line's timestamp; `--since-mark <file>` counts only lines stamped
 after it. The timestamps are the Docker daemon's own (`docker logs --timestamps`), so the host clock
