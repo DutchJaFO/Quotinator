@@ -747,6 +747,17 @@ running them until they are converted, which is a body of work of its own.
   existing path, which is why this was accepted, but it was reasoned rather than measured.
 - The 60 documents have not run against the changed `http.csx`. #473 runs each of them.
 
+**`06` was run five times exactly as written on 2026-11-01, one at a time, on `e77e2828`'s text and `quotinator:local`
+built from `00a9dfe2`.** Every step passed. *Nothing thrown since Cancel* read `0` each time, where the document's header
+expects `TaskCanceledException` lines until #445. The malformed upload's `JsonReaderException` read `1` each time, and the
+cleanup count read `0`. The three recorded earlier runs read 2, 5 and 9 and read 4 and 7 (2026-10-24), and read 9 and 11
+(2026-10-31). `06`, its page scripts, `capture-page.csx`, `test-env.csx`, `execute-sql.csx`, TestProbe's `log` command,
+`src` and the image are unchanged since `55760c8d`, which recorded that last reading. `http.csx` gained options `06` does
+not use. The cause of the difference is not established, and this does not show #445 fixed.
+
+**A pass that edited `05` and `08` to `13` was discarded**, without the developer's authorisation and without any step
+having failed. Those edits were removed and those runs are not evidence.
+
 **Readings the suite carries forward as known.** Each document names its issue:
 
 | Document | Step | Issue |
