@@ -1105,7 +1105,7 @@ an entry needs; a happy-path-only test has nothing to contribute.
 
 ## Observed effects awaiting measurement
 
-**42 of 81 documents describe their effect without having measured it.** Each row below names the
+**41 of 81 documents describe their effect without having measured it.** Each row below names the
 quantity its next run must read, so the measurement is a specific act rather than a vague intention to
 look. A document leaves this list by recording `**Measured <date>**` in its own section, and
 `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails if it does so while its row is still
@@ -1137,7 +1137,6 @@ asserts what it should; what is missing is a reading an entry can quote.
 | [import-and-staged-actions/12-character-modify-and-explicit-id-on-add.md](import-and-staged-actions/12-character-modify-and-explicit-id-on-add.md) | The id stored for the explicit-uppercase Add, and the Source matched through a differently-cased title |
 | [import-and-staged-actions/13-bulk-decide-via-file-export-import.md](import-and-staged-actions/13-bulk-decide-via-file-export-import.md) | The round trip's own row counts in both wire formats, and the malformed row's report |
 | [import-and-staged-actions/17-source-alias-staleness.md](import-and-staged-actions/17-source-alias-staleness.md) | The pending and stale lists after the fresh seed and after the reseed |
-| [import-and-staged-actions/19-per-file-import-report.md](import-and-staged-actions/19-per-file-import-report.md) | The per-file, per-entity-type counts each of the five surfaces reports |
 | [import-and-staged-actions/20-pending-review-alert.md](import-and-staged-actions/20-pending-review-alert.md) | The alert count per file, and each alert's state after its resolution |
 | [import-and-staged-actions/21-reseed-preserves-existing-data.md](import-and-staged-actions/21-reseed-preserves-existing-data.md) | The quote count either side of each reseed, and the surviving batch list |
 | [import-and-staged-actions/22-season-attached-quote-served-through-the-api.md](import-and-staged-actions/22-season-attached-quote-served-through-the-api.md) | The Season reference as served by the list, by `GET /{id}`, and by search |
