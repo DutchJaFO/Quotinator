@@ -128,7 +128,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #324 ─── depends on #278, #312, #319; soft-consumes #329: Planning
 #325 ─── depends on #323: Closed as not planned
 #326 ─── (none); blocks #327: Waiting for release
-#327 ─── depends on #326, #339, #350: In progress
+#327 ─── depends on #326, #339, #350; blocked by #482, #454, #453, #455, #456, #305, #428, #457: In progress
 #328 ─── depends on #339: Planning
 #329 ─── depends on #323, #325; blocks #324: Planning
 #330 ─── (none); blocks #331: Planning

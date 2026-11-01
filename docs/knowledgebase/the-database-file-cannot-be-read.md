@@ -3,7 +3,7 @@
 **Kind:** diagnostic
 **Entry code:** —
 **Affected versions:** 1.9.0-alpha onwards
-**GitHub issue:** #457, #348, #444
+**GitHub issue:** #457, #482, #348, #444
 
 ## Symptom
 
@@ -47,7 +47,8 @@ For a schema that does not match its version, run the Reset the reason names.
 ## Notes
 
 Found by #327's `startup-and-degradation/08` and `09` (2026-10-23). #457 tracks the reason telling an
-unreadable file apart from a schema-version mismatch. The `allowNoBackup` override is meant to let a
-Reset proceed with no restore point, and refusing here is a gap in it, to be closed under #348.
+unreadable file apart from a schema-version mismatch. [#482](https://github.com/DutchJaFO/Quotinator/issues/482)
+tracks a Reset rebuilding a file it cannot read, instead of refusing, which will make the second remedy
+above an in-app action.
 [#444](https://github.com/DutchJaFO/Quotinator/issues/444) plans restoring a backup from inside the
 application, local or uploaded, which will make the first remedy above an in-app action.

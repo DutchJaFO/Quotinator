@@ -1,9 +1,44 @@
 # #327: Smoke tests that prove startup problems degrade rather than crash
 
-**Status:** In progress (step 20, the developer's T1)
+**Status:** In progress, stopped: blocked. Next action: rewrite the issue body, then this plan's contract and checklist, to the requirement below. Do not run this plan or start T1 until the blockers are resolved.
 **GitHub issue:** #327
 **Tiers required:** T1, T2
-**Depends on:** #326, #339, #350
+**Depends on:** #326, #339, #350. **Blocked by:** #482, #454, #453, #455, #456 (in part), #305, #428, #457
+
+---
+
+## Blocked: what stopped this issue (2026-11-01)
+
+This plan was marked as waiting for T1 with 13 checklist rows unticked. That was wrong: the steps had been run, but the rows were never ticked as they finished, and the narrowing in step 13 was never carried into the checklist. Everything below replaces that position.
+
+**The requirement (developer direction, 2026-11-01).** It replaces *The goal is narrow* and *The contract every scenario asserts* below, which are to be rewritten to it, along with the issue body and the checklist:
+
+- `/health` says whether the application is healthy or degraded. Further detail is welcome, and its accuracy does not decide a pass.
+- The application's own pages show the user the details of the problem and their options. A remedy may lie outside the application, such as a read-only mount, or restoring a backup while no route for it exists.
+- The log does not count: the user is not expected to read it.
+- No exception escapes a request, per ADR 022.
+- Every scenario proves the negative and the positive, with predictable results. A step count is no part of a requirement.
+
+**Blockers.** Each was decided by the developer on the reading shown. Measured with throwaway containers on `quotinator:local` built from `00a9dfe2`, reading what headless Edge displayed; the screenshots and logs were not kept in the repository.
+
+| Issue | What it blocks on |
+|---|---|
+| #454 | When the data directory or `keys/` cannot be created, or `keys/` cannot be written, `/`, `/stats` and `/notifications` answer the default `500`, with no details and no options, and the exception escapes; `/about` renders. `/rest-api` and `/import-review` read the same with the data directory uncreatable, and were not read in the other two. Needs widening to the unwritable case and those two pages |
+| #455 | A Reset answers `200` and `/health` reads `healthy` while `/` still answers `500`, with `keys/` uncreatable or unwritable. Needs widening to the unwritable case |
+| #453 | All six admin endpoints answer `500` on a corrupt database, each logging an escaped exception. On a truncated database `/admin/audit` was read, with the same result |
+| #456 (in part) | With the data directory uncreatable, the refusal offers `allowNoBackup`, and sending it answers a bare `500`. With a migration pending, the page's Reset button is offered but refuses correctly |
+| #305 | With `System_Notification` missing, `/health` reads `healthy` and the page reads *No notifications yet*. With `Quotinator_Conversation` missing, the application degrades. Only these two tables were read |
+| #428 | Every count reads `0` under *last known-good state* with an unwritable directory, a corrupt or truncated file, and a refused migration |
+| #457 | A corrupt or truncated file is diagnosed as a schema-version mismatch, and the page names no backup. Its remedies change with #482 |
+| #482 | A Reset refuses an unreadable database, although recreating it needs nothing from the old file |
+
+**Read and found not to block.** #348: on a corrupt database the override answers `409` with correct remedies, and #482 now owns making a Reset work there. #365: `/api/v1/quotes` and an unknown URL answer JSON in a browser, carrying the full reason, and the application's pages render. #445: two reloads and several page visits logged no exception; the reloads ran in an iframe, so this is not the same as a person reloading. The earlier readings of 2 to 11 in `06` stay unexplained.
+
+**Also read.** With the schema version ahead, clicking Reset on `/stats` left `Quotes 795` on the page five seconds later, with `/health` already healthy; the page was not reloaded, and no issue covers this yet. The migration-refused remedy (remove the filler through the API, then restart) and the Reset on a broken schema and on a version ahead each returned the application to healthy.
+
+**Known conflict, still to be settled:** the developer filed #481 as non-blocking, and #482 counts a set-aside file towards the backup ceiling, while #481 is what lets a user remove it through the API. Until #481 lands, a large set-aside file can refuse later backups and migrations with no in-app way to remove it. This has not been measured, since neither issue exists in code yet.
+
+**Before this was stopped,** on `c3652feb`: the build at 0 warnings, 4,833 tests green, and all 21 documents in step 18's scope run as written, carrying the known readings tabled there. The developer has directed that the whole plan is run again from scratch once it can be completed, with each row ticked and committed as it passes, so none of this counts as that run.
 
 ---
 
