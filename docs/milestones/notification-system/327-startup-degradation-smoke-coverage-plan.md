@@ -36,7 +36,7 @@ This plan was marked as waiting for T1 with 13 checklist rows unticked. That was
 
 **Also read.** With the schema version ahead, clicking Reset on `/stats` left `Quotes 795` on the page five seconds later, with `/health` already healthy; the page was not reloaded, and no issue covers this yet. The migration-refused remedy (remove the filler through the API, then restart) and the Reset on a broken schema and on a version ahead each returned the application to healthy.
 
-**Known conflict, still to be settled:** the developer filed #481 as non-blocking, and #482 counts a set-aside file towards the backup ceiling, while #481 is what lets a user remove it through the API. Until #481 lands, a large set-aside file can refuse later backups and migrations with no in-app way to remove it. This has not been measured, since neither issue exists in code yet.
+**Known conflict, accepted as non-blocking (developer decision, 2026-11-01):** #482 counts a set-aside file towards the backup ceiling, while #481 is what lets a user remove it through the API. Until #481 lands, a large set-aside file can refuse later backups and migrations with no in-app way to remove it. #482's notification says where the file is and that it counts towards backup storage, so the user knows what to clear. This has not been measured, since neither issue exists in code yet.
 
 **Before this was stopped,** on `c3652feb`: the build at 0 warnings, 4,833 tests green, and all 21 documents in step 18's scope run as written, carrying the known readings tabled there. The developer has directed that the whole plan is run again from scratch once it can be completed, with each row ticked and committed as it passes, so none of this counts as that run.
 
