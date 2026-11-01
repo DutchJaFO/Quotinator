@@ -114,6 +114,9 @@ Build the commit before [#309](https://github.com/DutchJaFO/Quotinator/issues/30
 Step 3 is expected to pass there, and it is the control: the page rendered from the JSON files before #309, so step 2's reading is about
 the file rather than about a broken container.
 
+**Measured 2026-11-01** on `quotinator:canary-309`, built from `13b8562e`, steps 1 to 3 in order. Step 2 fails: `quotinatordata.db`
+holds content and `quotinatorchangelog.db` does not exist. Step 3 passes: `/about` answers `200` and matches `changelog-entry`.
+
 Remove the container, image and worktree afterwards.
 
 ## Cleanup

@@ -137,6 +137,13 @@ startup window is not refused, so the reset does not answer `503`.
 Step 3 is the control on both builds: once seeding completes the application must be healthy and
 report a version, so a run that never reaches ready has not tested the window at all.
 
+**Measured 2026-11-01:**
+
+| Build | Steps, in order | Reading |
+|---|---|---|
+| `quotinator:canary-280`, from `c755e5b0` | 1, 3 | Step 1 fails: the first answer is `200`, and no `503` is ever read. In step 3 `/health` reads `healthy` and `/version` answers `200`, naming `1.8.2` with a `database` block, and its `status=ready` check fails, a field that build predates. `Program.cs` at that commit has no wait page, and `5c83008f` adds one |
+| `quotinator:canary-419`, from `ea08cac3` | 1, 2, 3 | Step 1 fails: only `health` answers `503`, and `version`, `page`, `reset` and `random` answer `200`. Step 2 fails on `/version`, which has no *starting up* title, and on the reset and the JSON GET, each `text/html`, the reset with no `Retry-After`. Step 2's `/health` and page reads pass. Step 3 passes |
+
 Remove the container, image and worktree afterwards.
 
 ## Cleanup

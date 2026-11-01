@@ -113,6 +113,10 @@ Built from `29b55805`, the commit before #424's first code change, as `quotinato
 `git worktree add` and `docker build`. Step 1 must find `sources/download` populated: on that build the
 refresh is on by default.
 
+**Measured 2026-11-01** on `quotinator:canary-424`, built from the same commit, step 1 in order. With the setting confirmed
+absent, `sources/download` exists after startup, and the forced refresh reads `updated` for both sources rather than
+`uptodate`.
+
 **A document that is ever run against more than one build names its image in every `create`.** The first
 attempt at this canary named none, so `test-env.csx` used its default, `quotinator:local`, and the "canary"
 run was the current build twice.

@@ -175,6 +175,16 @@ For the pre-fix form, build the commit before [#181](https://github.com/DutchJaF
 change, under a distinct tag, and run steps 2 to 4 against it: the bundled files do not all resolve cleanly there, so step 3
 finds rows awaiting review and step 4 finds the duplicate Sources that went with them.
 
+**Measured 2026-11-01** on `quotinator:canary-181`, built from `bcace5f6`, steps 2 to 4 in order after step 1. Step 2 fails:
+quotes, sources, characters and people read above `0`, and the other six counts do not exist on that build. Step 3 fails:
+`75` pending, with `status` in either case.
+
+**Step 4 passes there, and it should not.** `seed-sources` exits `0`, reading `482` sources and no title on more than one row,
+while the list it read holds `Matrix` and `The Matrix`, `Shawshank Redemption` and `The Shawshank Redemption`, `Wolf of the
+Wall Street` and `The Wolf of Wall Street`, and `Spiderman` and `Spider Man`. It compares title and type ignoring case, so
+duplicates spelled differently are invisible to it, and those are what a `SourceAliasRule` exists to merge. Until step 4 can
+see them, which is [#479](https://github.com/DutchJaFO/Quotinator/issues/479), step 3 alone proves this document able to fail.
+
 **Step 5 has no canary**, for the reason the `Fully green after:` field states. Pin
 `Quotinator__AutoPurgeBundledImportActions` for every run: an empty list produced by auto-purge is indistinguishable from an
 empty list produced by the behaviour under test.

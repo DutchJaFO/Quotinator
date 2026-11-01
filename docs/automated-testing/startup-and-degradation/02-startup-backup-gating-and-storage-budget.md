@@ -150,6 +150,10 @@ load backs up anyway, which is the waste this document exists to keep from retur
 step 3 finds no backup has broken backups rather than working gating, and step 2's reading would mean
 nothing.
 
+**Measured 2026-11-01** on `quotinator:canary-277`, built from `ed00ef2c`, steps 1 to 3 in order. Step 1 passes. Step 2 fails:
+the healthy restart leaves a `backups` directory. Step 3 answers `200` and its exact count of `1` fails at `2`: step 2's
+backup, and Reset's own beside it, so the control holds.
+
 Remove the container, image and worktree afterwards.
 
 ## Cleanup

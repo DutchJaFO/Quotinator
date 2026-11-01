@@ -163,6 +163,21 @@ not started until the document is fixed. Much of this suite predates the first r
 PowerShell; that is a known deviation, corrected document by document as each is next used, never
 worked around at run time with a wrapper or a runner of one's own.
 
+### A document is executed exactly as written
+
+**Every step a run is directed to execute is executed in full and in order, with nothing skipped, reordered, added or
+changed** (developer direction, 2026-11-01). Any deviation can produce behaviour the document does not describe, which
+makes the result unreliable whichever way it reads. Found live: a first canary pass over #327's documents read only some of
+their commands, ran steps out of order and inserted commands of its own, and its readings had to be withdrawn.
+
+**A canary run changes one thing: the image.** Its `Canary` section names the steps. A step's *Stop* does not end a canary
+run, since failing is what that run is there to read. A procedure is never rewritten to fit what a run left out.
+
+**A reading is never assumed correct, and a prediction is not a verdict.** A prediction helps interpret a result where no
+perfect result is possible. Where the two differ, either could be wrong, so the difference is tested on its own, in its own
+environment and outside the run, before either is believed. Found live: `import-and-staged-actions/14` predicted step 4 would
+find duplicate Sources, step 4 reported none, and the saved list showed the prediction was right and the check was blind.
+
 ### A test that cannot be confirmed has failed
 
 **If a run cannot confirm the behaviour, the test's result is FAIL, not pass, and not "a known

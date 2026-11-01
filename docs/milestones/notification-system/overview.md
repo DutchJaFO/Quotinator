@@ -90,6 +90,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#476](https://github.com/DutchJaFO/Quotinator/issues/476) | Four notification payloads store their own fields without declared JSON names, and one stores an enum as a number | Planning | T1 ⬜ T2 ⬜ | none |
 | [#477](https://github.com/DutchJaFO/Quotinator/issues/477) | The notification Reset writes records no app version, because the version row is restored after it | Planning | T1 ⬜ T2 ⬜ | none |
 | [#478](https://github.com/DutchJaFO/Quotinator/issues/478) | A reseed recommendation cannot say what a reseed would load, and resolves itself when it loads nothing | Planning | T1 ⬜ T2 ⬜ | none |
+| [#479](https://github.com/DutchJaFO/Quotinator/issues/479) | A duplicate Source spelled differently passes the fresh-seed check | Planning | T1 ⬜ T2 ⬜ | none |
+| [#480](https://github.com/DutchJaFO/Quotinator/issues/480) | `test-env.csx destroy --bind` with no directory is read as no bind at all | Planning | T1 ⬜ T2 ⬜ | none |
 | [#397](https://github.com/DutchJaFO/Quotinator/issues/397) | Exceptions the application catches leave no trace outside Visual Studio | Waiting for release | T1 ✅ T2 ✅ | [397-exceptions-leave-no-trace-plan.md](397-exceptions-leave-no-trace-plan.md) |
 | [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | Waiting for release | T1 ✅ T2 ✅ | [371-database-and-migration-notifications-plan.md](371-database-and-migration-notifications-plan.md) |
 | [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | Waiting for release | T1 ✅ T2 ✅ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
@@ -158,6 +160,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #476 ─── (none); must land before release, since correcting a shipped payload needs a migration: Planning
 #477 ─── (none): Planning
 #478 ─── (none); soft-relates to #390, #476: Planning
+#479 ─── (none); soft-relates to #400, #441: Planning
+#480 ─── (none): Planning
 #430 ─── (none): Planning
 #431 ─── (none): Planning
 #397 ─── (none); blocks #370: Waiting for release
@@ -252,6 +256,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 65 | **#476** | Planning; before release |
 | 66 | **#477** | Planning |
 | 67 | **#478** | Planning |
+| 68 | **#479** | Planning |
+| 69 | **#480** | Planning |
 
 ---
 

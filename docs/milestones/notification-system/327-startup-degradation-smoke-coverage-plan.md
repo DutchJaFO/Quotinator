@@ -1,6 +1,6 @@
 # #327: Smoke tests that prove startup problems degrade rather than crash
 
-**Status:** In progress (step 20; row 17 open)
+**Status:** In progress (step 20, the developer's T1)
 **GitHub issue:** #327
 **Tiers required:** T1, T2
 **Depends on:** #326, #339, #350
@@ -684,6 +684,45 @@ nothing, and a zero count on any build means something only with a positive cont
 **`06` is not fully green until #445:** its *nothing thrown since Cancel* count read 9, then 11, every line
 `TaskCanceledException`.
 
+**Fourth run, 2026-11-01, for the documents step 18 converted.** Each ran as its `Canary` directs, every command in
+order, on the commit before the issue it traces to, with the image the only change. Each fails at a named step, and
+each full reading is in the document's own `Canary`:
+
+| Document | Build | Failing steps |
+|---|---|---|
+| `api-surface/02` | `canary-195` (`639f1209`) | 3 to 6 |
+| `import-and-staged-actions/01` | `canary-154` (`d113d6f5`) | 2 to 11 |
+| `import-and-staged-actions/14` | `canary-181` (`bcace5f6`) | 2 and 3 |
+| `import-and-staged-actions/19` | `canary-221` (`22d45db9`) | 2 to 8 |
+| `database-lifecycle/03` | `canary-156` (`3ae1c3d5`) | 2 to 4 |
+| `startup-and-degradation/02` | `canary-277` (`ed00ef2c`) | 2 and 3 |
+| `startup-and-degradation/03` | `canary-280` (`c755e5b0`) | 1 and 3 |
+| `startup-and-degradation/03` | `canary-419` (`ea08cac3`) | 1 and 2 |
+| `startup-and-degradation/07` | `canary-424` (`29b55805`) | 1 |
+| `notifications-and-changelog/01` | `canary-278` (`6dd617ef`) | 1, 2, 5, 6 and 8 |
+| `notifications-and-changelog/01` | `canary-339` (`7a25bd38`) | 4 |
+| `notifications-and-changelog/07` | `canary-309` (`13b8562e`) | 2 |
+
+`api-surface/01` has no pre-fix build. Its canary is the presence and absence assertions in its own run.
+
+**A first pass was withdrawn** (developer direction, 2026-11-01). It read only some of the documents' commands, ran
+steps out of order, inserted commands of its own and rewrote two procedures to match what it had left out, so nothing
+it read is used here. The suite index now carries the rule, *A document is executed exactly as written*.
+
+**Where a reading differed from a prediction, the difference was tested on its own before either was believed.**
+
+- **Three predictions were wrong, and each document now states what was measured.** `api-surface/02` said an oversized
+  page size was rejected on all three endpoints before #195, and two clamp it to `200`; it also expected `pageSize=0` to
+  return no rows, and those two return one. `notifications-and-changelog/01` said step 2 passes on both builds, and it
+  reads `404` where the route does not exist.
+- **One prediction was right, and the test wrong.** `import-and-staged-actions/14` said step 4 would find duplicate
+  Sources. Step 4 passes, while the list it read holds `Matrix` and `The Matrix` among others. Filed as #479.
+- **`database-lifecycle/03`'s step 2 fails where that build has no seasons or notifications**, and reads every other
+  count correctly, so it still serves as the control.
+
+**Also found by this run, and filed as #480:** `test-env.csx destroy --bind` with no directory, as four documents write it,
+attempts to remove a volume the container never had. It costs nothing.
+
 ### 17. Run the template and suite guards
 
 **Status:** ✅ Done 2026-10-24, 52 green on `47d2e9c9`
@@ -707,8 +746,6 @@ running them until they are converted, which is a body of work of its own.
 - `startup-and-degradation/` ran before the last of them and was not rerun. They added options and changed no
   existing path, which is why this was accepted, but it was reasoned rather than measured.
 - The 60 documents have not run against the changed `http.csx`. #473 runs each of them.
-- The converted smoke documents and `startup-and-degradation/02`, `03` and `07` have no canary reading from their
-  converted form, which row 17 below still holds open.
 
 **Readings the suite carries forward as known.** Each document names its issue:
 
@@ -767,7 +804,7 @@ invoking it runs too. Each document's `Observed effect` records the reading, ope
 ### 19. Build and full test run
 
 **Status:** ✅ Done 2026-11-01 on `c0f199b0`: 0 warnings, 0 errors, and 4,833 tests green across 12 projects. Only
-documents have changed since. Next action: step 20, with row 17's canaries still open.
+documents have changed since. Next action: step 20.
 
 `dotnet build --configuration Release` at 0 warnings, 0 errors, and
 `dotnet test --configuration Release --verbosity normal -m:1` all green.
@@ -800,7 +837,7 @@ The developer starts the application in Visual Studio and confirms it starts wit
 | 14 | ❌ | No scenario asserts a migration number or schema version | Live | Read of all nine documents in steps 13 and 14 |
 | 15 | ✅ | Each document carries the template fields, including Determinism, and is in the smoke set | Unit test | Step 16: `RepositoryStructureTests` template guards and `SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` green |
 | 16 | ✅ | In-process: every deterministic, cross-platform scenario has negative tests and a positive control | Unit test | Step 2: the `StartupResilienceTests` and `StartupBackupRefusalTests` methods tabled there, 43 green, every new one shown able to fail by mutations M1 to M7 |
-| 17 | ❌ | Each document is shown able to fail | Live (Docker) | Step 15: every scenario document against `quotinator:canary-327`, and the earlier-fix canaries, the failing step recorded in each `Canary` |
+| 17 | ✅ | Each document is shown able to fail | Live (Docker) | Step 16: every scenario document against `quotinator:canary-327` and the earlier-fix canaries (third run), and the documents step 18 converted against their own pre-fix builds (fourth run), the failing steps recorded in each `Canary` |
 | 18 | ✅ | End-of-issue T2 scope passes | Live (Docker) | Step 18: smoke set and `startup-and-degradation/` run from their own steps, the known readings and gaps tabled there; the remaining `http.csx` users are #473's |
 | 19 | ✅ | Build clean and no regression | Build + Unit test | Step 19: 0 warnings, 0 errors; full suite green with `-m:1`, 4,833 tests |
 | 20 | ❌ | The application still starts | Manual | Step 19, confirmed by the developer in Visual Studio |

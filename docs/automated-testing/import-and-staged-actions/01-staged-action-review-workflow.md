@@ -243,6 +243,13 @@ machinery answers, which is the state this workflow replaced.
 Step 7 is the pair for step 6: a decision that can be made and then undone, rather than only made. A
 build that recorded decisions without being able to reverse them satisfies step 6 alone.
 
+**Measured 2026-11-01** on `quotinator:canary-154`, built from `d113d6f5`, steps 2 to 11 in order after step 1. Step 2 fails:
+`404` on `/import/actions`. Step 3 fails: `200` on `/import/conflicts`. Step 4 fails: the quote imports with `200`, and its
+conflict under `review` answers `200` rather than `202`, with no `pendingActionIds`. Steps 5 to 10 fail: every call to
+`/import/actions` answers `404`, and the commands needing an action id have none to read. Step 11 fails on the batch's
+tally, also `404`. The quote holds the original text read in lower case, and an id that does not exist answers `404`, but
+the same quote's id in upper case also answers `404`, which is #69's class of defect on that build.
+
 Remove the container, image and worktree afterwards.
 
 ## Cleanup

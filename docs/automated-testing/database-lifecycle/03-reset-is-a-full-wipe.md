@@ -373,8 +373,16 @@ cannot show this. Step 4 must also read more than Reset's own single audit row, 
 The fixture may name categories that build predates, which would fail step 2 there instead: remove those sections
 from the canary's copy and say so in its reading.
 
-Step 2 is expected to pass there, and it is the control: both builds seed the same file, so step 4's reading is
-about what Reset did rather than about what the container started with.
+Step 2 is the control: both builds seed the same file, so step 4's reading is about what Reset did rather than about
+what the container started with.
+
+**Measured 2026-11-01** on `quotinator:canary-156`, built from `3ae1c3d5`, variant A's steps 1 to 4 in order, with the
+fixture unchanged, since that build seeded it. Step 2 reads every count it can: `4` quotes, `3` sources, `3` characters,
+`2` each of people, series, universes, stage directions, sound cues and conversations, `7` audit rows and `22` import
+actions. It fails only where that build has nothing to read: `/masterdata/seasons` and `/notifications` answer `404`, and
+`/version` has no `seasons`. Step 3 fails: the reset answers every count as before, with one entry in `reports`. Step 4
+fails: the file is still there, and every category reads what step 2 read rather than `0`, with `15` audit rows rather than
+`1`, `44` import actions rather than `0`, and `/quotes/random` returning a quote.
 
 Remove the container, image and worktree afterwards.
 

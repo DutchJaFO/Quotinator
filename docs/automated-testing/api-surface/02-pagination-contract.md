@@ -143,13 +143,28 @@ line that names it.
 Build the commit before [#195](https://github.com/DutchJaFO/Quotinator/issues/195)'s first code
 change, under a distinct tag, and run steps 1 to 6 against it.
 
-Step 3 must read `50` on `/admin/audit` and `/import/actions`, the default #195 replaced. Step 4 is the other
-half: `CLAUDE.md`'s *Standard pagination contract* records #195's own pass finding `SystemAuditReader` and
-`SystemImportActionReader` translating `pageSize=0` into a literal `LIMIT 0`, so that build must return zero
-rows where this one returns every row. Confirm which of the two readers shows it rather than assuming both do.
+Step 3 must read `50` on `/admin/audit` and `/import/actions`, the default #195 replaced.
 
-Step 5 is expected to pass there. A rejected oversized page size predates #195, so it is the control that keeps
-step 3's reading attributable to the default rather than to a broken container.
+**Measured 2026-11-01** on `quotinator:canary-195`, built from `639f1209`, steps 1 to 6 in order. Steps 1 and 2 pass, and
+each later step fails on at least one endpoint:
+
+| Step | `/quotes` | `/import/actions` | `/admin/audit` |
+|---|---|---|---|
+| 3, no `pageSize` | `pageSize=20`, 20 items of 25, passes | `pageSize=50`, 26 items, no `totalCount` | `pageSize=50`, no `totalCount` |
+| 4, `pageSize=0` | `422` | `pageSize=1`, 1 item, no `totalCount` | `pageSize=1`, 1 item, no `totalCount` |
+| 5, `pageSize=501` | `422`, passes | `200` | `200` |
+| 6, `pageSize=1&page=999999` | `200` | `200` | `200` |
+
+`/quotes` in steps 3 and 5 is the control: those reads pass, so the others are about the contract rather than a broken
+container.
+
+**Two things this section used to predict are not what that build does, and each was tested on its own.** Step 5 does not
+pass there, since `/admin/audit` and `/import/actions` clamp at `200`: `AdminEndpoints.cs` and `ImportEndpoints.cs` at that
+commit do so in code, and in a separate container with the bundled sources seeded, `pageSize=501` on `/import/actions`
+returned `pageSize=200` and 200 items. Step 4 does not return zero rows there, since both set anything below `1` to `1`: in
+that container `pageSize=0` returned 1 item, with `pageSize=3` as the control returning 3. The `LIMIT 0` defect `CLAUDE.md`'s
+*Standard pagination contract* records was found during #195's own work (`467bc7d0`), so this build cannot show it.
+`SystemAuditReaderTests` and `SystemImportActionWriterReaderTests` hold it at unit tier.
 
 Remove the container, image and worktree afterwards.
 

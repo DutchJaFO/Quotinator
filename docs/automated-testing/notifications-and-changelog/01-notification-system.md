@@ -234,8 +234,19 @@ filter and Action button have nothing to show.
 by its operations but never declared with a description until #339 added it, so the commit before that
 change publishes a spec where the tag renders bare and last.
 
-Steps 2 and 3 are the control and pass on both builds: an unknown id rejected without a key and
-accepted with one is about the admin gate rather than about notifications existing.
+Steps 2 and 3 are the control on the #339 build: an unknown id rejected without a key and accepted with one is about the
+admin gate rather than about notifications existing.
+
+**Measured 2026-11-01:**
+
+| Build | Steps, in order | Reading |
+|---|---|---|
+| `quotinator:canary-278`, from `6dd617ef` | 1, 2, 3, 5, 6, 8 | Step 1 fails: `404`. Step 2 fails: `404` rather than `401`. Step 3 reads `404`, which shows nothing there. Step 5 fails: `/notifications` has no title and no rows, and `/` shows the ready wording and stats and no notifications. Step 6 fails: no id to read, `404` on the list, and no empty-filter wording. Step 8 fails: the page scripts throw, having no table to read, and the quote remains |
+| `quotinator:canary-339`, from `7a25bd38` | 1, 2, 3, 4 | Steps 1 to 3 pass, `401` then `404`. Step 4 fails: the list operation carries `Notifications`, and the spec's top-level `tags` does not declare it |
+
+**Step 2 does not pass on `canary-278`, and that was tested on its own.** In a separate container of that build, a route
+that cannot exist answers the same `404`, a keyless reset answers `401`, so the gate works, and the spec holds no
+`notifications` at all while holding the reset path. The route is absent, which is why this is not a control there.
 
 Remove the container, image and worktree afterwards.
 

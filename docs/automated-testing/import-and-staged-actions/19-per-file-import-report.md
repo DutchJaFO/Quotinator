@@ -167,6 +167,12 @@ what #221 added, so every surface reports a single total there and step 7's remo
 present. The fixture may name categories that build predates, which would fail step 2 there instead: remove those sections
 from the canary's copy and say so in its reading.
 
+**Measured 2026-11-01** on `quotinator:canary-221`, built from `22d45db9`, steps 2 to 8 in order after step 1, with the fixture
+unchanged, since that build seeded it. Step 2 fails: no `reports`. Step 3 fails: `quotes=4`, `sources=3`, `characters=3` and
+`people=2`, with no other counts and no `reports`. Step 4 fails: the reset reimports and reads those same counts, which is
+#156's defect rather than this one. Steps 5 and 6 fail: no `report`. Step 7 fails: the preview still holds the removed fields.
+Step 8 fails: `[Database - Stats]` names quotes, sources, characters and people, and none of the other six.
+
 Remove the container, image and worktree afterwards.
 
 ## Cleanup
