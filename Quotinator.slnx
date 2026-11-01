@@ -365,6 +365,7 @@
     <File Path="docs/knowledgebase/version-counts-are-stale-after-an-import.md" />
     <File Path="docs/knowledgebase/applying-a-batch-that-does-not-exist-answers-200.md" />
     <File Path="docs/knowledgebase/a-quote-date-is-lost-when-its-source-is-declared-without-one.md" />
+    <File Path="docs/knowledgebase/a-reset-from-a-notification-leaves-no-reseed-recommendation.md" />
     <File Path="docs/knowledgebase/a-quote-id-stops-working-after-an-upgrade.md" />
     <File Path="docs/knowledgebase/antiforgery-token-could-not-be-decrypted.md" />
     <File Path="docs/knowledgebase/degraded-startup-shows-every-count-as-zero.md" />
@@ -452,6 +453,9 @@
     <File Path="docs/automated-testing/notifications-and-changelog/15-a-created-database-says-so.md" />
     <File Path="docs/automated-testing/notifications-and-changelog/16-each-applied-migration-says-what-it-did.md" />
   </Folder>
+  <Folder Name="/docs/automated-testing/notifications-and-changelog/fixtures/">
+    <File Path="docs/automated-testing/notifications-and-changelog/fixtures/constructed-notifications.sql" />
+  </Folder>
   <Folder Name="/docs/automated-testing/import-and-staged-actions/fixtures/">
     <File Path="docs/automated-testing/import-and-staged-actions/fixtures/decide-keep.json" />
     <File Path="docs/automated-testing/import-and-staged-actions/fixtures/review-quote-conflict.json" />
@@ -524,6 +528,7 @@
     <File Path="scripts/testing/capture-page.csx" />
     <File Path="scripts/testing/conflict-rule.csx" />
     <File Path="scripts/testing/corrupt-csv-cell.csx" />
+    <File Path="scripts/testing/dismiss-notifications.csx" />
     <File Path="scripts/testing/execute-sql.csx" />
     <File Path="scripts/testing/http.csx" />
     <File Path="scripts/testing/startup-window.csx" />
@@ -534,6 +539,10 @@
   <Folder Name="/scripts/testing/page-scripts/">
     <File Path="scripts/testing/page-scripts/degraded-home-text.js" />
     <File Path="scripts/testing/page-scripts/degraded-page-unwritable-data.js" />
+    <File Path="scripts/testing/page-scripts/notification-action-cancel.js" />
+    <File Path="scripts/testing/page-scripts/notification-action-confirm.js" />
+    <File Path="scripts/testing/page-scripts/notification-filters.js" />
+    <File Path="scripts/testing/page-scripts/notification-page-state.js" />
     <File Path="scripts/testing/page-scripts/notifications-page-rows.js" />
     <File Path="scripts/testing/page-scripts/overshoot-modal.js" />
     <File Path="scripts/testing/page-scripts/overshoot-modal-cancel.js" />

@@ -4,292 +4,224 @@
 **Environment:** Fresh
 **Deterministic:** yes
 **Traces to:** #278
+**Fully green after:** [#472](https://github.com/DutchJaFO/Quotinator/issues/472): step 9 reads no notifications until then, because a Reset from a notification's action writes no reseed recommendation. See the [Knowledgebase entry](../../knowledgebase/a-reset-from-a-notification-leaves-no-reseed-recommendation.md)
 
 ## Preconditions
 
-**Beyond the profile.** One container of this test's own (`qt-notif-01` / `qt-notif-01-data`),
-because the Action-button check runs a Reset that wipes the database it is started against.
-Seeding must be allowed to finish before anything is asserted: the notification a fresh container
-produces is written during startup, so an early read cannot tell "not produced" from "not yet".
+**Beyond the profile.** One container of this test's own (`qt-notif-01`), with its data directory bound to a host path so
+step 7 can reach the file, and with `Quotinator__IncludeDefaultSources=false` so nothing bundled is in the database. Step 1
+imports [a quote](../import-and-staged-actions/fixtures/review-quote.json), the content the Reset in step 8 has to remove,
+so a broken import blocks this document.
 
-The Status-filter and Action-button checks additionally need four rows that no producer creates on its
-own: one `ActionRequired` row with `DismissTriggerKey = 'DatabaseReset'`, one already-expired row, one
-already-dismissed row, and one dismissed with reason `Obsolete`. Nothing has produced an obsolete
-notification since #372 stopped reseeds truncating batches, but databases that already hold one still
-have to read it correctly. Step 7 constructs them directly in `System_Notification`; this is the index's
-first case for a constructed fixture, a state the application cannot be driven into through its own
-surfaces.
+The Status-filter and Action-button checks additionally need four rows that no producer creates on its own: one
+`ActionRequired` row with `DismissTriggerKey = 'DatabaseReset'`, one already-expired row, one already-dismissed row, and one
+dismissed with reason `Obsolete`. Nothing has produced an obsolete notification since #372 stopped reseeds truncating
+batches, but databases that already hold one still have to read it correctly. Step 7 constructs
+[them](fixtures/constructed-notifications.sql) directly in `System_Notification`; this is the index's first case for a
+constructed fixture, a state the application cannot be driven into through its own surfaces.
 
 ## Determinism
 
-**Never assert a total notification count.** The number on a fresh container changes whenever a
-producer is added or the bundled changelog gains a notification-flagged highlight for the running
-version. **This expectation has already been wrong twice**: `0` before #312's producers existed, then
-`1` until the unreleased changelog carried a `notification` audience highlight.
-
-Assert the presence of the notification a *known cause* produces, which is what this test is actually
-about. A count asserts something nobody intended and gets "fixed" by editing a digit.
+**Never assert a total notification count.** The number on a fresh container changes whenever a producer is added or the
+changelog gains a notification-flagged highlight for the running version. Assert the presence of the notification a *known
+cause* produces, which is what this test is actually about. The known cause in step 1 is the #279 announcement, which is
+written from the changelog rather than from the bundled quote sources.
 
 - **Waits for health, not a duration.**
-- The dismiss checks use a **fixed all-zero id** that cannot exist, so the `404` is about the id being
-  absent rather than about any particular row's state.
-- The empty-state check requires dismissing **every** active row first, since a fresh container is no longer
-  empty, so the genuinely-zero-rows path is otherwise never exercised. It produces more than one
-  notification now, so dismissing only the announcement leaves the page populated and the empty state
-  unreached.
-- **Step 7 edits the database from the host, against a stopped container.** A clean `docker stop -t 15`
-  checkpoints and removes the `-wal`/`-shm` sidecars (measured), so copying the `.db` file out, editing
-  it and copying it back cannot leave a stale sidecar behind for SQLite to recover from.
-- **The log is read before each stop, with the browser tab closed first.** Stopping logs exceptions of
-  its own. Measured 2026-09-19, this document's one stop logged seven with a page still open, and a
-  page left open reconnects to the restarted container. Read afterwards, they would be counted as this
-  test's.
+- **On the home page, notifications are counted by their body cells, not by table rows**, because that page has another table
+  with a row of its own.
+- The dismiss checks use a **fixed all-zero id** that cannot exist, so the `404` is about the id being absent rather than
+  about any particular row's state.
+- **Ids are sent in both cases**, per the index: dismissing one notification upper-cased and one lower-cased, whatever form
+  the server returned, and the all-zero id is the value that must not match.
+- The empty-state check requires dismissing **every** active row first, since a fresh container is not empty, so the
+  genuinely-zero-rows path is otherwise never exercised.
+- **Step 7 edits the database from the host, against a stopped container.** Writing to a SQLite file under a running process
+  is a different scenario, and a clean `docker stop -t 15` leaves no sidecars for SQLite to recover from.
+- **The log is read before the stop.** Stopping logs exceptions of its own, so the first read comes before it, and the last
+  counts only what was logged since. `capture-page.csx` closes its browser when each command ends, so no page is left to
+  reconnect to the restarted container.
+- **Quotes are read from `/quotes`, not `/api/v1/version`**, whose counts an import does not refresh (#468). That read is what
+  separates Cancel from Confirm, since both leave the page looking similar.
 
 ## Steps
 
 ### 1. Start a container of this test's own and list its notifications
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-notif-01 --port 18501
-
-$notifications = (dotnet script scripts/testing/http.csx -- --url "http://localhost:18501/api/v1/notifications?pageSize=0" --expect 200 | ConvertFrom-Json).items
-@($notifications | Where-Object { $_.title -match 'operation IDs were renamed' }).Count
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-notif-01-data --delete C:\repos\Quotinator\.claude\temp\qt-notif-01-out --create-directory C:\repos\Quotinator\.claude\temp\qt-notif-01-data
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-01 --port 18501 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-notif-01-data --env Quotinator__IncludeDefaultSources=false
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18501/api/v1/import --file C:\repos\Quotinator\docs\automated-testing\import-and-staged-actions\fixtures\review-quote.json --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18501/api/v1/notifications?pageSize=0" --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list.json --contains "items=operation IDs were renamed"
 ```
 
-**Expected:** `200`, and `1`: the announcement about the renamed API operation IDs is present, the
-notification a fresh container is known to produce. Asserted by identity, never by a total: see
-Determinism for the two occasions a count was wrong here.
+**Expected:** `200`, and the announcement about the renamed API operation IDs is present, the notification a fresh container
+is known to produce. Asserted by identity, never by a total.
 
-**On failure:** an empty list means seeding had not finished writing the startup notification, not that
-no notification is produced: the two are indistinguishable from an early read (see Preconditions).
-Stop and let the container finish rather than reading the absence as a result.
+**On failure:** every step below reads this container, so stop.
 
 ### 2. Dismiss an unknown notification with no admin key
 
-```powershell
-dotnet script scripts/testing/http.csx -- --method POST `
-  --url "http://localhost:18501/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss" `
-  --no-key --expect 401 --status
+```
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18501/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss --no-key --expect 401 --status
 ```
 
 **Expected:** `401`.
 
 ### 3. Dismiss the same all-zero id with the correct key
 
-```powershell
-dotnet script scripts/testing/http.csx -- --method POST `
-  --url "http://localhost:18501/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss" `
-  --expect 404 --status
+```
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18501/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss --expect 404 --status
 ```
 
-**Expected:** `404`, since no notification exists with that id. Taken with step 2, that separates "the key
-was rejected" from "the row was not found"; either alone could be produced by the other cause.
+**Expected:** `404`, since no notification exists with that id. Taken with step 2, that separates "the key was rejected" from
+"the row was not found"; either alone could be produced by the other cause.
 
 ### 4. Confirm the OpenAPI spec carries the Notifications tag
 
-```powershell
-$spec = Invoke-RestMethod "http://localhost:18501/openapi/v1.json"
-$operations = foreach ($path in $spec.paths.PSObject.Properties) {
-  foreach ($verb in $path.Value.PSObject.Properties) { $verb.Value }
-}
-"taggedOperations=$(@($operations | Where-Object { $_.tags -ccontains 'Notifications' }).Count)"
-"declaredTags=$((@($spec.tags).name | Sort-Object) -join ', ')"
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18501/openapi/v1.json --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\spec.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\spec.json --contains paths./api/v1/notifications.get.tags=Notifications --contains tags=Notifications
 ```
 
-**Expected:** `taggedOperations` is non-zero: the notification endpoints are grouped under
-`Notifications` rather than falling into whatever group they would otherwise land in. Read from the
-operations' own `tags` arrays rather than matched as text, so the assertion cannot be satisfied by the
-word appearing somewhere unrelated in the document.
+**Expected:** the list endpoint is grouped under `Notifications`, read from the operation's own `tags` array rather than
+matched as text, and the spec's top-level `tags` declares it. That every tag an operation uses is declared with a description
+is held at unit tier, by `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription`.
 
-**`declaredTags` includes `Notifications`.** It was missing until 2026-08-27, when the
-constant existed and the operations carried it, but the spec's top-level `tags` array declared only the
-other six, so the group rendered with no description and no ordering. Found by reading the live spec
-during #339's PowerShell conversion, and fixed in the same issue.
+### 5. Render the notification pages
 
-**The assertion for that now lives at unit tier**, where it belongs:
-`OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` fetches the live
-`/openapi/v1.json` through the full pipeline and checks every tag an operation carries against the
-declared set, derived from the operations themselves, so a tag added to an endpoint and nowhere else
-fails without anyone updating a list. This step prints the tags for context rather than re-asserting
-what a deterministic test already covers.
+```
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18501/notifications --out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\notifications.png --script-file scripts/testing/page-scripts/notification-page-state.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\notifications.json --wait-ms 4000
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\notifications.json --contains title=Notifications --greater-than rows=0 --equals announcementShown=true --equals stackTraceShown=false
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18501/ --out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\home.png --script-file scripts/testing/page-scripts/notification-page-state.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\home.json --wait-ms 4000
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\home.json --equals readyShown=true --greater-than bodyCells=0 --equals announcementShown=true --equals statsShown=true --equals notificationsHeadingInMain=true --equals stackTraceShown=false
+```
 
-### 5. Render the notification pages, and assert on the DOM
-
-**This step needs a browser driver**: the pages are Blazor and the assertions are about what renders,
-so an HTTP call cannot make them. They are stated as DOM reads so a driver can run them unattended, and
-so two runs check the same thing.
-
-**Expected:** every row of the table below holds, on both pages.
-
-| Page | Assert |
-|---|---|
-| `/notifications` | `document.title` contains `Notifications`; `tbody tr` count is non-zero; the row text contains the #279 announcement's **body** (`Two REST API operation IDs were renamed`), since the table renders the message rather than the title |
-| `/` | body text contains the startup-success wording and the same announcement; `tbody tr` is non-zero |
-| both | no stack trace in the body text, so `/at [A-Za-z.]+\(/` must not match, and no `503` |
-
-**Capture a screenshot of each as evidence**, but never as the assertion: a screenshot nothing compares
-against records what happened without being able to fail. The DOM reads above are what fail.
-
-**Verified this way during #339's full run**, driving a real browser: `/notifications` rendered two
-rows with the Created / Type / Message / Expires / Status / Action columns, and `/` rendered
-*Quotinator is ready … Startup completed successfully.* with both notifications and the stats block.
+**Expected:** `/notifications` lists rows, with the announcement's body among them, since the table renders the message rather
+than the title. `/` shows the startup-success wording, the same announcement and the stats. Neither shows a stack trace. The
+screenshots are evidence, and the reads are what fail.
 
 ### 6. Dismiss every active notification and re-read both pages
 
-```powershell
-foreach ($id in (Invoke-RestMethod "http://localhost:18501/api/v1/notifications?pageSize=0").items.id) {
-  dotnet script scripts/testing/http.csx -- --method POST `
-    --url "http://localhost:18501/api/v1/notifications/$id/dismiss" --expect 200 --status
-}
-
-$all = (Invoke-RestMethod "http://localhost:18501/api/v1/notifications?pageSize=0").items
-"total=$(@($all).Count) stillActive=$(@($all | Where-Object { -not $_.isDismissed }).Count)"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18501/api/v1/notifications/{id}/dismiss" --upper-value id=C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list.json#items.0.id --out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\dismiss-upper-url.txt
+dotnet script scripts/testing/http.csx -- --method POST --url-file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\dismiss-upper-url.txt --expect 200 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18501/api/v1/notifications/{id}/dismiss" --lower-value id=C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list.json#items.1.id --out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\dismiss-lower-url.txt
+dotnet script scripts/testing/http.csx -- --method POST --url-file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\dismiss-lower-url.txt --expect 200 --status
+dotnet script scripts/testing/dismiss-notifications.csx -- --url http://localhost:18501/api/v1
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18501/api/v1/notifications?pageSize=0" --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list-dismissed.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list-dismissed.json --greater-than totalCount=0 --equals items.0.isDismissed=true --equals items.1.isDismissed=true
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18501/notifications --out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\notifications-empty.png --script-file scripts/testing/page-scripts/notification-page-state.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\notifications-empty.json --wait-ms 4000
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\notifications-empty.json --equals rows=0 --equals emptyFilterShown=true
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18501/ --out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\home-empty.png --script-file scripts/testing/page-scripts/notification-page-state.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\home-empty.json --wait-ms 4000
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\home-empty.json --equals readyShown=true --equals bodyCells=0 --equals notificationsHeadingInMain=false --equals statsShown=true
 ```
 
-**Expected:** each dismiss returns `200`, and then `stillActive=0` against a non-zero `total`.
-
-**`GET /notifications` returns dismissed rows too**: the API's default is unfiltered, while the
-*page's* filter defaults to Active. Do not read a still-populated API response as a failed dismiss;
-read the flag, which is why both numbers are printed.
-
-Then, with the driver again:
-
-**Expected:** `/notifications` shows `tbody tr` count `0` and the text *No notifications match this
-filter.*; `/` drops its Notifications section entirely rather than leaving an empty heading, and its
-stats block still renders.
-
-**Dismissing *every* active row is deliberate.** The empty state is only reachable with none left, and
-a fresh container now produces more than one, two when measured. Dismissing just the announcement, as
-this step said until #339's full run, leaves the what's-new row behind and the empty state untested.
+**Expected:** the first two dismiss in each case and answer `200`, the script dismisses the rest and reports none still active,
+and the list still holds them, flagged: `GET /notifications` returns dismissed rows too, while the *page's* filter defaults to
+Active. `/notifications` then shows no rows and *No notifications match this filter.*; `/` drops its Notifications section rather
+than leaving an empty heading, and its stats still render.
 
 ### 7. Insert the four rows no producer creates
 
-The Status-column, filter and Action-button checks need one `ActionRequired` row carrying a dismiss
-trigger, one already-expired row, one already-dismissed row and one dismissed as obsolete. Nothing in
-the application produces these, so the test constructs them, against a **stopped** container, since writing to a SQLite file
-underneath a running process is a different scenario:
-
-First close the browser tab, so no page reconnects to the restarted container, and read the log: the
-stop below logs exceptions of its own (the index's *Read the log before the application stops*):
-
-```powershell
-function Read-Thrown {
-  $lines = @(docker logs qt-notif-01 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]')
-  $new = @($lines | Select-Object -Skip $script:thrownSeen)
-  $script:thrownSeen = $lines.Count
-  "thrown=$($new.Count)"
-  $new | ForEach-Object { '  ' + ($_.Line -split 'thrown: ')[1] }
-}
-$thrownSeen = 0
-Read-Thrown
 ```
-
-**Expected:** `thrown=0`, since nothing in steps 1 to 6 threw.
-
-**On failure:** a `CryptographicException` / `AntiforgeryValidationException` pair means the browser
-held a cookie from a container outside the suite's shared key ring; see
-[*A cookie from another key ring is replaced on the first page, and logged only
-then*](../api-surface/06-a-cookie-from-another-key-ring-is-replaced.md), whose step 4 restores it.
-
-```powershell
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-01 --pattern "\[Runtime - Exception\]" --exactly 0
 docker stop -t 15 qt-notif-01
-$thrownSeen = @(docker logs qt-notif-01 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count
-docker cp qt-notif-01:/data/quotinatordata.db .claude/temp/notif-01.db
-
-dotnet script scripts/testing/execute-sql.csx -- --db .claude/temp/notif-01.db --sql @'
-INSERT INTO System_Notification (Id, Type, Title, Body, ExpiresAt, IsDismissed, DismissedAt, DismissTriggerKey, DismissReason, DateCreated, IsDeleted) VALUES
-  ('a0000278-0000-4000-8000-000000000001','ActionRequired','Smoke test action required','A #278 smoke test row needing an action.',NULL,0,NULL,'DatabaseReset',NULL,'2026-01-01 00:00:00',0),
-  ('a0000278-0000-4000-8000-000000000002','Information','Smoke test expired','A #278 smoke test row that has already expired.','2020-01-01 00:00:00',0,NULL,NULL,NULL,'2026-01-01 00:00:00',0),
-  ('a0000278-0000-4000-8000-000000000003','Information','Smoke test dismissed','A #278 smoke test row already dismissed.',NULL,1,'2026-01-02 00:00:00',NULL,NULL,'2026-01-01 00:00:00',0),
-  ('a0000278-0000-4000-8000-000000000004','Information','Smoke test obsolete','A #278 smoke test row whose subject no longer exists.',NULL,1,'2026-01-02 00:00:00',NULL,'Obsolete','2026-01-01 00:00:00',0);
-'@
-
-docker cp .claude/temp/notif-01.db qt-notif-01:/data/quotinatordata.db
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-01 --mark C:\repos\Quotinator\.claude\temp\qt-notif-01-out\after-stop.mark
+dotnet script scripts/testing/execute-sql.csx -- --db C:\repos\Quotinator\.claude\temp\qt-notif-01-data\quotinatordata.db --sql-file C:\repos\Quotinator\docs\automated-testing\notifications-and-changelog\fixtures\constructed-notifications.sql
 docker start qt-notif-01
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18501/api/v1/health" --wait-for 200 --status
-
-$rows = (Invoke-RestMethod "http://localhost:18501/api/v1/notifications?pageSize=0").items
-@($rows | Where-Object { $_.title -like 'Smoke test*' }).Count
+dotnet script scripts/testing/http.csx -- --url http://localhost:18501/api/v1/health --wait-for 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18501/api/v1/notifications?pageSize=0" --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list-constructed.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-text C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list-constructed.json "Smoke test action required" --expect-text C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list-constructed.json "Smoke test expired" --expect-text C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list-constructed.json "Smoke test dismissed" --expect-text C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list-constructed.json "Smoke test obsolete"
 ```
 
-**Expected:** `execute-sql.csx` reports `4 row(s) affected`, and the count reads `4`: all four rows
-are present and readable through the API.
+**Expected:** no exception so far, since nothing in steps 1 to 6 threw. `execute-sql.csx` reports `4 row(s) affected`, and all four
+rows are readable through the API.
 
-**Counted as objects, not as text matches.** The response is single-line JSON, so a line-counting match
-reports `1` however many rows exist, and this step required `3` from exactly that shape until #339's full
-run, and therefore failed on a correct setup every time. It is the second document in the suite to have
-carried this bug; see the index's *A count is evidence only if the instrument counts the right thing*.
-
-**The edit goes through `execute-sql.csx` against a copy of the file**, rather than through a
-throwaway container installing `sqlite3` over the network. It is this project's own tool per ADR 010,
-and it removes a network dependency from the middle of a test.
-
-**On failure:** a SQL error means the rows were never created, and every assertion in step 8 then
-reads an unchanged page. That is a setup failure, not a result: stop.
-
-A CHECK-constraint rejection here is worth reading rather than working around: `Type`,
-`DismissTriggerKey` and `DismissReason` are constrained to their enum's current members, so a failure
-means the enum moved and this fixture needs updating with it.
+**On failure:** a SQL error means the rows were never created, and every assertion in step 8 then reads an unchanged page. Stop.
+A CHECK-constraint rejection is worth reading rather than working around: `Type`, `DismissTriggerKey` and `DismissReason` are
+constrained to their enum's current members, so a failure means the enum moved and this fixture needs updating with it.
 
 ### 8. Check the status column, the status filter, and the Action button
 
-With the four rows from step 7 in place, on `/notifications`. **Driver step**, like step 5: every
-assertion is a DOM read or a click, and each is stated so a driver can perform it without judgement.
-
-**Expected, status column and default filter:** reading `tbody tr`, taking each row's message cell
-and status cell:
-
-- The page loads with the **Active** filter selected: exactly the `ActionRequired` row is listed, and
-  its Action cell holds that action's own button, **Reset the database**.
-- Click **All**: every row is listed, the four constructed ones among them, and those four read
-  `Active` (the action row), `Expired`, `Dismissed` and `No longer applicable`. **The undismissed row past
-  its `ExpiresAt` reads `Expired`, never `Active`**, which is the computed-status assertion. **The row
-  dismissed as obsolete reads `No longer applicable`, never `Dismissed`**: a notification whose subject
-  no longer exists was neither dealt with nor set aside.
-- Click **Expired only**: exactly one row, the expired one.
-
-**Action button, Cancel path.** Back on **Active**, click **Reset the database** in the ActionRequired
-row.
-
-- The row's buttons become **Confirm** and **Cancel**.
-- Click **Cancel**: the buttons revert to the single **Reset the database** button.
-- `(Invoke-RestMethod "http://localhost:18501/api/v1/version").database.quotes` is **unchanged**, since
-  Cancel called nothing.
-
-**Action button, Confirm path.** Click **Reset the database**, then **Confirm**.
-
-- `(Invoke-RestMethod "http://localhost:18501/api/v1/version").database.quotes` drops to `0`, matching
-  [`database-lifecycle/03-reset-is-a-full-wipe.md`](../database-lifecycle/03-reset-is-a-full-wipe.md).
-- `(Invoke-RestMethod "http://localhost:18501/api/v1/notifications?pageSize=0").items` is **empty**, since
-  Reset wipes `System_Notification` along with every other table.
-
-**The quote count is what makes Cancel and Confirm distinguishable.** Both leave the page looking
-similar; only the domain read separates "reverted without calling anything" from "ran the reset".
-
-**Verified this way during #339's full run**, driving a real browser: the filters behaved exactly as
-above, Cancel left `quotes` at `799`, and Confirm dropped it to `0` with `0` notification rows left.
-
-**Then close the browser tab and read the log once more**, before the cleanup stops the container:
-
-```powershell
-Read-Thrown
+```
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18501/notifications --out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\filters.png --script-file scripts/testing/page-scripts/notification-filters.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\filters.json --wait-ms 4000
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\filters.json --equals activeSelected=true --equals active.rows=1 --equals active.actionRowListed=true --contains "active.actionButtons=Reset the database" --equals all.action=Active --equals all.expired=Expired --equals all.dismissed=Dismissed --equals "all.obsolete=No longer applicable" --equals expiredOnly.rows=1 --equals expiredOnly.expiredRowListed=true
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18501/notifications --out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\cancel.png --script-file scripts/testing/page-scripts/notification-action-cancel.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\cancel.json --wait-ms 4000
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\cancel.json --contains "before=Reset the database" --contains armed=Confirm --contains armed=Cancel --contains "afterCancel=Reset the database" --length-equals afterCancel=1
+dotnet script scripts/testing/http.csx -- --url http://localhost:18501/api/v1/quotes --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\quotes-after-cancel.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\quotes-after-cancel.json --equals totalCount=1
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18501/notifications --out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\confirm.png --script-file scripts/testing/page-scripts/notification-action-confirm.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\confirm.json --wait-ms 4000
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\confirm.json --equals rowGone=true
+dotnet script scripts/testing/http.csx -- --url http://localhost:18501/api/v1/quotes --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\quotes-after-confirm.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\quotes-after-confirm.json --equals totalCount=0
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18501/api/v1/notifications?pageSize=0" --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list-after-confirm.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-no-text C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list-after-confirm.json "Smoke test"
 ```
 
-**Expected:** `thrown=0`, since nothing since the restart threw, the reset included.
+**Expected, filters:** the page opens on **Active**, listing only the `ActionRequired` row, with its **Reset the database** button.
+**All** reads `Active`, `Expired`, `Dismissed` and `No longer applicable` for the four rows. The undismissed row past its `ExpiresAt`
+reads `Expired`, never `Active`, which is the computed-status assertion, and the row dismissed as obsolete reads `No longer
+applicable`, never `Dismissed`. **Expired only** lists exactly the expired row.
+
+**Expected, Cancel:** arming the action offers **Confirm** and **Cancel**, Cancel restores the single button, and the quote is still
+there, since Cancel called nothing.
+
+**Expected, Confirm:** the row leaves the page, no quote remains, and none of the four constructed rows survives, since Reset wipes
+`System_Notification` along with every other table.
+
+### 9. The Reset leaves its reseed recommendation
+
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list-after-confirm.json --equals totalCount=1 --equals items.0.metadataKind=reseedrecommended --equals items.0.type=actionrequired --equals items.0.isDismissed=false
+```
+
+**Expected:** one active reseed recommendation, the same result `POST /admin/database/reset` leaves in
+[`database-lifecycle/03`](../database-lifecycle/03-reset-is-a-full-wipe.md).
+
+**On failure:** `totalCount=0` is [#472](https://github.com/DutchJaFO/Quotinator/issues/472), a known issue described in the
+[Knowledgebase](../../knowledgebase/a-reset-from-a-notification-leaves-no-reseed-recommendation.md). Record it and carry on, since
+nothing below reads this step. Any other reading is not #472 and is reported in its own right.
+
+### 10. Nothing unexpected was thrown since the restart
+
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-notif-01-out\after-stop.mark --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18501/api/v1/import --file C:\repos\Quotinator\docs\automated-testing\startup-and-degradation\fixtures\malformed-import.json --duplicate-resolution review --expect 422 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-notif-01-out\after-stop.mark --pattern "thrown: JsonReaderException" --at-least 1
+```
+
+**Expected:** no exception since the restart, the Reset included. The malformed upload then answers `422` and its
+`JsonReaderException` is logged, which is the positive control: the same channel that read zero can see an exception.
+
+**On failure:** a count above zero is an issue, unless a Knowledgebase entry says otherwise. Report it with the line that names it.
+A `CryptographicException` / `AntiforgeryValidationException` pair means the browser held a cookie from a container outside the suite's
+shared key ring; see [*A cookie from another key ring is replaced on the first page, and logged only
+then*](../api-surface/06-a-cookie-from-another-key-ring-is-replaced.md).
 
 ## Observed effect
 
-**Measured 2026-08-25**, driving a real browser. `/notifications` renders a table with Created / Type /
-Message / Expires / Status / Action columns and a Show filter offering Active, All and Expired only;
-the Message column carries each notification's **body**, not its title. `/` renders
-*Quotinator is ready … Startup completed successfully.* above the notification summary and the entity
-counts. After every row is dismissed, `/notifications` reads *No notifications match this filter.* and
-the modal drops its Notifications section rather than leaving an empty heading.
+**Measured 2026-11-01** against `quotinator:local` built from `00a9dfe2`, with a browser driven by `capture-page.csx`.
 
-Driving the ActionRequired row's **Run → Confirm** performed a full database reset from the UI: quotes
-`799 → 0`, and the notification table emptied with it.
+| Stage | Reading |
+|---|---|
+| First boot, `GET /notifications` | The renamed-operation-ids announcement is present, among 3 rows |
+| Dismiss the all-zero id, no key | `401` |
+| Dismiss the all-zero id, with the key | `404` |
+| Spec | The list operation carries `Notifications`, and the top-level `tags` declares it |
+| `/notifications` | 3 rows, with the announcement's body, and no stack trace |
+| `/` | *Quotinator is ready*, *Startup completed successfully.*, 3 notifications, the stats, and no stack trace |
+| Dismiss one id upper-cased, one lower-cased, and the rest | `200` each, none still active, all 3 still listed |
+| `/notifications` after that | No rows, and *No notifications match this filter.* |
+| `/` after that | No notifications, no Notifications heading, and the stats still render |
+| Filters, with the four constructed rows | Opens on Active with 1 row. All reads `Active`, `Expired`, `Dismissed`, `No longer applicable`. Expired only lists 1 row |
+| Cancel | `Confirm` and `Cancel` offered, then `Reset the database` again, and `/quotes` still reads `1` |
+| Confirm | The row leaves the page, `/quotes` reads `0`, and none of the constructed rows survives |
+| The reseed recommendation after Confirm | **`GET /notifications` lists nothing, where it should list one: #472** |
 
-What the container logs while writing the startup notification has still not been recorded.
+**No exception was logged before the stop, or after the restart before the malformed upload**, the Reset included. That upload's
+`JsonReaderException` was then logged once.
 
 ## Canary
 
@@ -300,8 +232,7 @@ filter and Action button have nothing to show.
 
 **Step 4 has a different pre-fix build, and it is this issue's own.** The `Notifications` tag was used
 by its operations but never declared with a description until #339 added it, so the commit before that
-change publishes a spec where the tag renders bare and last. `OpenApiSpecEndpointTests` holds it now,
-which is why step 4 reads the published spec rather than trusting the source.
+change publishes a spec where the tag renders bare and last.
 
 Steps 2 and 3 are the control and pass on both builds: an unknown id rejected without a key and
 accepted with one is about the admin gate rather than about notifications existing.
@@ -310,10 +241,9 @@ Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-01
-Remove-Item .claude/temp/notif-01.db -ErrorAction SilentlyContinue
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-01 --bind
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-notif-01-data --delete C:\repos\Quotinator\.claude\temp\qt-notif-01-out
 ```
 
-If the Action button's **Confirm** path was exercised, the volume holds a wiped, post-Reset database,
-which is why it is removed rather than kept.
+**Expected:** the container, its data directory and the output directory are gone.
