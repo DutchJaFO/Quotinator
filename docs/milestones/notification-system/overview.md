@@ -106,6 +106,13 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#383](https://github.com/DutchJaFO/Quotinator/issues/383) | Notification detail table has no totals line | Waiting for release | T1 ✅ | [383-notification-detail-totals-line-plan.md](383-notification-detail-totals-line-plan.md) |
 | [#389](https://github.com/DutchJaFO/Quotinator/issues/389) | A staged review batch cannot be discarded once the planner has staged a no-op in it as Applied | Waiting for release | T1 ✅ T2 ✅ | [389-discard-keeps-plan-time-no-ops-plan.md](389-discard-keeps-plan-time-no-ops-plan.md) |
 | [#390](https://github.com/DutchJaFO/Quotinator/issues/390) | A reseed imports the file list captured at startup, not the files currently in either folder | Planning | T1 ⬜ T2 ⬜ | none |
+| [#482](https://github.com/DutchJaFO/Quotinator/issues/482) | A Reset cannot rebuild a database SQLite cannot read | Planning | T1 ⬜ T2 ⬜ | none |
+| [#457](https://github.com/DutchJaFO/Quotinator/issues/457) | The health reason for an unreadable database file misdiagnoses it as a schema-version mismatch | Planning | T1 ⬜ T2 ⬜ | none |
+| [#454](https://github.com/DutchJaFO/Quotinator/issues/454) | Every page answers 500 when the keys directory cannot be created, though /health reports the fault | Planning | T1 ⬜ T2 ⬜ | none |
+| [#455](https://github.com/DutchJaFO/Quotinator/issues/455) | An uncreatable keys directory is reported as an unwritable data directory, and a Reset clears it from /health while it remains | Planning | T1 ⬜ T2 ⬜ | none |
+| [#456](https://github.com/DutchJaFO/Quotinator/issues/456) | A degraded start on an unwritable data directory offers remedies that cannot fix it | Planning | T1 ⬜ T2 ⬜ | none |
+| [#453](https://github.com/DutchJaFO/Quotinator/issues/453) | Six admin endpoints return an unhandled 500 while the database is degraded | Planning | T1 ⬜ T2 ⬜ | none |
+| [#428](https://github.com/DutchJaFO/Quotinator/issues/428) | Degraded startup shows database counts as 0 instead of withholding them | Planning | T1 ⬜ T2 ⬜ | none |
 
 ---
 
@@ -121,7 +128,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #307 ─── depends on #80; soft-depends on #309: Waiting for release
 #308 ─── depends on #302, #303, #304, #312, #367: Waiting for release
 #309 ─── depends on #80: Waiting for release
-#305 ─── (none): Planning
+#305 ─── (none); blocks #327: Planning
 #306 ─── (none): Planning
 #319 ─── depends on #278, #312; blocks #304, #302, #303, #308: Waiting for release
 #323 ─── (none); blocks #325, #329: Waiting for release
@@ -181,6 +188,13 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #367 ─── depends on #278, #304; blocks #308: Waiting for release
 #371 ─── (none): Waiting for release
 #368 ─── depends on #303, #304, #390: Planning
+#482 ─── (none); blocks #327, #457: Planning
+#457 ─── depends on #482, whose Reset its remedies name; blocks #327: Planning
+#454 ─── (none); blocks #327, #455, #456: Planning
+#455 ─── depends on #454; blocks #327: Planning
+#456 ─── depends on #454; blocks #327: Planning
+#453 ─── (none); blocks #327: Planning
+#428 ─── (none); blocks #327: Planning
 ```
 
 ---
@@ -231,33 +245,40 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 40 | **#371** ✅ | Waiting for release |
 | 41 | **#350** ✅ | Waiting for release |
 | 42 | **#339** ✅ | Waiting for release; before #327 and #328 |
-| 43 | **#327** 🚧 | In progress; after #339 |
-| 44 | **#328** | Planning; after #339 |
-| 45 | **#329** | Planning; before #324, which consumes its statistics |
-| 46 | **#330** | Planning; before #331 |
-| 47 | **#331** | Planning; after #330 |
-| 48 | **#324** | Planning; after #329/#330/#331 |
-| 49 | **#305** | Planning; independent |
-| 50 | **#306** | Planning; independent |
-| 51 | **#351** | Planning; independent, placed late |
-| 52 | **#381** | Planning; independent, deliberately deferred |
-| 53 | **#352** | Planning; after #349 |
-| 54 | **#353** | Planning; after #352 |
-| 55 | **#360** | Planning; before end-of-milestone migration consolidation |
-| 56 | **#390** | Planning; before #368 |
-| 57 | **#368** | Planning; after #390 |
-| 58 | **#416** | Planning; unsequenced, placed last until it is |
-| 59 | **#430** | Planning; before #352 and #353, which cite the convention |
-| 60 | **#431** | Planning; after #353, which builds the shared sanitiser |
-| 61 | **#438** | Planning; early, a smoke document cannot be confirmed until it lands |
-| 62 | **#462** | Planning; before #329 and #331 test live against it |
-| 63 | **#473** | Planning; after #327, and before the milestone-close T2 run |
-| 64 | **#475** | Planning; before #473, whose exception counts read these lines |
-| 65 | **#476** | Planning; before release |
-| 66 | **#477** | Planning |
-| 67 | **#478** | Planning |
-| 68 | **#479** | Planning |
-| 69 | **#480** | Planning |
+| 43 | **#305** | Planning; blocks #327, and may add a scenario to it |
+| 44 | **#482** | Planning; blocks #327, before #457, whose remedies name its Reset |
+| 45 | **#457** | Planning; blocks #327, after #482 |
+| 46 | **#454** | Planning; blocks #327, before #455 and #456, whose pages must render first |
+| 47 | **#455** | Planning; blocks #327, after #454 |
+| 48 | **#456** | Planning; blocks #327, after #454 |
+| 49 | **#453** | Planning; blocks #327 |
+| 50 | **#428** | Planning; blocks #327 |
+| 51 | **#327** 🚧 | In progress, stopped; after #339 and every blocker above, then rewritten and run from scratch |
+| 52 | **#328** | Planning; after #339 |
+| 53 | **#329** | Planning; before #324, which consumes its statistics |
+| 54 | **#330** | Planning; before #331 |
+| 55 | **#331** | Planning; after #330 |
+| 56 | **#324** | Planning; after #329/#330/#331 |
+| 57 | **#306** | Planning; independent |
+| 58 | **#351** | Planning; independent, placed late |
+| 59 | **#381** | Planning; independent, deliberately deferred |
+| 60 | **#352** | Planning; after #349 |
+| 61 | **#353** | Planning; after #352 |
+| 62 | **#360** | Planning; before end-of-milestone migration consolidation |
+| 63 | **#390** | Planning; before #368 |
+| 64 | **#368** | Planning; after #390 |
+| 65 | **#416** | Planning; unsequenced, placed last until it is |
+| 66 | **#430** | Planning; before #352 and #353, which cite the convention |
+| 67 | **#431** | Planning; after #353, which builds the shared sanitiser |
+| 68 | **#438** | Planning; early, a smoke document cannot be confirmed until it lands |
+| 69 | **#462** | Planning; before #329 and #331 test live against it |
+| 70 | **#473** | Planning; after #327, and before the milestone-close T2 run |
+| 71 | **#475** | Planning; before #473, whose exception counts read these lines |
+| 72 | **#476** | Planning; before release |
+| 73 | **#477** | Planning |
+| 74 | **#478** | Planning |
+| 75 | **#479** | Planning |
+| 76 | **#480** | Planning |
 
 ---
 
@@ -267,7 +288,8 @@ Every issue in this milestone is self-contained on top of already-released infra
 #156): none leave anything half-wired if merged independently, except #81 (which genuinely cannot
 merge before #309 and #307), #319 (which cannot merge before #312), #331 (which cannot merge before
 #330), #328 (which cannot merge before #339), and #327 (which cannot merge before #339 for its
-structure, nor before #348, whose migration refusal one of its documents provokes).
+structure, nor before #348, whose migration refusal one of its documents provokes, nor before the
+eight issues that block it: #305, #482, #457, #454, #455, #456, #453 and #428).
 Those are real implementation-order dependencies, not just sequencing preferences.
 Default assumption per `process.md`: the branch stays open until all issues in the milestone are done,
 then one PR: no known reason to depart from that default.
