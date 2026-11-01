@@ -491,6 +491,15 @@ The translation files cover config option names/descriptions and port descriptio
 
 **The `?lang=` query parameter is a separate concern.** It tells `IQuoteService` which language to use when returning *quote content* (translations stored in the source files under `data/sources/`). It does not affect UI strings or error messages — those always follow `Accept-Language`. Do not conflate the two.
 
+### Notification content: stored text is for what stays true
+
+A notification's stored `Title` and `Body` are for static content: a record of something that happened, or
+an announcement. Whatever depends on current state, such as what a reseed would load or what can be done
+next, is composed when read, from the notification's payload and `NotificationActionAvailability`, from
+which its offered actions are also decided. **Before writing a new notification's text, ask whether it would
+still be true if read later, after settings or files had changed.** See
+[ADR 026](docs/architecture-decisions/026-notification-content-is-stored-only-when-it-is-static.md).
+
 ### Language selector — UI culture override
 
 The navbar `LanguageSelector` control (`Components/Controls/LanguageSelector.razor`) lets users override the browser's `Accept-Language` preference. It submits a GET form to `/Culture/Set?culture={code}&redirectUri={path}`, which sets the `.AspNetCore.Culture` cookie (`c={code}|uic={code}`) and redirects back using `TypedResults.LocalRedirect` (prevents open-redirect attacks). The cookie is read by `CookieRequestCultureProvider` (one of the default providers in `RequestLocalizationOptions`) on every subsequent request.

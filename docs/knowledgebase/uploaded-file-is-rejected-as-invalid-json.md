@@ -14,13 +14,15 @@
 File content is not valid JSON in Quotinator's canonical quote schema.
 ```
 
-and the log carries two `Error` lines:
+and the log carries `Error` lines for two exceptions:
 
 ```
 [Runtime - Exception] <id> thrown: JsonReaderException
 System.Text.Json.JsonReaderException: '0x0D' is invalid within a JSON string. … LineNumber: 0 | BytePositionInLine: 38.
 [Runtime - Exception] <id> thrown: QuoteImportValidationException
 ```
+
+The second line repeats with the same id; see [The log shows the same exception thrown several times](one-exception-is-logged-as-thrown-several-times.md).
 
 ## Does it prevent the app or API from functioning?
 

@@ -1,6 +1,6 @@
 # #327: Smoke tests that prove startup problems degrade rather than crash
 
-**Status:** In progress (step 19)
+**Status:** In progress (step 20; row 17 open)
 **GitHub issue:** #327
 **Tiers required:** T1, T2
 **Depends on:** #326, #339, #350
@@ -723,10 +723,11 @@ running them until they are converted, which is a body of work of its own.
 #470 (a dated quote's date lost when its Source is declared dateless in the same file) came out of this step too,
 and #471 records the research it raised. #438's second item is covered by `import-and-staged-actions/19`.
 
-**Seen and not filed**, for a later decision: the reset notification says "bundled sources" with them turned off;
-the reseed notification's `appVersionId` is null and its metadata's `Reason` and `ChangedFiles` are cased
-differently from the rest; one `QuoteImportValidationException` logs four times; `status=NotAStatus` on
-`/import/actions` answers `200` with nothing, where a bad value might be expected to be refused.
+**Also found and filed, 2026-11-01:** #474 (an unknown `status` or `entityType` on `/import/actions` answers `200`),
+#475 (one exception logged as thrown once per awaited frame it crosses, which may also be `07`'s unidentified four
+lines above), #476 (notification payload field names, and an enum stored as a number), #477 (the notification Reset
+writes records no app version), #478 (a reseed recommendation cannot say what a reseed would load, and resolves
+itself when it loads nothing).
 
 **Log wording.** `notifications-and-changelog/07` no longer reads it, for the same reason as the startup documents:
 a file on disk is what the in-memory regression cannot leave, and which source served a read is proven by
@@ -765,7 +766,8 @@ invoking it runs too. Each document's `Observed effect` records the reading, ope
 
 ### 19. Build and full test run
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done 2026-11-01 on `c0f199b0`: 0 warnings, 0 errors, and 4,833 tests green across 12 projects. Only
+documents have changed since. Next action: step 20, with row 17's canaries still open.
 
 `dotnet build --configuration Release` at 0 warnings, 0 errors, and
 `dotnet test --configuration Release --verbosity normal -m:1` all green.
@@ -800,7 +802,7 @@ The developer starts the application in Visual Studio and confirms it starts wit
 | 16 | ✅ | In-process: every deterministic, cross-platform scenario has negative tests and a positive control | Unit test | Step 2: the `StartupResilienceTests` and `StartupBackupRefusalTests` methods tabled there, 43 green, every new one shown able to fail by mutations M1 to M7 |
 | 17 | ❌ | Each document is shown able to fail | Live (Docker) | Step 15: every scenario document against `quotinator:canary-327`, and the earlier-fix canaries, the failing step recorded in each `Canary` |
 | 18 | ✅ | End-of-issue T2 scope passes | Live (Docker) | Step 18: smoke set and `startup-and-degradation/` run from their own steps, the known readings and gaps tabled there; the remaining `http.csx` users are #473's |
-| 19 | ❌ | Build clean and no regression | Build + Unit test | Step 18: 0 warnings, 0 errors; full suite green with `-m:1` |
+| 19 | ✅ | Build clean and no regression | Build + Unit test | Step 19: 0 warnings, 0 errors; full suite green with `-m:1`, 4,833 tests |
 | 20 | ❌ | The application still starts | Manual | Step 19, confirmed by the developer in Visual Studio |
 | 21 | ❌ | Scenario 9, `keys/` exists but cannot be written: the application reports itself degraded, and the contract holds | Unit test + Live (Docker) | Step 14: the new `StartupResilienceTests` case red then green, and the new document red on the current build, green after the fix |
 | 22 | ✅ | Each finding outside the contract is recorded in its document and drafted as an issue | Live | Step 13: every finding recorded in the named documents' `Observed effect`; filed as #454, #455, #456 and #457, the override gap held for #348, each with Knowledgebase coverage |

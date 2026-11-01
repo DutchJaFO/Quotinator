@@ -86,6 +86,10 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#438](https://github.com/DutchJaFO/Quotinator/issues/438) | Two automated-test documents no longer match the product: the wait-page document cannot pass as written | Planning | T1 ⬜ T2 ⬜ | none |
 | [#462](https://github.com/DutchJaFO/Quotinator/issues/462) | Add a dummy source server under our control, so source refresh tests do not depend on GitHub | Planning | T1 ⬜ T2 ⬜ | none |
 | [#473](https://github.com/DutchJaFO/Quotinator/issues/473) | Convert the remaining 60 T2 documents to single commands and run them | Planning | T1 ⬜ T2 ⬜ | none |
+| [#475](https://github.com/DutchJaFO/Quotinator/issues/475) | One exception is logged as thrown once per awaited frame it crosses | Planning | T1 ⬜ T2 ⬜ | none |
+| [#476](https://github.com/DutchJaFO/Quotinator/issues/476) | Four notification payloads store their own fields without declared JSON names, and one stores an enum as a number | Planning | T1 ⬜ T2 ⬜ | none |
+| [#477](https://github.com/DutchJaFO/Quotinator/issues/477) | The notification Reset writes records no app version, because the version row is restored after it | Planning | T1 ⬜ T2 ⬜ | none |
+| [#478](https://github.com/DutchJaFO/Quotinator/issues/478) | A reseed recommendation cannot say what a reseed would load, and resolves itself when it loads nothing | Planning | T1 ⬜ T2 ⬜ | none |
 | [#397](https://github.com/DutchJaFO/Quotinator/issues/397) | Exceptions the application catches leave no trace outside Visual Studio | Waiting for release | T1 ✅ T2 ✅ | [397-exceptions-leave-no-trace-plan.md](397-exceptions-leave-no-trace-plan.md) |
 | [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | Waiting for release | T1 ✅ T2 ✅ | [371-database-and-migration-notifications-plan.md](371-database-and-migration-notifications-plan.md) |
 | [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | Waiting for release | T1 ✅ T2 ✅ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
@@ -150,6 +154,10 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #438 ─── (none): Planning
 #462 ─── (none); soft-relates to #329, #331: Planning
 #473 ─── requires #327, which built the tooling; must land before the milestone-close T2 run, which cannot start until every document can: Planning
+#475 ─── (none); soft-relates to #406, #445: Planning
+#476 ─── (none); must land before release, since correcting a shipped payload needs a migration: Planning
+#477 ─── (none): Planning
+#478 ─── (none); soft-relates to #390, #476: Planning
 #430 ─── (none): Planning
 #431 ─── (none): Planning
 #397 ─── (none); blocks #370: Waiting for release
@@ -240,6 +248,10 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 61 | **#438** | Planning; early, a smoke document cannot be confirmed until it lands |
 | 62 | **#462** | Planning; before #329 and #331 test live against it |
 | 63 | **#473** | Planning; after #327, and before the milestone-close T2 run |
+| 64 | **#475** | Planning; before #473, whose exception counts read these lines |
+| 65 | **#476** | Planning; before release |
+| 66 | **#477** | Planning |
+| 67 | **#478** | Planning |
 
 ---
 

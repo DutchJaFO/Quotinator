@@ -60,3 +60,4 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 | 023 | [023-one-conflict-rule-entry-per-entity.md](023-one-conflict-rule-entry-per-entity.md) | One conflict-rule entry per entity, and the recorded incoming value belongs to the field it governs |
 | 024 | [024-case-insensitivity-serves-identity-not-content-equality.md](024-case-insensitivity-serves-identity-not-content-equality.md) | Case-insensitivity serves identity and lookup, never content equality |
 | 025 | [025-a-backup-belongs-to-the-composer-not-the-operation.md](025-a-backup-belongs-to-the-composer-not-the-operation.md) | A backup belongs to whoever composes the work, never to the operation itself |
+| 026 | [026-notification-content-is-stored-only-when-it-is-static.md](026-notification-content-is-stored-only-when-it-is-static.md) | A notification's text is stored only when it is static; anything that depends on current state is composed from its payload when read |
