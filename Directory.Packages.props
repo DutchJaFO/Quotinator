@@ -12,18 +12,18 @@
   <ItemGroup>
     <PackageVersion Include="Dapper" Version="2.1.89" />
     <PackageVersion Include="Dapper.Contrib" Version="2.0.78" />
-    <PackageVersion Include="JsonSchema.Net" Version="9.4.1" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
+    <PackageVersion Include="JsonSchema.Net" Version="9.6.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
     <!-- Test-only: Quotinator.Api.Tests resolves its own sources to symbols to prove no test
          constructs the unguarded WebApplicationFactory<Program> (#313). Never referenced by src/. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
     <PackageVersion Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
     <PackageVersion Include="MSTest" Version="4.5.1" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.13" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.18.3" />
     <PackageVersion Include="Serilog" Version="4.4.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0" />
@@ -42,13 +42,13 @@
          Microsoft.AspNetCore.OpenApi 10.0.10 resolved the vulnerable Microsoft.OpenApi 2.0.0
          transitively. That is no longer what this pin does: AspNetCore.OpenApi 10.0.11 declares
          [2.7.5, 3.0.0), so it already floors on the patched version by itself. The pin is kept
-         only to hold the latest 2.x (2.12.2) above that 2.7.5 floor.
+         only to hold the latest 2.x (2.13.0) above that 2.7.5 floor.
          3.x stays blocked: the bundled XmlCommentGenerator still assigns to the now-read-only
          IOpenApiMediaType.Example, so 3.x fails to compile with CS0200: reproduced against
          3.10.2 on 2026-08-30, on top of NU1608 from the range above. dotnet/aspnetcore#64317
          is closed upstream, but its fix is not in 10.0.11: confirm by building, never by the
          issue's state. See src/Quotinator.Api/CVE/archived/CVE-2026-49451.md. -->
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.13.0" />
   </ItemGroup>
 
 </Project>
