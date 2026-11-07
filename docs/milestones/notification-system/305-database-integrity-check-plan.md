@@ -1,6 +1,6 @@
 # #305: Database integrity check: verify every database's full schema against its migration path at startup
 
-**Status:** In progress (step 6)
+**Status:** In progress (step 7)
 **GitHub issue:** #305
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 6: check a database upgraded from the published `v1.8.3` image, live.** Every decision is settled (see
+**Execute from step 7: write the T2 documents and confirm them red against a pre-issue build.** Every decision is settled (see
 *Decisions*, including D5, found in step 3), the ADR 003 and ADR 009 amendments were approved on
 2026-11-07, and the issue's title and body reflect the widened scope.
 
@@ -351,7 +351,7 @@ Findings, 2026-11-07:
 
 ### 6. Check a database upgraded from the last release, live
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Row 13, by the T2 suite's own method (D5): the database is rebuilt from the published image, never
 stored. The published `v1.8.3` image runs against a fresh volume until its first boot has finished,
@@ -363,6 +363,28 @@ recorded here when run. Step 8 does not start until this row is green.
 
 The same check is repeated at the milestone's close, after the migrations are condensed, as ADR 009's
 last-release verification (step 12).
+
+Run 2026-11-07, this build at `88795817`, by document 09's mechanics (`scripts/testing/test-env.csx` over
+a bind-mounted directory):
+
+```bash
+docker build -f docker/Dockerfile -t quotinator:305-step6 .
+dotnet script scripts/testing/test-env.csx -- create --name qt-305-upgrade-183 --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind '<temp>\qt-305-upgrade-data-1'
+# waited on its log for "Quotinator ready"; [Runtime - Exception] count before the stop: 0
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-305-upgrade-183 --bind '<temp>\qt-305-upgrade-data-1'
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-305-upgrade-current --port 18530 --image quotinator:305-step6 --bind '<temp>\qt-305-upgrade-data-1'
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18530/api/v1/health" --wait-for 200 --status
+curl -s http://localhost:18530/api/v1/admin/database/integrity
+```
+
+- The released database recorded data v3 and app v5. This build applied 25 Data migrations (v3 to v28)
+  and 4 App migrations (v5 to v9), logged no exception, and reported `200` on `/health`.
+- **The endpoint answered
+  `{"databases":[{"database":"main","isIntact":true,"differences":[]},{"database":"changelog","isIntact":true,"differences":[]}]}`**:
+  the upgraded database matches this build's schema in every measured aspect, with no extra object.
+  Row 13 is green, so step 8 may enforce the check at startup.
+- Torn down with `test-env.csx -- destroy`, `docker rmi quotinator:305-step6`, and the bind directory
+  removed. The pulled `1.8.3` image is kept, since other T2 documents use it.
 
 *Found in step 3, 2026-11-07:* row 13 was written as a unit test, but the T2 *Upgraded* profile stores no
 database, so a unit test had nothing to open. A committed fixture was chosen first and then withdrawn,
@@ -491,7 +513,7 @@ in step 6; rows 20 and 21 are written red in step 7.
 | 10 | ✅ | Main database: baseline and full replay are identical in every measured aspect | Integration test | `DatabaseIntegrityCheckTests.MainDatabase_BaselineAndReplay_AreIdentical` |
 | 11 | ✅ | Data-owned schema alone: baseline and replay are identical | Integration test | `DatabaseIntegrityCheckTests.DataOwnedSchema_BaselineAndReplay_AreIdentical` |
 | 12 | ✅ | Changelog database: baseline and replay are identical | Integration test | `ChangelogDatabaseInitializerTests.Integrity_BaselineAndReplay_AreIdentical` |
-| 13 | ❌ | A database the published `v1.8.3` image created, upgraded by this build, is intact | Live (Docker) | Step 6's commands: `v1.8.3` on a fresh volume until healthy, then this build on the same volume; `GET /api/v1/admin/database/integrity` reports every database `isIntact: true` |
+| 13 | ✅ | A database the published `v1.8.3` image created, upgraded by this build, is intact | Live (Docker) | Step 6's commands: `v1.8.3` on a fresh volume until healthy, then this build on the same volume; `GET /api/v1/admin/database/integrity` reports every database `isIntact: true` |
 | 14 | ✅ | The reader captures each aspect from a real database, and reads the schema a list of scripts creates in a scratch database of its own | Integration test | `SqliteSchemaSnapshotReaderTests.ReadsTablesColumnsForeignKeysIndexesViewsAndTriggers`, `SqliteSchemaSnapshotReaderTests.ReadScriptsAsync_ReadsTheSchemaTheScriptsCreate` |
 | 15 | ❌ | Main startup: a difference stops the content load, takes no backup and writes nothing; a complete database loads normally | Integration test | `DatabaseIntegrityCheckTests.MissingExpectedTable_DetectedAsSchemaInconsistency_TreatedAsHardFailure`, `DatabaseIntegrityCheckTests.Difference_ContentLoadDoesNotRunAndNothingIsWritten`, `DatabaseIntegrityCheckTests.AllExpectedTablesPresent_PassesCleanly` |
 | 16 | ❌ | The check does not run on a refused migration or an overshoot | Integration test | `DatabaseIntegrityCheckTests.MigrationRefused_IntegrityNotChecked`, `DatabaseIntegrityCheckTests.SchemaVersionOvershoot_IntegrityNotChecked` |
