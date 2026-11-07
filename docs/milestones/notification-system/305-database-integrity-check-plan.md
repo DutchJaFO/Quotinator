@@ -1,6 +1,6 @@
 # #305: Database integrity check: verify every database's full schema against its migration path at startup
 
-**Status:** Planning
+**Status:** In progress (step 2)
 **GitHub issue:** #305
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,9 +9,9 @@
 
 ## Next action
 
-**Execute from step 1: amend ADR 003 and point `CLAUDE.md` at it.** Every decision is settled (see
-*Decisions*, and the ADR 003 and ADR 009 amendments the developer approved on 2026-11-07), and the
-issue's title and body already reflect the widened scope.
+**Execute from step 2: create the signatures only.** Every decision is settled (see *Decisions*, and the
+ADR 003 and ADR 009 amendments the developer approved on 2026-11-07), and the issue's title and body
+already reflect the widened scope.
 
 ---
 
@@ -212,7 +212,7 @@ names, since the name is the engine's and not the schema's.
 
 ### 1. Amend ADR 003, and point `CLAUDE.md`'s structural-metadata sentence at it
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 A `docs [#305]` commit of its own, drafted and approved before it is made.
 
