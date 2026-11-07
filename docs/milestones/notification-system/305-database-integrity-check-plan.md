@@ -1,6 +1,6 @@
 # #305: Database integrity check: verify every database's full schema against its migration path at startup
 
-**Status:** In progress (step 4)
+**Status:** In progress (step 5)
 **GitHub issue:** #305
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 4: implement the model, the comparer and the reader.** Every decision is settled (see
+**Execute from step 5: produce the last-release fixture and check an upgraded copy of it.** Every decision is settled (see
 *Decisions*, including D5, found in step 3), the ADR 003 and ADR 009 amendments were approved on
 2026-11-07, and the issue's title and body reflect the widened scope.
 
@@ -284,7 +284,7 @@ Findings, 2026-11-07:
 
 ### 4. Implement the model, the comparer and the reader; run the drift tests and record what they find
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Implemented in that order. Then the baseline-versus-replay tests (rows 10 to 12) run for the first time
 across every aspect. **Any difference they find is a finding, recorded here before anything is
@@ -292,6 +292,17 @@ changed.** A baseline that disagrees with replay is corrected in the baseline, i
 `CLAUDE.md`'s migration policy requires. A difference that means installed databases already hold the
 wrong shape cannot be fixed by a baseline edit and needs a new migration. That is an unforeseen
 circumstance, not an open question: work stops at this step and the finding goes to the developer.
+
+Findings, 2026-11-07:
+
+- **No drift in any measured aspect, foreign keys included, for any database.** Rows 10 to 12
+  (`MainDatabase_BaselineAndReplay_AreIdentical`, `DataOwnedSchema_BaselineAndReplay_AreIdentical`,
+  `ChangelogDatabaseInitializerTests.Integrity_BaselineAndReplay_AreIdentical`) passed on their first run,
+  with no extra objects either. This is the first time foreign keys and views or triggers were compared
+  between a fresh install and a full replay. No baseline change and no migration is needed.
+- **Rows 1 to 9 and 14 are green**: every comparer case and the reader against a real database.
+- **The index-definition lookup compares its name through `TextClauses.Equals`**, per `CLAUDE.md`'s rule
+  for name comparisons; `SqlTextCaseGuard` flagged the bare `name = @index` on the first run.
 
 ### 5. Run the check against a database upgraded from the last release
 

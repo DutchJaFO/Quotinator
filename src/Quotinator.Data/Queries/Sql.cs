@@ -789,4 +789,45 @@ internal static class Sql
             $"AND {TextClauses.Equals(nameof(AppVersionEntity.Application), "application")} " +
             "LIMIT 1;";
     }
+
+    /// <summary>
+    /// The metadata reads behind the integrity check's snapshot (#305), consumed only by
+    /// <see cref="Quotinator.Data.Schema.SqliteSchemaSnapshotReader"/>. Engine-specific by nature, which is why ADR 003's
+    /// design goal 5 confines them here, to one reader behind an interface.
+    /// </summary>
+    /// <remarks>
+    /// The table-valued pragma functions are read in their own order (<c>cid</c>, <c>id</c>/<c>seq</c>,
+    /// <c>seqno</c>) without selecting those numbers: a foreign key's rows are grouped by <c>seq</c>
+    /// restarting at 0, and nothing downstream needs the engine's internal numbering.
+    /// </remarks>
+    internal static class SchemaMetadata
+    {
+        /// <summary>Every user table: names starting <c>sqlite_</c> are the engine's own bookkeeping.</summary>
+        internal const string SelectTables =
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite!_%' ESCAPE '!' ORDER BY name;";
+
+        /// <summary>One table's columns, in declaration order.</summary>
+        internal const string SelectColumns =
+            "SELECT name, type, \"notnull\", dflt_value, pk FROM pragma_table_info(@table) ORDER BY cid;";
+
+        /// <summary>One table's foreign keys, one row per column, each key's columns consecutive and in order.</summary>
+        internal const string SelectForeignKeys =
+            "SELECT seq, \"table\", \"from\", \"to\", on_update, on_delete FROM pragma_foreign_key_list(@table) ORDER BY id, seq;";
+
+        /// <summary>One table's indexes: <c>origin</c> is <c>c</c> for a created index, otherwise the engine made it for a constraint.</summary>
+        internal const string SelectIndexes =
+            "SELECT name, \"unique\", origin, partial FROM pragma_index_list(@table) ORDER BY name;";
+
+        /// <summary>One index's columns, in order. An expression column has no name.</summary>
+        internal const string SelectIndexColumns =
+            "SELECT name FROM pragma_index_info(@index) ORDER BY seqno;";
+
+        /// <summary>One index's stored definition, from which a partial index's filter is taken.</summary>
+        internal static readonly string SelectIndexDefinition =
+            $"SELECT sql FROM sqlite_master WHERE type = 'index' AND {TextClauses.Equals("name", "index")};";
+
+        /// <summary>Every view or trigger, by <c>@type</c>, with the table it belongs to.</summary>
+        internal const string SelectObjectsOfType =
+            "SELECT name, tbl_name FROM sqlite_master WHERE type = @type ORDER BY name;";
+    }
 }
