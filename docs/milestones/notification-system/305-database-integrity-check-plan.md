@@ -1,6 +1,6 @@
 # #305: Database integrity check: verify every database's full schema against its migration path at startup
 
-**Status:** In progress (step 7)
+**Status:** In progress (step 8)
 **GitHub issue:** #305
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 7: write the T2 documents and confirm them red against a pre-issue build.** Every decision is settled (see
+**Execute from step 8: wire the main database's startup and Reset.** Every decision is settled (see
 *Decisions*, including D5, found in step 3), the ADR 003 and ADR 009 amendments were approved on
 2026-11-07, and the issue's title and body reflect the widened scope.
 
@@ -393,7 +393,7 @@ databases are rebuilt from published image tags, not stored. D5 records the outc
 
 ### 7. Write the T2 documents and confirm them red against a pre-issue build
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 - `startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md`, in the
   smoke set like every degraded-start document. Fresh profile. It removes `System_Notification` (the
@@ -411,6 +411,21 @@ databases are rebuilt from published image tags, not stored. D5 records the outc
 Canary: both run against a build of the commit before this issue's first code change, in their own
 worktree and image tag; document 14 must read `healthy` there. Worktree, image and container are removed
 afterwards. Every step is a single command.
+
+Findings, 2026-11-08:
+
+- **Both canaries are red**, against `95093abc` built in a detached worktree as `quotinator:canary-305`.
+  Document 14: the integrity call `404`, then with `System_Notification` dropped `/health` read
+  `{"status":"healthy"}` and `/quotes/random` `200`, #305's premise reproduced. Document 04: the integrity
+  call `404` on a healthy fresh container. Each document records its reading under *Canary*; container,
+  directories, image and worktree are removed.
+- **The index entries moved here from step 12**: the smoke set (now nineteen), both category tables, and
+  *Observed effects awaiting measurement* (now 42 of 83). The guard tests that keep them in step with the
+  documents would otherwise fail on this commit. Both documents are also listed in `Quotinator.slnx`.
+- **Document 04 waits on the released image by `wait-field` against a published port**, not by its log in
+  a shell loop, so every step stays one command, as the index requires.
+- **Both documents are red against this build too**, until steps 8 and 9 make startup enforce the check:
+  rows 20 and 21 go green in step 13's full run, which also records each document's *Observed effect*.
 
 ### 8. Wire the main database's startup and Reset
 
@@ -454,7 +469,8 @@ zero when not intact; let `ReadScriptsAsync` reuse one scratch database across c
 
 **Status:** ⬜ Not started
 
-- `docs/automated-testing/README.md`: the smoke-set table and both category tables.
+- `docs/automated-testing/README.md`: done in step 7, with the documents; here, only document 14 and 04
+  leaving *Observed effects awaiting measurement* once step 13 records their readings.
 - `startup-and-degradation/01` drops `Quotinator_Quote`, which now degrades through this check instead of
   the generic catch; any reason it records is updated, and it is re-run.
 - ADR 009 amended (developer-approved, 2026-11-07): its procedure names the integrity check as the
