@@ -9,9 +9,9 @@
 
 ## Next action
 
-**Execute from step 2: amend `CLAUDE.md`'s structural-metadata sentence, then start the code at step 3.**
-Every design decision is settled (see *Open decisions*), and the issue's title and body reflect the
-widened scope (step 1).
+**Execute from step 1: amend ADR 003 and point `CLAUDE.md` at it.** Every decision is settled (see
+*Decisions*, and the ADR 003 and ADR 009 amendments the developer approved on 2026-11-07), and the
+issue's title and body already reflect the widened scope.
 
 ---
 
@@ -43,11 +43,11 @@ Developer direction, 2026-11-07, widening the issue as filed (tables only, main 
 | Every database the application builds can perform the check, since each has its own migration path | The check is generic and runs for the main database and the changelog database; a guard test holds every future database to it |
 | The check is part of the testing procedure | The baseline-versus-replay drift tests and the last-release upgrade check run the same comparer |
 | Database-engine specifics are kept to a minimum, so a future engine change stays cheap | The schema model and the comparer are engine-neutral; only the reader that produces a snapshot knows SQLite |
-| `sqlite_master` is blocked so metadata is not used as a crutch; integrity verification is a valid use | `CLAUDE.md`'s sentence is amended to say so (step 2) |
+| Metadata is avoided because it is highly engine-specific, and engine-specific features are kept to a minimum; integrity verification is a valid use | ADR 003 is amended to state this, and `CLAUDE.md`'s sentence points to it (step 1) |
 
-The issue body still describes the narrower scope, so per `process.md` → *Scope changes and deferrals*
-it gets a comment recording this widening and its body is rewritten to match, both drafted for approval
-in step 1.
+Per `process.md` → *Scope changes and deferrals*, the issue carries a comment recording this widening,
+and its title and body were rewritten to match, both approved by the developer and posted on 2026-11-07
+during planning.
 
 ---
 
@@ -59,11 +59,11 @@ Checked per `process.md` → Planning step 3, in source order.
 
 | ADR | Governs this issue? | Consequence for the design |
 |---|---|---|
-| 002, 008, 015 | No: no table, column or enum-backed column is added | No migration and no baseline change, unless step 5 finds drift a baseline must correct |
-| 003 | **Yes** | Rule 3 forbids provider abstractions and conditional branches for other engines; rule 2 makes interfaces the contract with SQLite-specific implementations behind them. The design takes rule 2's shape and nothing more: an engine-neutral model and comparer, one interface for reading a snapshot, **one** SQLite implementation, no branching on engine and no configuration for one. This is the minimum the engine-change direction asks for, and nothing in it anticipates a second engine beyond keeping SQLite out of the comparison. No Dapper or SQLite type appears on a public interface |
+| 002, 008, 015 | No: no table, column or enum-backed column is added | No migration and no baseline change, unless step 4 finds drift a baseline must correct |
+| 003 | **Yes** | Rule 3 forbids provider abstractions and conditional branches for other engines; rule 2 makes interfaces the contract with SQLite-specific implementations behind them. The design takes rule 2's shape and nothing more: an engine-neutral model and comparer, one interface for reading a snapshot, **one** SQLite implementation, no branching on engine and no configuration for one. This is the minimum the engine-change direction asks for, and nothing in it anticipates a second engine beyond keeping SQLite out of the comparison. No Dapper or SQLite type appears on a public interface. The ADR gains a design goal stating that engine-specific features, metadata reads included, are kept to a minimum (step 1) |
 | 004 | Yes | The check never names a Quotinator table, so the model, comparer and reader live in `Quotinator.Data`. The wording an operator reads lives in `Quotinator.Api`, beside `SchemaOvershootGuidance` |
 | 006 | Yes | New test classes stay sequential; each owns its temp database |
-| 009 | **Yes, newly** | The last-release upgrade check this ADR mandates at milestone close gains a concrete instrument: the integrity check, run against a database upgraded from the last release's schema (step 6) |
+| 009 | **Yes, newly** | The last-release upgrade check this ADR mandates at milestone close gains a concrete instrument: the integrity check, run against a database upgraded from the last release's schema (step 5). The ADR is amended to name it (step 12) |
 | 010 | Yes | Sabotage in the T2 documents goes through `scripts/testing/execute-sql.csx`; the check itself is run through the admin endpoint or the C# DbInspector command (R1), never a script in another language |
 | 012, 017 | No: no id column is compared or selected, no join over domain tables | Metadata reads are not entity queries |
 | 016 | Yes | The outcome is `SchemaIntegrityResult`; the model types are plain domain value objects (the suffix rule's own exemption), and any enum, such as the kind of difference, goes in `Quotinator.Data/Enums/`. The endpoint's top-level type is `DatabaseIntegrityResponse`; its per-database and per-difference members are `Dto`s, never `Response`s |
@@ -73,21 +73,22 @@ Checked per `process.md` → Planning step 3, in source order.
 | 022 | Yes | A difference is detectable by a check, so it is **returned as an outcome, never thrown**. Existing catches stay as the backstop for what the check cannot foresee |
 | 024 | Yes | Object and column names are identifiers, so they compare case-insensitively. A declared column type, default expression or index filter is compared as written, since it is content rather than identity |
 | 025 | Yes | The check writes nothing, at startup or through the endpoint, so there is no backup to place |
-| 026 | Yes, by exclusion | No notification is raised for a failed check: see step 9 |
+| 026 | Yes, by exclusion | No notification is raised for a failed check: see step 8 |
 
 ### Other authoritative sources
 
 - **`CLAUDE.md` → "No exception-based migration recovery"** reserves structural metadata checks for the
-  empty-database check. The developer's reasoning, 2026-11-07: the block exists so metadata is not used
-  as a crutch, inferring state in place of handling or fixing it; checking integrity requires metadata
-  for a valid reason. Step 2 amends the sentence to say exactly that.
+  empty-database check. The developer's reasoning, 2026-11-07: metadata is avoided because it is highly
+  engine-specific and engine-specific features are kept to a minimum; checking integrity requires
+  metadata for a valid reason. No ADR stated this, ADR 003 being the closest, so step 1 adds it to
+  ADR 003 as a design goal and makes the `CLAUDE.md` sentence a pointer to it.
 - **`CLAUDE.md` → hard failure, not a self-heal**: applied. Nothing is recreated or altered; the
   application degrades and names a remedy.
 - **The drift tests as they stand** compare columns and indexes table by table over a hand-kept list
   (`DatabaseInitializerTests.ConsumerDomainTables`, `DumpTableSchemaAsync`) and **never compare foreign
   keys**. Nothing proves today that a fresh install and an upgraded database agree on foreign keys, so a
   startup check that degrades on a difference could degrade a real installation over drift nobody has
-  measured. This decides the order of work: measure first (steps 5 and 6), enforce at startup after.
+  measured. This decides the order of work: measure first (steps 4 and 5), enforce at startup after.
 - **`CLAUDE.md`'s endpoint rules**, applied to the integrity endpoint: one job, reporting, with no side
   effect (it never marks health either way: a Reset is what changes health); the `admin` rate-limit
   policy; the *Action* naming shape, `WithName("CheckDatabaseIntegrity")` with its name held in a
@@ -100,7 +101,7 @@ Checked per `process.md` → Planning step 3, in source order.
 
 ---
 
-## Open decisions
+## Decisions
 
 **All settled.** D1, D2 and D4 are settled by the developer's direction above. D3 is settled as:
 extras are reported, not degrading. R1 to R3 were answered by the developer on 2026-11-07.
@@ -202,32 +203,30 @@ names, since the name is the engine's and not the schema's.
   the first time and needs no hand-kept table list.
 - **Upgrade from the last release**: a database built by the last released version is upgraded by this
   build and compared against this build's baseline (ADR 009). This is the measurement that must pass
-  before step 8 enables degradation at startup.
+  before step 7 enables degradation at startup.
 - **Live**: the T2 suite runs the check against a container's databases through the endpoint.
 
 ---
 
 ## Steps
 
-### 1. Record R1 to R3, and draft the issue comment and body rewrite
-
-**Status:** ✅ Done: R1 to R3 recorded; scope-change comment posted and the issue's title and body
-rewritten (2026-11-07)
-
-Answers are written into *Open decisions* in place. The scope-change comment and the rewritten body
-(title included, since "tables" no longer describes it) are written to a draft file and pasted in full
-for approval before `gh issue comment` / `gh issue edit` runs, per `CLAUDE.md`'s draft-then-review rule.
-
-### 2. Amend `CLAUDE.md`'s structural-metadata sentence
+### 1. Amend ADR 003, and point `CLAUDE.md`'s structural-metadata sentence at it
 
 **Status:** ⬜ Not started
 
-A `docs [#305]` commit of its own. The amended rule: metadata is not a crutch, so it is never read to
-infer what a failure meant or to recover from one; verifying a schema's integrity is a valid use. The
-same paragraph in `docs/database-conventions.md`'s *Migrations* section, if it restates the rule, is
-amended in the same commit.
+A `docs [#305]` commit of its own, drafted and approved before it is made.
 
-### 3. Create the signatures only
+- **ADR 003** gains a design goal (developer-approved, 2026-11-07): engine-specific features are kept to
+  a minimum and confined to the implementations behind the interfaces, so changing engines stays cheap.
+  Metadata reads are highly engine-specific, so they are used only where nothing engine-neutral can
+  answer the question, such as verifying a schema's integrity, and only inside `Quotinator.Data`'s
+  implementations. Stated as what is done and why, with no added explanation or history.
+- **`CLAUDE.md`'s** sentence reserving structural metadata checks for the empty-database check becomes
+  a pointer to that design goal, carrying no reasoning of its own.
+- The same paragraph in `docs/database-conventions.md`'s *Migrations* section, if it restates the rule,
+  is changed the same way.
+
+### 2. Create the signatures only
 
 **Status:** ⬜ Not started
 
@@ -237,7 +236,7 @@ snapshot, the initializers' result properties, `SchemaIntegrityGuidance.Reason` 
 string, the endpoint returning an empty `DatabaseIntegrityResponse`, and the DbInspector command
 returning success. No behaviour, so every test fails on its assertion.
 
-### 4. Write the unit tests and confirm each is red
+### 3. Write the unit tests and confirm each is red
 
 **Status:** ⬜ Not started
 
@@ -246,7 +245,7 @@ aspect's missing, different and extra case, several differences at once, case-in
 empty snapshot on both sides. Reader and startup tests use a real temp-file database per test, with the
 sabotage applied by the test, never by editing shipped data.
 
-### 5. Implement the model, the comparer and the reader; run the drift tests and record what they find
+### 4. Implement the model, the comparer and the reader; run the drift tests and record what they find
 
 **Status:** ⬜ Not started
 
@@ -254,18 +253,18 @@ Implemented in that order. Then the baseline-versus-replay tests (rows 10 to 12)
 across every aspect. **Any difference they find is a finding, recorded here before anything is
 changed.** A baseline that disagrees with replay is corrected in the baseline, in the same commit, as
 `CLAUDE.md`'s migration policy requires. A difference that means installed databases already hold the
-wrong shape cannot be fixed by a baseline edit and needs a new migration; that is raised to the
-developer, not decided here.
+wrong shape cannot be fixed by a baseline edit and needs a new migration. That is an unforeseen
+circumstance, not an open question: work stops at this step and the finding goes to the developer.
 
-### 6. Run the check against a database upgraded from the last release
+### 5. Run the check against a database upgraded from the last release
 
 **Status:** ⬜ Not started
 
 Row 13. A database created by the last released image (the T2 *Upgraded* profile's own fixture) is
-upgraded by this build and compared with this build's baseline. Findings are handled as in step 5.
-Step 8 does not start until this row is green.
+upgraded by this build and compared with this build's baseline. Findings are handled as in step 4.
+Step 7 does not start until this row is green.
 
-### 7. Write the T2 documents and confirm them red against a pre-issue build
+### 6. Write the T2 documents and confirm them red against a pre-issue build
 
 **Status:** ⬜ Not started
 
@@ -285,7 +284,7 @@ Canary: both run against a build of the commit before this issue's first code ch
 worktree and image tag; document 14 must read `healthy` there. Worktree, image and container are removed
 afterwards. Every step is a single command.
 
-### 8. Wire the main database's startup and Reset
+### 7. Wire the main database's startup and Reset
 
 **Status:** ⬜ Not started
 
@@ -295,7 +294,7 @@ not intact, log extras and differences through source-generated `LoggerMessage`s
 DI, since nothing could supply it, and carries the comment `CLAUDE.md`'s DI policy requires. Reset per
 R3. `HasPendingContentSeedAsync` is not changed.
 
-### 9. Degrade startup in `Program.cs`, with no notification
+### 8. Degrade startup in `Program.cs`, with no notification
 
 **Status:** ⬜ Not started
 
@@ -305,14 +304,14 @@ metadata names. **No notification is written**: writing a row into a database kn
 schema is the unprotected write #348 refuses, and the missing object can be `System_Notification`
 itself. The generic catch's wording is #457's.
 
-### 10. Wire the changelog database
+### 9. Wire the changelog database
 
 **Status:** ⬜ Not started
 
 `ChangelogDatabaseInitializer` runs the same check after its migrations. A not-intact result is logged
 at `Error` and the reader falls back to the authored JSON (R2).
 
-### 11. Add the integrity endpoint and the DbInspector command
+### 10. Add the integrity endpoint and the DbInspector command
 
 **Status:** ⬜ Not started
 
@@ -322,7 +321,7 @@ policy, a `private const string` name shared with its log tag. The `integrity` c
 `tools/Quotinator.Tools.DbInspector`, reusing `Quotinator.Data`'s comparer and reader. Neither holds
 comparison logic of its own.
 
-### 12. Prove each test is wired to the behaviour
+### 11. Prove each test is wired to the behaviour
 
 **Status:** ⬜ Not started
 
@@ -333,25 +332,27 @@ changelog initializer (the guard test must fail); clear health on Reset without 
 have the endpoint return the startup result instead of a fresh check; make the DbInspector command exit
 zero when not intact.
 
-### 13. Update the documents this changes
+### 12. Update the documents this changes
 
 **Status:** ⬜ Not started
 
 - `docs/automated-testing/README.md`: the smoke-set table and both category tables.
 - `startup-and-degradation/01` drops `Quotinator_Quote`, which now degrades through this check instead of
   the generic catch; any reason it records is updated, and it is re-run.
-- `docs/workflow/checklist.md` → *Milestone close* and ADR 009's procedure: the integrity check named as
-  the instrument of the last-release verification. Changing ADR 009's text is the developer's call and
-  is proposed, not made.
+- ADR 009 amended (developer-approved, 2026-11-07): its procedure names the integrity check as the
+  instrument of the last-release verification, step 3's "confirm the result matches" becoming "the
+  integrity check reports the upgraded database intact". The amendment states what is done and why,
+  with no added explanation or history. `docs/workflow/checklist.md` → *Milestone close* names the
+  same instrument.
 - `docs/vocabulary.md`: *integrity check*, *schema snapshot*.
 - `tools/Quotinator.Tools.DbInspector/README.md`: the `integrity` command.
 - A Knowledgebase entry for the new degraded reason, pointing at the endpoint to see every difference;
   no `QTN-` code, since #333 owns allocation.
 
-`docs/api-endpoints.md` goes with the endpoint's code commit (step 11), as `CLAUDE.md` requires; the rest
+`docs/api-endpoints.md` goes with the endpoint's code commit (step 10), as `CLAUDE.md` requires; the rest
 each in a `docs [#305]` commit separate from the code.
 
-### 14. Run the full gates
+### 13. Run the full gates
 
 **Status:** ⬜ Not started
 
@@ -361,7 +362,7 @@ and `database-lifecycle/04`, and `startup-and-degradation/01`, `06` and `12`, th
 check is skipped on their paths, and `notifications-and-changelog/07` for the changelog database);
 then T1, the developer starting the app in Visual Studio.
 
-### 15. Waiting-for-release housekeeping
+### 14. Waiting-for-release housekeeping
 
 **Status:** ⬜ Not started
 
@@ -376,7 +377,7 @@ ticked except the closing-comment box, and the status moved to `Waiting for rele
 
 ## Verification
 
-All rows start ❌. Rows 1 to 19, 22 and 23 are written red in step 4; rows 20 and 21 in step 7.
+All rows start ❌. Rows 1 to 19, 22 and 23 are written red in step 3; rows 20 and 21 in step 6.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
@@ -403,5 +404,5 @@ All rows start ❌. Rows 1 to 19, 22 and 23 are written red in step 4; rows 20 a
 | 21 | ❌ | Live: a Fresh and an Upgraded container report every database intact through the endpoint, and an added column is reported as extra without degrading | Live (Docker) | `automated-testing/database-lifecycle/04-a-database-is-complete-for-its-schema-version.md` |
 | 22 | ❌ | The endpoint runs a fresh check on every database, reports intact and not-intact results with every difference, answers while degraded, writes nothing and leaves health unchanged, requires the admin key, and is described in the spec | Integration test | `AdminDatabaseIntegrityEndpointTests.IntactDatabases_ReportIntact`, `AdminDatabaseIntegrityEndpointTests.MissingTable_ReportsTheDifference`, `AdminDatabaseIntegrityEndpointTests.ExtraColumn_ReportedButIntact`, `AdminDatabaseIntegrityEndpointTests.Degraded_EndpointStillAnswers`, `AdminDatabaseIntegrityEndpointTests.Check_DoesNotChangeHealth`, `AdminDatabaseIntegrityEndpointTests.WithoutAdminKey_IsRejected`, `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` |
 | 23 | ❌ | The DbInspector command reports a file's differences and exits non-zero when it is not intact | Unit test | `IntegrityCommandTests.IntactFile_ExitsZero`, `IntegrityCommandTests.MissingTable_ReportsItAndExitsNonZero`, `IntegrityCommandTests.ChangelogFile_ComparedAgainstTheChangelogSchema` |
-| 24 | ❌ | No regression | Build | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all green; T2 end-of-issue scope per step 14 green |
+| 24 | ❌ | No regression | Build | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all green; T2 end-of-issue scope per step 13 green |
 | 25 | ❌ | The application still starts | Manual | T1: the developer starts `Quotinator.Api` in Visual Studio and confirms it starts without error |
