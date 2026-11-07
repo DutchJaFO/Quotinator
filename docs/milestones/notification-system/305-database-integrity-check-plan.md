@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 5: produce the last-release fixture and check an upgraded copy of it.** Every decision is settled (see
+**Execute from step 5: add the integrity endpoint and the DbInspector command.** Every decision is settled (see
 *Decisions*, including D5, found in step 3), the ADR 003 and ADR 009 amendments were approved on
 2026-11-07, and the issue's title and body reflect the widened scope.
 
@@ -73,7 +73,7 @@ Checked per `process.md` → Planning step 3, in source order.
 | 022 | Yes | A difference is detectable by a check, so it is **returned as an outcome, never thrown**. Existing catches stay as the backstop for what the check cannot foresee |
 | 024 | Yes | Object and column names are identifiers, so they compare case-insensitively. A declared column type, default expression or index filter is compared as written, since it is content rather than identity |
 | 025 | Yes | The check writes nothing, at startup or through the endpoint, so there is no backup to place |
-| 026 | Yes, by exclusion | No notification is raised for a failed check: see step 8 |
+| 026 | Yes, by exclusion | No notification is raised for a failed check: see step 9 |
 
 ### Other authoritative sources
 
@@ -88,7 +88,7 @@ Checked per `process.md` → Planning step 3, in source order.
   (`DatabaseInitializerTests.ConsumerDomainTables`, `DumpTableSchemaAsync`) and **never compare foreign
   keys**. Nothing proves today that a fresh install and an upgraded database agree on foreign keys, so a
   startup check that degrades on a difference could degrade a real installation over drift nobody has
-  measured. This decides the order of work: measure first (steps 4 and 5), enforce at startup after.
+  measured. This decides the order of work: measure first (steps 4 and 6), enforce at startup after.
 - **`CLAUDE.md`'s endpoint rules**, applied to the integrity endpoint: one job, reporting, with no side
   effect (it never marks health either way: a Reset is what changes health); the `admin` rate-limit
   policy; the *Action* naming shape, `WithName("CheckDatabaseIntegrity")` with its name held in a
@@ -105,7 +105,7 @@ Checked per `process.md` → Planning step 3, in source order.
 
 **All settled.** D1, D2 and D4 are settled by the developer's direction above. D3 is settled as:
 extras are reported, not degrading. R1 to R3 were answered by the developer on 2026-11-07, and D5, an
-unforeseen circumstance found in step 3, the same day.
+unforeseen circumstance found in step 3, the same day, by following the T2 suite's own method.
 
 **R1. How is the check run on request, by the testing procedure and by an operator?** **Both
 instruments.** A read-only admin endpoint, `GET /api/v1/admin/database/integrity`, runs the check on
@@ -120,13 +120,13 @@ JSON, and main-database health is unaffected. Its content is regenerated from it
 so nothing is served from a wrong schema.
 
 **D5. Where does row 13's last-release database come from?** (Found in step 3; decided 2026-11-07.)
-**A committed fixture, and the live run as well.** A v1.8.3 database is produced once from the published
-image and committed under the Core tests, so the upgrade from the last release is checked on every
-`dotnet test`, including each attempt at the migration condensing planned for this milestone's close.
-The expected schema is never stored, always derived from this build's baseline, so condensing needs no
-fixture change; the fixture is the starting point, which a shipped release cannot change. It is
-regenerated at each release. T2 document 04's Upgraded scenario stays as the live variant against the real
-image.
+**Rebuilt from the published image, the way the T2 suite does it; nothing is stored.** The published
+`v1.8.3` image creates the database on a fresh volume and this build upgrades it, and the endpoint checks
+the result (step 6, and T2 document 04's Upgraded scenario). This follows the 2026-08-25 decision in
+`docs/automated-testing/README.md` → *Users skip versions*. A committed fixture was chosen first and
+withdrawn once that record surfaced. The expected schema is always derived from this build's baseline, so
+the migration condensing planned for this milestone's close needs no change here; the check is repeated
+after it (step 12).
 
 **R3. Does a Reset re-run the check before clearing health?** **Yes.** Developer's reasoning: the check
 is what runs before starting, so it should be what shows that a reset database is in a good state. A
@@ -214,7 +214,8 @@ names, since the name is the engine's and not the schema's.
   the first time and needs no hand-kept table list.
 - **Upgrade from the last release**: a database built by the last released version is upgraded by this
   build and compared against this build's baseline (ADR 009). This is the measurement that must pass
-  before step 7 enables degradation at startup.
+  before step 8 enables degradation at startup. It is rebuilt from the published image, as the T2 suite
+  does (D5).
 - **Live**: the T2 suite runs the check against a container's databases through the endpoint.
 
 ---
@@ -251,7 +252,7 @@ requires.
 
 ### 3. Write the unit tests and confirm each is red
 
-**Status:** ✅ Done; row 13's test moved to step 5 (D5)
+**Status:** ✅ Done; row 13 is checked live in step 6 (D5)
 
 Rows 1 to 19, 22 and 23 of the Verification table. Comparer tests supply both snapshots, covering each
 aspect's missing, different and extra case, several differences at once, case-insensitive names, and the
@@ -270,17 +271,17 @@ Findings, 2026-11-07:
   sensitivity is proven by step 11's mutation (removing the interface from the changelog initializer).
 - **Dropping `System_Notification` from a database a first run populated is refused by its foreign keys**
   (translation rows reference it). The Api tests turn foreign keys off for the sabotage connection only;
-  step 6's T2 sabotage needs the same.
+  step 7's T2 sabotage needs the same.
 - **The changelog test is named for what the initializer can show.** The JSON fallback happens in
   `Program.cs`, which marks the changelog import as failed. Row 17's test proves the initializer reports
-  the table missing and still completes; step 9 wires the fallback, and step 13's run of
+  the table missing and still completes; step 10 wires the fallback, and step 13's run of
   `notifications-and-changelog/07` checks it live.
 - **Row 18's positive control already exists** as `Startup_RestartOverAnIntactDatabase_ReportsHealthy`, so
   the row names it instead of adding a duplicate.
 - **The initializer construction the new class needed was moved, not copied**: `QuotinatorTestInitializer`
   now holds what `DatabaseInitializerTests.CreateForcedIncrementalInitializer` built, and both use it.
-- **Row 13 had no database to run against**: settled by D5, and its test is written red in step 5 once the
-  fixture exists.
+- **Row 13 had no database to run against**: a unit test cannot open a database the T2 suite never stores.
+  Settled by D5: row 13 is checked live in step 6, by the T2 method.
 
 ### 4. Implement the model, the comparer and the reader; run the drift tests and record what they find
 
@@ -304,64 +305,69 @@ Findings, 2026-11-07:
 - **The index-definition lookup compares its name through `TextClauses.Equals`**, per `CLAUDE.md`'s rule
   for name comparisons; `SqlTextCaseGuard` flagged the bare `name = @index` on the first run.
 
-### 5. Run the check against a database upgraded from the last release
+### 5. Add the integrity endpoint and the DbInspector command
+
+**Status:** 🔄 In progress
+
+The check on request, before anything enforces it: `BuildExpectedSchemaAsync` and `CheckIntegrityAsync`
+for both initializers, the endpoint's behaviour behind the stub step 2 registered, and the `integrity`
+command in `tools/Quotinator.Tools.DbInspector`. The endpoint follows *On request* and the endpoint rules
+under *Other authoritative sources*; its description and `docs/api-endpoints.md` row are corrected in the
+same commit if the behaviour changed what they say. Neither the endpoint nor the command holds comparison
+logic of its own. Rows 22 and 23. It comes before step 6 because step 6 checks through the endpoint (D5).
+
+### 6. Check a database upgraded from the last release, live
 
 **Status:** ⬜ Not started
 
-Row 13, the fixture variant of the last-release check (decision D5). Findings are handled as in step 4.
-Step 7 does not start until this row is green.
+Row 13, by the T2 suite's own method (D5): the database is rebuilt from the published image, never
+stored. The published `v1.8.3` image runs against a fresh volume until its first boot has finished,
+judged by its `/health` reading healthy rather than by a wait; it is stopped, and this build's image runs
+against the same volume. Startup enforcement is not on yet (step 8), so this build starts whatever it
+finds, and `GET /api/v1/admin/database/integrity` must report every database intact. Findings are handled
+as in step 4. Containers, volume and image tag are removed afterwards; every step is a single command,
+recorded here when run. Step 8 does not start until this row is green.
 
-1. **Produce the fixture once**, from the published `v1.8.3` image: start it against an empty volume with
-   an admin key, call its own `POST /api/v1/admin/database/reset` so the file holds the v1.8.3 schema and
-   no bundled content, stop it, and copy `quotinatordata.db` out of the volume. Container and volume are
-   removed afterwards. Every step is a single command, recorded here when run.
-2. **Commit it** as `tests/Quotinator.Core.Tests/Fixtures/LastRelease/quotinatordata.db`, copied to the
-   test output, with a `README.md` beside it naming the release it came from and how it was produced.
-3. **`DatabaseIntegrityCheckTests.LastReleaseDatabase_Upgraded_IsIntact`** copies the fixture to a temp
-   directory, runs this build's real initializer over the copy, and requires the result to be intact. It
-   is written red first, then runs on every `dotnet test`, so the milestone's migration condensing is
-   checked on each attempt rather than at release.
+The same check is repeated at the milestone's close, after the migrations are condensed, as ADR 009's
+last-release verification (step 12).
 
-The **live variant** stays as well (developer direction, 2026-11-07: test both variants): document
-`database-lifecycle/04`'s Upgraded scenario upgrades the real `v1.8.3` image's volume with this build and
-checks it through the endpoint (step 6, row 21). The fixture gives a fast, deterministic check; the live
-run confirms it against the real released image.
+*Found in step 3, 2026-11-07:* row 13 was written as a unit test, but the T2 *Upgraded* profile stores no
+database, so a unit test had nothing to open. A committed fixture was chosen first and then withdrawn,
+since `docs/automated-testing/README.md` → *Users skip versions* records the 2026-08-25 decision that such
+databases are rebuilt from published image tags, not stored. D5 records the outcome.
 
-*Found in step 3, 2026-11-07:* the T2 *Upgraded* profile stores no database, it runs a prior image and then
-this build against one volume, so a unit test had nothing to open. ADR 009 left "a checked-in
-released-schema snapshot or a reconstructable script" undecided; D5 settles it.
-
-### 6. Write the T2 documents and confirm them red against a pre-issue build
+### 7. Write the T2 documents and confirm them red against a pre-issue build
 
 **Status:** ⬜ Not started
 
 - `startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md`, in the
   smoke set like every degraded-start document. Fresh profile. It removes `System_Notification` (the
   table from the live incident) and, in a second scenario, a column, through
-  `scripts/testing/execute-sql.csx`. It asserts the degraded contract (process up, `/health` unhealthy
-  with a reason naming the object, `/openapi/v1.json` answering, quote endpoints `503`, `/notifications`
-  rendering the degraded page) and ends by running the remedy it names, a Reset, then reading healthy.
+  `scripts/testing/execute-sql.csx`, with foreign keys off for that connection only (step 3's finding).
+  It asserts the degraded contract (process up, `/health` unhealthy with a reason naming the object,
+  `/openapi/v1.json` answering, quote endpoints `503`, `/notifications` rendering the degraded page) and
+  ends by running the remedy it names, a Reset, then reading healthy.
 - `database-lifecycle/04-a-database-is-complete-for-its-schema-version.md`: the integrity endpoint
-  against a Fresh container and an Upgraded one, each reporting every database intact with no extras.
-  Then a column is added to the running Fresh database through `execute-sql.csx`, and the endpoint
-  reports it as extra while `/health` stays healthy (the positive control that the instrument can find
-  one, and that an extra does not degrade).
+  against a Fresh container and an Upgraded one (the published `v1.8.3` tag, as in step 6), each
+  reporting every database intact with no extras. Then a column is added to the running Fresh database
+  through `execute-sql.csx`, and the endpoint reports it as extra while `/health` stays healthy (the
+  positive control that the instrument can find one, and that an extra does not degrade).
 
 Canary: both run against a build of the commit before this issue's first code change, in their own
 worktree and image tag; document 14 must read `healthy` there. Worktree, image and container are removed
 afterwards. Every step is a single command.
 
-### 7. Wire the main database's startup and Reset
+### 8. Wire the main database's startup and Reset
 
 **Status:** ⬜ Not started
 
-In `DatabaseInitializer`: run after migrations, skip on refusal and overshoot, stop the content load when
-not intact, log extras and differences through source-generated `LoggerMessage`s with the
-`[Database - Init]` prefix. The scratch reference database is constructed directly rather than through
-DI, since nothing could supply it, and carries the comment `CLAUDE.md`'s DI policy requires. Reset per
-R3. `HasPendingContentSeedAsync` is not changed.
+In `DatabaseInitializer`: run the check step 5 built after migrations, skip on refusal and overshoot,
+stop the content load when not intact, log extras and differences through source-generated
+`LoggerMessage`s with the `[Database - Init]` prefix. The scratch reference database is constructed
+directly rather than through DI, since nothing could supply it, and carries the comment `CLAUDE.md`'s DI
+policy requires. Reset per R3. `HasPendingContentSeedAsync` is not changed.
 
-### 8. Degrade startup in `Program.cs`, with no notification
+### 9. Degrade startup in `Program.cs`, with no notification
 
 **Status:** ⬜ Not started
 
@@ -371,22 +377,12 @@ metadata names. **No notification is written**: writing a row into a database kn
 schema is the unprotected write #348 refuses, and the missing object can be `System_Notification`
 itself. The generic catch's wording is #457's.
 
-### 9. Wire the changelog database
+### 10. Wire the changelog database
 
 **Status:** ⬜ Not started
 
 `ChangelogDatabaseInitializer` runs the same check after its migrations. A not-intact result is logged
 at `Error` and the reader falls back to the authored JSON (R2).
-
-### 10. Add the integrity endpoint and the DbInspector command
-
-**Status:** ⬜ Not started
-
-The endpoint's behaviour behind the stub step 2 registered, per *On request* and the endpoint rules under
-*Other authoritative sources*; its description and `docs/api-endpoints.md` row are corrected in the same
-commit if the behaviour changed what they say. The `integrity` command in
-`tools/Quotinator.Tools.DbInspector`, reusing `Quotinator.Data`'s comparer and reader. Neither holds
-comparison logic of its own.
 
 ### 11. Prove each test is wired to the behaviour
 
@@ -409,16 +405,15 @@ zero when not intact.
 - ADR 009 amended (developer-approved, 2026-11-07): its procedure names the integrity check as the
   instrument of the last-release verification, step 3's "confirm the result matches" becoming "the
   integrity check reports the upgraded database intact". The amendment states what is done and why,
-  with no added explanation or history. Per D5 it also states that the last release's database is kept
-  as a committed fixture, checked on every test run, and regenerated at each release; its follow-on about
-  a snapshot is thereby settled. `docs/workflow/checklist.md` → *Milestone close* names the same
-  instrument, and its release steps gain regenerating the fixture from the newly released image.
+  with no added explanation or history. Per D5, its step 1 obtains the last release's database by running
+  the published image, as the T2 suite does. `docs/workflow/checklist.md` → *Milestone close* names the
+  same instrument, run after the migrations are condensed.
 - `docs/vocabulary.md`: *integrity check*, *schema snapshot*.
 - `tools/Quotinator.Tools.DbInspector/README.md`: the `integrity` command.
 - A Knowledgebase entry for the new degraded reason, pointing at the endpoint to see every difference;
   no `QTN-` code, since #333 owns allocation.
 
-`docs/api-endpoints.md` goes with the endpoint's code commits (steps 2 and 10), as `CLAUDE.md` requires;
+`docs/api-endpoints.md` goes with the endpoint's code commits (steps 2 and 5), as `CLAUDE.md` requires;
 the rest each in a `docs [#305]` commit separate from the code.
 
 ### 13. Run the full gates
@@ -446,24 +441,25 @@ ticked except the closing-comment box, and the status moved to `Waiting for rele
 
 ## Verification
 
-All rows start ❌. Rows 1 to 19, 22 and 23 are written red in step 3; rows 20 and 21 in step 6.
+All rows started ❌. Rows 1 to 12, 14 to 19, 22 and 23 were written red in step 3; row 13 is checked live
+in step 6; rows 20 and 21 are written red in step 7.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | Identical snapshots are intact, including two empty ones | Unit test | `SchemaIntegrityComparerTests.IdenticalSnapshots_AreIntact`, `SchemaIntegrityComparerTests.TwoEmptySnapshots_AreIntact` |
-| 2 | ❌ | A missing table is detected and named | Unit test | `SchemaIntegrityComparerTests.MissingTable_IsADifference` |
-| 3 | ❌ | A missing column, and each differing column property, is detected | Unit test | `SchemaIntegrityComparerTests.MissingColumn_IsADifference`, `SchemaIntegrityComparerTests.ColumnPropertyDiffers_IsADifference` (one row per property) |
-| 4 | ❌ | A missing or differing foreign key is detected | Unit test | `SchemaIntegrityComparerTests.MissingForeignKey_IsADifference`, `SchemaIntegrityComparerTests.ForeignKeyActionDiffers_IsADifference` |
-| 5 | ❌ | A missing or differing index is detected, an engine-named index by its columns | Unit test | `SchemaIntegrityComparerTests.MissingIndex_IsADifference`, `SchemaIntegrityComparerTests.IndexUniquenessDiffers_IsADifference`, `SchemaIntegrityComparerTests.AutomaticIndexNameDiffers_IsNotADifference` |
-| 6 | ❌ | A missing view or trigger is detected | Unit test | `SchemaIntegrityComparerTests.MissingViewOrTrigger_IsADifference` |
-| 7 | ❌ | Extra tables, columns, foreign keys and indexes are reported and leave the result intact | Unit test | `SchemaIntegrityComparerTests.ExtraObjects_AreReportedButIntact` |
-| 8 | ❌ | Every difference is reported, sorted, not only the first | Unit test | `SchemaIntegrityComparerTests.SeveralDifferences_AreAllReportedInOrder` |
-| 9 | ❌ | Names compare case-insensitively; declared values compare as written | Unit test | `SchemaIntegrityComparerTests.NameCasingDiffers_IsNotADifference`, `SchemaIntegrityComparerTests.DeclaredTypeCasingDiffers_IsADifference` |
-| 10 | ❌ | Main database: baseline and full replay are identical in every measured aspect | Integration test | `DatabaseIntegrityCheckTests.MainDatabase_BaselineAndReplay_AreIdentical` |
-| 11 | ❌ | Data-owned schema alone: baseline and replay are identical | Integration test | `DatabaseIntegrityCheckTests.DataOwnedSchema_BaselineAndReplay_AreIdentical` |
-| 12 | ❌ | Changelog database: baseline and replay are identical | Integration test | `ChangelogDatabaseInitializerTests.Integrity_BaselineAndReplay_AreIdentical` |
-| 13 | ❌ | A database from the last release, upgraded by this build, is intact: the committed fixture on every test run, and the real released image live (row 21) | Integration test | `DatabaseIntegrityCheckTests.LastReleaseDatabase_Upgraded_IsIntact`, against `tests/Quotinator.Core.Tests/Fixtures/LastRelease/quotinatordata.db` |
-| 14 | ❌ | The reader captures each aspect from a real database | Integration test | `SqliteSchemaSnapshotReaderTests.ReadsTablesColumnsForeignKeysIndexesViewsAndTriggers` |
+| 1 | ✅ | Identical snapshots are intact, including two empty ones | Unit test | `SchemaIntegrityComparerTests.IdenticalSnapshots_AreIntact`, `SchemaIntegrityComparerTests.TwoEmptySnapshots_AreIntact` |
+| 2 | ✅ | A missing table is detected and named | Unit test | `SchemaIntegrityComparerTests.MissingTable_IsADifference` |
+| 3 | ✅ | A missing column, and each differing column property, is detected | Unit test | `SchemaIntegrityComparerTests.MissingColumn_IsADifference`, `SchemaIntegrityComparerTests.ColumnPropertyDiffers_IsADifference` (one row per property) |
+| 4 | ✅ | A missing or differing foreign key is detected | Unit test | `SchemaIntegrityComparerTests.MissingForeignKey_IsADifference`, `SchemaIntegrityComparerTests.ForeignKeyActionDiffers_IsADifference` |
+| 5 | ✅ | A missing or differing index is detected, an engine-named index by its columns | Unit test | `SchemaIntegrityComparerTests.MissingIndex_IsADifference`, `SchemaIntegrityComparerTests.IndexUniquenessDiffers_IsADifference`, `SchemaIntegrityComparerTests.AutomaticIndexNameDiffers_IsNotADifference` |
+| 6 | ✅ | A missing view or trigger is detected | Unit test | `SchemaIntegrityComparerTests.MissingViewOrTrigger_IsADifference` |
+| 7 | ✅ | Extra tables, columns, foreign keys and indexes are reported and leave the result intact | Unit test | `SchemaIntegrityComparerTests.ExtraObjects_AreReportedButIntact` |
+| 8 | ✅ | Every difference is reported, sorted, not only the first | Unit test | `SchemaIntegrityComparerTests.SeveralDifferences_AreAllReportedInOrder` |
+| 9 | ✅ | Names compare case-insensitively; declared values compare as written | Unit test | `SchemaIntegrityComparerTests.NameCasingDiffers_IsNotADifference`, `SchemaIntegrityComparerTests.DeclaredTypeCasingDiffers_IsADifference` |
+| 10 | ✅ | Main database: baseline and full replay are identical in every measured aspect | Integration test | `DatabaseIntegrityCheckTests.MainDatabase_BaselineAndReplay_AreIdentical` |
+| 11 | ✅ | Data-owned schema alone: baseline and replay are identical | Integration test | `DatabaseIntegrityCheckTests.DataOwnedSchema_BaselineAndReplay_AreIdentical` |
+| 12 | ✅ | Changelog database: baseline and replay are identical | Integration test | `ChangelogDatabaseInitializerTests.Integrity_BaselineAndReplay_AreIdentical` |
+| 13 | ❌ | A database the published `v1.8.3` image created, upgraded by this build, is intact | Live (Docker) | Step 6's commands: `v1.8.3` on a fresh volume until healthy, then this build on the same volume; `GET /api/v1/admin/database/integrity` reports every database `isIntact: true` |
+| 14 | ✅ | The reader captures each aspect from a real database | Integration test | `SqliteSchemaSnapshotReaderTests.ReadsTablesColumnsForeignKeysIndexesViewsAndTriggers` |
 | 15 | ❌ | Main startup: a difference stops the content load, takes no backup and writes nothing; a complete database loads normally | Integration test | `DatabaseIntegrityCheckTests.MissingExpectedTable_DetectedAsSchemaInconsistency_TreatedAsHardFailure`, `DatabaseIntegrityCheckTests.Difference_ContentLoadDoesNotRunAndNothingIsWritten`, `DatabaseIntegrityCheckTests.AllExpectedTablesPresent_PassesCleanly` |
 | 16 | ❌ | The check does not run on a refused migration or an overshoot | Integration test | `DatabaseIntegrityCheckTests.MigrationRefused_IntegrityNotChecked`, `DatabaseIntegrityCheckTests.SchemaVersionOvershoot_IntegrityNotChecked` |
 | 17 | ❌ | Every database declaring migrations performs the check; a changelog database that is not intact is reported without failing its initialisation, so the changelog falls back to the JSON files without affecting main health; a Reset re-runs the check before clearing health | Unit test / Integration test | `RepositoryStructureTests.EveryDatabaseWithMigrations_PerformsTheIntegrityCheck`, `ChangelogDatabaseInitializerTests.Integrity_MissingTable_ReportedWithoutFailingInitialisation`, `DatabaseIntegrityCheckTests.Reset_RerunsTheCheckBeforeClearingHealth` |
