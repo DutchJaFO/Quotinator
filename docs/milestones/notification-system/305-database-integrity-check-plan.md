@@ -1,6 +1,6 @@
 # #305: Database integrity check: verify every database's full schema against its migration path at startup
 
-**Status:** In progress (step 5)
+**Status:** In progress (step 6)
 **GitHub issue:** #305
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 5: add the integrity endpoint and the DbInspector command.** Every decision is settled (see
+**Execute from step 6: check a database upgraded from the published `v1.8.3` image, live.** Every decision is settled (see
 *Decisions*, including D5, found in step 3), the ADR 003 and ADR 009 amendments were approved on
 2026-11-07, and the issue's title and body reflect the widened scope.
 
@@ -307,7 +307,7 @@ Findings, 2026-11-07:
 
 ### 5. Add the integrity endpoint and the DbInspector command
 
-**Status:** 🔄 In progress
+**Status:** ✅ Done
 
 The check on request, before anything enforces it: `BuildExpectedSchemaAsync` and `CheckIntegrityAsync`
 for both initializers, the endpoint's behaviour behind the stub step 2 registered, and the `integrity`
@@ -315,6 +315,26 @@ command in `tools/Quotinator.Tools.DbInspector`. The endpoint follows *On reques
 under *Other authoritative sources*; its description and `docs/api-endpoints.md` row are corrected in the
 same commit if the behaviour changed what they say. Neither the endpoint nor the command holds comparison
 logic of its own. Rows 22 and 23. It comes before step 6 because step 6 checks through the endpoint (D5).
+
+Findings, 2026-11-07:
+
+- **Row 23 is green** (`IntegrityCommandTests`, all three), and so are four of row 22's six tests.
+  `Degraded_EndpointStillAnswers` and `Check_DoesNotChangeHealth` stay red because their precondition is a
+  degraded application, which step 9 brings; they go green there.
+- **The expected schema runs exactly what a fresh database runs**: the two version tables, then the
+  baselines, or a replay of both migration lists when the consumer has no baseline. It is built in an
+  in-memory scratch database, constructed directly, with the comment `CLAUDE.md`'s DI policy requires, as
+  is the one stateless reader both builders share.
+- **The command recognises a file by its version table**: `System_ConsumerSchemaVersion` means main,
+  `Changelog_SchemaVersion` means changelog, and a file with neither exits `2` saying it is not a
+  Quotinator database. `Program.cs` and `ArgsParser.cs` joined the scoped `IDE0008`/`IDE0090` lists when
+  first touched.
+- **Step 4's commit left one existing guard red, found by this step's full run.**
+  `SqlBoundaryTests.Sql_ContainsOnlyGenericInfrastructureQueries` keeps a documented list of the query
+  sets allowed in `Quotinator.Data`, and step 4 added `SchemaMetadata` without adding it there; step 4 had
+  run only the tests it touched, not the full suite. The list now includes it, with the reason. Every step
+  from here runs the full suite before its commit.
+- **Full run: every remaining failure is a test that steps 8 to 10 turn green**, and nothing else fails.
 
 ### 6. Check a database upgraded from the last release, live
 
@@ -468,6 +488,6 @@ in step 6; rows 20 and 21 are written red in step 7.
 | 20 | ❌ | Live: a removed table, and a removed column, each degrade the container with a named reason, and a Reset recovers it; a pre-issue build does not degrade | Live (Docker) | `automated-testing/startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md`, green on this build, red as its canary |
 | 21 | ❌ | Live: a Fresh and an Upgraded container report every database intact through the endpoint, and an added column is reported as extra without degrading | Live (Docker) | `automated-testing/database-lifecycle/04-a-database-is-complete-for-its-schema-version.md` |
 | 22 | ❌ | The endpoint runs a fresh check on every database, reports intact and not-intact results with every difference, answers while degraded, writes nothing and leaves health unchanged, answers without a key like the other read-only admin endpoints, and is described in the spec | Integration test | `AdminDatabaseIntegrityEndpointTests.IntactDatabases_ReportIntact`, `AdminDatabaseIntegrityEndpointTests.MissingTable_ReportsTheDifference`, `AdminDatabaseIntegrityEndpointTests.ExtraColumn_ReportedButIntact`, `AdminDatabaseIntegrityEndpointTests.Degraded_EndpointStillAnswers`, `AdminDatabaseIntegrityEndpointTests.Check_DoesNotChangeHealth`, `AdminDatabaseIntegrityEndpointTests.WithoutAdminKey_IsAnswered`, `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` |
-| 23 | ❌ | The DbInspector command reports a file's differences and exits non-zero when it is not intact | Unit test | `IntegrityCommandTests.IntactFile_ExitsZero`, `IntegrityCommandTests.MissingTable_ReportsItAndExitsNonZero`, `IntegrityCommandTests.ChangelogFile_ComparedAgainstTheChangelogSchema` |
+| 23 | ✅ | The DbInspector command reports a file's differences and exits non-zero when it is not intact | Unit test | `IntegrityCommandTests.IntactFile_ExitsZero`, `IntegrityCommandTests.MissingTable_ReportsItAndExitsNonZero`, `IntegrityCommandTests.ChangelogFile_ComparedAgainstTheChangelogSchema` |
 | 24 | ❌ | No regression | Build | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all green; T2 end-of-issue scope per step 13 green |
 | 25 | ❌ | The application still starts | Manual | T1: the developer starts `Quotinator.Api` in Visual Studio and confirms it starts without error |

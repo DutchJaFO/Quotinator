@@ -23,16 +23,20 @@ public class SqlBoundaryTests
     /// SQL, with no relational or transactional coupling to any consumer-defined entity (ADR 018).
     /// <c>AppVersion</c> (#81) stays here too — tracks the last app version that completed a healthy
     /// startup, pure app-instance state with no consumer-entity coupling of any kind.
+    /// <c>SchemaMetadata</c> (#305) stays here too — the integrity check's metadata reads, which name no
+    /// table at all and serve every database alike.
     /// </summary>
     [TestMethod]
     public void Sql_ContainsOnlyGenericInfrastructureQueries()
     {
-        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches", "SystemSourceFileOverrides", "FileResources", "Notifications", "ChangelogSchema", "ChangelogContent", "AppVersion" };
+        HashSet<string> expected = ["Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches", "SystemSourceFileOverrides", "FileResources", "Notifications", "ChangelogSchema", "ChangelogContent", "AppVersion", "SchemaMetadata"];
 
-        var actual = typeof(Sql)
-            .GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Static)
-            .Select(t => t.Name)
-            .ToHashSet();
+        HashSet<string> actual =
+        [
+            .. typeof(Sql)
+                .GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Static)
+                .Select(t => t.Name),
+        ];
 
         Assert.AreSequenceEqual(
             [.. expected], [.. actual], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "Quotinator.Data.Queries.Sql contains a nested type outside the documented generic-infrastructure " +

@@ -54,14 +54,38 @@ public sealed class ChangelogDatabaseInitializer(
     public SchemaIntegrityResult? LastIntegrityResult { get; private set; }
 
     /// <inheritdoc/>
-    public Task<SchemaIntegrityResult> CheckIntegrityAsync() => throw new NotImplementedException();
+    public async Task<SchemaIntegrityResult> CheckIntegrityAsync()
+    {
+        SchemaSnapshot expected = await BuildExpectedSchemaAsync();
+
+        using SqliteConnection connection = (SqliteConnection)factory.CreateConnection();
+        await connection.OpenAsync();
+        SchemaSnapshot actual = await SnapshotReader.ReadAsync(connection);
+
+        return SchemaIntegrityComparer.Compare(expected, actual);
+    }
 
     /// <summary>
     /// Builds the schema the changelog database's migration path defines (#305), in a scratch in-memory
     /// database that is read and discarded. Static so a tool can derive the same expected schema without
     /// a configured initializer.
     /// </summary>
-    public static Task<SchemaSnapshot> BuildExpectedSchemaAsync() => throw new NotImplementedException();
+    public static async Task<SchemaSnapshot> BuildExpectedSchemaAsync()
+    {
+        // A scratch database that exists only for this comparison: nothing in the container could
+        // supply it, and it must not be the changelog's own connection, so it is created here.
+        using SqliteConnection scratch = new(DatabaseInitializer.ScratchConnectionString);
+        await scratch.OpenAsync();
+
+        await scratch.ExecuteAsync(Sql.ChangelogSchema.CreateVersionTable);
+        await scratch.ExecuteAsync(BaselineSql);
+
+        return await SnapshotReader.ReadAsync(scratch);
+    }
+
+    // Stateless, and needed by the static builder above and by a tool with no container, so it is not
+    // injected: there is exactly one implementation (ADR 003) and nothing to substitute.
+    private static readonly SqliteSchemaSnapshotReader SnapshotReader = new();
 
     /// <summary>Applies the baseline (genuinely empty database) or any pending migrations.</summary>
     public Task InitialiseAsync() => InitialiseAsync(forceIncremental: false);

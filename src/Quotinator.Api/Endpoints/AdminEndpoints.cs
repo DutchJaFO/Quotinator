@@ -18,6 +18,7 @@ using Quotinator.Data.Models;
 using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Import;
+using Quotinator.Data.Schema;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -82,8 +83,14 @@ internal static class AdminEndpoints
             "real seed run, always accurate against a database that already has the relevant rows. " +
             "Use this before calling `reseed` to understand what will be imported.");
 
-        publicGroup.MapGet("/database/integrity", () =>
-            Results.Ok(new DatabaseIntegrityResponse { Databases = [] }))
+        publicGroup.MapGet("/database/integrity", async (IDatabaseInitializer db, ChangelogDatabaseInitializer changelog) =>
+        {
+            List<DatabaseIntegrityDto> databases = [];
+            foreach (IIntegrityCheckedDatabase database in new IIntegrityCheckedDatabase[] { db, changelog })
+                databases.Add(ToDto(database.DatabaseName, await database.CheckIntegrityAsync()));
+
+            return Results.Ok(new DatabaseIntegrityResponse { Databases = databases });
+        })
         .WithName(CheckDatabaseIntegrityName)
         .WithSummary("Check every database's schema against its migration path")
         .Produces<DatabaseIntegrityResponse>(StatusCodes.Status200OK)
@@ -475,5 +482,23 @@ internal static class AdminEndpoints
         DateModified    = entity.DateModified.Parsed,
         DateDeleted     = entity.DateDeleted.Parsed,
         IsDeleted       = entity.IsDeleted,
+    };
+
+    private static DatabaseIntegrityDto ToDto(string database, SchemaIntegrityResult result) => new()
+    {
+        Database    = database,
+        IsIntact    = result.IsIntact,
+        Differences =
+        [
+            .. result.Differences.Select(d => new SchemaDifferenceDto
+            {
+                Kind       = d.Kind.ToString().ToLowerInvariant(),
+                ObjectKind = d.ObjectKind.ToString().ToLowerInvariant(),
+                ObjectName = d.ObjectName,
+                Aspect     = d.Aspect,
+                Expected   = d.Expected,
+                Actual     = d.Actual,
+            }),
+        ],
     };
 }

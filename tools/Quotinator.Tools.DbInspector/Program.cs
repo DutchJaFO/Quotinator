@@ -2,14 +2,26 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Tools.DbInspector;
 
-var parsed = ArgsParser.Parse(args);
+if (args.Length > 0 && args[0] == "integrity")
+{
+    string? integrityDb = ArgsParser.ParseDb(args);
+    if (integrityDb is null)
+    {
+        PrintUsage();
+        return 1;
+    }
+
+    return await IntegrityCommand.RunAsync(integrityDb, Console.Out);
+}
+
+QueryArgs? parsed = ArgsParser.Parse(args);
 if (parsed is null)
 {
     PrintUsage();
     return 1;
 }
 
-using var connection = new SqliteConnection(ConnectionStrings.BuildReadOnly(parsed.Value.DbPath));
+using SqliteConnection connection = new(ConnectionStrings.BuildReadOnly(parsed.Value.DbPath));
 IEnumerable<dynamic> rows;
 try
 {
@@ -30,7 +42,9 @@ static void PrintUsage()
     Console.WriteLine();
     Console.WriteLine("Usage:");
     Console.WriteLine("  dotnet run -- --db <path-to-db-file> --sql \"<query>\"");
+    Console.WriteLine("  dotnet run -- integrity --db <path-to-db-file>");
     Console.WriteLine();
-    Console.WriteLine("Example:");
+    Console.WriteLine("Examples:");
     Console.WriteLine("  dotnet run -- --db C:/path/to/quotinatordata.db --sql \"SELECT Name, Type, Url FROM ImportBatches WHERE IsDeleted = 0\"");
+    Console.WriteLine("  dotnet run -- integrity --db C:/path/to/quotinatordata.db");
 }

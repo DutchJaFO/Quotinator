@@ -598,18 +598,62 @@ public class DatabaseInitializer(
     public SchemaIntegrityResult? LastIntegrityResult { get; protected set; }
 
     /// <inheritdoc/>
-    public Task<SchemaIntegrityResult> CheckIntegrityAsync() => throw new NotImplementedException();
+    public async Task<SchemaIntegrityResult> CheckIntegrityAsync()
+    {
+        SchemaSnapshot expected = await BuildExpectedSchemaAsync(_consumerMigrations, _consumerBaseline);
+
+        using SqliteConnection connection = (SqliteConnection)_factory.CreateConnection();
+        await connection.OpenAsync();
+        SchemaSnapshot actual = await SnapshotReader.ReadAsync(connection);
+
+        return SchemaIntegrityComparer.Compare(expected, actual);
+    }
 
     /// <summary>
     /// Builds the schema the main database's migration path defines (#305): Quotinator.Data's own tables
     /// and the consumer's, at their current versions, in a scratch in-memory database that is read and
     /// discarded. Static so a tool can derive the same expected schema without a configured initializer.
     /// </summary>
+    /// <remarks>
+    /// Runs exactly what a fresh database runs: the two version tables, then the baselines when the
+    /// consumer has one, otherwise a replay of both migration lists, which is the path a fresh database
+    /// without a consumer baseline takes. In memory, so it writes no file and works on a read-only data
+    /// directory.
+    /// </remarks>
     /// <param name="consumerMigrations">The consuming project's own migrations.</param>
     /// <param name="consumerBaseline">The consuming project's baseline, or <see langword="null"/> to replay its migrations instead.</param>
-    public static Task<SchemaSnapshot> BuildExpectedSchemaAsync(
-        IReadOnlyList<SchemaMigration> consumerMigrations, SchemaBaseline? consumerBaseline) =>
-        throw new NotImplementedException();
+    public static async Task<SchemaSnapshot> BuildExpectedSchemaAsync(
+        IReadOnlyList<SchemaMigration> consumerMigrations, SchemaBaseline? consumerBaseline)
+    {
+        // A scratch database that exists only for this comparison: nothing in the container could
+        // supply it, and it must not be the application's own connection, so it is created here.
+        using SqliteConnection scratch = new(ScratchConnectionString);
+        await scratch.OpenAsync();
+        await scratch.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+
+        await scratch.ExecuteAsync(Sql.Schema.CreateDataVersionTable);
+        await scratch.ExecuteAsync(Sql.Schema.CreateConsumerVersionTable);
+
+        if (consumerBaseline is not null)
+        {
+            await scratch.ExecuteAsync(DataBaselineSql);
+            await scratch.ExecuteAsync(consumerBaseline.Sql);
+        }
+        else
+        {
+            foreach (SchemaMigration migration in DataOwnedMigrations.Concat(consumerMigrations))
+                await scratch.ExecuteAsync(migration.Sql);
+        }
+
+        return await SnapshotReader.ReadAsync(scratch);
+    }
+
+    /// <summary>An in-memory database that disappears when its one connection closes.</summary>
+    internal const string ScratchConnectionString = "Data Source=:memory:";
+
+    // Stateless, and needed by the static builder above and by a tool with no container, so it is not
+    // injected: there is exactly one implementation (ADR 003) and nothing to substitute.
+    private static readonly SqliteSchemaSnapshotReader SnapshotReader = new();
 
     /// <inheritdoc/>
     public IReadOnlyList<FileImportReport> LastSeedReport { get; protected set; } = [];

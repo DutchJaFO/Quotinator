@@ -12,12 +12,24 @@ internal static class ArgsParser
         string? dbPath = null;
         string? sql    = null;
 
-        for (var i = 0; i < args.Length - 1; i++)
+        for (int i = 0; i < args.Length - 1; i++)
         {
             if (args[i] == "--db")  dbPath = args[i + 1];
             if (args[i] == "--sql") sql    = args[i + 1];
         }
 
         return dbPath is null || sql is null ? null : new QueryArgs(dbPath, sql);
+    }
+
+    /// <summary>Returns the <c>--db</c> argument, or <c>null</c> if it is missing (#305's <c>integrity</c> command).</summary>
+    internal static string? ParseDb(string[] args)
+    {
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i] == "--db")
+                return args[i + 1];
+        }
+
+        return null;
     }
 }
