@@ -78,5 +78,27 @@ public class SqliteSchemaSnapshotReaderTests
         Assert.AreEqual(new SchemaObject("TR_Child_Touch", "Child"), snapshot.Triggers.Single());
     }
 
+    /// <summary>
+    /// How an expected schema is derived: the scripts run in a scratch database of the reader's own, which is
+    /// read and discarded. Two calls must not see each other's tables, or one database's expected schema would
+    /// leak into the next.
+    /// </summary>
+    [TestMethod]
+    public async Task ReadScriptsAsync_ReadsTheSchemaTheScriptsCreate()
+    {
+        SchemaSnapshot first = await SqliteSchemaSnapshotReader.Instance.ReadScriptsAsync(
+        [
+            "CREATE TABLE Parent (Id TEXT NOT NULL PRIMARY KEY);",
+            "CREATE TABLE Child (Id TEXT NOT NULL PRIMARY KEY, ParentId TEXT REFERENCES Parent(Id));",
+        ]);
+        SchemaSnapshot second = await SqliteSchemaSnapshotReader.Instance.ReadScriptsAsync(
+            ["CREATE TABLE Other (Id TEXT NOT NULL PRIMARY KEY);"]);
+
+        Assert.AreSequenceEqual(["Child", "Parent"], [.. first.Tables.Select(t => t.Name)], SequenceOrder.InAnyOrder);
+        Assert.AreEqual("Parent", first.Tables.Single(t => t.Name == "Child").ForeignKeys.Single().ReferencedTable);
+        Assert.AreSequenceEqual(["Other"], [.. second.Tables.Select(t => t.Name)],
+            "each call reads its own scratch database");
+    }
+
     public TestContext TestContext { get; set; }
 }

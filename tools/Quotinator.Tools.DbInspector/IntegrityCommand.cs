@@ -15,6 +15,9 @@ internal static class IntegrityCommand
     private const string MainVersionTable = "System_ConsumerSchemaVersion";
     private const string ChangelogVersionTable = "Changelog_SchemaVersion";
 
+    // A developer tool with no container, reading SQLite files only.
+    private static readonly ISchemaSnapshotReader Reader = SqliteSchemaSnapshotReader.Instance;
+
     /// <summary>Checks the database file and writes the report.</summary>
     /// <param name="dbPath">The database file to check.</param>
     /// <param name="output">Where the report is written.</param>
@@ -25,7 +28,7 @@ internal static class IntegrityCommand
         using (SqliteConnection connection = new(ConnectionStrings.BuildReadOnly(dbPath)))
         {
             await connection.OpenAsync();
-            actual = await new SqliteSchemaSnapshotReader().ReadAsync(connection);
+            actual = await Reader.ReadAsync(connection);
         }
 
         (string database, SchemaSnapshot expected)? reference = await ExpectedSchemaAsync(actual);
@@ -55,10 +58,10 @@ internal static class IntegrityCommand
         bool Has(string table) => actual.Tables.Any(t => string.Equals(t.Name, table, StringComparison.OrdinalIgnoreCase));
 
         if (Has(MainVersionTable))
-            return ("main", await DatabaseInitializer.BuildExpectedSchemaAsync(QuotinatorMigrations.All, QuotinatorMigrations.Baseline));
+            return ("main", await Reader.ReadScriptsAsync(DatabaseInitializer.ExpectedSchemaScripts(QuotinatorMigrations.All, QuotinatorMigrations.Baseline)));
 
         if (Has(ChangelogVersionTable))
-            return ("changelog", await ChangelogDatabaseInitializer.BuildExpectedSchemaAsync());
+            return ("changelog", await Reader.ReadScriptsAsync(ChangelogDatabaseInitializer.ExpectedSchemaScripts()));
 
         return null;
     }

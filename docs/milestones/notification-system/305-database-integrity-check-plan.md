@@ -171,9 +171,10 @@ names, since the name is the engine's and not the schema's.
   their own.
 - **The expected snapshot is derived from each database's own migration path**: a scratch database is
   built from that database's baseline SQL, or, when it has no baseline, by replaying its migrations, and
-  read with the same reader. Building that scratch database is engine-specific by nature, so it sits on
-  the SQLite side with the reader. It is built in memory, so the check writes no file and works on a
-  read-only data directory (#332).
+  read with the same reader. Each initializer supplies only the DDL list (`ExpectedSchemaScripts`); the
+  reader runs it in a scratch database of its own (`ReadScriptsAsync`), since building one is
+  engine-specific by nature. It is built in memory, so the check writes no file and works on a read-only
+  data directory (#332).
 - **Every database performs it**: the main database's `DatabaseInitializer` and the
   `ChangelogDatabaseInitializer` each run it after their migrations, and each exposes its last result.
   A guard test finds every type in the solution that declares a `SchemaMigration` list and fails for
@@ -309,7 +310,7 @@ Findings, 2026-11-07:
 
 **Status:** ✅ Done
 
-The check on request, before anything enforces it: `BuildExpectedSchemaAsync` and `CheckIntegrityAsync`
+The check on request, before anything enforces it: `ExpectedSchemaScripts` and `CheckIntegrityAsync`
 for both initializers, the endpoint's behaviour behind the stub step 2 registered, and the `integrity`
 command in `tools/Quotinator.Tools.DbInspector`. The endpoint follows *On request* and the endpoint rules
 under *Other authoritative sources*; its description and `docs/api-endpoints.md` row are corrected in the
@@ -335,6 +336,18 @@ Findings, 2026-11-07:
   run only the tests it touched, not the full suite. The list now includes it, with the reason. Every step
   from here runs the full suite before its commit.
 - **Full run: every remaining failure is a test that steps 8 to 10 turn green**, and nothing else fails.
+- **Developer review after the commit: the initializers' new code named the engine three times** (a cast
+  to `SqliteConnection`, a scratch `SqliteConnection`, and the concrete reader), where ADR 003's design goal
+  5 asks for the minimum. The rest of `DatabaseInitializer` already names SQLite throughout, as the SQLite
+  implementation of `IDatabaseInitializer`; the new code did not need to add to that. Corrected:
+  - The scratch database moved into the reader, as `ISchemaSnapshotReader.ReadScriptsAsync`, so the reader
+    is the only class in the check that knows the engine.
+  - Each initializer now exposes `ExpectedSchemaScripts`, the plain DDL list a fresh database runs, and
+    reads its own database through `DbConnection`.
+  - Callers hold the reader through `SqliteSchemaSnapshotReader.Instance`, typed as the interface; the
+    one engine name left in each initializer is that assignment.
+  - `SqliteSchemaSnapshotReaderTests.ReadScriptsAsync_ReadsTheSchemaTheScriptsCreate` covers the moved
+    behaviour. It was written after the move rather than red first, so step 11 adds a mutation for it.
 
 ### 6. Check a database upgraded from the last release, live
 
@@ -383,9 +396,9 @@ afterwards. Every step is a single command.
 
 In `DatabaseInitializer`: run the check step 5 built after migrations, skip on refusal and overshoot,
 stop the content load when not intact, log extras and differences through source-generated
-`LoggerMessage`s with the `[Database - Init]` prefix. The scratch reference database is constructed
-directly rather than through DI, since nothing could supply it, and carries the comment `CLAUDE.md`'s DI
-policy requires. Reset per R3. `HasPendingContentSeedAsync` is not changed.
+`LoggerMessage`s with the `[Database - Init]` prefix. The scratch reference database is the reader's,
+already in place from step 5, so nothing engine-specific is added here. Reset per R3.
+`HasPendingContentSeedAsync` is not changed.
 
 ### 9. Degrade startup in `Program.cs`, with no notification
 
@@ -413,7 +426,7 @@ foreign keys from the reader; treat an extra as a difference; run the content lo
 difference; stop skipping on overshoot; omit an object from the reason; remove the check from the
 changelog initializer (the guard test must fail); clear health on Reset without re-running the check;
 have the endpoint return the startup result instead of a fresh check; make the DbInspector command exit
-zero when not intact.
+zero when not intact; let `ReadScriptsAsync` reuse one scratch database across calls.
 
 ### 12. Update the documents this changes
 
@@ -479,7 +492,7 @@ in step 6; rows 20 and 21 are written red in step 7.
 | 11 | ✅ | Data-owned schema alone: baseline and replay are identical | Integration test | `DatabaseIntegrityCheckTests.DataOwnedSchema_BaselineAndReplay_AreIdentical` |
 | 12 | ✅ | Changelog database: baseline and replay are identical | Integration test | `ChangelogDatabaseInitializerTests.Integrity_BaselineAndReplay_AreIdentical` |
 | 13 | ❌ | A database the published `v1.8.3` image created, upgraded by this build, is intact | Live (Docker) | Step 6's commands: `v1.8.3` on a fresh volume until healthy, then this build on the same volume; `GET /api/v1/admin/database/integrity` reports every database `isIntact: true` |
-| 14 | ✅ | The reader captures each aspect from a real database | Integration test | `SqliteSchemaSnapshotReaderTests.ReadsTablesColumnsForeignKeysIndexesViewsAndTriggers` |
+| 14 | ✅ | The reader captures each aspect from a real database, and reads the schema a list of scripts creates in a scratch database of its own | Integration test | `SqliteSchemaSnapshotReaderTests.ReadsTablesColumnsForeignKeysIndexesViewsAndTriggers`, `SqliteSchemaSnapshotReaderTests.ReadScriptsAsync_ReadsTheSchemaTheScriptsCreate` |
 | 15 | ❌ | Main startup: a difference stops the content load, takes no backup and writes nothing; a complete database loads normally | Integration test | `DatabaseIntegrityCheckTests.MissingExpectedTable_DetectedAsSchemaInconsistency_TreatedAsHardFailure`, `DatabaseIntegrityCheckTests.Difference_ContentLoadDoesNotRunAndNothingIsWritten`, `DatabaseIntegrityCheckTests.AllExpectedTablesPresent_PassesCleanly` |
 | 16 | ❌ | The check does not run on a refused migration or an overshoot | Integration test | `DatabaseIntegrityCheckTests.MigrationRefused_IntegrityNotChecked`, `DatabaseIntegrityCheckTests.SchemaVersionOvershoot_IntegrityNotChecked` |
 | 17 | ❌ | Every database declaring migrations performs the check; a changelog database that is not intact is reported without failing its initialisation, so the changelog falls back to the JSON files without affecting main health; a Reset re-runs the check before clearing health | Unit test / Integration test | `RepositoryStructureTests.EveryDatabaseWithMigrations_PerformsTheIntegrityCheck`, `ChangelogDatabaseInitializerTests.Integrity_MissingTable_ReportedWithoutFailingInitialisation`, `DatabaseIntegrityCheckTests.Reset_RerunsTheCheckBeforeClearingHealth` |

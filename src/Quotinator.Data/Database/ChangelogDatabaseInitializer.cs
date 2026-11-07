@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
@@ -56,9 +57,9 @@ public sealed class ChangelogDatabaseInitializer(
     /// <inheritdoc/>
     public async Task<SchemaIntegrityResult> CheckIntegrityAsync()
     {
-        SchemaSnapshot expected = await BuildExpectedSchemaAsync();
+        SchemaSnapshot expected = await SnapshotReader.ReadScriptsAsync(ExpectedSchemaScripts());
 
-        using SqliteConnection connection = (SqliteConnection)factory.CreateConnection();
+        using DbConnection connection = (DbConnection)factory.CreateConnection();
         await connection.OpenAsync();
         SchemaSnapshot actual = await SnapshotReader.ReadAsync(connection);
 
@@ -66,26 +67,14 @@ public sealed class ChangelogDatabaseInitializer(
     }
 
     /// <summary>
-    /// Builds the schema the changelog database's migration path defines (#305), in a scratch in-memory
-    /// database that is read and discarded. Static so a tool can derive the same expected schema without
-    /// a configured initializer.
+    /// The DDL that defines the changelog database's schema (#305): exactly what a fresh changelog database
+    /// runs. Static so a tool can derive the same expected schema without a configured initializer.
     /// </summary>
-    public static async Task<SchemaSnapshot> BuildExpectedSchemaAsync()
-    {
-        // A scratch database that exists only for this comparison: nothing in the container could
-        // supply it, and it must not be the changelog's own connection, so it is created here.
-        using SqliteConnection scratch = new(DatabaseInitializer.ScratchConnectionString);
-        await scratch.OpenAsync();
+    public static IReadOnlyList<string> ExpectedSchemaScripts() => [Sql.ChangelogSchema.CreateVersionTable, BaselineSql];
 
-        await scratch.ExecuteAsync(Sql.ChangelogSchema.CreateVersionTable);
-        await scratch.ExecuteAsync(BaselineSql);
-
-        return await SnapshotReader.ReadAsync(scratch);
-    }
-
-    // Stateless, and needed by the static builder above and by a tool with no container, so it is not
-    // injected: there is exactly one implementation (ADR 003) and nothing to substitute.
-    private static readonly SqliteSchemaSnapshotReader SnapshotReader = new();
+    // Stateless, and needed by an instance and a static caller alike, so it is not injected: there is
+    // exactly one implementation (ADR 003), and this is the only place in the check that names it.
+    private static readonly ISchemaSnapshotReader SnapshotReader = SqliteSchemaSnapshotReader.Instance;
 
     /// <summary>Applies the baseline (genuinely empty database) or any pending migrations.</summary>
     public Task InitialiseAsync() => InitialiseAsync(forceIncremental: false);

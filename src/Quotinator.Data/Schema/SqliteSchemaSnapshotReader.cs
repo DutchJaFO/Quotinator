@@ -1,5 +1,6 @@
 using System.Data.Common;
 using Dapper;
+using Microsoft.Data.Sqlite;
 using Quotinator.Data.Queries;
 
 namespace Quotinator.Data.Schema;
@@ -10,8 +11,37 @@ namespace Quotinator.Data.Schema;
 /// </summary>
 public sealed class SqliteSchemaSnapshotReader : ISchemaSnapshotReader
 {
+    /// <summary>
+    /// The one instance, exposed as the interface. The reader holds no state, and callers that cannot be
+    /// handed one by the container, a static helper or a developer tool, hold the contract rather than the
+    /// engine (ADR 003, design goal 5).
+    /// </summary>
+    public static ISchemaSnapshotReader Instance { get; } = new SqliteSchemaSnapshotReader();
+
     private const string CreatedIndexOrigin = "c";
     private const string FilterKeyword = " WHERE ";
+
+    // An in-memory database that disappears when its one connection closes, so the scratch schema
+    // writes no file and works on a read-only data directory.
+    private const string ScratchConnectionString = "Data Source=:memory:";
+
+    /// <inheritdoc/>
+    public async Task<SchemaSnapshot> ReadScriptsAsync(IEnumerable<string> scripts)
+    {
+        // A scratch database that exists only for this read: nothing in the container could supply it,
+        // and it must never be an application connection, so it is created here.
+        using SqliteConnection scratch = new(ScratchConnectionString);
+        await scratch.OpenAsync();
+
+        // Migrations that rebuild a table drop it while others still reference it; the application
+        // runs them with enforcement off, so the scratch replay does too.
+        await scratch.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+
+        foreach (string script in scripts)
+            await scratch.ExecuteAsync(script);
+
+        return await ReadAsync(scratch);
+    }
 
     /// <inheritdoc/>
     public async Task<SchemaSnapshot> ReadAsync(DbConnection connection)
