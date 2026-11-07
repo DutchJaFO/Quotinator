@@ -9,10 +9,9 @@
 
 ## Next action
 
-**Execute from step 4: implement the model, the comparer and the reader.** Step 5 is blocked by an
-unforeseen circumstance found in step 3: no last-release database exists for row 13 to run against, and
-how to obtain one is the developer's call. The ADR 003 and ADR 009 amendments were approved on 2026-11-07,
-and the issue's title and body reflect the widened scope.
+**Execute from step 4: implement the model, the comparer and the reader.** Every decision is settled (see
+*Decisions*, including D5, found in step 3), the ADR 003 and ADR 009 amendments were approved on
+2026-11-07, and the issue's title and body reflect the widened scope.
 
 ---
 
@@ -105,7 +104,8 @@ Checked per `process.md` → Planning step 3, in source order.
 ## Decisions
 
 **All settled.** D1, D2 and D4 are settled by the developer's direction above. D3 is settled as:
-extras are reported, not degrading. R1 to R3 were answered by the developer on 2026-11-07.
+extras are reported, not degrading. R1 to R3 were answered by the developer on 2026-11-07, and D5, an
+unforeseen circumstance found in step 3, the same day.
 
 **R1. How is the check run on request, by the testing procedure and by an operator?** **Both
 instruments.** A read-only admin endpoint, `GET /api/v1/admin/database/integrity`, runs the check on
@@ -118,6 +118,15 @@ See *On request*.
 same as its initialisation failing today: logged at `Error`, non-fatal, the reader serves the authored
 JSON, and main-database health is unaffected. Its content is regenerated from its files on every start,
 so nothing is served from a wrong schema.
+
+**D5. Where does row 13's last-release database come from?** (Found in step 3; decided 2026-11-07.)
+**A committed fixture, and the live run as well.** A v1.8.3 database is produced once from the published
+image and committed under the Core tests, so the upgrade from the last release is checked on every
+`dotnet test`, including each attempt at the migration condensing planned for this milestone's close.
+The expected schema is never stored, always derived from this build's baseline, so condensing needs no
+fixture change; the fixture is the starting point, which a shipped release cannot change. It is
+regenerated at each release. T2 document 04's Upgraded scenario stays as the live variant against the real
+image.
 
 **R3. Does a Reset re-run the check before clearing health?** **Yes.** Developer's reasoning: the check
 is what runs before starting, so it should be what shows that a reset database is in a good state. A
@@ -242,7 +251,7 @@ requires.
 
 ### 3. Write the unit tests and confirm each is red
 
-**Status:** ✅ Done, except row 13 (see step 5)
+**Status:** ✅ Done; row 13's test moved to step 5 (D5)
 
 Rows 1 to 19, 22 and 23 of the Verification table. Comparer tests supply both snapshots, covering each
 aspect's missing, different and extra case, several differences at once, case-insensitive names, and the
@@ -270,7 +279,8 @@ Findings, 2026-11-07:
   the row names it instead of adding a duplicate.
 - **The initializer construction the new class needed was moved, not copied**: `QuotinatorTestInitializer`
   now holds what `DatabaseInitializerTests.CreateForcedIncrementalInitializer` built, and both use it.
-- **Row 13 has no fixture to run against**: see step 5.
+- **Row 13 had no database to run against**: settled by D5, and its test is written red in step 5 once the
+  fixture exists.
 
 ### 4. Implement the model, the comparer and the reader; run the drift tests and record what they find
 
@@ -287,14 +297,28 @@ circumstance, not an open question: work stops at this step and the finding goes
 
 **Status:** ⬜ Not started
 
-Row 13. A database created by the last released image (the T2 *Upgraded* profile's own fixture) is
-upgraded by this build and compared with this build's baseline. Findings are handled as in step 4.
+Row 13, the fixture variant of the last-release check (decision D5). Findings are handled as in step 4.
 Step 7 does not start until this row is green.
 
-**Blocked (found in step 3, 2026-11-07):** the T2 *Upgraded* profile has no stored database. It runs a
-prior image against a volume and then this build, so there is no last-release file a unit test can open.
-ADR 009 leaves "a checked-in released-schema snapshot or a reconstructable script" undecided, pointing to
-#155. How row 13 obtains its database is the developer's decision.
+1. **Produce the fixture once**, from the published `v1.8.3` image: start it against an empty volume with
+   an admin key, call its own `POST /api/v1/admin/database/reset` so the file holds the v1.8.3 schema and
+   no bundled content, stop it, and copy `quotinatordata.db` out of the volume. Container and volume are
+   removed afterwards. Every step is a single command, recorded here when run.
+2. **Commit it** as `tests/Quotinator.Core.Tests/Fixtures/LastRelease/quotinatordata.db`, copied to the
+   test output, with a `README.md` beside it naming the release it came from and how it was produced.
+3. **`DatabaseIntegrityCheckTests.LastReleaseDatabase_Upgraded_IsIntact`** copies the fixture to a temp
+   directory, runs this build's real initializer over the copy, and requires the result to be intact. It
+   is written red first, then runs on every `dotnet test`, so the milestone's migration condensing is
+   checked on each attempt rather than at release.
+
+The **live variant** stays as well (developer direction, 2026-11-07: test both variants): document
+`database-lifecycle/04`'s Upgraded scenario upgrades the real `v1.8.3` image's volume with this build and
+checks it through the endpoint (step 6, row 21). The fixture gives a fast, deterministic check; the live
+run confirms it against the real released image.
+
+*Found in step 3, 2026-11-07:* the T2 *Upgraded* profile stores no database, it runs a prior image and then
+this build against one volume, so a unit test had nothing to open. ADR 009 left "a checked-in
+released-schema snapshot or a reconstructable script" undecided; D5 settles it.
 
 ### 6. Write the T2 documents and confirm them red against a pre-issue build
 
@@ -374,8 +398,10 @@ zero when not intact.
 - ADR 009 amended (developer-approved, 2026-11-07): its procedure names the integrity check as the
   instrument of the last-release verification, step 3's "confirm the result matches" becoming "the
   integrity check reports the upgraded database intact". The amendment states what is done and why,
-  with no added explanation or history. `docs/workflow/checklist.md` → *Milestone close* names the
-  same instrument.
+  with no added explanation or history. Per D5 it also states that the last release's database is kept
+  as a committed fixture, checked on every test run, and regenerated at each release; its follow-on about
+  a snapshot is thereby settled. `docs/workflow/checklist.md` → *Milestone close* names the same
+  instrument, and its release steps gain regenerating the fixture from the newly released image.
 - `docs/vocabulary.md`: *integrity check*, *schema snapshot*.
 - `tools/Quotinator.Tools.DbInspector/README.md`: the `integrity` command.
 - A Knowledgebase entry for the new degraded reason, pointing at the endpoint to see every difference;
@@ -425,7 +451,7 @@ All rows start ❌. Rows 1 to 19, 22 and 23 are written red in step 3; rows 20 a
 | 10 | ❌ | Main database: baseline and full replay are identical in every measured aspect | Integration test | `DatabaseIntegrityCheckTests.MainDatabase_BaselineAndReplay_AreIdentical` |
 | 11 | ❌ | Data-owned schema alone: baseline and replay are identical | Integration test | `DatabaseIntegrityCheckTests.DataOwnedSchema_BaselineAndReplay_AreIdentical` |
 | 12 | ❌ | Changelog database: baseline and replay are identical | Integration test | `ChangelogDatabaseInitializerTests.Integrity_BaselineAndReplay_AreIdentical` |
-| 13 | ❌ | A database from the last release, upgraded by this build, is intact | Integration test | `DatabaseIntegrityCheckTests.LastReleaseDatabase_Upgraded_IsIntact` |
+| 13 | ❌ | A database from the last release, upgraded by this build, is intact: the committed fixture on every test run, and the real released image live (row 21) | Integration test | `DatabaseIntegrityCheckTests.LastReleaseDatabase_Upgraded_IsIntact`, against `tests/Quotinator.Core.Tests/Fixtures/LastRelease/quotinatordata.db` |
 | 14 | ❌ | The reader captures each aspect from a real database | Integration test | `SqliteSchemaSnapshotReaderTests.ReadsTablesColumnsForeignKeysIndexesViewsAndTriggers` |
 | 15 | ❌ | Main startup: a difference stops the content load, takes no backup and writes nothing; a complete database loads normally | Integration test | `DatabaseIntegrityCheckTests.MissingExpectedTable_DetectedAsSchemaInconsistency_TreatedAsHardFailure`, `DatabaseIntegrityCheckTests.Difference_ContentLoadDoesNotRunAndNothingIsWritten`, `DatabaseIntegrityCheckTests.AllExpectedTablesPresent_PassesCleanly` |
 | 16 | ❌ | The check does not run on a refused migration or an overshoot | Integration test | `DatabaseIntegrityCheckTests.MigrationRefused_IntegrityNotChecked`, `DatabaseIntegrityCheckTests.SchemaVersionOvershoot_IntegrityNotChecked` |
