@@ -6,9 +6,5 @@ namespace Quotinator.Data.Schema;
 public sealed class SqliteSchemaSnapshotReader : ISchemaSnapshotReader
 {
     /// <inheritdoc/>
-    public Task<SchemaSnapshot> ReadAsync(DbConnection connection)
-    {
-        _ = connection;
-        return Task.FromResult(SchemaSnapshot.Empty);
-    }
+    public Task<SchemaSnapshot> ReadAsync(DbConnection connection) => throw new NotImplementedException();
 }

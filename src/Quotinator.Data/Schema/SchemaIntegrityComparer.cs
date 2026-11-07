@@ -10,10 +10,6 @@ public static class SchemaIntegrityComparer
     /// <param name="expected">The schema the database's migration path defines.</param>
     /// <param name="actual">The schema the database holds.</param>
     /// <returns>Every missing, different and extra object, sorted.</returns>
-    public static SchemaIntegrityResult Compare(SchemaSnapshot expected, SchemaSnapshot actual)
-    {
-        _ = expected;
-        _ = actual;
-        return SchemaIntegrityResult.Intact;
-    }
+    public static SchemaIntegrityResult Compare(SchemaSnapshot expected, SchemaSnapshot actual) =>
+        throw new NotImplementedException();
 }

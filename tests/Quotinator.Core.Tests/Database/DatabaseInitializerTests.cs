@@ -4479,33 +4479,8 @@ public class DatabaseInitializerTests
 
     private (QuotinatorDatabaseInitializer Db, string DbPath) CreateForcedIncrementalInitializer()
     {
-        string dbPath        = Path.Combine(_tempDir.Path, $"test_incremental_{Guid.NewGuid():N}.db");
-        SqliteConnectionFactory factory       = new(dbPath);
-        DatabaseOptions options       = new() { DbPath = dbPath, BackupsPath = _backups };
-        SqliteImportBatchRepository importBatches = new(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        ImportActionReader actionReader  = new(factory);
-        ImportActionWriter actionWriter  = new(factory);
-        ImportActionResolutionCoordinator coordinator   = new(actionReader, actionWriter, factory);
-        SqliteImportActionService actionService = new(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
-            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<PersonEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            importBatches, factory, NoOpNotificationWriter.Instance);
-        QuotinatorDatabaseInitializer db = new(factory, options, QuotinatorMigrations.All, [], importBatches,
-            coordinator, actionService, actionWriter,
-            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
-            NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
-            autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
-            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance,
-            NoOpFileResourceRepository.Instance,
-            NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
-            new AppVersionTracker(factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
-            QuotinatorMigrations.Baseline);
-        return (db, dbPath);
+        string dbPath = Path.Combine(_tempDir.Path, $"test_incremental_{Guid.NewGuid():N}.db");
+        return (QuotinatorTestInitializer.Create(dbPath, _backups), dbPath);
     }
 
     private static async Task<List<string>> DumpTableSchemaAsync(SqliteConnection conn, string table)
@@ -5693,18 +5668,7 @@ public class DatabaseInitializerTests
     // themselves, one per actual CreateBackup call.
     private int BackupFileCount() => Directory.Exists(_backups) ? Directory.GetFiles(_backups, "*.db").Length : 0;
 
-    private SeedBatch SimpleQuoteBatch()
-    {
-        string quotesFile = Path.Combine(_tempDir.Path, $"quotes-{Guid.NewGuid():N}.json");
-        File.WriteAllText(quotesFile,
-            $$"""[{"id":"{{Guid.NewGuid()}}","quote":"Hello there.","source":"Test Movie","type":"movie","genres":["drama"]}]""");
-        return new SeedBatch([new SeedFile(quotesFile, null)], ManifestPolicy.HardcodedDefault, "simple-test-seed");
-    }
-
-    private sealed class FakeDiskSpaceProvider(long availableBytes) : IDiskSpaceProvider
-    {
-        public long GetAvailableFreeSpaceBytes(string path) => availableBytes;
-    }
+    private SeedBatch SimpleQuoteBatch() => QuotinatorTestInitializer.SimpleQuoteBatch(_tempDir.Path);
 
     private sealed class ThrowingAuditEntryWriter : IAuditEntryWriter
     {

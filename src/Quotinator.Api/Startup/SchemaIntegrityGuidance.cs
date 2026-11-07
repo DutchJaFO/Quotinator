@@ -15,9 +15,5 @@ internal static class SchemaIntegrityGuidance
 {
     /// <summary>The degraded-startup reason for a schema that does not match its migration path.</summary>
     /// <param name="result">The integrity check's result, holding at least one missing or different object.</param>
-    internal static string Reason(SchemaIntegrityResult result)
-    {
-        _ = result;
-        return string.Empty;
-    }
+    internal static string Reason(SchemaIntegrityResult result) => throw new NotImplementedException();
 }

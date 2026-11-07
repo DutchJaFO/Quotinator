@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\tools\Quotinator.Tools.DbInspector\Quotinator.Tools.DbInspector.csproj" />
+    <ProjectReference Include="..\..\src\Quotinator.Data.Testing\Quotinator.Data.Testing.csproj" />
   </ItemGroup>
 
 </Project>

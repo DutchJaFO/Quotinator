@@ -3,6 +3,8 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
+using Quotinator.Data.Enums;
+using Quotinator.Data.Schema;
 
 namespace Quotinator.Data.Tests.Database;
 
@@ -142,6 +144,69 @@ public class ChangelogDatabaseInitializerTests
                 "VALUES (@id, @changelogId, 'NotARealKind', 'x', 1, @now);",
                 new { id = Guid.NewGuid().ToString(), changelogId, now }));
         }
+    }
+
+    /// <summary>
+    /// #305: the changelog database's baseline and its full migration replay are identical in every aspect
+    /// the integrity check measures, extras included, with no hand-kept table list.
+    /// </summary>
+    [TestMethod]
+    public async Task Integrity_BaselineAndReplay_AreIdentical()
+    {
+        SqliteConnectionFactory factoryA = new(UniqueConnectionString());
+        using ChangelogConnectionKeepAlive keepAliveA = new(factoryA);
+        await new ChangelogDatabaseInitializer(factoryA, NullLogger<ChangelogDatabaseInitializer>.Instance).InitialiseAsync();
+
+        SqliteConnectionFactory factoryB = new(UniqueConnectionString());
+        using ChangelogConnectionKeepAlive keepAliveB = new(factoryB);
+        await new ChangelogDatabaseInitializer(factoryB, NullLogger<ChangelogDatabaseInitializer>.Instance)
+            .InitialiseForTestingAsync(forceIncremental: true);
+
+        SchemaSnapshot baseline = await ReadSchemaAsync(factoryA);
+        SchemaSnapshot replay   = await ReadSchemaAsync(factoryB);
+
+        Assert.IsNotEmpty(baseline.Tables, "the baseline snapshot is empty, so this comparison could not fail");
+        SchemaIntegrityResult result = SchemaIntegrityComparer.Compare(baseline, replay);
+        Assert.IsEmpty(result.Differences,
+            "baseline and replay differ: " + string.Join("; ", result.Differences.Select(d => $"{d.Kind} {d.ObjectKind} {d.ObjectName} {d.Aspect}")));
+    }
+
+    /// <summary>
+    /// #305: a changelog database missing a table its migration path defines is reported as not intact,
+    /// naming the table, and initialisation still completes: the changelog is non-fatal, and its reader
+    /// falls back to the authored JSON (R2). A complete database is the positive control.
+    /// </summary>
+    [TestMethod]
+    public async Task Integrity_MissingTable_ReportedWithoutFailingInitialisation()
+    {
+        SqliteConnectionFactory factory = new(UniqueConnectionString());
+        using ChangelogConnectionKeepAlive keepAlive = new(factory);
+
+        ChangelogDatabaseInitializer first = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        await first.InitialiseAsync();
+        Assert.IsTrue(first.LastIntegrityResult?.IsIntact, "control: a freshly built changelog database is intact");
+
+        using (SqliteConnection connection = (SqliteConnection)factory.CreateConnection())
+        {
+            await connection.OpenAsync(TestContext.CancellationToken);
+            await connection.ExecuteAsync("DROP TABLE Changelog_Line;");
+        }
+
+        ChangelogDatabaseInitializer second = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        await second.InitialiseAsync();
+
+        Assert.IsNotNull(second.LastIntegrityResult);
+        Assert.IsFalse(second.LastIntegrityResult.IsIntact);
+        Assert.Contains(
+            d => d.Kind == SchemaDifferenceKind.Missing && d.ObjectKind == SchemaObjectKind.Table && d.ObjectName == "Changelog_Line",
+            second.LastIntegrityResult.Differences);
+    }
+
+    private async Task<SchemaSnapshot> ReadSchemaAsync(SqliteConnectionFactory factory)
+    {
+        using SqliteConnection connection = (SqliteConnection)factory.CreateConnection();
+        await connection.OpenAsync(TestContext.CancellationToken);
+        return await new SqliteSchemaSnapshotReader().ReadAsync(connection);
     }
 
     /// <summary>A genuinely empty changelog database takes the one-step baseline path, not incremental replay.</summary>

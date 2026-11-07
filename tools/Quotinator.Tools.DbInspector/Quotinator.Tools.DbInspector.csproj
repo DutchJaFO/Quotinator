@@ -15,6 +15,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- #305: the integrity command derives each database's expected schema from the application's own
+         migration paths, so it compares against exactly what the application builds. -->
+    <ProjectReference Include="..\..\src\Quotinator.Core\Quotinator.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Quotinator.Tools.DbInspector.Tests</_Parameter1>
     </AssemblyAttribute>

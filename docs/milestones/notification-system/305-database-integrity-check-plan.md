@@ -1,6 +1,6 @@
 # #305: Database integrity check: verify every database's full schema against its migration path at startup
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 4)
 **GitHub issue:** #305
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,9 +9,10 @@
 
 ## Next action
 
-**Execute from step 3: write the unit tests and confirm each is red.** Every decision is settled (see *Decisions*, and the
-ADR 003 and ADR 009 amendments the developer approved on 2026-11-07), and the issue's title and body
-already reflect the widened scope.
+**Execute from step 4: implement the model, the comparer and the reader.** Step 5 is blocked by an
+unforeseen circumstance found in step 3: no last-release database exists for row 13 to run against, and
+how to obtain one is the developer's call. The ADR 003 and ADR 009 amendments were approved on 2026-11-07,
+and the issue's title and body reflect the widened scope.
 
 ---
 
@@ -241,12 +242,35 @@ requires.
 
 ### 3. Write the unit tests and confirm each is red
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, except row 13 (see step 5)
 
 Rows 1 to 19, 22 and 23 of the Verification table. Comparer tests supply both snapshots, covering each
 aspect's missing, different and extra case, several differences at once, case-insensitive names, and the
 empty snapshot on both sides. Reader and startup tests use a real temp-file database per test, with the
 sabotage applied by the test, never by editing shipped data.
+
+Findings, 2026-11-07:
+
+- **Step 2's stubs returned "intact", so every test asserting intactness would have been green before any
+  behaviour existed.** They now throw `NotImplementedException`, so each test fails until step 4 implements
+  what it covers.
+- **Red run: 48 of 49 new tests red**, each for its intended reason (the stub's exception, an assertion
+  that the check never ran, or the application reporting healthy over a missing table).
+  `RepositoryStructureTests.EveryDatabaseWithMigrations_PerformsTheIntegrityCheck` is green, because step 2
+  already made both initializers implement the interface it requires. It is a structural guard, so its
+  sensitivity is proven by step 11's mutation (removing the interface from the changelog initializer).
+- **Dropping `System_Notification` from a database a first run populated is refused by its foreign keys**
+  (translation rows reference it). The Api tests turn foreign keys off for the sabotage connection only;
+  step 6's T2 sabotage needs the same.
+- **The changelog test is named for what the initializer can show.** The JSON fallback happens in
+  `Program.cs`, which marks the changelog import as failed. Row 17's test proves the initializer reports
+  the table missing and still completes; step 9 wires the fallback, and step 13's run of
+  `notifications-and-changelog/07` checks it live.
+- **Row 18's positive control already exists** as `Startup_RestartOverAnIntactDatabase_ReportsHealthy`, so
+  the row names it instead of adding a duplicate.
+- **The initializer construction the new class needed was moved, not copied**: `QuotinatorTestInitializer`
+  now holds what `DatabaseInitializerTests.CreateForcedIncrementalInitializer` built, and both use it.
+- **Row 13 has no fixture to run against**: see step 5.
 
 ### 4. Implement the model, the comparer and the reader; run the drift tests and record what they find
 
@@ -266,6 +290,11 @@ circumstance, not an open question: work stops at this step and the finding goes
 Row 13. A database created by the last released image (the T2 *Upgraded* profile's own fixture) is
 upgraded by this build and compared with this build's baseline. Findings are handled as in step 4.
 Step 7 does not start until this row is green.
+
+**Blocked (found in step 3, 2026-11-07):** the T2 *Upgraded* profile has no stored database. It runs a
+prior image against a volume and then this build, so there is no last-release file a unit test can open.
+ADR 009 leaves "a checked-in released-schema snapshot or a reconstructable script" undecided, pointing to
+#155. How row 13 obtains its database is the developer's decision.
 
 ### 6. Write the T2 documents and confirm them red against a pre-issue build
 
@@ -400,8 +429,8 @@ All rows start ❌. Rows 1 to 19, 22 and 23 are written red in step 3; rows 20 a
 | 14 | ❌ | The reader captures each aspect from a real database | Integration test | `SqliteSchemaSnapshotReaderTests.ReadsTablesColumnsForeignKeysIndexesViewsAndTriggers` |
 | 15 | ❌ | Main startup: a difference stops the content load, takes no backup and writes nothing; a complete database loads normally | Integration test | `DatabaseIntegrityCheckTests.MissingExpectedTable_DetectedAsSchemaInconsistency_TreatedAsHardFailure`, `DatabaseIntegrityCheckTests.Difference_ContentLoadDoesNotRunAndNothingIsWritten`, `DatabaseIntegrityCheckTests.AllExpectedTablesPresent_PassesCleanly` |
 | 16 | ❌ | The check does not run on a refused migration or an overshoot | Integration test | `DatabaseIntegrityCheckTests.MigrationRefused_IntegrityNotChecked`, `DatabaseIntegrityCheckTests.SchemaVersionOvershoot_IntegrityNotChecked` |
-| 17 | ❌ | Every database declaring migrations performs the check; a changelog database that is not intact falls back to the JSON files without affecting main health; a Reset re-runs the check before clearing health | Unit test / Integration test | `RepositoryStructureTests.EveryDatabaseWithMigrations_PerformsTheIntegrityCheck`, `ChangelogDatabaseInitializerTests.Integrity_MissingTable_FallsBackToJson`, `DatabaseIntegrityCheckTests.Reset_RerunsTheCheckBeforeClearingHealth` |
-| 18 | ❌ | Against the real schema, a missing table or column degrades startup with a reason naming it and both remedies; quote endpoints are gated; pages render degraded; a Reset restores health; a complete database is healthy | Integration test | `StartupResilienceTests.Startup_SchemaDifference_HealthReportsUnhealthy`, `StartupResilienceTests.Startup_SchemaDifference_HealthReasonNamesTheObject`, `StartupResilienceTests.Startup_SchemaDifference_QuoteEndpointsAreGated`, `StartupResilienceTests.Startup_SchemaDifference_BlazorPageRendersDegradedUi`, `StartupResilienceTests.Startup_SchemaDifference_ResetRestoresHealth`, `StartupResilienceTests.Startup_SchemaIntact_HealthReportsHealthy` |
+| 17 | ❌ | Every database declaring migrations performs the check; a changelog database that is not intact is reported without failing its initialisation, so the changelog falls back to the JSON files without affecting main health; a Reset re-runs the check before clearing health | Unit test / Integration test | `RepositoryStructureTests.EveryDatabaseWithMigrations_PerformsTheIntegrityCheck`, `ChangelogDatabaseInitializerTests.Integrity_MissingTable_ReportedWithoutFailingInitialisation`, `DatabaseIntegrityCheckTests.Reset_RerunsTheCheckBeforeClearingHealth` |
+| 18 | ❌ | Against the real schema, a missing table or column degrades startup with a reason naming it and both remedies; quote endpoints are gated; pages render degraded; a Reset restores health; a complete database is healthy | Integration test | `StartupResilienceTests.Startup_SchemaDifference_HealthReportsUnhealthy`, `StartupResilienceTests.Startup_SchemaDifference_HealthReasonNamesTheObject`, `StartupResilienceTests.Startup_SchemaDifference_QuoteEndpointsAreGated`, `StartupResilienceTests.Startup_SchemaDifference_BlazorPageRendersDegradedUi`, `StartupResilienceTests.Startup_SchemaDifference_ResetRestoresHealth`, `StartupResilienceTests.Startup_RestartOverAnIntactDatabase_ReportsHealthy` (existing, the positive control) |
 | 19 | ❌ | The reason names every difference in engine-neutral words, and both remedies | Unit test | `SchemaIntegrityGuidanceTests.Reason_NamesEveryDifference`, `SchemaIntegrityGuidanceTests.Reason_NamesResetAndRestore`, `SchemaIntegrityGuidanceTests.Reason_UsesNoEngineMetadataNames` |
 | 20 | ❌ | Live: a removed table, and a removed column, each degrade the container with a named reason, and a Reset recovers it; a pre-issue build does not degrade | Live (Docker) | `automated-testing/startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md`, green on this build, red as its canary |
 | 21 | ❌ | Live: a Fresh and an Upgraded container report every database intact through the endpoint, and an added column is reported as extra without degrading | Live (Docker) | `automated-testing/database-lifecycle/04-a-database-is-complete-for-its-schema-version.md` |

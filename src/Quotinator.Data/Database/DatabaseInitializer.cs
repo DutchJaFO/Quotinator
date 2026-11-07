@@ -598,7 +598,7 @@ public class DatabaseInitializer(
     public SchemaIntegrityResult? LastIntegrityResult { get; protected set; }
 
     /// <inheritdoc/>
-    public Task<SchemaIntegrityResult> CheckIntegrityAsync() => Task.FromResult(SchemaIntegrityResult.Intact);
+    public Task<SchemaIntegrityResult> CheckIntegrityAsync() => throw new NotImplementedException();
 
     /// <summary>
     /// Builds the schema the main database's migration path defines (#305): Quotinator.Data's own tables
@@ -608,12 +608,8 @@ public class DatabaseInitializer(
     /// <param name="consumerMigrations">The consuming project's own migrations.</param>
     /// <param name="consumerBaseline">The consuming project's baseline, or <see langword="null"/> to replay its migrations instead.</param>
     public static Task<SchemaSnapshot> BuildExpectedSchemaAsync(
-        IReadOnlyList<SchemaMigration> consumerMigrations, SchemaBaseline? consumerBaseline)
-    {
-        _ = consumerMigrations;
-        _ = consumerBaseline;
-        return Task.FromResult(SchemaSnapshot.Empty);
-    }
+        IReadOnlyList<SchemaMigration> consumerMigrations, SchemaBaseline? consumerBaseline) =>
+        throw new NotImplementedException();
 
     /// <inheritdoc/>
     public IReadOnlyList<FileImportReport> LastSeedReport { get; protected set; } = [];

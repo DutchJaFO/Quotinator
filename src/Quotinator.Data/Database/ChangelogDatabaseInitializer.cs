@@ -54,14 +54,14 @@ public sealed class ChangelogDatabaseInitializer(
     public SchemaIntegrityResult? LastIntegrityResult { get; private set; }
 
     /// <inheritdoc/>
-    public Task<SchemaIntegrityResult> CheckIntegrityAsync() => Task.FromResult(SchemaIntegrityResult.Intact);
+    public Task<SchemaIntegrityResult> CheckIntegrityAsync() => throw new NotImplementedException();
 
     /// <summary>
     /// Builds the schema the changelog database's migration path defines (#305), in a scratch in-memory
     /// database that is read and discarded. Static so a tool can derive the same expected schema without
     /// a configured initializer.
     /// </summary>
-    public static Task<SchemaSnapshot> BuildExpectedSchemaAsync() => Task.FromResult(SchemaSnapshot.Empty);
+    public static Task<SchemaSnapshot> BuildExpectedSchemaAsync() => throw new NotImplementedException();
 
     /// <summary>Applies the baseline (genuinely empty database) or any pending migrations.</summary>
     public Task InitialiseAsync() => InitialiseAsync(forceIncremental: false);

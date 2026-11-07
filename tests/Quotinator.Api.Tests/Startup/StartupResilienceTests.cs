@@ -518,6 +518,82 @@ public class StartupResilienceTests
     }
 
     /// <summary>
+    /// #305: a table missing behind a current schema version, the live incident's table, is found by the
+    /// integrity check at startup and degrades rather than reporting healthy.
+    /// <see cref="Startup_RestartOverAnIntactDatabase_ReportsHealthy"/> is the positive control.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_SchemaDifference_HealthReportsUnhealthy()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithASchemaDifference("DROP TABLE System_Notification;");
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [TestMethod]
+    [DataRow("DROP TABLE System_Notification;", "System_Notification")]
+    [DataRow("ALTER TABLE System_Notification DROP COLUMN DateDeleted;", "System_Notification.DateDeleted")]
+    public async Task Startup_SchemaDifference_HealthReasonNamesTheObject(string sabotage, string objectName)
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithASchemaDifference(sabotage);
+
+        using HttpClient client = factory.CreateClient();
+        string body = await (await client.GetAsync(HealthRoute, TestContext.CancellationToken))
+            .Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.Contains(objectName, body, StringComparison.Ordinal);
+        Assert.Contains("database Reset", body, StringComparison.Ordinal);
+    }
+
+    [TestMethod]
+    public async Task Startup_SchemaDifference_QuoteEndpointsAreGated()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithASchemaDifference("DROP TABLE System_Notification;");
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync(RandomQuoteRoute, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode,
+            "quote content was served from a schema known not to match its version");
+    }
+
+    [TestMethod]
+    [DataRow("/")]
+    [DataRow("/notifications")]
+    public async Task Startup_SchemaDifference_BlazorPageRendersDegradedUi(string route)
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithASchemaDifference("DROP TABLE System_Notification;");
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage health = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync(route, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, health.StatusCode, "precondition: the application degraded");
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, $"{route} must render degraded UI, not 500");
+    }
+
+    /// <summary>#305: the remedy the reason names works: a Reset rebuilds the schema and health returns.</summary>
+    [TestMethod]
+    public async Task Startup_SchemaDifference_ResetRestoresHealth()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithASchemaDifference("DROP TABLE System_Notification;", AdminKey);
+
+        using HttpClient client = factory.CreateClient();
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable,
+            (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode, "precondition: the application degraded");
+
+        using HttpRequestMessage reset = new(HttpMethod.Post, "/api/v1/admin/database/reset");
+        reset.Headers.Add("X-Api-Key", AdminKey);
+        HttpResponseMessage resetResponse = await client.SendAsync(reset, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, resetResponse.StatusCode);
+        Assert.AreEqual(HttpStatusCode.OK, (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode);
+    }
+
+    /// <summary>
     /// #327: the positive control for every scenario that sabotages an empty data directory. Without
     /// it, each degraded assertion above would stay green against a build that degraded on everything.
     /// </summary>
@@ -550,6 +626,33 @@ public class StartupResilienceTests
     private const string HealthRoute = "/api/v1/health";
     private const string VersionRoute = "/api/v1/version";
     private const string RandomQuoteRoute = "/api/v1/quotes/random";
+    private const string AdminKey = "test-admin-key-305";
+
+    /// <summary>
+    /// A database a first run really created, then changed outside any migration by <paramref name="sabotage"/>.
+    /// Foreign keys are off for the sabotage only: the first run wrote rows that reference the table being
+    /// dropped, and the point is a missing object, not a refused drop.
+    /// </summary>
+    private WebApplicationFactory<Program> FactoryWithASchemaDifference(string sabotage, string? adminKey = null)
+    {
+        string dataDirectory = DataDirectoryWithAMigratedDatabase();
+
+        using (IDbConnection connection =
+            new SqliteConnectionFactory(Path.Combine(dataDirectory, DataPaths.DatabaseFile)).CreateConnection())
+        {
+            connection.Execute("PRAGMA foreign_keys = OFF;");
+            connection.Execute(sabotage);
+        }
+
+        SqliteConnection.ClearAllPools();
+        return adminKey is null
+            ? FactoryFor(dataDirectory)
+            : new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("Quotinator:DataDir", dataDirectory);
+                builder.UseSetting("Quotinator:AdminApiKey", adminKey);
+            });
+    }
 
     /// <summary>
     /// A database that really migrated, then had one version recorded past what this build knows.
