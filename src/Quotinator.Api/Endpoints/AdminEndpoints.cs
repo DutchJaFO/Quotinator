@@ -24,6 +24,8 @@ namespace Quotinator.Api.Endpoints;
 /// <summary>Registers all <c>/api/v1/admin</c> endpoints.</summary>
 internal static class AdminEndpoints
 {
+    private const string CheckDatabaseIntegrityName = "CheckDatabaseIntegrity";
+
     internal static void MapAdminEndpoints(this WebApplication app)
     {
         // Non-destructive endpoints: read-only; no API key required.
@@ -79,6 +81,19 @@ internal static class AdminEndpoints
             "new to the database reports as `new` in both files' reports rather than `new` in one and `modified` in the other, unlike a " +
             "real seed run, always accurate against a database that already has the relevant rows. " +
             "Use this before calling `reseed` to understand what will be imported.");
+
+        publicGroup.MapGet("/database/integrity", () =>
+            Results.Ok(new DatabaseIntegrityResponse { Databases = [] }))
+        .WithName(CheckDatabaseIntegrityName)
+        .WithSummary("Check every database's schema against its migration path")
+        .Produces<DatabaseIntegrityResponse>(StatusCodes.Status200OK)
+        .WithDescription(
+            "Runs the integrity check now on every database the application has (issue #305), comparing each database's " +
+            "tables, columns, foreign keys, indexes, views and triggers with the schema its own migration path defines. " +
+            "Returns, per database, whether it is intact and every difference: `missing` and `different` objects make a " +
+            "database not intact; `extra` objects are reported without doing so, since they mean a migration may have been " +
+            "missed. `200` means the check ran, whatever it found. Writes nothing and never changes the health status; " +
+            "answers while the database is degraded, when it is most useful. CHECK constraints are not compared.");
 
         publicGroup.MapGet("/audit", async (
             string? table,

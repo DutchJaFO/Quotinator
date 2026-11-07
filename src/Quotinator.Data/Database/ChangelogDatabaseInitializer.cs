@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Logging;
 using Quotinator.Data.Queries;
+using Quotinator.Data.Schema;
 
 namespace Quotinator.Data.Database;
 
@@ -24,7 +25,7 @@ namespace Quotinator.Data.Database;
 /// <param name="logger">Logger for startup diagnostics.</param>
 public sealed class ChangelogDatabaseInitializer(
     [FromKeyedServices(DatabaseConnectionKeys.Changelog)] IDbConnectionFactory factory,
-    ILogger<ChangelogDatabaseInitializer> logger)
+    ILogger<ChangelogDatabaseInitializer> logger) : IIntegrityCheckedDatabase
 {
     // Append-only, same discipline as DatabaseInitializer.DataOwnedMigrations — once applied to any
     // real (persistent-file-variant) database, a migration here is frozen too.
@@ -45,6 +46,22 @@ public sealed class ChangelogDatabaseInitializer(
 
     /// <summary>The current schema version, available after <see cref="InitialiseAsync()"/> completes.</summary>
     public int SchemaVersion { get; private set; }
+
+    /// <inheritdoc/>
+    public string DatabaseName => "changelog";
+
+    /// <inheritdoc/>
+    public SchemaIntegrityResult? LastIntegrityResult { get; private set; }
+
+    /// <inheritdoc/>
+    public Task<SchemaIntegrityResult> CheckIntegrityAsync() => Task.FromResult(SchemaIntegrityResult.Intact);
+
+    /// <summary>
+    /// Builds the schema the changelog database's migration path defines (#305), in a scratch in-memory
+    /// database that is read and discarded. Static so a tool can derive the same expected schema without
+    /// a configured initializer.
+    /// </summary>
+    public static Task<SchemaSnapshot> BuildExpectedSchemaAsync() => Task.FromResult(SchemaSnapshot.Empty);
 
     /// <summary>Applies the baseline (genuinely empty database) or any pending migrations.</summary>
     public Task InitialiseAsync() => InitialiseAsync(forceIncremental: false);

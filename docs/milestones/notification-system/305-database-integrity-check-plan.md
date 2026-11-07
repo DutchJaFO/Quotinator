@@ -1,6 +1,6 @@
 # #305: Database integrity check: verify every database's full schema against its migration path at startup
 
-**Status:** In progress (step 2)
+**Status:** In progress (step 3)
 **GitHub issue:** #305
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 2: create the signatures only.** Every decision is settled (see *Decisions*, and the
+**Execute from step 3: write the unit tests and confirm each is red.** Every decision is settled (see *Decisions*, and the
 ADR 003 and ADR 009 amendments the developer approved on 2026-11-07), and the issue's title and body
 already reflect the widened scope.
 
@@ -186,7 +186,8 @@ names, since the name is the engine's and not the schema's.
 
 ### On request
 
-- **`GET /api/v1/admin/database/integrity`** (admin key, `admin` rate-limit policy): runs the check now,
+- **`GET /api/v1/admin/database/integrity`** (in the read-only admin group, so no key, like the seed
+  preview and the audit log; `admin` rate-limit policy, developer-confirmed 2026-11-07): runs the check now,
   on every database the application has, and returns `200` with a `DatabaseIntegrityResponse`: per
   database, its name, whether it is intact, and every difference (object, aspect, expected, actual,
   missing/different/extra). `200` means the check ran, whatever it found; intact or not is in the body.
@@ -228,13 +229,15 @@ A `docs [#305]` commit of its own, drafted and approved before it is made.
 
 ### 2. Create the signatures only
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `SchemaSnapshot` and its parts, `SchemaIntegrityResult`, the difference enum, `SchemaIntegrityComparer.Compare`
 returning an intact result, `ISchemaSnapshotReader` and `SqliteSchemaSnapshotReader` returning an empty
 snapshot, the initializers' result properties, `SchemaIntegrityGuidance.Reason` returning an empty
 string, the endpoint returning an empty `DatabaseIntegrityResponse`, and the DbInspector command
-returning success. No behaviour, so every test fails on its assertion.
+returning success. No behaviour, so every test fails on its assertion. The endpoint is registered here,
+so its `[Description]` attributes and its `docs/api-endpoints.md` row come with it, as `CLAUDE.md`
+requires.
 
 ### 3. Write the unit tests and confirm each is red
 
@@ -315,9 +318,9 @@ at `Error` and the reader falls back to the authored JSON (R2).
 
 **Status:** ⬜ Not started
 
-The endpoint in `AdminEndpoints.cs` per *On request* and the endpoint rules under *Other authoritative
-sources*: `[Description]` attributes, `docs/api-endpoints.md` in the same commit, the admin rate-limit
-policy, a `private const string` name shared with its log tag. The `integrity` command in
+The endpoint's behaviour behind the stub step 2 registered, per *On request* and the endpoint rules under
+*Other authoritative sources*; its description and `docs/api-endpoints.md` row are corrected in the same
+commit if the behaviour changed what they say. The `integrity` command in
 `tools/Quotinator.Tools.DbInspector`, reusing `Quotinator.Data`'s comparer and reader. Neither holds
 comparison logic of its own.
 
@@ -349,8 +352,8 @@ zero when not intact.
 - A Knowledgebase entry for the new degraded reason, pointing at the endpoint to see every difference;
   no `QTN-` code, since #333 owns allocation.
 
-`docs/api-endpoints.md` goes with the endpoint's code commit (step 10), as `CLAUDE.md` requires; the rest
-each in a `docs [#305]` commit separate from the code.
+`docs/api-endpoints.md` goes with the endpoint's code commits (steps 2 and 10), as `CLAUDE.md` requires;
+the rest each in a `docs [#305]` commit separate from the code.
 
 ### 13. Run the full gates
 
@@ -402,7 +405,7 @@ All rows start ❌. Rows 1 to 19, 22 and 23 are written red in step 3; rows 20 a
 | 19 | ❌ | The reason names every difference in engine-neutral words, and both remedies | Unit test | `SchemaIntegrityGuidanceTests.Reason_NamesEveryDifference`, `SchemaIntegrityGuidanceTests.Reason_NamesResetAndRestore`, `SchemaIntegrityGuidanceTests.Reason_UsesNoEngineMetadataNames` |
 | 20 | ❌ | Live: a removed table, and a removed column, each degrade the container with a named reason, and a Reset recovers it; a pre-issue build does not degrade | Live (Docker) | `automated-testing/startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md`, green on this build, red as its canary |
 | 21 | ❌ | Live: a Fresh and an Upgraded container report every database intact through the endpoint, and an added column is reported as extra without degrading | Live (Docker) | `automated-testing/database-lifecycle/04-a-database-is-complete-for-its-schema-version.md` |
-| 22 | ❌ | The endpoint runs a fresh check on every database, reports intact and not-intact results with every difference, answers while degraded, writes nothing and leaves health unchanged, requires the admin key, and is described in the spec | Integration test | `AdminDatabaseIntegrityEndpointTests.IntactDatabases_ReportIntact`, `AdminDatabaseIntegrityEndpointTests.MissingTable_ReportsTheDifference`, `AdminDatabaseIntegrityEndpointTests.ExtraColumn_ReportedButIntact`, `AdminDatabaseIntegrityEndpointTests.Degraded_EndpointStillAnswers`, `AdminDatabaseIntegrityEndpointTests.Check_DoesNotChangeHealth`, `AdminDatabaseIntegrityEndpointTests.WithoutAdminKey_IsRejected`, `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` |
+| 22 | ❌ | The endpoint runs a fresh check on every database, reports intact and not-intact results with every difference, answers while degraded, writes nothing and leaves health unchanged, answers without a key like the other read-only admin endpoints, and is described in the spec | Integration test | `AdminDatabaseIntegrityEndpointTests.IntactDatabases_ReportIntact`, `AdminDatabaseIntegrityEndpointTests.MissingTable_ReportsTheDifference`, `AdminDatabaseIntegrityEndpointTests.ExtraColumn_ReportedButIntact`, `AdminDatabaseIntegrityEndpointTests.Degraded_EndpointStillAnswers`, `AdminDatabaseIntegrityEndpointTests.Check_DoesNotChangeHealth`, `AdminDatabaseIntegrityEndpointTests.WithoutAdminKey_IsAnswered`, `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` |
 | 23 | ❌ | The DbInspector command reports a file's differences and exits non-zero when it is not intact | Unit test | `IntegrityCommandTests.IntactFile_ExitsZero`, `IntegrityCommandTests.MissingTable_ReportsItAndExitsNonZero`, `IntegrityCommandTests.ChangelogFile_ComparedAgainstTheChangelogSchema` |
 | 24 | ❌ | No regression | Build | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all green; T2 end-of-issue scope per step 13 green |
 | 25 | ❌ | The application still starts | Manual | T1: the developer starts `Quotinator.Api` in Visual Studio and confirms it starts without error |

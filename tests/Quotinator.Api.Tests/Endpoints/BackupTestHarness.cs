@@ -228,6 +228,12 @@ internal sealed class BackupTestHarness : IDisposable
         /// <inheritdoc/>
         public bool SchemaVersionOvershootDetected => _inner.SchemaVersionOvershootDetected;
         /// <inheritdoc/>
+        public string DatabaseName => _inner.DatabaseName;
+        /// <inheritdoc/>
+        public Quotinator.Data.Schema.SchemaIntegrityResult? LastIntegrityResult => _inner.LastIntegrityResult;
+        /// <inheritdoc/>
+        public Task<Quotinator.Data.Schema.SchemaIntegrityResult> CheckIntegrityAsync() => _inner.CheckIntegrityAsync();
+        /// <inheritdoc/>
         public IReadOnlyList<FileImportReport> LastSeedReport => _inner.LastSeedReport;
         /// <inheritdoc/>
         public Task<DatabaseOperationResult> InitialiseAsync() => _inner.InitialiseAsync();

@@ -1,10 +1,11 @@
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
+using Quotinator.Data.Schema;
 
 namespace Quotinator.Data.Database;
 
 /// <summary>Initialises the database schema and seed data at application startup.</summary>
-public interface IDatabaseInitializer
+public interface IDatabaseInitializer : IIntegrityCheckedDatabase
 {
     /// <summary>
     /// The consuming project's own schema version applied at startup: what operators track

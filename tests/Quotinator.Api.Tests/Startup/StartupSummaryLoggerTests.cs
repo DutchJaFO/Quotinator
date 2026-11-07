@@ -81,6 +81,9 @@ public class StartupSummaryLoggerTests
         public bool DatabaseWasCreated => false;
         public IReadOnlyList<AppliedMigrationResult> MigrationsApplied => [];
         public bool SchemaVersionOvershootDetected => false;
+        public string DatabaseName => "main";
+        public Quotinator.Data.Schema.SchemaIntegrityResult? LastIntegrityResult => null;
+        public Task<Quotinator.Data.Schema.SchemaIntegrityResult> CheckIntegrityAsync() => Task.FromResult(Quotinator.Data.Schema.SchemaIntegrityResult.Intact);
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
         public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
 

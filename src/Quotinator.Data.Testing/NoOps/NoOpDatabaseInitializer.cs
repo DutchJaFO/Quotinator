@@ -1,6 +1,7 @@
 using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
+using Quotinator.Data.Schema;
 
 namespace Quotinator.Data.Testing.NoOps;
 
@@ -57,6 +58,15 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
 
     /// <inheritdoc/>
     public bool SchemaVersionOvershootDetected => false;
+
+    /// <inheritdoc/>
+    public string DatabaseName => "main";
+
+    /// <inheritdoc/>
+    public SchemaIntegrityResult? LastIntegrityResult => null;
+
+    /// <inheritdoc/>
+    public Task<SchemaIntegrityResult> CheckIntegrityAsync() => Task.FromResult(SchemaIntegrityResult.Intact);
 
     /// <inheritdoc/>
     public BackupOutcome CheckBackupReadiness(long bytesFreedFirst = 0) => BackupOutcome.Succeeded;

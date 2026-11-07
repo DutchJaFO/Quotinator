@@ -9,6 +9,7 @@ using Quotinator.Data.Models;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Schema;
 
 namespace Quotinator.Data.Database;
 
@@ -589,6 +590,30 @@ public class DatabaseInitializer(
 
     /// <inheritdoc/>
     public bool SchemaVersionOvershootDetected { get; protected set; }
+
+    /// <inheritdoc/>
+    public string DatabaseName => "main";
+
+    /// <inheritdoc/>
+    public SchemaIntegrityResult? LastIntegrityResult { get; protected set; }
+
+    /// <inheritdoc/>
+    public Task<SchemaIntegrityResult> CheckIntegrityAsync() => Task.FromResult(SchemaIntegrityResult.Intact);
+
+    /// <summary>
+    /// Builds the schema the main database's migration path defines (#305): Quotinator.Data's own tables
+    /// and the consumer's, at their current versions, in a scratch in-memory database that is read and
+    /// discarded. Static so a tool can derive the same expected schema without a configured initializer.
+    /// </summary>
+    /// <param name="consumerMigrations">The consuming project's own migrations.</param>
+    /// <param name="consumerBaseline">The consuming project's baseline, or <see langword="null"/> to replay its migrations instead.</param>
+    public static Task<SchemaSnapshot> BuildExpectedSchemaAsync(
+        IReadOnlyList<SchemaMigration> consumerMigrations, SchemaBaseline? consumerBaseline)
+    {
+        _ = consumerMigrations;
+        _ = consumerBaseline;
+        return Task.FromResult(SchemaSnapshot.Empty);
+    }
 
     /// <inheritdoc/>
     public IReadOnlyList<FileImportReport> LastSeedReport { get; protected set; } = [];
