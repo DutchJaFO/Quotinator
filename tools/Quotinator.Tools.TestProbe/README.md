@@ -55,6 +55,7 @@ uses, since a pipe is shell logic.
 | `--equals <path>=<value>` | the field's value is exactly `<value>` (strings, numbers and booleans compared as their JSON text) |
 | `--contains <path>=<text>` | the field is a string containing `<text>`, or an array with an element containing it |
 | `--present <path>` | the field exists |
+| `--absent <path>` | the field does not exist at all; a field sent as `null` does not hold, since omitting a field and sending it empty are different responses |
 | `--not-empty <path>` | the field exists and is not `null`, an empty string or an empty array |
 | `--greater-than <path>=<number>` | the field is a number greater than `<number>` (a seeded count above `0`) |
 | `--equals-field <path>=<other path>` | the field's value is exactly the other field's value, for a contract that relates two fields of one response |

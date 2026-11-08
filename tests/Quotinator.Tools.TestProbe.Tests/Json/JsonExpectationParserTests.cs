@@ -55,6 +55,14 @@ public sealed class JsonExpectationParserTests
     }
 
     [TestMethod]
+    public void Parse_Absent_ReadsPathWithoutValue()
+    {
+        IReadOnlyList<JsonExpectation> parsed = JsonExpectationParser.Parse(["--absent", "items.0.resolution"], out _);
+
+        Assert.AreEqual(new JsonExpectation(JsonExpectationKind.Absent, "items.0.resolution", null), parsed[0]);
+    }
+
+    [TestMethod]
     public void Parse_NotEmpty_ReadsPathWithoutValue()
     {
         IReadOnlyList<JsonExpectation> parsed = JsonExpectationParser.Parse(["--not-empty", "reason"], out _);

@@ -12,6 +12,12 @@ internal enum JsonExpectationKind
     /// <summary>The field exists (<c>--present</c>).</summary>
     Present,
 
+    /// <summary>
+    /// The field does not exist at all (<c>--absent</c>). A field present with <c>null</c> does not hold:
+    /// a response that omits a field and one that sends it empty are different responses.
+    /// </summary>
+    Absent,
+
     /// <summary>The field exists and is not null, an empty string or an empty array (<c>--not-empty</c>).</summary>
     NotEmpty,
 

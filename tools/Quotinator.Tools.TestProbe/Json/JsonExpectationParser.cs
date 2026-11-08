@@ -23,6 +23,7 @@ internal static class JsonExpectationParser
         ["--equals"] = JsonExpectationKind.EqualTo,
         ["--contains"] = JsonExpectationKind.Contains,
         ["--present"] = JsonExpectationKind.Present,
+        ["--absent"] = JsonExpectationKind.Absent,
         ["--not-empty"] = JsonExpectationKind.NotEmpty,
         ["--greater-than"] = JsonExpectationKind.GreaterThan,
         ["--equals-field"] = JsonExpectationKind.EqualToField,
@@ -31,7 +32,7 @@ internal static class JsonExpectationParser
     };
 
     /// <summary>
-    /// The expectations named by <c>--equals</c>, <c>--contains</c>, <c>--present</c>,
+    /// The expectations named by <c>--equals</c>, <c>--contains</c>, <c>--present</c>, <c>--absent</c>,
     /// <c>--not-empty</c>, <c>--greater-than</c>, <c>--equals-field</c>, <c>--length-equals-field</c>,
     /// <c>--length-equals</c>, <c>--equals-xml</c>, <c>--equals-json</c>, <c>--greater-than-json</c> and
     /// <c>--length-equals-json</c>, in no particular order, and one error per option that could not be read.
@@ -65,7 +66,7 @@ internal static class JsonExpectationParser
 
             string argument = args[++index];
 
-            if (kind is JsonExpectationKind.Present or JsonExpectationKind.NotEmpty)
+            if (kind is JsonExpectationKind.Present or JsonExpectationKind.Absent or JsonExpectationKind.NotEmpty)
             {
                 expectations.Add(new JsonExpectation(kind, argument, null));
                 continue;

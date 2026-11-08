@@ -96,12 +96,17 @@ measured.
 dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18388/api/v1/admin/backups/create --expect 201 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\created-reserve.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\created-reserve.json --not-empty name --greater-than sizeBytes=0
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18388/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-reserve.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-reserve.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=1 --equals items.0.type=warning --contains "items.0.body=The backups folder holds" --contains "items.0.body=past its operating quota of" --contains "items.0.body=from the reserve below the ceiling of 1.00 GB"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-reserve.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=1 --equals items.0.type=warning --absent items.0.resolution --contains "items.0.body=The backups folder holds" --contains "items.0.body=past its operating quota of" --contains "items.0.body=from the reserve below the ceiling of 1.00 GB"
 ```
 
 **Expected:** every command exits `0`: a backup is created with a non-zero size, and exactly one open
-`warning` whose body names three sizes: what the folder holds, the quota it has passed, and
-the ceiling it has not.
+`warning`, carrying no `resolution`, whose body names three sizes: what the folder holds, the quota it
+has passed, and the ceiling it has not.
+
+**Open is asserted on two fields, not one.** `--where items:isDismissed=false` only chooses which rows
+are counted; `--absent items.0.resolution` asserts the row has not been resolved. A resolved row carries
+the field, as step 7 reads (`underquota`), so its absence here is a reading and not a field the API never
+sends. The field is omitted rather than sent as `null`, which is why `--absent` and not `--equals ...=null`.
 
 **Both halves matter and neither implies the other.** A build that refused the backup would fail the
 first `json`; a build that took it silently would fail the second.
@@ -114,7 +119,7 @@ first `json`; a build that took it silently would fail the second.
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-backup-08 --pattern "\[Runtime - Exception\]" --exactly 0
 dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-08 --port 18388 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-08
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18388/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-restarted.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-restarted.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-restarted.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=1 --absent items.0.resolution
 ```
 
 **Expected:** nothing thrown before the stop, and exactly one open warning after the restart.
@@ -129,7 +134,7 @@ grew by a backup in step 4.
 ```
 dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18388/api/v1/admin/database/reset --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18388/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-reset.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-reset.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-reset.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=1 --absent items.0.resolution
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-reset.json --where items:isDismissed=false --where items:availableActions.0 --present items.0 --equals items.0.backupCaution=true --contains items.0.availableActions=backupthenreseed
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-reset.json --where items:isDismissed=false --where items:availableActions.0 --where items:backupCaution=false --length-equals items=0
 ```
@@ -184,7 +189,7 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- file --sparse C:\repos\
 dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18388/api/v1/notifications/refresh --no-key --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\refresh-raised.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\refresh-raised.json --where checks:kind=backupquotareached --equals checks.0.outcome=raised
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18388/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-raised.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-raised.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-raised.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=1 --absent items.0.resolution
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-08\backups\filler.db
 dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18388/api/v1/notifications/refresh --no-key --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\refresh-cleared.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\refresh-cleared.json --where checks:kind=backupquotareached --equals checks.0.outcome=cleared
@@ -213,7 +218,7 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18388/api/v1/notifications/refresh --no-key --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18388/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-ceiling.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-ceiling.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=0
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-ceiling.json --where items:metadataKind=backupmaxexceeded --where items:isDismissed=false --length-equals items=1 --equals items.0.type=error --contains "items.0.body=The backups folder holds" --contains "items.0.body=at or above its maximum of 1.00 GB"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-ceiling.json --where items:metadataKind=backupmaxexceeded --where items:isDismissed=false --length-equals items=1 --equals items.0.type=error --absent items.0.resolution --contains "items.0.body=The backups folder holds" --contains "items.0.body=at or above its maximum of 1.00 GB"
 ```
 
 **Expected:** every command exits `0`: the create is refused `409` with `BudgetExceeded`, no quota warning
@@ -260,19 +265,21 @@ exiting `0`:
 |---|---|
 | 2 | `canBackUp = true`, `reserveInUse = false`, `usedBytes = 0`; a backup of `4718592` bytes; `0` open quota warnings |
 | 3 | `reserveInUse = true` and `canBackUp = true`, `81180754` bytes left below the ceiling |
-| 4 | a second backup of `4718592` bytes; `1` open `warning`, body *The backups folder holds 951.1 MB, past its operating quota of 921.6 MB. Backups are still being taken, from the reserve below the ceiling of 1.00 GB, …* |
-| 5 | `0` exceptions; `1` open warning after the restart |
-| 6 | reset `200`; `1` open warning; the reseed row *The database holds no quotes* with `backupCaution = true` and `["backupthenreseed"]`; `0` rows offering an action without the caution |
+| 4 | a second backup of `4718592` bytes; `1` open `warning`, `resolution` absent, body *The backups folder holds 951.1 MB, past its operating quota of 921.6 MB. Backups are still being taken, from the reserve below the ceiling of 1.00 GB, …* |
+| 5 | `0` exceptions; `1` open warning after the restart, `resolution` absent |
+| 6 | reset `200`; `1` open warning, `resolution` absent; the reseed row *The database holds no quotes* with `backupCaution = true` and `["backupthenreseed"]`; `0` rows offering an action without the caution |
 | 6b | `innerHeight = 1100`, `cautioned = 1`, buttons *Back up, then reseed* and *Dismiss* |
 | 7 | `reserveInUse = false`; `0` open, the newest resolved one `underquota` |
-| 8 | refresh `raised`, `1` open; refresh `cleared`, `0` open |
-| 9 | `409 BudgetExceeded`; `0` open quota warnings; `1` open `error` |
+| 8 | refresh `raised`, `1` open, `resolution` absent; refresh `cleared`, `0` open |
+| 9 | `409 BudgetExceeded`; `0` open quota warnings; `1` open `error`, `resolution` absent |
 | 10 | `canBackUp = true`, a backup taken; `0` open errors, `0` open quota warnings; `0` exceptions |
 
 **The conversion corrected one assertion of its own.** Its first run asserted the open warning's
-`resolution` as `null` and failed: an open notification carries no `resolution` field at all. Being open
-is already asserted through `isDismissed`, and step 7 reads `resolution` once there is one, so the
-assertion was dropped rather than replaced.
+`resolution` as `null` and failed: the response omits the field rather than sending it as `null`. The
+assertion was then wrongly dropped, on the reasoning that `isDismissed` already showed the row open; but
+that filter only selects rows and asserts nothing about them, so the document no longer checked that an
+open notice is unresolved. TestProbe gained `--absent` for it, and every open warning and error the
+document reads now asserts `resolution` absent, against step 7's resolved row that carries one.
 
 **Measured 2026-09-27** against `quotinator:local`, and first run red against an image built from
 `7f83e92a`, the model #348 replaced.

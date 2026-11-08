@@ -103,6 +103,22 @@ public sealed class JsonExpectationEvaluatorTests
         => Assert.IsFalse(Evaluate(JsonExpectationKind.Present, "absent", null).Holds);
 
     [TestMethod]
+    public void Absent_MissingField_Holds()
+        => Assert.IsTrue(Evaluate(JsonExpectationKind.Absent, "absent", null).Holds);
+
+    [TestMethod]
+    public void Absent_ExistingField_Fails()
+        => Assert.IsFalse(Evaluate(JsonExpectationKind.Absent, "status", null).Holds);
+
+    [TestMethod]
+    public void Absent_NullField_Fails()
+        => Assert.IsFalse(Evaluate(JsonExpectationKind.Absent, "nothing", null).Holds);
+
+    [TestMethod]
+    public void Absent_MissingField_IsObservedAsAbsent()
+        => Assert.Contains(line => line == "absent is absent", Evaluate(JsonExpectationKind.Absent, "absent", null).Observations);
+
+    [TestMethod]
     public void NotEmpty_NonEmptyString_Holds()
         => Assert.IsTrue(Evaluate(JsonExpectationKind.NotEmpty, "reason", null).Holds);
 

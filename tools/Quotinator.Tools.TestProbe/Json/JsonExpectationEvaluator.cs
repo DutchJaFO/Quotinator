@@ -57,6 +57,11 @@ internal static class JsonExpectationEvaluator
 
     private static string? Check(JsonElement root, JsonExpectation expectation, bool found, JsonElement value)
     {
+        if (expectation.Kind == JsonExpectationKind.Absent)
+        {
+            return found ? $"{expectation.Path}: expected {Describe(expectation)}, got: {Observe(expectation, value)}" : null;
+        }
+
         if (!found)
         {
             return $"{expectation.Path}: expected {Describe(expectation)}, but the field is absent";
@@ -115,6 +120,7 @@ internal static class JsonExpectationEvaluator
         JsonExpectationKind.GreaterThan => $"a number greater than {expectation.Value}",
         JsonExpectationKind.Contains => $"to contain '{expectation.Value}'",
         JsonExpectationKind.Present => "to be present",
+        JsonExpectationKind.Absent => "the field to be absent",
         JsonExpectationKind.EqualToField => $"the value of {expectation.Value}",
         JsonExpectationKind.LengthEqualToField => $"an array as long as the value of {expectation.Value}",
         JsonExpectationKind.LengthEquals => $"an array of {expectation.Value} elements",
