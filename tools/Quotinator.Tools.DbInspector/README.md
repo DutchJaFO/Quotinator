@@ -28,6 +28,26 @@ Inspecting a database file produced by a Docker container: if the container was 
 
 Any table can be queried this way — `Quotes`, `Sources`, `System_AuditEntries`, `System_SchemaVersion`, etc.
 
+### `integrity`: check a database file's schema
+
+```bash
+dotnet run --project tools/Quotinator.Tools.DbInspector -- integrity --db <path-to-db-file>
+```
+
+Runs the integrity check (#305) against a file, without a running application: the file's schema is
+compared, in every measured aspect, with the schema this build's migration path defines. The expected
+schema is chosen from the version table the file holds: `System_ConsumerSchemaVersion` means the main
+database, `Changelog_SchemaVersion` the changelog database. Every difference is printed, extras included.
+
+| Exit code | Meaning |
+|---|---|
+| `0` | Intact: nothing missing or different (extras may still be listed) |
+| `1` | Not intact: something is missing or different |
+| `2` | Not a Quotinator database: the file holds neither version table |
+
+Useful for a developer database, a backup, or a file copied out of a container. The running
+application's own check is `GET /api/v1/admin/database/integrity`.
+
 ## Read-only by design
 
 The connection opens with `Mode=ReadOnly` (`ConnectionStrings.BuildReadOnly`) — no query, however it's crafted, can `INSERT`/`UPDATE`/`DELETE`/`DROP`. This is deliberate, and is this tool's equivalent of the project's mandatory SQL policy (`CLAUDE.md` → SQL injection policy): the rest of the codebase enforces safety by parameterising every query, but this tool's entire purpose is running arbitrary, non-parameterisable query *text* supplied directly by the developer — there's no fixed structure to bind parameters into. Read-only mode is the correct analogous protection: it can't do damage regardless of what's typed, and it also means this tool won't read as a SQL-injection-shaped pattern to security scanners the way an unguarded `connection.Query(freeformSql)` normally would, since there's no write capability to exploit even if the "injection" succeeded.

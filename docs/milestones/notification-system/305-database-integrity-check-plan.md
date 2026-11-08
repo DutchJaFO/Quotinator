@@ -1,6 +1,6 @@
 # #305: Database integrity check: verify every database's full schema against its migration path at startup
 
-**Status:** In progress (step 12)
+**Status:** In progress (step 13)
 **GitHub issue:** #305
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 12: update the documents this changes.** Every decision is settled (see
+**Execute from step 13: run the full gates, correcting `startup-and-degradation/01` from its measured run.** Every decision is settled (see
 *Decisions*, including D5, found in step 3), the ADR 003 and ADR 009 amendments were approved on
 2026-11-07, and the issue's title and body reflect the widened scope.
 
@@ -573,7 +573,7 @@ Findings, 2026-11-08:
 
 ### 12. Update the documents this changes
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done; document 01 and the README's awaiting list are corrected from step 13's measured run
 
 - `docs/automated-testing/README.md`: done in step 7, with the documents; here, only document 14 and 04
   leaving *Observed effects awaiting measurement* once step 13 records their readings.
@@ -592,6 +592,20 @@ Findings, 2026-11-08:
 
 `docs/api-endpoints.md` goes with the endpoint's code commits (steps 2 and 5), as `CLAUDE.md` requires;
 the rest each in a `docs [#305]` commit separate from the code.
+
+Findings, 2026-11-08:
+
+- **ADR 009, `checklist.md`, `vocabulary.md`, the DbInspector README and the Knowledgebase are updated.**
+  ADR 009's procedure now obtains the released database from the published image and requires the
+  integrity check to report it intact; its open follow-on about a checked-in snapshot is replaced by D5's
+  outcome, since the two contradicted each other. The new entry is
+  `docs/knowledgebase/the-schema-does-not-match-its-recorded-version.md`, and the existing
+  `the-database-file-cannot-be-read.md` points to it for the case it now covers.
+- **`startup-and-degradation/01`'s step 3 no longer describes what happens.** The dropped `Quotinator_Quote`
+  is found by the check before seeding, so no `SqliteException` is thrown and no backup is taken, and the
+  document asserts both. Its expected values are corrected from a measured run in step 13, not written
+  ahead of one.
+- **The README's awaiting list** loses documents 14 and 04 in step 13, once their readings are recorded.
 
 ### 13. Run the full gates
 

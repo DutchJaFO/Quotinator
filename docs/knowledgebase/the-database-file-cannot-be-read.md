@@ -46,6 +46,11 @@ For a schema that does not match its version, run the Reset the reason names.
 
 ## Notes
 
+Since #305, a schema that does not match its recorded version is found before this reason can be given,
+and reported with its own: see [the schema does not match the one its recorded version
+defines](the-schema-does-not-match-its-recorded-version.md). This reason remains for what that check
+cannot reach, a file that cannot be read among them.
+
 Found by #327's `startup-and-degradation/08` and `09` (2026-10-23). #457 tracks the reason telling an
 unreadable file apart from a schema-version mismatch. [#482](https://github.com/DutchJaFO/Quotinator/issues/482)
 tracks a Reset rebuilding a file it cannot read, instead of refusing, which will make the second remedy

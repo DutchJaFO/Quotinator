@@ -222,7 +222,10 @@ Releases follow a two-stage model. See `docs/release-verification.md` for tier d
 - [ ] **Process gap check**: across the whole milestone, did anything about the workflow itself repeatedly feel undefined or get skipped? A pattern visible only at milestone scope (not from any single issue) still needs the same investigate-and-decide treatment, see `process.md` → "Process gap discovery"
 - [ ] If the milestone added any migrations: full incremental migration path verified against a
       database matching the *last published release's* schema, not the accumulated dev database,
-      see [ADR 009](../architecture-decisions/009-verify-migrations-against-last-released-schema.md)
+      see [ADR 009](../architecture-decisions/009-verify-migrations-against-last-released-schema.md).
+      Run after the consolidation below: the last release's image creates the database, this build
+      upgrades it, and the integrity check (`GET /api/v1/admin/database/integrity`) must report every
+      database intact with no extra object
 - [ ] If the milestone added any migrations: consolidate the accumulated set before release, the way
       #155 and #289 each consolidated their predecessors. What accumulated is read from
       `DatabaseInitializer.DataOwnedMigrations` and the consumer's own list against the last

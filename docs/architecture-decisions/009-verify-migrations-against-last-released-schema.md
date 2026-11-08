@@ -44,13 +44,16 @@ own).
 
 This means:
 
-1. Obtain or reconstruct a database snapshot matching the real released schema (e.g. by checking
-   out the release tag and running a fresh `InitialiseAsync` against an empty file, or restoring an
-   actual shipped database backup).
-2. Apply every migration the in-progress milestone has added, in order, against that snapshot.
-3. Confirm the result matches what the from-empty incremental-replay and from-empty baseline paths
-   already produce for the same final version — i.e., no drift specific to *upgrading from a real
-   prior release* that the from-empty tests wouldn't have caught.
+1. Obtain the released database by running the last published release's image against a fresh data
+   directory until its first start has finished. It is rebuilt this way each time, never stored, so
+   it is always the database a real installation of that release holds.
+2. Run this build against the same data directory, so it applies every migration the in-progress
+   milestone has added, in order, against that database.
+3. Run the integrity check (`GET /api/v1/admin/database/integrity`) and require it to report every
+   database intact, with no extra object. It compares the upgraded database with the schema this
+   build's own migration path defines, in every aspect it measures, so drift specific to *upgrading
+   from a real prior release*, which the from-empty tests cannot catch, is reported rather than
+   inferred.
 4. Give particular attention to any migration that is known to have been edited after being applied
    locally during development (this project's own tracked example: the #56 `System_ImportConflicts`
    incident) — confirm the final on-disk migration text is what a genuine prior-release database
@@ -99,6 +102,5 @@ structurally unable to catch.
   different classes of error.
 - `docs/database-conventions.md` references this ADR under "Migrations" as the do/don't summary;
   this ADR is the authoritative reasoning.
-- Consider, as a follow-on (not decided here), whether a checked-in released-schema snapshot or a
-  reconstructable script should become a permanent, automated test fixture rather than a manual
-  per-milestone step — see #155 for where that decision will actually be made.
+- No released-schema snapshot is checked in: the released database is rebuilt from the published
+  image, as `docs/automated-testing/README.md` → *Users skip versions* records.
