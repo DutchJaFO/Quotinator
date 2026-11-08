@@ -9,13 +9,11 @@
 
 **Beyond the profile.** One container of this test's own, `qt-notif-14`, publishing `19514`, created
 with `--env Quotinator__AdminApiKey=t2-308` and a bind directory holding the shared conflict fixture in
-its `imports/` folder. It is restarted three times and reset once, then restarted a fourth time to read
-the reset's own recommendation in the popup; each of those is a trigger, not scaffolding.
+its `imports/` folder. It is restarted three times and reset once; each of those is a trigger, not
+scaffolding.
 
-#308 defines a per-type layout across both surfaces. Two kinds, `ReseedRecommended` and
-`SchemaVersionOvershoot`, had never been rendered under assertion at all, and the per-type decision
-itself was only ever read off a lookup table no renderer consults. This asserts both halves for every
-kind: that the kind's own trigger produces it, and that what a reader then sees matches the decision.
+#308 defines a per-type layout across both surfaces. This asserts both halves for every kind: that the
+kind's own trigger produces it, and that what a reader then sees matches the decision.
 
 ## Determinism
 
@@ -29,516 +27,275 @@ rendering assertion passing over a page nobody could reach in practice:
 | `WhatsNew` | the same cold start, from the bundled changelog |
 | `ReseedFileApplied` | the same cold start, one per bundled file that applied cleanly |
 | `ImportReviewPending` | the conflict fixture in `imports/`, staged by that seed |
+| `DatabaseCreated` | the same cold start, which is what creates the database (#371) |
 | `SchemaVersionOvershoot` | a consumer schema version rolled one past this build, then a restart |
 | `ReseedRecommended` | a database reset, which leaves the database empty |
-| `DatabaseCreated` | the same cold start, which is what creates the database (#371) |
 
-**`BackupRefused` is not produced here.** Its trigger is a startup that cannot take a backup, and that
-startup loads no content, so it cannot share a run with the kinds above, each of which needs content
-loaded. Its own trigger produces it, and both surfaces render it, in
-[`../backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md`](../backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md).
-
-**`BackupQuotaReached` is not produced here either.** Its trigger is a backups folder filled past its
-operating quota, which no other kind here needs and which would slow every step that takes a backup. Its
-own trigger produces it in `backup/08`, #348's document for the reserve.
-
-**`BackupMaxExceeded` is not produced here either**, for the same reason and by the same document: its
-trigger is a backups folder filled to its maximum, one band further than the warning above. `backup/08`
-produces both, and they are mutually exclusive, so no step there shows the two together.
-
-**`MigrationApplied` is not produced here either** (#371). Its trigger is an upgrade: migrations applied
-to a database an *earlier* build created. Every cold start in this document takes the baseline path,
-which applies no individual migration at all, so this run cannot produce it.
-[*Each applied migration says what it did*](16-each-applied-migration-says-what-it-did.md) is the
-document whose upgrade produces it, and which renders it on both surfaces.
-
-**The reset comes last, and in its own step.** Reset rebuilds every table (#156), so it takes the other
-five kinds with it, which is why it cannot share a page with them and why nothing after it may assume
-they are still there.
+**`BackupRefused`, `BackupQuotaReached`, `BackupMaxExceeded` and `MigrationApplied` are not produced
+here.** Each needs a state no other kind here shares: a startup that cannot take a backup loads no content
+([`../backup/06`](../backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md)), a backups folder
+past its quota or its maximum ([`../backup/08`](../backup/08-backups-continue-from-the-reserve-until-the-ceiling-refuses-one.md)),
+and an upgrade from an earlier build's database
+([`16`](16-each-applied-migration-says-what-it-did.md)). Each of those documents produces its kind and
+renders it on both surfaces. Every cold start here takes the baseline path, which applies no individual
+migration, so `migrationapplied` must be absent, and the exact kind list asserts that it is.
 
 **The overshoot's trigger is a version row, not a notification row.** Inserting `MAX(Version) + 1` into
 `System_ConsumerSchemaVersion` is what
-[`../startup-and-degradation/06-schema-version-ahead-of-the-application.md`](../startup-and-degradation/06-schema-version-ahead-of-the-application.md)
-uses, and the producer is what writes the notification, so this still exercises the producer rather
-than faking its output.
+[`../startup-and-degradation/06`](../startup-and-degradation/06-schema-version-ahead-of-the-application.md)
+uses, and the producer writes the notification. The row is then removed again, because while the version
+stands ahead the application is degraded and shows nothing read from the database (#350): the
+notification survives, the degradation does not.
 
-**The detail expectation is derived, not listed.** Which kinds carry structured detail is read from each
-row's own payload (a kind has detail when its payload carries a non-empty `counts` array), so no list
-here can go stale when a kind is added.
+**The reset comes last but one.** Reset rebuilds every table (#156), so it takes the other kinds with it,
+and nothing after it may assume they are still there.
+
+**The detail expectation follows the payload.** A kind opens detail when its payload carries a non-empty
+`counts` array: `reseedfileapplied` and `importreviewpending`. Every other kind here carries none, and its
+body already says what its payload holds.
 
 **`NotificationMetadataKind` is the source of the case list.** A kind added later must fail until it is
 covered here; `NotificationTableTests.EveryLiveNotificationKind_IsNamedInTheVariantDocument` asserts
 this document names every member.
 
-**Close the browser tab before every stop**, and read the log before it, per the index's *Read the log
-before the application stops*.
+**Every reading is a committed page script run by `capture-page.csx`**, which loads the page, runs the
+script, prints and saves what it returns, and writes the PNG, so the assertion and the image describe the
+same moment. A script returning a rectangle crops the image to it:
+[`notification-row.js`](../../../scripts/testing/page-scripts/notification-row.js) finds the row whose
+title holds the text in the URL fragment (`#needs review`, or `#needs review|expand` to open its in-place
+detail first). [`notification-kinds.js`](../../../scripts/testing/page-scripts/notification-kinds.js)
+reads the kinds from the API, and
+[`notification-rows-by-kind.js`](../../../scripts/testing/page-scripts/notification-rows-by-kind.js)
+pairs each rendered row with its kind, on the page or in the startup popup. Images land in
+`.claude/temp/qt-notif-14/`, gitignored: this run's evidence, produced again by the next.
 
-**A rendering claim is only evidence if someone can see it.** Every surface this document opens is
-captured as well as read: one image of the whole surface, one per kind on it, and one more for each
-detail it opens: `<kind>-<surface>.png` and `<kind>-<surface>-detail.png`, into
-`.claude/temp/qt-notif-14/`, which is gitignored. Fifteen images, and none of them a tracked file: they
-are this run's evidence, produced again by the next run.
+**Nothing passes or fails on an image.** The image records what an assertion cannot describe (spacing,
+wrapping, whether a body that reads correctly also looks like one); the scripts' results are what fail.
 
-The DOM snippets stay the machine-checkable half, per the index's *Every test must be able to run
-unattended*: nothing passes or fails on an image. The image records what an assertion cannot describe
-(spacing, wrapping, whether a body that reads correctly also looks like one), and it is the only way the
-per-type decision reaches a reader who cannot produce these kinds themselves. Four of the six need a
-rolled-forward schema version, a reset, or a staged conflict to exist at all, so this run is the only
-place all six are ever together.
-
-**The capture is a command, not an act of driving a browser.** `scripts/testing/capture-page.csx` runs
-headless Edge over the DevTools Protocol: it loads a URL, evaluates the step's own JavaScript, prints
-what that returns, and writes the PNG. So every image in this document comes from a line anyone can run
-again, and the assertion and the picture describe the same moment because one call produced both.
-
-**A kind is cropped to its own row by returning that row's rectangle.** The script uses an
-`{x, y, width, height}` return value as the capture region, so `getBoundingClientRect()` on the row is
-what bounds the image: no pixel bounds chosen by eye, and no hiding of neighbouring rows to fake an
-isolated shot. A row whose rectangle has zero height is not one that rendered small but one the viewport
-never laid out, and the index's *A count is evidence only if the instrument counts the right thing*
-applies to a capture exactly as it does to a count.
-
-**Match a title without an apostrophe in it.** The match text is interpolated into a single-quoted
-JavaScript string, and `What's new` closes it: `SyntaxError: missing ) after argument list`, measured
-2026-09-24. Match `new (unreleased)` instead.
+**Every zero exception count is read from a mark taken after the last restart**, so a stop's own shutdown
+lines are behind it, and the last is given its positive control: the malformed upload's
+`JsonReaderException`, logged by the same channel.
 
 ## Steps
 
 ### 1. Cold start with a conflict waiting, and confirm five kinds were produced
 
-```powershell
-$bind = Join-Path $env:TEMP "qt-notif-14-bind"
-# A folder left by an earlier run still holds its database, and the container would start against it.
-if (Test-Path $bind) { Remove-Item -LiteralPath $bind -Recurse -Force }
-dotnet script scripts/testing/stage-import-conflict.csx -- --imports (Join-Path $bind "imports")
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-notif-14 --port 19514 `
-  --image quotinator:local --bind $bind --env Quotinator__AdminApiKey=t2-308
-function Read-Thrown {
-  $lines = @(docker logs qt-notif-14 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]')
-  $new = @($lines | Select-Object -Skip $script:thrownSeen)
-  $script:thrownSeen = $lines.Count
-  "thrown=$($new.Count)"
-  $new | ForEach-Object { '  ' + ($_.Line -split 'thrown: ')[1] }
-}
-$thrownSeen = 0
-
-function Kinds {
-  $items = (Invoke-RestMethod "http://localhost:19514/api/v1/notifications?pageSize=0").items
-  @($items | Group-Object metadataKind | Sort-Object Name | ForEach-Object { "$($_.Name)=$($_.Count)" }) -join ' '
-}
-
-# Images from an earlier run would otherwise be read as this one's evidence.
-$shots = Join-Path (Get-Location) ".claude\temp\qt-notif-14"
-if (Test-Path $shots) { Remove-Item -LiteralPath $shots -Recurse -Force }
-New-Item -ItemType Directory -Path $shots | Out-Null
-
-function Capture-Row {
-  param([string]$Surface, [string]$Match, [string]$Name, [switch]$Expand, [string]$Port = '19514')
-  $url    = if ($Surface -eq 'popup') { "http://localhost:$Port/" } else { "http://localhost:$Port/notifications" }
-  $scope  = if ($Surface -eq 'popup') { "document.querySelector('.modal')" } else { "document" }
-  $width  = if ($Surface -eq 'popup') { 1000 } else { 1280 }
-  $expandJs = if ($Expand) { "const d = row.querySelector('details.notification-detail'); if (d) d.open = true; await new Promise(r => setTimeout(r, 300));" } else { "" }
-  @"
-await new Promise(r => setTimeout(r, 800));
-const rows = [...$scope.querySelectorAll('tbody tr')].filter(r => r.querySelector('.notification-body'));
-const row  = rows.find(r => r.querySelector('.notification-title').textContent.includes('$Match'));
-$expandJs
-const b = row.getBoundingClientRect();
-return { x: b.left + scrollX, y: b.top + scrollY, width: b.width, height: b.height,
-         title: row.querySelector('.notification-title').textContent.trim(),
-         opensDetail: !!row.querySelector('.notification-detail-open'),
-         expandsInPlace: !!row.querySelector('details.notification-detail'),
-         buttons: [...row.querySelectorAll('button')].map(x => x.textContent.trim()) };
-"@ | dotnet script scripts/testing/capture-page.csx -- --url $url --out "$shots\$Name.png" --width $width --height 1400 --script-stdin
-}
-
-Kinds
-Read-Thrown
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-notif-14-bind --delete C:\repos\Quotinator\.claude\temp\qt-notif-14 --create-directory C:\repos\Quotinator\.claude\temp\qt-notif-14
+dotnet script scripts/testing/stage-import-conflict.csx -- --imports C:\repos\Quotinator\.claude\temp\qt-notif-14-bind\imports
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-14 --port 19514 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-notif-14-bind --env Quotinator__AdminApiKey=t2-308
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:19514/notifications --out C:\repos\Quotinator\.claude\temp\qt-notif-14\kinds-first-start.png --script-file scripts/testing/page-scripts/notification-kinds.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\kinds-first-start.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\kinds-first-start.json --equals "kindList=announcement=1 databasecreated=1 importreviewpending=1 reseedfileapplied=5 whatsnew=1"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-14 --pattern "\[Runtime - Exception\]" --exactly 0
 ```
 
-**Expected:** `announcement=1 databasecreated=1 importreviewpending=1 reseedfileapplied=5 whatsnew=1`,
-and `thrown=0`. Five kinds, each written by the producer its trigger runs. `migrationapplied` is absent
-and must be: the baseline path applies no individual migration, which is the distinction #371 draws
-between creating a database and upgrading one.
+**Expected:** the conflict is staged, the container reaches healthy, the `json` command exits `0` on
+exactly five kinds, and no exception has been logged. `migrationapplied` is absent, as the baseline path
+requires.
 
-**`Capture-Row`'s script fragment is `$expandJs`, never `$expand`.** PowerShell names are
-case-insensitive, so `$expand` *is* the `[switch]$Expand` parameter: assigning it a string throws, and
-the page then receives a bare `False`. Measured 2026-09-26: every capture failed with `ReferenceError:
-False is not defined`, and each failed capture left four `WebSocketException`s in the log that the next
-stop's `Read-Thrown` counted.
-
-**On failure:** a missing kind is a producer defect, not a rendering one; the rest of this document
-would then asserting rendering for a row nobody can obtain. Stop and report which trigger produced
-nothing.
+**On failure:** a missing kind is a producer defect, not a rendering one, and every later step would assert
+rendering for a row nobody can obtain. Stop and report which trigger produced nothing.
 
 ### 2. Read the page: what each kind shows
 
-Open `http://localhost:19514/notifications` and:
-
-```js
-const rows = [...document.querySelectorAll('tbody tr')].filter(r => r.querySelector('.notification-body'));
-rows.map(r => ({
-  title: r.querySelector('.notification-title')?.textContent.trim() ?? '(none)',
-  bodyLength: r.querySelector('.notification-body')?.textContent.trim().length ?? 0,
-  titleInsideBody: (r.querySelector('.notification-body')?.textContent ?? '')
-      .includes((r.querySelector('.notification-title')?.textContent ?? 'no-title').trim()),
-  opensDetail: !!r.querySelector('.notification-detail-open'),
-  expandsInPlace: !!r.querySelector('details.notification-detail'),
-  buttons: [...r.querySelectorAll('button')].map(b => b.textContent.trim()).filter(t => t && t !== 'Details' && t !== 'Dismiss')
-}))
+```
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:19514/notifications --out C:\repos\Quotinator\.claude\temp\qt-notif-14\page.png --width 1280 --height 1400 --full-page --script-file scripts/testing/page-scripts/notification-rows-by-kind.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\page-by-kind.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\page-by-kind.json --equals rows=9 --equals byKind.reseedfileapplied.rows=5 --equals byKind.reseedfileapplied.opensDetail=5 --equals byKind.importreviewpending.opensDetail=1 --equals byKind.importreviewpending.extraButtons=Decide --equals byKind.announcement.opensDetail=0 --equals byKind.whatsnew.opensDetail=0 --equals byKind.databasecreated.opensDetail=0 --equals byKind.reseedfileapplied.expandsInPlace=0 --equals byKind.importreviewpending.expandsInPlace=0 --equals byKind.reseedfileapplied.emptyBody=0 --equals byKind.reseedfileapplied.titleInsideBody=0 --equals byKind.importreviewpending.emptyBody=0 --equals byKind.importreviewpending.titleInsideBody=0 --equals byKind.announcement.emptyBody=0 --equals byKind.announcement.titleInsideBody=0 --equals byKind.whatsnew.emptyBody=0 --equals byKind.whatsnew.titleInsideBody=0 --equals byKind.databasecreated.emptyBody=0 --equals byKind.databasecreated.titleInsideBody=0
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/notifications#operation IDs" --out C:\repos\Quotinator\.claude\temp\qt-notif-14\announcement-page.png --script-file scripts/testing/page-scripts/notification-row.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\announcement-page.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\announcement-page.json --equals buttons=Dismiss
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/notifications#new (unreleased)" --out C:\repos\Quotinator\.claude\temp\qt-notif-14\whatsnew-page.png --script-file scripts/testing/page-scripts/notification-row.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\whatsnew-page.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\whatsnew-page.json --equals buttons=Dismiss
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/notifications#Database created" --out C:\repos\Quotinator\.claude\temp\qt-notif-14\databasecreated-page.png --script-file scripts/testing/page-scripts/notification-row.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\databasecreated-page.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\databasecreated-page.json --equals buttons=Dismiss
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/notifications#reseeded cleanly" --out C:\repos\Quotinator\.claude\temp\qt-notif-14\reseedfileapplied-page.png --script-file scripts/testing/page-scripts/notification-row.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\reseedfileapplied-page.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\reseedfileapplied-page.json --equals "buttons=Details, Dismiss"
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/notifications#needs review" --out C:\repos\Quotinator\.claude\temp\qt-notif-14\importreviewpending-page.png --script-file scripts/testing/page-scripts/notification-row.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\importreviewpending-page.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\importreviewpending-page.json --equals "buttons=Details, Decide, Dismiss"
 ```
 
-Pair each row with its kind through the API, so the assertion is per kind rather than per position:
+**Expected:** every `json` command exits `0`. Nine rows; every row renders a non-empty body with its title
+as its own element, never inside the body; detail opens in a dialog for exactly the five reseeded files and
+the review row, and for none of the announcement, what's-new and database-created rows; nothing expands in
+place on the page; and the review row alone carries an extra button, `Decide`. The per-row captures read
+`Dismiss` alone for the three kinds without detail, `Details, Dismiss` for a reseeded file, and
+`Details, Decide, Dismiss` for the review row.
 
-```powershell
-(Invoke-RestMethod "http://localhost:19514/api/v1/notifications?pageSize=0").items | ForEach-Object {
-  $p   = if ($_.metadata) { $_.metadata | ConvertFrom-Json } else { $null }
-  $has = $p -and ($p.PSObject.Properties.Name -contains 'counts')
-  "$($_.metadataKind) | title=$($_.title) | countEntries=$(if ($has) { @($p.counts).Count } else { 0 })"
-}
-```
-
-**Ask whether the key exists before counting it.** `@($p.counts).Count` reads `1` for a payload with no
-`counts` at all, because `@($null)` is a one-element array, so every kind would look as though it
-carried detail. Measured here 2026-09-23: the announcement and what's-new rows reported `counts=1`
-under that form and `0` under this one. See the index's *A count is evidence only if the instrument
-counts the right thing*.
-
-**Expected:** every row renders a non-empty body with its title as its own element and never inside it
-(`titleInsideBody: false`); `expandsInPlace: false` throughout, because the page opens a dialog;
-`opensDetail: true` for exactly the rows whose payload carries a non-empty `counts` array (the five
-`reseedfileapplied` rows and the one `importreviewpending` row) and `false` for `announcement`,
-`whatsnew` and `databasecreated`, whose payloads carry no counts; and the review row is the only one
-with an extra button, reading `Decide`.
-
-**That is the per-type layout decision, stated as what a reader sees.** Derive it from the payload when
-a kind is added: a kind whose payload says nothing its body does not opens no detail.
-
-**Capture the page, then each of the five kinds on it.** One of the five `reseedfileapplied` rows is
-enough, since the five are one kind:
-
-```powershell
-dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/notifications" `
-  --out "$shots\page.png" --width 1280 --height 1400 --full-page
-Capture-Row -Surface page -Match "operation IDs"    -Name announcement-page
-Capture-Row -Surface page -Match "new (unreleased)" -Name whatsnew-page
-Capture-Row -Surface page -Match "reseeded cleanly" -Name reseedfileapplied-page
-Capture-Row -Surface page -Match "needs review"     -Name importreviewpending-page
-Capture-Row -Surface page -Match "Database created" -Name databasecreated-page
-```
-
-**Expected:** each call prints the row it found and its own rectangle, and the five match this step's
-own reading: `buttons` of `Dismiss` alone for the announcement, what's-new and database-created rows,
-`Details, Dismiss` for a reseeded file, `Details, Decide, Dismiss` for the review row.
+**That is the per-type layout decision, stated as what a reader sees**, and it is asserted both ways: the
+kinds whose payload carries counts open detail, and the kinds whose payload does not, do not.
 
 ### 3. Open a detail dialog and confirm it describes itself
 
-```js
-document.querySelector('.notification-detail-open').click();
-await new Promise(r => setTimeout(r, 700));
-const t = document.querySelector('.modal-body .notification-detail-table');
-({ headers: [...t.querySelectorAll('th')].map(h => h.textContent.trim()),
-   rows: [...t.querySelectorAll('tbody tr')].map(r => [...r.querySelectorAll('td')].map(c => c.textContent.trim())) })
+```
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/notifications#reseeded cleanly" --out C:\repos\Quotinator\.claude\temp\qt-notif-14\reseedfileapplied-page-detail.png --width 1280 --height 1000 --script-file scripts/testing/page-scripts/notification-detail-dialog.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\detail.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\detail.json --equals "title=Source file reseeded cleanly" --greater-than headers=0 --greater-than bodyRows=0 --equals footRows=1 --equals everyRowMatchesHeaders=true
 ```
 
-**Expected:** a heading per column and one row per payload entry, each row's cell count matching the
-headings. Close the dialog afterwards.
+**Expected:** the `json` command exits `0`: a reseeded file's dialog, with headings, at least one body row,
+one **Total** footer row, and every row with one cell per heading.
 
-Capture it from a run of its own, which opens the dialog and shoots it in one call:
+**The dialog is chosen by its row's title, never by position.** Rows written in the same second are listed
+in no fixed order. Found while converting this document: its earlier form opened the first detail control on
+the page, which was a reseeded file on one run and the review row on the next, whose breakdown has no total
+line.
 
-```powershell
-@'
-document.querySelector('.notification-detail-open').click();
-await new Promise(r => setTimeout(r, 1200));
-const dialog = document.querySelector('.modal-dialog');
-const t = document.querySelector('.modal-body .notification-detail-table');
-const b = dialog.getBoundingClientRect();
-return { x: b.left + scrollX, y: b.top + scrollY, width: b.width, height: b.height,
-         headers:  [...t.querySelectorAll('th')].map(h => h.textContent.trim()),
-         bodyRows: [...t.querySelectorAll('tbody tr')].map(r => [...r.querySelectorAll('td')].map(c => c.textContent.trim())),
-         footRows: [...t.querySelectorAll('tfoot tr')].map(r => [...r.querySelectorAll('td,th')].map(c => c.textContent.trim())) };
-'@ | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/notifications" `
-  --out "$shots\reseedfileapplied-page-detail.png" --width 1280 --height 1000 --script-stdin
+**Assert the shape, not the column list**: the counts a breakdown carries have changed twice since #308
+(#374, #377), and naming them here would fail on the next addition while the behaviour is correct.
+
+### 4. Trigger the overshoot, and confirm its kind is produced and rendered
+
 ```
-
-**Read `tfoot` separately, or the totals go unasserted.** The dialog renders a bold **Total** line that
-is not a `tbody` row; measured 2026-09-24: `bodyRows` `2`, `footRows` `1`. A step counting only
-`tbody tr` reads `2` where three lines render, and would keep passing if the totals stopped adding up.
-
-**Assert the shape, not the column list**: the counts a breakdown carries have changed twice since
-#308 (#374, #377), and naming them here would fail on the next addition while the behaviour is correct.
-
-### 4. Trigger the overshoot, and confirm the fifth kind is produced and rendered
-
-Close the browser tab, then:
-
-```powershell
-Read-Thrown
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-14 --pattern "\[Runtime - Exception\]" --exactly 0
 docker stop -t 15 qt-notif-14
-$thrownSeen = @(docker logs qt-notif-14 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count
-dotnet script scripts/testing/execute-sql.csx -- --db "$bind\quotinatordata.db" `
-  --sql "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) SELECT MAX(Version) + 1, '2026-01-01 00:00:00' FROM System_ConsumerSchemaVersion;"
+dotnet script scripts/testing/execute-sql.csx -- --db C:\repos\Quotinator\.claude\temp\qt-notif-14-bind\quotinatordata.db --sql "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) SELECT MAX(Version) + 1, '2026-01-01 00:00:00' FROM System_ConsumerSchemaVersion;"
 docker start qt-notif-14
-dotnet script scripts/testing/http.csx -- --url "http://localhost:19514/api/v1/health" --wait-for 503 --status
-
-# The producer has now written the row. Take the overshoot away again so the application comes back
-# healthy and will render it: the notification survives, the degradation does not.
+dotnet script scripts/testing/http.csx -- --url http://localhost:19514/api/v1/health --wait-for 503 --status
 docker stop -t 15 qt-notif-14
-dotnet script scripts/testing/execute-sql.csx -- --db "$bind\quotinatordata.db" `
-  --sql "DELETE FROM System_ConsumerSchemaVersion WHERE Version = (SELECT MAX(Version) FROM System_ConsumerSchemaVersion);"
+dotnet script scripts/testing/execute-sql.csx -- --db C:\repos\Quotinator\.claude\temp\qt-notif-14-bind\quotinatordata.db --sql "DELETE FROM System_ConsumerSchemaVersion WHERE Version = (SELECT MAX(Version) FROM System_ConsumerSchemaVersion);"
 docker start qt-notif-14
-dotnet script scripts/testing/http.csx -- --url "http://localhost:19514/api/v1/health" --wait-for 200 --status
-Kinds
+dotnet script scripts/testing/http.csx -- --url http://localhost:19514/api/v1/health --wait-for 200 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-14 --mark C:\repos\Quotinator\.claude\temp\qt-notif-14\after-overshoot.mark
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:19514/notifications --out C:\repos\Quotinator\.claude\temp\qt-notif-14\kinds-overshoot.png --script-file scripts/testing/page-scripts/notification-kinds.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\kinds-overshoot.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\kinds-overshoot.json --equals "kindList=announcement=1 databasecreated=1 importreviewpending=1 reseedfileapplied=5 schemaversionovershoot=1 whatsnew=1"
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/notifications#schema version" --out C:\repos\Quotinator\.claude\temp\qt-notif-14\schemaversionovershoot-page.png --script-file scripts/testing/page-scripts/notification-row.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\schemaversionovershoot-page.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\schemaversionovershoot-page.json --equals opensDetail=false --equals "buttons=Reset the database, Dismiss"
 ```
 
-**Expected:** `thrown=0` before the first stop, `OK — 1 row(s) affected.` twice, `503` then `200`, and
-the same four kinds plus `schemaversionovershoot=1`.
+**Expected:** nothing thrown before the first stop; `OK — 1 row(s) affected.` twice; `503` while the version
+stands ahead, then `200`; the earlier five kinds plus `schemaversionovershoot=1`; and its row opens no
+detail (its payload carries version numbers its body already states), with one extra button, `Reset the
+database`.
 
-**The overshoot has to be removed before its own notification can be read** (#350). While it stands,
-the application is degraded and nothing read from that database is shown or served: the schema is of
-unknown shape, so its content is untrusted, this row included. Rendering is this document's subject and
-degrading is
-[`startup-and-degradation/06`](../startup-and-degradation/06-schema-version-ahead-of-the-application.md)'s,
-so the state is built, the row is produced by it, and then the fault is cleared to read what the
-producer wrote. Deleting the version row is the one step that leaves the notification in place;
-step 7's Reset would take it with everything else.
+**On failure:** no overshoot row means the producer did not run; the version bump is its only trigger, so
+check the insert reported a row before reading anything into the rendering.
 
-Open `http://localhost:19514/notifications` and read the overshoot row with the snippet from step 2.
+### 5. Read the startup popup
 
-**Expected:** a non-empty body, its title its own element, `opensDetail: false` (its payload carries
-version numbers, which its body already states), and one extra button reading `Reset the database`.
-
-```powershell
-Capture-Row -Surface page -Match "schema version" -Name schemaversionovershoot-page
 ```
-
-**On failure:** no overshoot row means the producer did not run; the version bump is its only trigger,
-so check the insert reported a row before reading anything into the rendering.
-
-### 5. Read the startup popup, which renders once per process run
-
-Close the browser tab, then:
-
-```powershell
-Read-Thrown
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-14 --since-mark C:\repos\Quotinator\.claude\temp\qt-notif-14\after-overshoot.mark --pattern "\[Runtime - Exception\]" --exactly 0
 docker restart qt-notif-14
-dotnet script scripts/testing/http.csx -- --url "http://localhost:19514/api/v1/health" --wait-for 200 --status
-$thrownSeen = @(docker logs qt-notif-14 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count
+dotnet script scripts/testing/http.csx -- --url http://localhost:19514/api/v1/health --wait-for 200 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-14 --mark C:\repos\Quotinator\.claude\temp\qt-notif-14\after-restart.mark
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:19514/ --out C:\repos\Quotinator\.claude\temp\qt-notif-14\popup.png --width 1000 --height 1200 --script-file scripts/testing/page-scripts/notification-rows-by-kind.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\popup-by-kind.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\popup-by-kind.json --equals rows=10 --equals anyButton=false --equals byKind.reseedfileapplied.expandsInPlace=5 --equals byKind.importreviewpending.expandsInPlace=1 --equals byKind.announcement.expandsInPlace=0 --equals byKind.whatsnew.expandsInPlace=0 --equals byKind.databasecreated.expandsInPlace=0 --equals byKind.schemaversionovershoot.expandsInPlace=0 --equals byKind.reseedfileapplied.opensDetail=0 --equals byKind.importreviewpending.opensDetail=0
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/#reseeded cleanly|expand" --out C:\repos\Quotinator\.claude\temp\qt-notif-14\reseedfileapplied-popup-detail.png --width 1000 --height 1400 --script-file scripts/testing/page-scripts/notification-row.js
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/#needs review|expand" --out C:\repos\Quotinator\.claude\temp\qt-notif-14\importreviewpending-popup-detail.png --width 1000 --height 1400 --script-file scripts/testing/page-scripts/notification-row.js
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/#schema version" --out C:\repos\Quotinator\.claude\temp\qt-notif-14\schemaversionovershoot-popup.png --width 1000 --height 1400 --script-file scripts/testing/page-scripts/notification-row.js
 ```
 
-Open `http://localhost:19514/` and, against the popup:
-
-```js
-const modal = document.querySelector('.modal');
-[...modal.querySelectorAll('tbody tr')].filter(r => r.querySelector('.notification-body')).map(r => ({
-  title: r.querySelector('.notification-title')?.textContent.trim() ?? '(none)',
-  bodyLength: r.querySelector('.notification-body')?.textContent.trim().length ?? 0,
-  expandsInPlace: !!r.querySelector('details.notification-detail'),
-  opensDetail: !!r.querySelector('.notification-detail-open')
-}))
-```
-
-**Expected:** the same five kinds, the same detail decision (`expandsInPlace: true` for exactly the
-rows whose payload carries counts), and `opensDetail: false` throughout. That surface difference is
-what #308 settled: a dialog on the page, an expander in the popup.
-
-**Capture the popup, then each kind in it**, the same way as step 2 but against the modal's own rows.
-The two detail-carrying kinds are captured expanded: that image is what shows the surface difference
-as a difference, rather than as two booleans that happen to disagree:
-
-```powershell
-@'
-await new Promise(r => setTimeout(r, 800));
-const d = document.querySelector('.modal-dialog');
-const rows = [...d.querySelectorAll('tbody tr')].filter(r => r.querySelector('.notification-body'));
-const b = d.getBoundingClientRect();
-return { x: b.left + scrollX, y: b.top + scrollY, width: b.width, height: b.height,
-         rows: rows.length,
-         anyButton: rows.some(r => r.querySelectorAll('button').length > 0),
-         expanders: rows.filter(r => r.querySelector('details.notification-detail')).length,
-         dialogs:   rows.filter(r => r.querySelector('.notification-detail-open')).length };
-'@ | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/" `
-  --out "$shots\popup.png" --width 1000 --height 1200 --script-stdin
-
-Capture-Row -Surface popup -Match "operation IDs"    -Name announcement-popup
-Capture-Row -Surface popup -Match "new (unreleased)" -Name whatsnew-popup
-Capture-Row -Surface popup -Match "schema version"   -Name schemaversionovershoot-popup
-Capture-Row -Surface popup -Match "reseeded cleanly" -Name reseedfileapplied-popup-detail  -Expand
-Capture-Row -Surface popup -Match "needs review"     -Name importreviewpending-popup-detail -Expand
-```
-
-**Expected:** the whole-surface call reports `rows: 9`, `anyButton: false`, `expanders: 6`,
-`dialogs: 0`, and every per-kind call reports `buttons` empty. Nine is step 1's eight rows plus the
-overshoot; this line read `8` until 2026-09-26, one fewer than its own steps produce.
-
-**The popup is per browser session, not per application run.** Measured 2026-09-24: two fresh sessions
-against the same running container both rendered it, so these five captures need no restart between
-them: each `capture-page.csx` call is its own session. The restart above is still what *produces* the
-overshoot row; it is not what makes the popup appear.
-
-**Count notification rows, not table rows.** An expander holds a detail table of its own, so an
-unfiltered `tbody tr` returns those too; measured 2026-09-23: `49` rows where there are `9`, the extra
-forty reporting an empty title and a zero-length body. Filtering on the presence of a
-`.notification-body` cell keeps the selection to notification rows on either surface.
-
-**Read `window.innerHeight` alongside any fit assertion.** The pane can report a zero-height viewport,
-which makes every element read as off-screen; see the index's *A count is evidence only if the
-instrument counts the right thing*.
+**Expected:** nothing thrown since the overshoot was cleared; the `json` command exits `0`: ten rows (step
+4's ten notifications), no button on any of them, and detail expanding in place for exactly the five
+reseeded files and the review row, with no dialog anywhere. That surface difference is what #308 settled:
+a dialog on the page, an expander in the popup. The three captures record two rows expanded and the
+overshoot as it reads there.
 
 **The popup offers no controls at all: no action button and no Dismiss.** `NotificationSummary` passes
-neither `ShowActionColumn` nor `ShowDismissAction`, so every row there is read-only; the page passes
-both. Assert the absence here: a row that grew a button in the popup would be a surface difference
-nobody decided.
+neither `ShowActionColumn` nor `ShowDismissAction`, so every row there is read-only, and `anyButton=false`
+is what asserts that absence: a row that grew a button in the popup would be a surface difference nobody
+decided.
 
-### 6. Confirm a body's line breaks survive on this surface
+**The popup is per browser session, not per application run**, so each capture is a session of its own and
+none needs a restart. The restart above is what produces this step's mark.
 
-The what's-new body carries one line per changelog highlight. In the popup:
+### 6. Confirm a body's line breaks survive
 
-```js
-const cell = [...document.querySelectorAll('.notification-body')].find(c => c.textContent.includes('\n'));
-function lineBoxes(el) { const r = document.createRange(); r.selectNodeContents(el); return r.getClientRects().length; }
-const withPreLine = lineBoxes(cell);
-cell.style.whiteSpace = 'normal';
-const withNormal = lineBoxes(cell);
-cell.style.whiteSpace = '';
-({ whiteSpace: getComputedStyle(cell).whiteSpace, breaksHonoured: withPreLine > withNormal })
+The what's-new body carries one line per changelog highlight.
+
+```
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:19514/ --out C:\repos\Quotinator\.claude\temp\qt-notif-14\line-breaks.png --width 1000 --height 1200 --script-file scripts/testing/page-scripts/notification-line-breaks.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\line-breaks.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\line-breaks.json --equals whiteSpace=pre-line --equals breaksHonoured=true
 ```
 
-**Expected:** `whiteSpace: 'pre-line'` and `breaksHonoured: true`.
+**Expected:** the `json` command exits `0`: the body's rule is `pre-line`, and it renders more line boxes
+under that rule than under `normal`, which collapses the breaks.
 
-**This is why no per-kind line-break flag is needed:** the rule applies to every body, so a kind's
-layout has nothing to declare about it.
+**This is why no per-kind line-break flag is needed:** the rule applies to every body, so a kind's layout
+has nothing to declare about it.
 
-### 7. Reset, and confirm the sixth kind is produced and rendered
+### 7. Reset, and confirm its kind is produced and rendered
 
-The reset rebuilds every table, so the five kinds above are gone from this point on.
-
-```powershell
-Read-Thrown
-Invoke-RestMethod -Method Post -Headers @{ 'X-Api-Key' = 't2-308' } `
-  "http://localhost:19514/api/v1/admin/database/reset?allowNoBackup=true" | Out-Null
-Kinds
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-14 --since-mark C:\repos\Quotinator\.claude\temp\qt-notif-14\after-restart.mark --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:19514/api/v1/admin/database/reset?allowNoBackup=true" --api-key t2-308 --expect 200 --status
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:19514/notifications --out C:\repos\Quotinator\.claude\temp\qt-notif-14\kinds-reset.png --script-file scripts/testing/page-scripts/notification-kinds.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\kinds-reset.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\kinds-reset.json --equals kindList=reseedrecommended=1
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/notifications#no quotes" --out C:\repos\Quotinator\.claude\temp\qt-notif-14\reseedrecommended-page.png --script-file scripts/testing/page-scripts/notification-row.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\reseedrecommended-page.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\reseedrecommended-page.json --equals opensDetail=false --equals "buttons=Back up, then reseed, Dismiss"
 ```
 
-**Expected:** `reseedrecommended=1` and nothing else.
+**Expected:** nothing thrown since the restart; the reset answers `200`; the reset's recommendation is the
+only notification left, since the reset took every other with it; and its row opens no detail and offers
+one extra button, `Back up, then reseed`: the option's own name, the only one offered, since a backup can
+be taken here (#348).
 
-Open `http://localhost:19514/notifications` and read that row with the snippet from step 2.
+**On failure:** no recommendation means the reset's producer did not run, which is #304's behaviour rather
+than this issue's rendering.
 
-**Expected:** a non-empty body, its title its own element, `opensDetail: false`, and one extra button
-reading `Back up, then reseed`, the option's own name, never `Run`. A backup can be taken here, so it is
-the only option offered (#348).
+### 8. Render that kind in the popup, after a restart that must not reseed it away
 
-```powershell
-Capture-Row -Surface page -Match "no quotes" -Name reseedrecommended-page
+A start loads the configured files only into a database it created itself (#423), so this restart leaves
+the database as the reset left it, and the recommendation stays active.
+
 ```
-
-**On failure:** no recommendation means the reset's producer did not run, which is #304's behaviour
-rather than this issue's rendering.
-
-### 8. Render that last kind in the popup too, where nothing can reseed it away
-
-The popup renders once per process run, so this kind needs a restart to reach it, and it is read on the
-container step 7 already reset.
-
-**This step used to need a second container, and no longer does.** The restart re-seeded the database
-and **resolved the recommendation before it could be read**: measured 2026-09-23, the row came back
-`isDismissed=True`, `dismissReason=resolved`, `resolution=reseeded`, so the only place the kind survived
-a restart was a container with nothing to seed.
-[#423](https://github.com/DutchJaFO/Quotinator/issues/423) was that re-seed, and it is fixed: a start
-only loads the configured files into a database it created itself, so the restart now leaves the
-database as the reset left it and the recommendation stays active. #304's producer was behaving
-correctly on top of the defect throughout: the load really did happen, so it recorded the action as
-carried out.
-
-```powershell
-Read-Thrown
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-14 --since-mark C:\repos\Quotinator\.claude\temp\qt-notif-14\after-restart.mark --pattern "\[Runtime - Exception\]" --exactly 0
 docker restart qt-notif-14
-dotnet script scripts/testing/http.csx -- --url "http://localhost:19514/api/v1/health" --wait-for 200 --status
-function Get-Items14 { (Invoke-RestMethod "http://localhost:19514/api/v1/notifications?pageSize=0").items }
-$deadline = (Get-Date).AddSeconds(30)
-$items14 = Get-Items14
-while (-not @($items14 | Where-Object { $_.metadataKind -eq 'whatsnew' }).Count -and (Get-Date) -lt $deadline) {
-  Start-Sleep -Seconds 1
-  $items14 = Get-Items14
-}
-$items14 | ForEach-Object { "$($_.metadataKind) dismissed=$($_.isDismissed)" }
-"quotes=$((Invoke-RestMethod "http://localhost:19514/api/v1/quotes?pageSize=1").totalCount)"
+dotnet script scripts/testing/http.csx -- --url http://localhost:19514/api/v1/health --wait-for 200 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-14 --mark C:\repos\Quotinator\.claude\temp\qt-notif-14\after-second-restart.mark
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/notifications#whatsnew" --out C:\repos\Quotinator\.claude\temp\qt-notif-14\kinds-final.png --script-file scripts/testing/page-scripts/notification-kinds.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\kinds-final.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\kinds-final.json --equals "kindList=announcement=1 reseedrecommended=1 whatsnew=1" --equals dismissedList=none
+dotnet script scripts/testing/http.csx -- --url "http://localhost:19514/api/v1/quotes?pageSize=1" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-notif-14\quotes.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\quotes.json --equals totalCount=0
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:19514/ --out C:\repos\Quotinator\.claude\temp\qt-notif-14\popup-final.png --width 1000 --height 1200 --script-file scripts/testing/page-scripts/notification-rows-by-kind.js --result-out C:\repos\Quotinator\.claude\temp\qt-notif-14\popup-final.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-14\popup-final.json --equals anyButton=false --equals byKind.reseedrecommended.rows=1 --equals byKind.reseedrecommended.expandsInPlace=0 --equals byKind.reseedrecommended.emptyBody=0
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:19514/#no quotes" --out C:\repos\Quotinator\.claude\temp\qt-notif-14\reseedrecommended-popup.png --width 1000 --height 1400 --script-file scripts/testing/page-scripts/notification-row.js
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-14 --since-mark C:\repos\Quotinator\.claude\temp\qt-notif-14\after-second-restart.mark --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:19514/api/v1/import --api-key t2-308 --file docs/automated-testing/startup-and-degradation/fixtures/malformed-import.json --duplicate-resolution review --expect 422 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-14 --since-mark C:\repos\Quotinator\.claude\temp\qt-notif-14\after-second-restart.mark --pattern "thrown: JsonReaderException" --at-least 1
 ```
 
-**Expected:** `reseedrecommended dismissed=False`, alongside the announcement and what's-new rows this
-boot wrote, and `quotes=0`.
+**Expected:** every command exits `0`. The kinds read `announcement`, `reseedrecommended` and `whatsnew`,
+none dismissed; the database holds no quotes; the popup renders the recommendation with a body, no
+expander and no button; nothing was thrown since the restart; and the malformed upload answers `422` with
+its `JsonReaderException` logged, the positive control for every zero count in this document.
 
-**`quotes=0` is the assertion that makes the rest of this step mean anything.** A restart that re-seeded
-would both refill the database and resolve the row, so a `reseedrecommended` read as active alongside a
-non-zero quote count would mean the listing was taken before the producer dismissed it, not that the
-reset survived.
+**`quotes=0` is what makes the rest of this step mean anything.** A restart that re-seeded would both refill
+the database and resolve the recommendation, so an active recommendation alongside a non-zero count would
+mean the listing was read before the producer dismissed it, not that the reset survived.
 
-**Poll for the what's-new row; do not read once.** Its producer runs detached after startup, so a
-listing taken the moment health answers `200` can precede it. Measured 2026-09-26: one run listed it,
-the next listed only `announcement` and `reseedrecommended`, and the popup read seconds later showed all
-three.
-
-Open `http://localhost:19514/` and read the popup with step 5's snippet.
-
-**Expected:** the recommendation renders its title and body, `expandsInPlace: false` (its payload
-carries no counts), and **no buttons at all**, per the read-only popup above.
-
-```powershell
-Capture-Row -Surface popup -Match "no quotes" -Name reseedrecommended-popup
-```
-
-That completes the set: six kinds, both surfaces, fifteen images.
-
-```powershell
-Read-Thrown
-```
-
-**Expected:** only the restart's own two shutdown lines.
+**The kinds read waits for the what's-new row** (`#whatsnew`): its producer runs detached after startup,
+so a listing taken the moment health answers `200` can precede it.
 
 ## Observed effect
 
-**Measured 2026-09-24**, against an image built from this branch, and captured this time as well as
-read. Every kind reached the page through its own trigger, and every one rendered as its payload
-implies:
+**Measured 2026-11-08** against `quotinator:local` built from `ace79e6b`.
 
-| Kind | Trigger that produced it | Page | Popup |
+| Kind | Trigger | Page | Popup |
 |---|---|---|---|
-| `Announcement` | cold start | body `261`, no detail, `Warning` badge, no button | same, read-only |
-| `WhatsNew` | cold start | body `264`, no detail, `Information` badge | same; its body is the one carrying line breaks |
-| `ReseedFileApplied` | cold start, five bundled files | detail dialog, 8 headings over 2 rows plus a `Total` row | expander in place, same table |
-| `ImportReviewPending` | the conflict fixture | detail dialog, button `Decide` and a `Review each change` link | expander (`Pending 1`), no button |
-| `SchemaVersionOvershoot` | a consumer version one past the build | body `201`, no detail, button `Reset the database` | body `201`, no detail, no button |
-| `ReseedRecommended` | a database reset | body `160`, no detail, button `Reseed the database` | step 8, no detail, no button |
+| `Announcement` | cold start | no detail, `Dismiss` only | no detail, no button |
+| `WhatsNew` | cold start | no detail, `Dismiss` only | no detail; its body renders 6 line boxes under `pre-line` against 5 under `normal` |
+| `DatabaseCreated` | cold start | no detail, `Dismiss` only | no detail, no button |
+| `ReseedFileApplied` | cold start, five bundled files | detail dialog: 8 headings, 2 rows and a `Total` row, every row one cell per heading; `Details, Dismiss` | expands in place, no button |
+| `ImportReviewPending` | the conflict fixture | detail dialog; `Details, Decide, Dismiss` | expands in place, no button |
+| `SchemaVersionOvershoot` | a consumer version one past the build | no detail; `Reset the database, Dismiss` | no detail, no button |
+| `ReseedRecommended` | a database reset | no detail; `Back up, then reseed, Dismiss` | after a restart, still active with `quotes=0`; no detail, no button |
 
-Detail opened for exactly the two kinds whose payload carries counts, on both surfaces, and for no
-others. The popup reported `anyButton: false` across all 8 rows, against `Details, Decide, Dismiss` on
-the page's review row. Line breaks: `pre-line`, `5` line boxes against `4` under `normal`. No container
-logged an exception of its own; every line read was a stop's or restart's own `SocketException`.
+The page held 9 rows after the first start and the popup 10 after the overshoot; no body was empty and no
+title appeared inside its body. Health read `503` while the version stood ahead and `200` once it was
+removed. No exception was logged at any read; the malformed upload's `JsonReaderException` was logged once.
 
-Fifteen images: each surface whole, then each of the six kinds on each of the two surfaces, plus the
-detail the dialog opens and the two the popup expands in place.
-
-**This reading predates #371, so it has no row for `DatabaseCreated`.** That kind did not exist when
-the run above was taken, and inventing a row for it would record an observation nobody made. The next
-pass over this document fills it.
-
-**One defect in the instrument, found and fixed rather than tolerated.** A capture that killed its
-browser left every Blazor circuit half-open: thirteen captures against one container produced **72
-`WebSocketException`s**, where the same container logged `0` before any capture ran: noise this suite
-would have been generating for itself, in the middle of the log the document reads for real exceptions.
-`capture-page.csx` now closes the browser over the protocol instead. Re-measured on a container of its
-own: `0` before three captures and `0` after.
+**Run as written before this conversion, the PowerShell form read the same**, apart from two readings that
+were its own: its popup expectation of `9` rows predated `DatabaseCreated`, and four `WebSocketException`s
+followed a capture of a snippet returning an array, which `capture-page.csx` cannot crop to and so exited
+without closing its browser.
 
 ## Canary
 
 Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*. Built from
 `69c01776` (the commit before #308's first feature commit) as `quotinator:canary308c` via
-`git worktree add` and `docker build`, 2026-09-23:
+`git worktree add` and `docker build`, 2026-09-23, and read with this document's earlier PowerShell form:
 
 | Step | Assertion | Pre-work result |
 |---|---|---|
-| 1 | four kinds from the cold start | **fails**, three: `announcement`, `importreviewpending`, `whatsnew` |
+| 1 | the kinds from the cold start | **fails**, three: `announcement`, `importreviewpending`, `whatsnew` |
 | 2 | each row has a `.notification-body` cell | **fails**: `0` of `3` rows; the class does not exist |
 | 2 | a title element distinct from the body | **fails**: `0` title elements |
 | 2 | a detail control for the kinds carrying counts | **fails**: `0` dialogs and `0` expanders, for any kind |
@@ -549,12 +306,9 @@ by accident. Container, image, bind directory and worktree removed afterwards.
 
 ## Cleanup
 
-Close the browser tab first.
-
-```powershell
-Read-Thrown
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-14 --bind $bind
-Remove-Item -LiteralPath $bind -Recurse -Force
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-14 --bind C:\repos\Quotinator\.claude\temp\qt-notif-14-bind
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-notif-14-bind --delete C:\repos\Quotinator\.claude\temp\qt-notif-14
 ```
 
-**Expected:** `thrown=0`.
+**Expected:** the container and both directories are gone.

@@ -550,8 +550,13 @@
     <File Path="scripts/testing/page-scripts/degraded-page-unwritable-data.js" />
     <File Path="scripts/testing/page-scripts/notification-action-cancel.js" />
     <File Path="scripts/testing/page-scripts/notification-action-confirm.js" />
+    <File Path="scripts/testing/page-scripts/notification-detail-dialog.js" />
     <File Path="scripts/testing/page-scripts/notification-filters.js" />
+    <File Path="scripts/testing/page-scripts/notification-kinds.js" />
+    <File Path="scripts/testing/page-scripts/notification-line-breaks.js" />
     <File Path="scripts/testing/page-scripts/notification-page-state.js" />
+    <File Path="scripts/testing/page-scripts/notification-row.js" />
+    <File Path="scripts/testing/page-scripts/notification-rows-by-kind.js" />
     <File Path="scripts/testing/page-scripts/notifications-page-rows.js" />
     <File Path="scripts/testing/page-scripts/overshoot-modal.js" />
     <File Path="scripts/testing/page-scripts/overshoot-modal-cancel.js" />
