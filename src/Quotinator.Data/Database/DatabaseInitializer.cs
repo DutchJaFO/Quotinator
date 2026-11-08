@@ -611,6 +611,32 @@ public class DatabaseInitializer(
     }
 
     /// <summary>
+    /// Runs the integrity check as part of this database's own initialisation or reset (#305), records the
+    /// result as <see cref="LastIntegrityResult"/>, and logs every difference and every extra object.
+    /// </summary>
+    /// <returns>Whether nothing is missing or different.</returns>
+    private async Task<bool> IsSchemaIntactAsync()
+    {
+        SchemaIntegrityResult result = await CheckIntegrityAsync();
+        LastIntegrityResult = result;
+
+        foreach (SchemaDifference difference in result.Differences)
+        {
+            if (difference.Kind == SchemaDifferenceKind.Extra)
+                Logger.LogSchemaExtraObject(difference.ObjectKind.ToString(), difference.ObjectName);
+            else
+                Logger.LogSchemaDifference(
+                    difference.Kind.ToString(), difference.ObjectKind.ToString(), difference.ObjectName,
+                    difference.Aspect is null ? string.Empty : $" ({difference.Aspect}: expected '{difference.Expected}', actual '{difference.Actual}')");
+        }
+
+        if (!result.IsIntact)
+            Logger.LogSchemaNotIntact(result.Differences.Count(d => d.Kind != SchemaDifferenceKind.Extra));
+
+        return result.IsIntact;
+    }
+
+    /// <summary>
     /// The DDL that defines the main database's schema (#305): exactly what a fresh database runs, the two
     /// version tables, then the baselines when the consumer has one, otherwise a replay of both migration
     /// lists. Static so a tool can derive the same expected schema without a configured initializer.
@@ -662,6 +688,13 @@ public class DatabaseInitializer(
         // the build has not migrated is exactly the unprotected write the refusal exists to prevent.
         if (migrations.Obstacle is BackupOutcome migrationObstacle)
             return DatabaseOperationResult.RefusedForBackup(migrationObstacle, BackupGuardedStep.Migration);
+
+        // #305: a version recorded ahead of this build means the schema's shape is unknown to it, so there
+        // is nothing meaningful to compare; that state already degrades on its own. Otherwise the schema
+        // must match what its version defines before anything is loaded into it, and a difference is a
+        // hard failure, returned rather than thrown (ADR 022) and never repaired.
+        if (!SchemaVersionOvershootDetected && !await IsSchemaIntactAsync())
+            return DatabaseOperationResult.NotIntact();
 
         BackupOutcome? obstacle = await RunInitialisedHookAsync(connection, migrations.TookBaselinePath, migrations.DatabaseWasCreated);
 
@@ -858,6 +891,12 @@ public class DatabaseInitializer(
             Logger.LogResetRefusedNoBackup(obstacle.ToString());
             return DatabaseOperationResult.RefusedForBackup(obstacle, BackupGuardedStep.Reset);
         }
+
+        // #305 (R3): the check that runs before starting is what shows a rebuilt database is in a good
+        // state, so "Reset repaired it" is measured rather than assumed. Nothing is written into a
+        // rebuilt schema that still differs.
+        if (!await IsSchemaIntactAsync())
+            return DatabaseOperationResult.NotIntact();
 
         await OnResetCompletedAsync();
         return DatabaseOperationResult.Success(backupSkippedByOverride: readiness != BackupOutcome.Succeeded);

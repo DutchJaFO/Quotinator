@@ -35,6 +35,18 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Information, Message = "[Database - Init] schema is up to date (data v{DataVersion}, app v{AppVersion})")]
     public static partial void LogSchemaUpToDate(this ILogger logger, int dataVersion, int appVersion);
 
+    /// <summary>Logs one object the schema is missing, or holds differently from what its migration path defines (#305).</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Init] schema integrity: {Kind:l} {ObjectKind:l} {ObjectName:l}{Detail:l}")]
+    public static partial void LogSchemaDifference(this ILogger logger, string kind, string objectKind, string objectName, string detail);
+
+    /// <summary>Logs one object the schema holds that no migration defines (#305): reported, never a failure.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Init] schema integrity: extra {ObjectKind:l} {ObjectName:l} that no migration defines; a migration may have been missed")]
+    public static partial void LogSchemaExtraObject(this ILogger logger, string objectKind, string objectName);
+
+    /// <summary>Logs that the schema does not match its migration path, so nothing is loaded into it (#305).</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Init] the schema does not match what its version defines: {Count} object(s) missing or different. Nothing is loaded into it and nothing is repaired: resolve it with a database Reset, or restore a backup")]
+    public static partial void LogSchemaNotIntact(this ILogger logger, int count);
+
     /// <summary>Logs that a recorded schema version exceeds the app's own known migration count (#289), which #350 treats as a fault: the migrations this build never saw may have added, altered or removed anything, so the schema's shape is unknown rather than known-complete.</summary>
     [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Init] schema version overshoot detected: recorded data v{DataVersion} (known: v{DataKnown}), recorded app v{AppVersion} (known: v{AppKnown}). This build does not know what the migrations it never saw changed, so the schema's shape is unknown: resolve it with a database Reset, or restore a backup taken before the version moved ahead")]
     public static partial void LogSchemaVersionOvershoot(this ILogger logger, int dataVersion, int dataKnown, int appVersion, int appKnown);

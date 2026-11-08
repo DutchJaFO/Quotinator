@@ -42,6 +42,21 @@ public sealed class DatabaseOperationResult
     /// </summary>
     public bool BackupSkippedByOverride { get; init; }
 
+    /// <summary>
+    /// Whether the operation stopped because the database's schema does not match the one its migration
+    /// path defines (#305). The differences are in <see cref="Schema.IIntegrityCheckedDatabase.LastIntegrityResult"/>;
+    /// a caller maps them to what an operator reads.
+    /// </summary>
+    public bool SchemaNotIntact { get; init; }
+
+    /// <summary>
+    /// An operation that stopped because the schema does not match its migration path (#305): nothing was
+    /// loaded into it and nothing was repaired.
+    /// </summary>
+    public static DatabaseOperationResult NotIntact() =>
+        new()
+        { Succeeded = false, SchemaNotIntact = true };
+
     /// <summary>A successful operation.</summary>
     /// <param name="backupSkippedByOverride">Whether it proceeded without a backup by explicit override.</param>
     public static DatabaseOperationResult Success(bool backupSkippedByOverride = false) =>

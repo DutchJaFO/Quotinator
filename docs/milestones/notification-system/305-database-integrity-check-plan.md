@@ -1,6 +1,6 @@
 # #305: Database integrity check: verify every database's full schema against its migration path at startup
 
-**Status:** In progress (step 8)
+**Status:** In progress (step 9)
 **GitHub issue:** #305
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 8: wire the main database's startup and Reset.** Every decision is settled (see
+**Execute from step 9: degrade startup in `Program.cs`, and map a not-intact Reset in its callers.** Every decision is settled (see
 *Decisions*, including D5, found in step 3), the ADR 003 and ADR 009 amendments were approved on
 2026-11-07, and the issue's title and body reflect the widened scope.
 
@@ -429,7 +429,7 @@ Findings, 2026-11-08:
 
 ### 8. Wire the main database's startup and Reset
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 In `DatabaseInitializer`: run the check step 5 built after migrations, skip on refusal and overshoot,
 stop the content load when not intact, log extras and differences through source-generated
@@ -437,12 +437,41 @@ stop the content load when not intact, log extras and differences through source
 already in place from step 5, so nothing engine-specific is added here. Reset per R3.
 `HasPendingContentSeedAsync` is not changed.
 
+Findings, 2026-11-08:
+
+- **Startup checks after migrations and before the content load**, skipping a refused migration (which
+  returns first) and an overshoot. A difference returns `DatabaseOperationResult.NotIntact()`, a new result
+  carrying `SchemaNotIntact`, so a caller can tell it from a backup refusal. Each difference is logged at
+  `Error` and each extra object at `Warning`, through source-generated `LoggerMessage`s with the
+  `[Database - Init]` prefix, and a summary line names both remedies.
+- **Reset checks the rebuilt database before `OnResetCompletedAsync`**, so nothing is written into a rebuilt
+  schema that still differs, and returns `NotIntact()` when it does.
+- **Three existing tests were re-based, keeping their subject.**
+  `DatabaseInitializerTests.InitialiseAsync_ExecuteStepFails_SurfacesDistinctFailureReason` and
+  `InitialiseAsync_SeedingFailsOnAlreadyMigratedDatabase_BacksUpFirstAndRethrows` dropped a table to make
+  seeding fail after its backup; the check now finds that first, so seeding never ran. The backstop they
+  cover is kept for what the check cannot foresee (ADR 022), so each now empties the genre table and adds a
+  trigger that refuses its inserts: the check reports the trigger as extra and does not stop, and the insert
+  fails after the backup as before. `SafeHasPendingContentSeedAsync`'s fail-safe, which the first test also
+  exercised through a missing table, is no longer reached by it: a missing table is now the check's to find.
+  `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_ReportsThatTheBackupWasSkipped` uses a double whose
+  reset rebuilds nothing, so it now gives the database Quotinator.Data's schema first, as a real rebuild
+  would.
+- **Rows 15 and 16 are green, and row 17's Reset test.** Every test still red belongs to steps 9 and 10,
+  including the existing `StartupResilienceTests.Startup_DomainTableMissing_*`: the missing table is now
+  found, and the application degrades on it once step 9 maps `NotIntact` in `Program.cs`.
+- **A Reset that is not intact is reported by its callers as a refused backup** (`AdminEndpoints`'s reset,
+  `NotificationActionExecutor`, `DatabaseRepairActions`), since each reads any unsuccessful result as one.
+  Unreachable in practice, a Reset rebuilds from the same baseline the expected schema comes from, but
+  wrong if reached; step 9 maps `SchemaNotIntact` in all three, keeping the application degraded with the
+  new reason (R3).
+
 ### 9. Degrade startup in `Program.cs`, with no notification
 
 **Status:** ⬜ Not started
 
 `SchemaIntegrityGuidance` beside `SchemaOvershootGuidance`, and the `MarkFailed` call after the overshoot
-check. The reason uses engine-neutral words (table, column, foreign key, index), never an engine's
+check. The Reset's three callers map `SchemaNotIntact` too (step 8's finding). The reason uses engine-neutral words (table, column, foreign key, index), never an engine's
 metadata names. **No notification is written**: writing a row into a database known not to match its
 schema is the unprotected write #348 refuses, and the missing object can be `System_Notification`
 itself. The generic catch's wording is #457's.
@@ -531,8 +560,8 @@ in step 6; rows 20 and 21 are written red in step 7.
 | 12 | ✅ | Changelog database: baseline and replay are identical | Integration test | `ChangelogDatabaseInitializerTests.Integrity_BaselineAndReplay_AreIdentical` |
 | 13 | ✅ | A database the published `v1.8.3` image created, upgraded by this build, is intact | Live (Docker) | Step 6's commands: `v1.8.3` on a fresh volume until healthy, then this build on the same volume; `GET /api/v1/admin/database/integrity` reports every database `isIntact: true` |
 | 14 | ✅ | The reader captures each aspect from a real database, and reads the schema a list of scripts creates in a scratch database of its own | Integration test | `SqliteSchemaSnapshotReaderTests.ReadsTablesColumnsForeignKeysIndexesViewsAndTriggers`, `SqliteSchemaSnapshotReaderTests.ReadScriptsAsync_ReadsTheSchemaTheScriptsCreate` |
-| 15 | ❌ | Main startup: a difference stops the content load, takes no backup and writes nothing; a complete database loads normally | Integration test | `DatabaseIntegrityCheckTests.MissingExpectedTable_DetectedAsSchemaInconsistency_TreatedAsHardFailure`, `DatabaseIntegrityCheckTests.Difference_ContentLoadDoesNotRunAndNothingIsWritten`, `DatabaseIntegrityCheckTests.AllExpectedTablesPresent_PassesCleanly` |
-| 16 | ❌ | The check does not run on a refused migration or an overshoot | Integration test | `DatabaseIntegrityCheckTests.MigrationRefused_IntegrityNotChecked`, `DatabaseIntegrityCheckTests.SchemaVersionOvershoot_IntegrityNotChecked` |
+| 15 | ✅ | Main startup: a difference stops the content load, takes no backup and writes nothing; a complete database loads normally | Integration test | `DatabaseIntegrityCheckTests.MissingExpectedTable_DetectedAsSchemaInconsistency_TreatedAsHardFailure`, `DatabaseIntegrityCheckTests.Difference_ContentLoadDoesNotRunAndNothingIsWritten`, `DatabaseIntegrityCheckTests.AllExpectedTablesPresent_PassesCleanly` |
+| 16 | ✅ | The check does not run on a refused migration or an overshoot | Integration test | `DatabaseIntegrityCheckTests.MigrationRefused_IntegrityNotChecked`, `DatabaseIntegrityCheckTests.SchemaVersionOvershoot_IntegrityNotChecked` |
 | 17 | ❌ | Every database declaring migrations performs the check; a changelog database that is not intact is reported without failing its initialisation, so the changelog falls back to the JSON files without affecting main health; a Reset re-runs the check before clearing health | Unit test / Integration test | `RepositoryStructureTests.EveryDatabaseWithMigrations_PerformsTheIntegrityCheck`, `ChangelogDatabaseInitializerTests.Integrity_MissingTable_ReportedWithoutFailingInitialisation`, `DatabaseIntegrityCheckTests.Reset_RerunsTheCheckBeforeClearingHealth` |
 | 18 | ❌ | Against the real schema, a missing table or column degrades startup with a reason naming it and both remedies; quote endpoints are gated; pages render degraded; a Reset restores health; a complete database is healthy | Integration test | `StartupResilienceTests.Startup_SchemaDifference_HealthReportsUnhealthy`, `StartupResilienceTests.Startup_SchemaDifference_HealthReasonNamesTheObject`, `StartupResilienceTests.Startup_SchemaDifference_QuoteEndpointsAreGated`, `StartupResilienceTests.Startup_SchemaDifference_BlazorPageRendersDegradedUi`, `StartupResilienceTests.Startup_SchemaDifference_ResetRestoresHealth`, `StartupResilienceTests.Startup_RestartOverAnIntactDatabase_ReportsHealthy` (existing, the positive control) |
 | 19 | ❌ | The reason names every difference in engine-neutral words, and both remedies | Unit test | `SchemaIntegrityGuidanceTests.Reason_NamesEveryDifference`, `SchemaIntegrityGuidanceTests.Reason_NamesResetAndRestore`, `SchemaIntegrityGuidanceTests.Reason_UsesNoEngineMetadataNames` |

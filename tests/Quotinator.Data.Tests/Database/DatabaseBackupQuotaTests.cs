@@ -122,9 +122,16 @@ public class DatabaseBackupQuotaTests
     }
 
     /// <summary>The caller has to be told the reset ran without a backup, or the audit trail above it has nothing to record.</summary>
+    /// <remarks>
+    /// #305: a Reset now checks the rebuilt schema before it reports success. This double's reset hook
+    /// rebuilds nothing, so the database is given Quotinator.Data's schema first, as a real rebuild would
+    /// leave it; without that, the check finds an empty database and the Reset reports a schema that does
+    /// not match instead of the skipped backup this test is about.
+    /// </remarks>
     [TestMethod]
     public async Task ResetAsync_WithTheOverride_ReportsThatTheBackupWasSkipped()
     {
+        await CurrentSchema.ApplyDataSchemaAsync(_dbPath);
         FillBackupsTo(percentOfCeiling: 100);
 
         DatabaseOperationResult result = await new RecordingInitializer(NewOptions(), _dbPath).ResetAsync(allowNoBackup: true);

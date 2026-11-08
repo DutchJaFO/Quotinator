@@ -4449,6 +4449,11 @@ public class DatabaseInitializerTests
     /// count blind spot (that requires two different migration *contents* under the same *count*,
     /// awkward to construct here): it reproduces the general class the fix actually covers: seeding
     /// throwing on an already-migrated (non-baseline) database, for any reason.
+    /// <para>
+    /// #305: this dropped the quote table, which the integrity check now finds before seeding starts.
+    /// Seeding is made pending by emptying the genre table instead, and fails on a trigger the check
+    /// reports as extra, so the backstop is still reached by a failure the check cannot foresee.
+    /// </para>
     /// </summary>
     [TestMethod]
     public async Task InitialiseAsync_SeedingFailsOnAlreadyMigratedDatabase_BacksUpFirstAndRethrows()
@@ -4460,8 +4465,8 @@ public class DatabaseInitializerTests
         using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
-            await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
-            await conn.ExecuteAsync("DROP TABLE Quotinator_Quote;");
+            await conn.ExecuteAsync("DELETE FROM Quotinator_QuoteGenre;");
+            await conn.ExecuteAsync(RefuseGenreInsertsTrigger);
         }
 
         Directory.CreateDirectory(_backups);
@@ -5984,6 +5989,15 @@ public class DatabaseInitializerTests
     /// <c>ReSeedGenresIfEmptyAsync</c> acts on. An empty quote table used to produce it and no longer
     /// does, because a start that did not create the database no longer loads the configured files.
     /// </summary>
+    /// <summary>
+    /// #305: makes the genre re-seed fail on its own insert without making the schema differ from its
+    /// version. The integrity check reports the trigger as an extra object, which never stops startup, so
+    /// the failure reaches the seeding backstop these tests are about.
+    /// </summary>
+    private const string RefuseGenreInsertsTrigger =
+        "CREATE TRIGGER Test_RefuseGenreInserts BEFORE INSERT ON Quotinator_QuoteGenre " +
+        "BEGIN SELECT RAISE(ABORT, 'genre insert refused by the test'); END;";
+
     private async Task<SeedBatch> ContentSeedPendingDatabaseAsync()
     {
         SeedBatch batch = SimpleQuoteBatch();
@@ -6047,12 +6061,15 @@ public class DatabaseInitializerTests
     /// import that an empty quote table triggered; that start no longer imports, and the genre re-seed
     /// which replaced it writes no audit entry, so nothing threw. It also cannot be failed through its
     /// files, since <c>LoadSourceFileAsync</c> treats a missing file and invalid JSON as outcomes rather
-    /// than exceptions. A dropped genre table is the remaining way in, and it is a real condition: the
-    /// step fails on its own insert, after a backup that succeeded.
+    /// than exceptions. The genre table refusing its insert is the remaining way in: the step fails on its
+    /// own insert, after a backup that succeeded.
     /// <para>
-    /// This also covers <c>SafeHasPendingContentSeedAsync</c>'s documented fail-safe, since the counting
-    /// query throws first and must be read as "assume pending, take the backup" rather than as "nothing
-    /// to do".
+    /// #305 re-based it again. This test dropped the genre table, which the integrity check now finds
+    /// before seeding starts, so the step it is about never ran. The backstop it covers is kept for what the
+    /// check cannot foresee (ADR 022), so the failure now comes from an extra trigger that aborts every
+    /// insert: the check reports it as extra and does not stop, and the insert fails as a real condition
+    /// would. The counting query no longer throws on this path, so <c>SafeHasPendingContentSeedAsync</c>'s
+    /// fail-safe is not reached here: a table missing is now the check's to find first.
     /// </para>
     /// </summary>
     [TestMethod]
@@ -6064,7 +6081,7 @@ public class DatabaseInitializerTests
         using (SqliteConnection connection = new($"Data Source={_dbPath}"))
         {
             await connection.OpenAsync(TestContext.CancellationToken);
-            await connection.ExecuteAsync("DROP TABLE Quotinator_QuoteGenre;");
+            await connection.ExecuteAsync(RefuseGenreInsertsTrigger);
         }
 
         QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true);
