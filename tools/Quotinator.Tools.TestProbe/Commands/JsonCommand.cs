@@ -19,11 +19,12 @@ internal sealed class JsonCommand : IProbeCommand
     public ExpectationResult Run(IReadOnlyList<string> args, TextReader stdin)
     {
         string? file = OptionReader.Single(args, FileOption);
-        IReadOnlyList<JsonExpectation> expectations = JsonExpectationParser.Parse(WithoutFileOption(args), out IReadOnlyList<string> errors);
+        IReadOnlyList<JsonArrayCondition> conditions = JsonArrayFilter.Parse(WithoutFileOption(args), out IReadOnlyList<string> remaining, out IReadOnlyList<string> filterErrors);
+        IReadOnlyList<JsonExpectation> expectations = JsonExpectationParser.Parse(remaining, out IReadOnlyList<string> errors);
 
-        if (errors.Count > 0)
+        if (filterErrors.Count > 0 || errors.Count > 0)
         {
-            return new ExpectationResult([], errors);
+            return new ExpectationResult([], [.. filterErrors, .. errors]);
         }
 
         if (file is not null && !File.Exists(file))
@@ -31,9 +32,23 @@ internal sealed class JsonCommand : IProbeCommand
             return ExpectationResult.Failed($"{file} is not a file; nothing to read");
         }
 
-        string json = file is null ? stdin.ReadToEnd() : File.ReadAllText(file);
+        string json = (file is null ? stdin.ReadToEnd() : File.ReadAllText(file)).TrimStart(ByteOrderMark);
 
-        return JsonExpectationEvaluator.Evaluate(json.TrimStart(ByteOrderMark), expectations);
+        if (conditions.Count == 0)
+        {
+            return JsonExpectationEvaluator.Evaluate(json, expectations);
+        }
+
+        string? filtered = JsonArrayFilter.Apply(json, conditions, out string? problem);
+
+        if (filtered is null)
+        {
+            return ExpectationResult.Failed(problem ?? "the array could not be narrowed");
+        }
+
+        ExpectationResult result = JsonExpectationEvaluator.Evaluate(filtered, expectations);
+
+        return result with { Observations = [.. JsonArrayFilter.Describe(conditions), .. result.Observations] };
     }
 
     private static List<string> WithoutFileOption(IReadOnlyList<string> args)

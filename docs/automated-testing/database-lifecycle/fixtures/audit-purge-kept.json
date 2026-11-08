@@ -1,0 +1,14 @@
+{
+  "quotes": [
+    {
+      "id": "7b2d4e61-3c8a-4f05-9e1b-6a4d2c8f0a02",
+      "quote": "Test line owned by the audit-purge document, imported with its history kept.",
+      "originalLanguage": "en",
+      "source": "Xyzzypurge Film",
+      "date": "2026",
+      "type": "movie",
+      "genres": ["drama"],
+      "translations": {}
+    }
+  ]
+}

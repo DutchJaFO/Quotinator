@@ -146,6 +146,23 @@ public sealed class JsonExpectationParserTests
     }
 
     [TestMethod]
+    public void Parse_LengthEqualsJson_ExpectsALengthOfTheValueFromTheOtherFile()
+    {
+        string file = WriteTempFile("[{\"DataFiles\": 5}]");
+
+        try
+        {
+            IReadOnlyList<JsonExpectation> parsed = JsonExpectationParser.Parse(["--length-equals-json", $"files={file}#0.DataFiles"], out _);
+
+            Assert.AreEqual(new JsonExpectation(JsonExpectationKind.LengthEquals, "files", "5"), parsed[0]);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [TestMethod]
     public void Parse_EqualsJsonWithAPathTheFileDoesNotHave_IsAnError()
     {
         string file = WriteTempFile("{}");

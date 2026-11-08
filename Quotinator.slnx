@@ -434,6 +434,8 @@
     <File Path="docs/automated-testing/startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/database-lifecycle/fixtures/">
+    <File Path="docs/automated-testing/database-lifecycle/fixtures/audit-purge-kept.json" />
+    <File Path="docs/automated-testing/database-lifecycle/fixtures/audit-purge-purged.json" />
     <File Path="docs/automated-testing/database-lifecycle/fixtures/reset-content.json" />
     <File Path="docs/automated-testing/database-lifecycle/fixtures/reset-imports-manifest.json" />
   </Folder>
@@ -569,6 +571,7 @@
     <File Path="scripts/testing/page-scripts/overshoot-modal-cancel.js" />
     <File Path="scripts/testing/page-scripts/overshoot-modal-confirm.js" />
     <File Path="scripts/testing/page-scripts/overshoot-reset-control.js" />
+    <File Path="scripts/testing/page-scripts/reserve-caution.js" />
   </Folder>
   <Folder Name="/scripts/hooks/">
     <File Path="scripts/hooks/README.md" />

@@ -62,7 +62,20 @@ uses, since a pipe is shell logic.
 | `--length-equals <path>=<number>` | the field is an array with exactly `<number>` elements |
 | `--equals-json <path>=<file>#<path>` | the field's value is exactly the value at `<path>` in another JSON file, so two readings saved at different moments are compared without copying either into a document (`0.Recorded=before.json#0.Recorded`) |
 | `--greater-than-json <path>=<file>#<path>` | the field is a number greater than the value at `<path>` in another JSON file |
+| `--length-equals-json <path>=<file>#<path>` | the field is an array with as many elements as the number at `<path>` in another JSON file (`files=capture.json#0.DataFiles`) |
 | `--equals-xml <path>=<file>#<element>` | the field's value is exactly the text of the first `<element>` in the XML file, read now, so a value the repository owns is not copied into a document (`version=Directory.Build.props#Version`) |
+
+**Narrowing an array before asserting on it**, for a list endpoint with no filter of its own:
+
+```bash
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file .claude/temp/qt-backup-08-out/notifications.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=1
+```
+
+`--where <array>:<field>=<value>` keeps only the elements of the array at `<array>` whose `<field>` renders
+exactly as `<value>`; `--where <array>:<field>` keeps those where `<field>` exists at all (`availableActions.0`
+for a non-empty list). Repeated, the conditions narrow in turn. They apply before every expectation, so
+`items.0` then means the first matching element. A count of `0` through `--where` is only evidence
+alongside a reading of the same filter that finds a row.
 
 Every option is repeatable. A `<path>` is segments joined by dots: a property name, or a zero-based index
 into an array (`database.quotes`, `items.0.quote`).

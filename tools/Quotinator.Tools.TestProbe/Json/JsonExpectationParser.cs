@@ -15,6 +15,7 @@ internal static class JsonExpectationParser
     {
         ["--equals-json"] = JsonExpectationKind.EqualTo,
         ["--greater-than-json"] = JsonExpectationKind.GreaterThan,
+        ["--length-equals-json"] = JsonExpectationKind.LengthEquals,
     };
 
     private static readonly Dictionary<string, JsonExpectationKind> KindsByOption = new()
@@ -32,9 +33,10 @@ internal static class JsonExpectationParser
     /// <summary>
     /// The expectations named by <c>--equals</c>, <c>--contains</c>, <c>--present</c>,
     /// <c>--not-empty</c>, <c>--greater-than</c>, <c>--equals-field</c>, <c>--length-equals-field</c>,
-    /// <c>--length-equals</c> and <c>--equals-xml</c>, in no particular order, and one error per option
-    /// that could not be read. <c>--equals-xml</c> becomes an equality expectation on the
-    /// text the named file holds now, so a value the repository owns is never copied into a document.
+    /// <c>--length-equals</c>, <c>--equals-xml</c>, <c>--equals-json</c>, <c>--greater-than-json</c> and
+    /// <c>--length-equals-json</c>, in no particular order, and one error per option that could not be read.
+    /// <c>--equals-xml</c> and the three <c>-json</c> forms compare against a value read from the named file
+    /// now, so a value the repository owns, or one an earlier step saved, is never copied into a document.
     /// </summary>
     /// <param name="args">The command's arguments, without the command name.</param>
     /// <param name="errors">One line per unreadable option; empty when all were read.</param>

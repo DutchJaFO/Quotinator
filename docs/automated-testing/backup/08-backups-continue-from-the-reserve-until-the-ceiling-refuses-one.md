@@ -7,9 +7,9 @@
 
 ## Preconditions
 
-Beyond the Fresh profile, this test supplies its own storage pressure: a sparse filler file inside
-`backups/`, written and removed from the host rather than through the application. It therefore needs
-`--bind`, so the host can reach the folder the container is measuring.
+**Beyond the profile.** One container of this test's own, `qt-backup-08`, publishing `18388`, on a bind
+directory, so the host can write and remove a sparse filler file inside the `backups/` folder the
+container is measuring.
 
 The pressure is established in two distinct bands, and every assertion below depends on which one is in
 force:
@@ -26,117 +26,98 @@ written, and step 9 does the same for the ceiling.
 - **`MaxBackupStorageGb` stays at its default 1 GB**, so the filler is sized from that. A smaller
   ceiling cannot be configured, since the setting is whole gigabytes.
 - **`BackupQuotaPercent` stays at its default 90**, so the reserve is the band from 90% to 100% of the
-  ceiling. Filling to 92% lands inside it: above the quota, below the ceiling.
+  ceiling. Filling to 92% (`987842478` bytes) lands inside it: above the quota, below the ceiling.
 - **A backup must fit in what is left below the ceiling, or step 4 would be measuring a refusal rather
-  than a backup.** This is not assumed: step 2 takes a backup and records what it actually cost, and
-  step 3 checks that `remainingAgainstCeilingBytes` still exceeds it. Both figures come from the run,
-  so neither is a prediction about the database's size.
-- **One filler file at a time, sparse.** `SetLength` allocates without writing the bytes, so a step is
+  than a backup.** This is not assumed: step 2 takes a backup and saves what it actually cost, and step 3
+  checks that `remainingAgainstCeilingBytes` still exceeds it (`--greater-than-json`). Both figures come
+  from the run, so neither is a prediction about the database's size.
+- **One filler file at a time, sparse.** A sparse file allocates without writing the bytes, so a step is
   fast and does not depend on the host's write throughput.
-- **Open warnings are counted with `isDismissed` filtered out.** The endpoint returns the full history,
-  so a resolved warning is still listed; counting rows without that filter counts warnings that have
-  already been cleared.
+- **The notification list has no filter, so each reading narrows it with `--where`.** A warning is
+  counted by `metadataKind` and with `isDismissed=false`, since the endpoint returns the full history and
+  a resolved warning is still listed. Every count of `0` has a reading of the same filter, elsewhere in
+  this document, that finds a row.
 - **The warning is one row however often its condition is checked**, so every count below is of open
   rows, never of checks performed.
-- **`$_.ErrorDetails.Message` is null in Windows PowerShell 5.1** for these responses. The body is read
-  off the exception's response stream instead; a snippet relying on `ErrorDetails` reports an empty
-  obstacle and looks like a failure of the endpoint.
+- **The log is read before each stop.**
 
 ## Steps
 
 ### 1. Seed a healthy database
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-08"
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path "$dataDir\backups" | Out-Null
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-backup-08 --port 18388 `
-  --image quotinator:local --bind $dataDir
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-08 --delete C:\repos\Quotinator\.claude\temp\qt-backup-08-out --create-directory C:\repos\Quotinator\.claude\temp\qt-backup-08\backups --create-directory C:\repos\Quotinator\.claude\temp\qt-backup-08-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-backup-08 --port 18388 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-08
 ```
 
 **Expected:** the environment reports healthy.
 
 ### 2. Positive control: below the quota, a backup is taken and nothing is warned about
 
-```powershell
-$key  = @{ "X-Api-Key" = "smoketest" }
-$base = "http://localhost:18388/api/v1"
-
-function Open-QuotaWarnings {
-  @((Invoke-RestMethod -Uri "$base/notifications?pageSize=0").items |
-    Where-Object { $_.metadataKind -eq 'backupquotareached' -and -not $_.isDismissed })
-}
-
-$status = Invoke-RestMethod -Uri "$base/admin/backups/status" -Headers $key
-"canBackUp=$($status.canBackUp) reserveInUse=$($status.storage.reserveInUse) used=$($status.storage.usedBytes)"
-
-$first = Invoke-RestMethod -Uri "$base/admin/backups/create" -Method POST -Headers $key
-$backupCost = $first.sizeBytes
-"created=$($first.name) cost=$backupCost warnings=$(@(Open-QuotaWarnings).Count)"
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18388/api/v1/admin/backups/status --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\status-fresh.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\status-fresh.json --equals canBackUp=true --equals storage.reserveInUse=false --equals storage.usedBytes=0
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18388/api/v1/admin/backups/create --expect 201 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\created-first.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\created-first.json --not-empty name --greater-than sizeBytes=0
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18388/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-fresh.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-fresh.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=0
 ```
 
-**Expected:** `canBackUp=True`, `reserveInUse=False`, `used=0`, then a created file name, a non-zero
-`cost`, and `warnings=0`.
+**Expected:** every command exits `0`: the folder is empty and a backup can be taken, one is taken at a
+non-zero cost, and no quota warning is open.
 
 **This is the positive control for the whole document.** Everything below asserts that a warning is
-raised, and a build that raised it unconditionally would satisfy all of it without this step.
+raised, and a build that raised it unconditionally would satisfy all of it without this step. Step 4's
+reading of the same filter finds the row, which is what makes this `0` evidence.
 
 **On failure:** a warning already open here, or a refused create, means the environment is not clean and
 nothing below is measuring the reserve.
 
 ### 3. Fill into the reserve, and confirm that is the band reached
 
-```powershell
-$filler = Join-Path $dataDir "backups\filler.db"
-$stream = [System.IO.File]::Create($filler)
-$stream.SetLength([int64](1073741824 * 0.92))
-$stream.Close()
-
-$status = Invoke-RestMethod -Uri "$base/admin/backups/status" -Headers $key
-"canBackUp=$($status.canBackUp) reserveInUse=$($status.storage.reserveInUse)"
-"roomBelowCeiling=$($status.storage.remainingAgainstCeilingBytes) backupCost=$backupCost fits=$($status.storage.remainingAgainstCeilingBytes -gt $backupCost)"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --sparse C:\repos\Quotinator\.claude\temp\qt-backup-08\backups\filler.db 987842478 --expect-length C:\repos\Quotinator\.claude\temp\qt-backup-08\backups\filler.db 987842478
+dotnet script scripts/testing/http.csx -- --url http://localhost:18388/api/v1/admin/backups/status --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\status-reserve.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\status-reserve.json --equals storage.reserveInUse=true --equals canBackUp=true --greater-than-json storage.remainingAgainstCeilingBytes=C:\repos\Quotinator\.claude\temp\qt-backup-08-out\created-first.json#sizeBytes
 ```
 
-**Expected:** `reserveInUse=True` and `canBackUp=True` together, meaning the quota has been passed and
-the ceiling has not, with `fits=True`.
+**Expected:** every command exits `0`: the quota has been passed and the ceiling has not, and what is left
+below the ceiling exceeds what step 2's backup cost.
 
-**On failure:** `canBackUp=False` has two causes, and `fits` tells them apart. With `fits=False` the fill
-overshot the ceiling, so steps 4 to 8 would be measuring refusals rather than the reserve. With
-`fits=True` the ceiling was not reached and the build is refusing at the *quota*: the pre-#348 model,
-where the reserve could not be used without the caller opting in. Either way, stop: the band below is
-not the one being measured.
+**On failure:** `canBackUp=false` has two causes, and the room below the ceiling tells them apart. With
+too little room the fill overshot the ceiling, so steps 4 to 8 would be measuring refusals rather than the
+reserve. With room to spare the build is refusing at the *quota*: the pre-#348 model, where the reserve
+could not be used without the caller opting in. Either way, stop: the band below is not the one being
+measured.
 
 ### 4. A backup is still taken from the reserve, and raises the warning
 
-```powershell
-$created = Invoke-RestMethod -Uri "$base/admin/backups/create" -Method POST -Headers $key
-"created=$($created.name) size=$($created.sizeBytes)"
-
-$warning = Open-QuotaWarnings
-"warnings=$(@($warning).Count) type=$($warning.type) resolution=$($warning.resolution)"
-"body=$($warning.body)"
+```
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18388/api/v1/admin/backups/create --expect 201 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\created-reserve.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\created-reserve.json --not-empty name --greater-than sizeBytes=0
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18388/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-reserve.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-reserve.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=1 --equals items.0.type=warning --contains "items.0.body=The backups folder holds" --contains "items.0.body=past its operating quota of" --contains "items.0.body=from the reserve below the ceiling of 1.00 GB"
 ```
 
-**Expected:** a created file with a non-zero size, then `warnings=1`, `type=warning`, an empty
-`resolution`, and a body naming three sizes: what the folder holds, the quota it has passed, and the
-ceiling it has not.
+**Expected:** every command exits `0`: a backup is created with a non-zero size, and exactly one open
+`warning` whose body names three sizes: what the folder holds, the quota it has passed, and
+the ceiling it has not.
 
 **Both halves matter and neither implies the other.** A build that refused the backup would fail the
-first line; a build that took it silently would fail the second.
+first `json`; a build that took it silently would fail the second.
 
-**On failure:** a refusal here is the pre-#348 model, where the quota refused rather than warned.
+**On failure:** a `409` on the create is the pre-#348 model, where the quota refused rather than warned.
 
 ### 5. The warning survives a restart, and the startup check does not duplicate it
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-08 --port 18388 `
-  --image quotinator:local --bind $dataDir
-
-"warnings=$(@(Open-QuotaWarnings).Count)"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-backup-08 --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-08 --port 18388 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-08
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18388/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-restarted.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-restarted.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=1
 ```
 
-**Expected:** `warnings=1`.
+**Expected:** nothing thrown before the stop, and exactly one open warning after the restart.
 
 **Two failures are distinguishable here, which is why the count is reported rather than a boolean.** `0`
 means the startup check did not run or did not raise; `2` means it raised a second warning for a
@@ -145,148 +126,153 @@ grew by a backup in step 4.
 
 ### 6. A Reset from the reserve is not refused, and what it offers carries the caution
 
-```powershell
-dotnet script scripts/testing/http.csx -- --url "$base/admin/database/reset" `
-  --method POST --expect 200 --status
-
-$rows = (Invoke-RestMethod -Uri "$base/notifications?pageSize=0").items | Where-Object { -not $_.isDismissed }
-$offering = $rows | Where-Object { @($_.availableActions).Count -gt 0 }
-"warnings=$(@(Open-QuotaWarnings).Count) offering=$(@($offering).Count) caution=$($offering.backupCaution -join ',')"
-"actions=$($offering.availableActions -join ',')"
+```
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18388/api/v1/admin/database/reset --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18388/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-reset.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-reset.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-reset.json --where items:isDismissed=false --where items:availableActions.0 --present items.0 --equals items.0.backupCaution=true --contains items.0.availableActions=backupthenreseed
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-reset.json --where items:isDismissed=false --where items:availableActions.0 --where items:backupCaution=false --length-equals items=0
 ```
 
-**Expected:** the reset returns `200`, then `warnings=1`, at least one row offering an action, every one
-of those rows reporting `caution=True`, and the offered actions including one that takes a backup
-(`backupthenreseed`, `removeoldestbackupthenreseed` or `resetdatabase`).
+**Expected:** every command exits `0`: the reset answers `200`, one quota warning is open, at least one
+open row offers an action, the first of them carries the caution and offers `backupthenreseed`, and no
+open row offering an action lacks the caution.
 
 **The warning count is the interesting one.** A Reset drops every table, this row included, so a `1`
 here is the post-reset condition check having raised it again rather than the original row surviving.
+
+**The last command's `0` is evidence because the one before it reads the same filter, less the caution,
+and finds a row.**
 
 **On failure:** a `409` means the reserve is refusing a Reset, which is the model #348 replaced.
 
 ### 6b. The page shows the caution beside the option that takes the backup
 
-```powershell
-$out = "C:\repos\Quotinator\.claude\temp\qt-backup-08"
-$rows = @'
-const rows = [...document.querySelectorAll('tbody tr')];
-const cautioned = rows.filter(r => r.textContent.includes('comes from the reserve'));
-return { rows: rows.length,
-         cautioned: cautioned.length,
-         warningBadges: rows.filter(r => r.querySelector('.badge.bg-warning, .badge.bg-danger')).length,
-         buttons: cautioned.flatMap(r => [...r.querySelectorAll('button')].map(b => b.textContent.trim())) };
-'@
-$page = $rows | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18388/notifications" `
-  --out "$out\reserve-caution.png" --height 1100 --script-stdin | ConvertFrom-Json
-"rows=$($page.rows) cautioned=$($page.cautioned) buttons=$($page.buttons -join ' | ')"
+```
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18388/notifications --out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\reserve-caution.png --height 1100 --script-file scripts/testing/page-scripts/reserve-caution.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\reserve-caution.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\reserve-caution.json --greater-than innerHeight=0 --equals cautioned=1 --contains "buttons=Back up, then reseed"
 ```
 
-**Expected:** `cautioned=1`, its `buttons` including one that takes a backup, so the caution is rendered
-beside the choice it qualifies rather than only carried over REST. `reserve-caution.png` is the artefact
-to look at.
+**Expected:** the `json` command exits `0`: one row carries the caution, and its buttons include *Back up,
+then reseed*, so the caution is rendered beside the choice it qualifies rather than only carried over
+REST. `reserve-caution.png` is the artefact to look at.
 
-**On failure:** `cautioned=0` with step 6 reporting `caution=True` means the response and the page
-disagree, which is the specific drift `NotificationActionOptions.TakesABackup` exists to prevent.
+**On failure:** `cautioned=0` with step 6 passing means the response and the page disagree, which is the
+specific drift `NotificationActionOptions.TakesABackup` exists to prevent.
 
 ### 7. Removing a backup through the application clears the warning, with no restart
 
-```powershell
-Invoke-RestMethod -Uri "$base/admin/backups/filler.db" -Method DELETE -Headers $key
-
-$status = Invoke-RestMethod -Uri "$base/admin/backups/status" -Headers $key
-$resolved = @((Invoke-RestMethod -Uri "$base/notifications?pageSize=0").items |
-  Where-Object { $_.metadataKind -eq 'backupquotareached' -and $_.isDismissed })
-"reserveInUse=$($status.storage.reserveInUse) open=$(@(Open-QuotaWarnings).Count) resolved=$($resolved.Count) resolution=$($resolved[0].resolution)"
+```
+dotnet script scripts/testing/http.csx -- --method DELETE --url http://localhost:18388/api/v1/admin/backups/filler.db --expect 204 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18388/api/v1/admin/backups/status --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\status-deleted.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\status-deleted.json --equals storage.reserveInUse=false
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18388/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-deleted.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-deleted.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-deleted.json --where items:metadataKind=backupquotareached --where items:isDismissed=true --present items.0 --equals items.0.resolution=underquota
 ```
 
-**Expected:** `reserveInUse=False`, `open=0`, `resolved` of at least 1, and `resolution=underquota`.
+**Expected:** every command exits `0`: the filler is deleted through the API, the reserve is no longer in
+use, no quota warning is open, and the newest resolved one is resolved as `underquota`.
 
 **The container was not restarted between the deletion and the read**, which is the point: the deletion
 itself re-checked the condition.
 
 ### 8. A removal the application never saw is picked up on request, still with no restart
 
-```powershell
-$filler = Join-Path $dataDir "backups\filler.db"
-$stream = [System.IO.File]::Create($filler)
-$stream.SetLength([int64](1073741824 * 0.92))
-$stream.Close()
-
-$raised = Invoke-RestMethod -Uri "$base/notifications/refresh" -Method POST
-"raised=$(($raised.checks | Where-Object { $_.kind -eq 'backupquotareached' }).outcome) open=$(@(Open-QuotaWarnings).Count)"
-
-Remove-Item -Force $filler
-
-$cleared = Invoke-RestMethod -Uri "$base/notifications/refresh" -Method POST
-"cleared=$(($cleared.checks | Where-Object { $_.kind -eq 'backupquotareached' }).outcome) open=$(@(Open-QuotaWarnings).Count)"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --sparse C:\repos\Quotinator\.claude\temp\qt-backup-08\backups\filler.db 987842478
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18388/api/v1/notifications/refresh --no-key --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\refresh-raised.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\refresh-raised.json --where checks:kind=backupquotareached --equals checks.0.outcome=raised
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18388/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-raised.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-raised.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-08\backups\filler.db
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18388/api/v1/notifications/refresh --no-key --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\refresh-cleared.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\refresh-cleared.json --where checks:kind=backupquotareached --equals checks.0.outcome=cleared
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18388/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-cleared.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-cleared.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=0
 ```
 
-**Expected:** `raised=raised` with `open=1`, then `cleared=cleared` with `open=0`.
+**Expected:** every command exits `0`: the first refresh reports `raised` and one warning is open, the
+second reports `cleared` and none is.
 
-**Neither refresh carried an admin key**, which is deliberate: the endpoint is open to every user.
+**Neither refresh carries an admin key** (`--no-key`), which is deliberate: the endpoint is open to every
+user.
 
-**This is the case a restart would otherwise be needed for.** The file was removed from the host, so no
-application path observed it; nothing but the refresh could have noticed.
+**This is the case a restart would otherwise be needed for.** The file was written and removed on the
+host, so no application path observed either; nothing but the refresh could have noticed.
 
-**On failure:** an `unchanged` on the first call means the fill did not reach the quota; on the second, it
-means the check is reading a cached figure rather than the folder.
+**On failure:** an `unchanged` on the first refresh means the fill did not reach the quota; on the second,
+it means the check is reading a cached figure rather than the folder.
 
 ### 9. Past the ceiling, a backup is refused
 
-```powershell
-$stream = [System.IO.File]::Create($filler)
-$stream.SetLength([int64]1073741824)
-$stream.Close()
-
-try {
-  Invoke-WebRequest -Uri "$base/admin/backups/create" -Method POST -Headers $key -UseBasicParsing
-} catch {
-  $resp   = $_.Exception.Response
-  $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
-  $body   = $reader.ReadToEnd(); $reader.Close()
-  "status=$($resp.StatusCode.value__)"
-  ($body | ConvertFrom-Json).backupObstacle
-}
-
-$null = Invoke-RestMethod -Uri "$base/notifications/refresh" -Method POST
-$errors = @((Invoke-RestMethod -Uri "$base/notifications?pageSize=0").items |
-  Where-Object { $_.metadataKind -eq 'backupmaxexceeded' -and -not $_.isDismissed })
-"open=$(@(Open-QuotaWarnings).Count) errors=$($errors.Count) type=$($errors[0].type)"
-$errors[0].body
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --sparse C:\repos\Quotinator\.claude\temp\qt-backup-08\backups\filler.db 1073741824
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18388/api/v1/admin/backups/create --expect 409 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\create-refused.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\create-refused.json --equals backupObstacle=BudgetExceeded
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18388/api/v1/notifications/refresh --no-key --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18388/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-ceiling.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-ceiling.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-ceiling.json --where items:metadataKind=backupmaxexceeded --where items:isDismissed=false --length-equals items=1 --equals items.0.type=error --contains "items.0.body=The backups folder holds" --contains "items.0.body=at or above its maximum of 1.00 GB"
 ```
 
-**Expected:** `409` and `BudgetExceeded`, then `open=0`, `errors=1`, `type=error`, and a body naming what
-the folder holds and the maximum it has passed.
+**Expected:** every command exits `0`: the create is refused `409` with `BudgetExceeded`, no quota warning
+is open, and exactly one open `error` names what the folder holds and the maximum it has passed.
 
 **Three separate facts, and none implies the others.** The refusal is the attempt being stopped. The
-`open=0` is the reserve warning gone, since it says backups are still being taken and that is false here.
-The `errors=1` is the band reporting: exceeding the maximum always reports, whether or not anything
-attempted a backup.
+quota warning's `0` is the reserve warning gone, since it says backups are still being taken and that is
+false here. The error's `1` is the band reporting: exceeding the maximum always reports, whether or not
+anything attempted a backup.
 
-**On failure:** a `200` on the create means nothing enforces the ceiling and the reserve has become
-unbounded. An `open=1` means the warning is kept outside the band it describes. An `errors=0` means the
-state that stops every backup is showing the operator nothing.
+**On failure:** a `201` on the create means nothing enforces the ceiling and the reserve has become
+unbounded. An open quota warning means the warning is kept outside the band it describes. No error means
+the state that stops every backup is showing the operator nothing.
 
 ### 10. The remedy the warning names actually works
 
-```powershell
-Remove-Item -Force $filler
-
-$after = Invoke-RestMethod -Uri "$base/notifications/refresh" -Method POST
-$status = Invoke-RestMethod -Uri "$base/admin/backups/status" -Headers $key
-$final = Invoke-RestMethod -Uri "$base/admin/backups/create" -Method POST -Headers $key
-$cleared = @((Invoke-RestMethod -Uri "$base/notifications?pageSize=0").items |
-  Where-Object { $_.metadataKind -eq 'backupmaxexceeded' -and -not $_.isDismissed })
-"canBackUp=$($status.canBackUp) open=$(@(Open-QuotaWarnings).Count) errors=$($cleared.Count) created=$($final.name)"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-08\backups\filler.db
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18388/api/v1/notifications/refresh --no-key --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18388/api/v1/admin/backups/status --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\status-remedied.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\status-remedied.json --equals canBackUp=true
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18388/api/v1/admin/backups/create --expect 201 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\created-final.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\created-final.json --not-empty name
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18388/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-remedied.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-remedied.json --where items:metadataKind=backupmaxexceeded --where items:isDismissed=false --length-equals items=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-08-out\notifications-remedied.json --where items:metadataKind=backupquotareached --where items:isDismissed=false --length-equals items=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-backup-08 --pattern "\[Runtime - Exception\]" --exactly 0
 ```
 
-**Expected:** `canBackUp=True`, `open=0`, `errors=0`, and a created file name.
+**Expected:** every command exits `0`: a backup can be taken again and one is, neither the error nor the
+quota warning is open, and nothing was thrown.
 
 **This closes the loop the warning promises.** Its body tells the operator to delete older backups or
 raise the quota, and says the notice clears itself once the folder is back under. This step performs the
-first of those and checks both halves: the warning is gone and a backup is possible again.
+first of those and checks both halves: the notices are gone and a backup is possible again. The error's
+`0` is evidence because step 9 read the same filter and found it.
 
 ## Observed effect
+
+**Measured 2026-11-08** on `feature/notification-system` (1.9.0-alpha), as written, every command
+exiting `0`:
+
+| Step | Observed |
+|---|---|
+| 2 | `canBackUp = true`, `reserveInUse = false`, `usedBytes = 0`; a backup of `4718592` bytes; `0` open quota warnings |
+| 3 | `reserveInUse = true` and `canBackUp = true`, `81180754` bytes left below the ceiling |
+| 4 | a second backup of `4718592` bytes; `1` open `warning`, body *The backups folder holds 951.1 MB, past its operating quota of 921.6 MB. Backups are still being taken, from the reserve below the ceiling of 1.00 GB, …* |
+| 5 | `0` exceptions; `1` open warning after the restart |
+| 6 | reset `200`; `1` open warning; the reseed row *The database holds no quotes* with `backupCaution = true` and `["backupthenreseed"]`; `0` rows offering an action without the caution |
+| 6b | `innerHeight = 1100`, `cautioned = 1`, buttons *Back up, then reseed* and *Dismiss* |
+| 7 | `reserveInUse = false`; `0` open, the newest resolved one `underquota` |
+| 8 | refresh `raised`, `1` open; refresh `cleared`, `0` open |
+| 9 | `409 BudgetExceeded`; `0` open quota warnings; `1` open `error` |
+| 10 | `canBackUp = true`, a backup taken; `0` open errors, `0` open quota warnings; `0` exceptions |
+
+**The conversion corrected one assertion of its own.** Its first run asserted the open warning's
+`resolution` as `null` and failed: an open notification carries no `resolution` field at all. Being open
+is already asserted through `isDismissed`, and step 7 reads `resolution` once there is one, so the
+assertion was dropped rather than replaced.
 
 **Measured 2026-09-27** against `quotinator:local`, and first run red against an image built from
 `7f83e92a`, the model #348 replaced.
@@ -310,22 +296,18 @@ answers `409 BudgetExceeded`, and removing the filler restores `canBackUp=True` 
 answered `404`. Step 3's *On failure* text was wrong before that run and is corrected: it blamed
 `canBackUp=False` on overshooting the ceiling alone, which `fits=True` disproves.
 
-**This pass found one defect, and step 9's `open=0` is the assertion added for it.** On the day of the
-run, past the *ceiling* the check raised the same body it raises inside the reserve: at 1.02 GB against a
-1.00 GB ceiling, with `canBackUp=False`, the warning read *"Backups are still being taken, from the
-reserve below the ceiling of 1.00 GB, but once the folder reaches the ceiling a backup will be
-refused."* Both clauses are false there. The warning's condition is now the band it describes rather than
-the threshold it starts at, so above the max it is removed instead, and the body needed no change since it
-is only ever shown inside the reserve.
-
-**`Remove-Item -Force $filler` is deliberately not used** to delete the filler from the host. It is
-refused outright in at least one sandboxed runner, which stops the whole step before any of it executes;
-`[System.IO.File]::Delete` is the same operation and matches the `::Create` two lines above it.
+**This pass found one defect, and step 9's quota-warning count of `0` is the assertion added for it.** On
+the day of the run, past the *ceiling* the check raised the same body it raises inside the reserve: at
+1.02 GB against a 1.00 GB ceiling, with `canBackUp=False`, the warning read *"Backups are still being
+taken, from the reserve below the ceiling of 1.00 GB, but once the folder reaches the ceiling a backup
+will be refused."* Both clauses are false there. The warning's condition is now the band it describes
+rather than the threshold it starts at, so above the max it is removed instead, and the body needed no
+change since it is only ever shown inside the reserve.
 
 ## Canary
 
 **Step 2 is the control and says so in its own title.** Below the quota a backup is taken,
-`reserveInUse` is `False` and nothing is warned about. Every later step asserts a change against that
+`reserveInUse` is `false` and nothing is warned about. Every later step asserts a change against that
 reading, so a build that warned about everything or about nothing fails step 2 before it can
 accidentally satisfy steps 4 to 10.
 
@@ -343,8 +325,9 @@ Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-08"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-08 --bind $dataDir
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
 ```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-08 --bind C:\repos\Quotinator\.claude\temp\qt-backup-08
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-08 --delete C:\repos\Quotinator\.claude\temp\qt-backup-08-out
+```
+
+**Expected:** the container and both directories are gone.

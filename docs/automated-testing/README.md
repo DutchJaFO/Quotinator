@@ -1124,7 +1124,7 @@ an entry needs; a happy-path-only test has nothing to contribute.
 
 ## Observed effects awaiting measurement
 
-**39 of 83 documents describe their effect without having measured it.** Each row below names the
+**37 of 83 documents describe their effect without having measured it.** Each row below names the
 quantity its next run must read, so the measurement is a specific act rather than a vague intention to
 look. A document leaves this list by recording `**Measured <date>**` in its own section, and
 `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails if it does so while its row is still
@@ -1138,8 +1138,6 @@ asserts what it should; what is missing is a reading an entry can quote.
 | [api-surface/03-unicode-aware-search-toggle.md](api-surface/03-unicode-aware-search-toggle.md) | The `matching` figure each of the two containers returns for the same accented query |
 | [api-surface/04-endpoint-naming-and-operation-ids.md](api-surface/04-endpoint-naming-and-operation-ids.md) | The operation count in the published spec, and the `[Api - GetQuoteById]` line as emitted |
 | [api-surface/05-a-thrown-exception-is-logged.md](api-surface/05-a-thrown-exception-is-logged.md) | The `ERR` line the rejected upload writes, with its exception id |
-| [database-lifecycle/01-file-resource-capture-and-reconstruction.md](database-lifecycle/01-file-resource-capture-and-reconstruction.md) | The captured row count per bundled file, and the hash the reconstruction returns |
-| [database-lifecycle/02-audit-export-and-conflict-data-purge.md](database-lifecycle/02-audit-export-and-conflict-data-purge.md) | The row count the export header reports, and the purge traces per batch |
 | [identity-and-casing/01-canonicalize-explicit-ids-at-capture.md](identity-and-casing/01-canonicalize-explicit-ids-at-capture.md) | The id as echoed back, and what the container logs while resolving a file-authored explicit id |
 | [identity-and-casing/02-quote-id-case-insensitive-lookup.md](identity-and-casing/02-quote-id-case-insensitive-lookup.md) | What the container logs while resolving either casing |
 | [identity-and-casing/03-conversation-line-quote-id-fk-safety.md](identity-and-casing/03-conversation-line-quote-id-fk-safety.md) | The foreign-key violation count either side of the mismatched line |

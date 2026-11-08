@@ -127,7 +127,8 @@ build refusing every migration would satisfy them all without this one.
 
 ## Observed effect
 
-Run 2026-11-08 on `feature/notification-system` (1.9.0-alpha), as written, every command exiting `0`:
+**Measured 2026-11-08** on `feature/notification-system` (1.9.0-alpha), as written, every command
+exiting `0`:
 
 | Step | Observed |
 |---|---|
