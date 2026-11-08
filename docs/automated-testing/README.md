@@ -1077,11 +1077,14 @@ So the Upgraded profile's prior image is chosen by what is being proven, and a d
   to cover rather than implying all of them.
 
 **The boundary of this approach, stated now rather than discovered later.** A published tag can only
-reproduce a version that was actually released and whose image is still pullable. Two states it cannot
-reach: an unreleased intermediate, which is why
+reproduce a version that was actually released and whose image is still pullable. **An unreleased
+intermediate is reproduced the same way from its commit**: build that commit from its own tree, with its
+own `docker/Dockerfile`, as a canary is built, and let it upgrade the database as a real installation's
+build would.
 [`notifications-and-changelog/03`](notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md)
-hand-builds its own with SQL rather than pulling anything, and a database exhibiting a feature removed
-before it ever shipped. **If a tag a test depends on ever stops being pullable, that is the trigger to
+does this. **A database state is never written by hand to stand in for one a build produces**: the copy
+claims to be that state, and anything the SQL leaves out makes the test about a database no installation
+ever held. **If a tag a test depends on ever stops being pullable, that is the trigger to
 revisit this decision, not a reason to quietly drop the test.**
 
 **Downgrade is deliberately not covered yet** (developer direction, 2026-08-25). Migrations are
@@ -1121,7 +1124,7 @@ an entry needs; a happy-path-only test has nothing to contribute.
 
 ## Observed effects awaiting measurement
 
-**40 of 83 documents describe their effect without having measured it.** Each row below names the
+**39 of 83 documents describe their effect without having measured it.** Each row below names the
 quantity its next run must read, so the measurement is a specific act rather than a vague intention to
 look. A document leaves this list by recording `**Measured <date>**` in its own section, and
 `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails if it does so while its row is still
@@ -1165,7 +1168,6 @@ asserts what it should; what is missing is a reading an entry can quote.
 | [import-and-staged-actions/29-a-case-only-change-is-shown-for-review.md](import-and-staged-actions/29-a-case-only-change-is-shown-for-review.md) | The refusal body, and the text stored after taking the incoming value |
 | [import-and-staged-actions/30-deciding-an-add-answers-an-outcome.md](import-and-staged-actions/30-deciding-an-add-answers-an-outcome.md) | The held reason each Add reports, and each refusal body |
 | [notifications-and-changelog/02-notification-metadata-and-provenance.md](notifications-and-changelog/02-notification-metadata-and-provenance.md) | The stored payload and its provenance, as read, with the date of the reading |
-| [notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md](notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md) | The version history after the upgrade from the intermediate state |
 | [notifications-and-changelog/05-legacy-notification-provenance.md](notifications-and-changelog/05-legacy-notification-provenance.md) | The order of the version-history rows, and the fresh database's absence of a released row |
 | [notifications-and-changelog/08-notification-text-resolves-per-language.md](notifications-and-changelog/08-notification-text-resolves-per-language.md) | The text each language returns for the same notification |
 | [notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md](notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md) | The text each language returns after the upgrade, and the English row either side |

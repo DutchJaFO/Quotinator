@@ -3,184 +3,194 @@
 **Smoke:** no
 **Environment:** Upgraded
 **Deterministic:** yes
-**Traces to:** #312
+**Traces to:** #312, #305
 
 ## Preconditions
 
-**Beyond the profile.** The Upgraded prior state is not an image at all but a **hand-built
-intermediate**: the published `ghcr.io/dutchjafo/quotinator:1.8.3` tag creates the released baseline,
-then one migration is applied by hand on top of it. Two containers of this test's own share one
-bind-mounted directory: `qt-notif-03-183` (the released image, **no published port**) and
-`qt-notif-03-current` (the current build, publishing `18503`) with the promotion applied from the
-host in between.
+**Beyond the profile.** The Upgraded prior state is built by the three builds a real installation passes
+through, one after another, on one bind-mounted directory, under one container name (`qt-notif-03`,
+publishing `18503`):
+
+1. the published `ghcr.io/dutchjafo/quotinator:1.8.3` tag creates the database;
+2. **the intermediate build**, `e94e9c82`, upgrades it: the commit before #312's first code change, built
+   from its own tree as `quotinator:pre-312`, the same way a canary is built;
+3. this build upgrades it from there.
+
+**Nothing in the database is written by hand.** The intermediate build applies its own migrations and
+records its own version, so the state this document upgrades from is one a real database has held, not a
+copy of one written to look like it.
 
 **This exists because upgrading from the last release alone missed a startup-killing bug.** The
 released-database path starts from v1.8.3, where `System_AppVersion` does not exist at all, so a
-pre-migration read of it hits the missing-table path and returns null. A database at data **v4 or v5**
-is a different state entirely: the table exists but the columns a later migration adds do not. That
-state crashed startup with `no such column: Application`, and only a T1 run on a real dev database
-exposed it.
+pre-migration read of it hits the missing-table path and returns null. A database the intermediate build
+has upgraded is a different state: the table exists, but the `Application` column a later migration adds
+does not. A build that read that column before migrating crashed startup with `no such column:
+Application`, and only a T1 run on a real dev database exposed it.
 
 **Whenever a migration adds a column to a table that startup reads before migrating, verify the
-intermediate state as well as the released one.** ADR 009 mandates the last *released* schema; that is
-a floor, not a ceiling, and unreleased intermediate versions exist on every developer machine.
-
-The intermediate state is built by hand, from the released image plus the migrations in between.
+intermediate state as well as the released one.** ADR 009 mandates the last *released* schema; that is a
+floor, not a ceiling, and unreleased intermediate versions exist on every developer machine. Any commit can
+be built, so any of them can be reproduced this way.
 
 ## Determinism
 
-**This is the one place version numbers are unavoidable.** The scenario's whole subject is a database
-sitting *between* two schema versions, so it has to name which one. Unlike every other test here,
-where a number would be an incidental assertion. The numbers below **describe the state being
-constructed, not an expected outcome**, and need re-deriving whenever migrations are consolidated.
+- **Each stage proves the state it leaves before the next one starts.** Step 2 shows the released database
+  has no `System_AppVersion`. Step 3 shows the intermediate one has the table and lacks the `Application`
+  column, by reading that column and getting the incident's own error. A run that reached the current
+  build from any other state would be testing a different upgrade, and these reads are what rule it out.
+- **The intermediate build is a fixed commit, built from its own tree.** Its own `docker/Dockerfile` is
+  used: today's names `Directory.Packages.props`, which that tree does not have.
+- **The current build's start waits for *listening*, then polls `status` for either outcome**, so a start
+  that degrades is read rather than waited out.
+- **No migration count or version number is asserted.** The states are proven by what each stage's schema
+  can and cannot answer.
+- **DbInspector reads the bind directory from the host** (`Mode=ReadOnly`, by design), so nothing writes
+  to the database but the three builds.
+- **The zero exception count is given a positive control in the same run**: the malformed upload in step 4
+  shows the channel recording an exception it expects.
 
-The tell that they have gone stale: the current build logs no pending migrations at all, or fails with
-a "table already exists" error instead of starting. Both mean the hand-built state no longer sits where
-this scenario needs it.
+## Explicitly not covered here
 
-- The released container publishes no port and waits on its own log.
-- The current build's wait terminates on **either** outcome, ready or unhandled exception, so a
-  genuine crash fails the test rather than hanging it.
-- **As elsewhere, assert that replay completed, never the migration count or the version numbers.**
-- **The promotion is a write, so it uses `execute-sql.csx`, not `DbInspector`.** DbInspector is
-  `Mode=ReadOnly` by design and cannot perform it. **Do not "fix" the tool to allow writes.** Both run
-  on the host against the bind directory, which is an absolute Windows path built from `$PWD` so that
-  nothing translates it into a different directory on the way.
+**Which version the intermediate build records.** It is the version in that commit's own
+`Directory.Build.props`, `1.8.3`, the same as the release's: the build predates the `-alpha` suffix the
+milestone workflow now adds at milestone start. Step 5 reads the row it wrote as it is.
 
 ## Steps
 
-### 1. Create the released baseline
+### 1. Build the intermediate build
 
-```powershell
-$dataDir = "$PWD\.claude\temp\qt-notif-03-data"
-# A folder left by an earlier run still holds its database, and the released image would start against it.
-if (Test-Path $dataDir) { Remove-Item -LiteralPath $dataDir -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-notif-03-183 `
-  --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind $dataDir
-while (-not (docker logs qt-notif-03-183 2>&1 | Select-String -SimpleMatch 'Quotinator ready')) { Start-Sleep 1 }
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-03-183 --bind $dataDir
+```
+git worktree add --detach C:\repos\Quotinator\.claude\temp\wt-pre-312 e94e9c82
+docker build -f C:\repos\Quotinator\.claude\temp\wt-pre-312\docker\Dockerfile -t quotinator:pre-312 C:\repos\Quotinator\.claude\temp\wt-pre-312
 ```
 
-**Expected:** the released image reaches `Quotinator ready`, leaving a v1.8.3 database in `$dataDir`.
+**Expected:** both commands exit `0`: the worktree is at `e94e9c82` and the image builds.
 
-**On failure:** if it never reaches `Quotinator ready`, there is no released baseline to promote, so the
-hand-applied SQL below would run against an empty or absent file and the current build would then be
-starting from a state nobody constructed. Stop.
+**On failure:** a worktree that already exists is left from an earlier run; remove it as *Cleanup* does and
+repeat.
 
-### 2. Hand-apply the migration that first creates `System_AppVersion`
+### 2. Create the released database
 
-One step past the baseline, plus a row the later column-adding migration must not destroy:
-
-```powershell
-dotnet script scripts/testing/execute-sql.csx -- --db "$dataDir\quotinatordata.db" --sql @'
-CREATE TABLE IF NOT EXISTS System_AppVersion (
-    Id TEXT NOT NULL PRIMARY KEY, Version TEXT NOT NULL, DateCreated TEXT NOT NULL,
-    DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0);
-INSERT INTO System_AppVersion (Id, Version, DateCreated)
-VALUES (lower(hex(randomblob(16))), '1.8.4', '2026-08-15 20:00:00');
-INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (4, '2026-08-15 20:00:00');
-'@
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-notif-03-data --delete C:\repos\Quotinator\.claude\temp\qt-notif-03-out --create-directory C:\repos\Quotinator\.claude\temp\qt-notif-03-data --create-directory C:\repos\Quotinator\.claude\temp\qt-notif-03-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-03 --port 18503 --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind C:\repos\Quotinator\.claude\temp\qt-notif-03-data
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-notif-03-data\quotinatordata.db --sql "SELECT Version FROM System_AppVersion"
 ```
 
-**Expected:** the script reports rows affected with no error, leaving the database at the intermediate
-state: the table present, the pre-existing `1.8.4` row written, and the schema counter promoted.
+**Expected:** the release reaches healthy, and DbInspector exits `1` with `no such table:
+System_AppVersion`: the released schema predates the table entirely.
 
-**On failure:** a SQL error means the intermediate state was never built, and the current build
-would then be upgrading the plain released baseline instead, which is the path
-[`02-notification-metadata-and-provenance.md`](02-notification-metadata-and-provenance.md) already
-covers, not this one. Stop.
+**On failure:** a table that exists means the directory was not new, or the image is not the release.
+Stop.
 
-### 3. Start the current build against that intermediate state
+### 3. Upgrade it with the intermediate build
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- reenter --name qt-notif-03-current --port 18503 `
-  --image quotinator:local --bind $dataDir --no-wait
-
-while (-not (docker logs qt-notif-03-current 2>&1 | Select-String -SimpleMatch 'Quotinator ready', 'Unhandled exception')) { Start-Sleep 1 }
-docker logs qt-notif-03-current 2>&1 | Select-String -SimpleMatch 'no such column', 'Unhandled', 'pending', 'schema updated', 'Quotinator ready'
+```
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-notif-03 --port 18503 --image quotinator:pre-312 --bind C:\repos\Quotinator\.claude\temp\qt-notif-03-data
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-notif-03-data\quotinatordata.db --sql "SELECT Version FROM System_AppVersion"
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-notif-03-data\quotinatordata.db --sql "SELECT Application FROM System_AppVersion"
 ```
 
-**Expected:** logs `applying … pending "Data" migration(s)`, then `schema updated`, and reaches
-`Quotinator ready`.
+**Expected:** the intermediate build reaches healthy; the first read lists one row, the version it recorded
+for itself; the second exits `1` with `no such column: Application`.
 
-**Must not log `no such column` or `Unhandled exception`.** Before the fix this terminated the process
-during startup, *after* the changelog database had already initialised, so a partial, healthy-looking
-log prefix is not evidence of a successful start. Check for `Quotinator ready` explicitly.
+**That error is the state this document exists for**: the table startup reads, without the column a later
+migration adds. A second read that succeeds means the intermediate build is not the one named above. Stop.
 
-The wait matches **either** outcome, so a genuine crash ends the loop and fails at the assertion rather
-than hanging on a container that will never become ready.
+### 4. Start the current build against that intermediate state
 
-**On failure:** no pending migrations at all, or a "table already exists" error, means the hand-built
-state no longer sits where this scenario needs it (see Determinism): the numbers need re-deriving, not
-the build investigating. Stop.
-
-### 4. Read the version history
-
-```powershell
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
-  --sql "SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber"
-(Select-Xml -Path Directory.Build.props -XPath '//Version').Node.InnerText
+```
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-notif-03 --port 18503 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-notif-03-data --wait-listening
+dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18503/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-notif-03-out\health.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-03-out\health.json --equals status=healthy
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-03 --pattern "no such column" --exactly 0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-03 --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18503/api/v1/admin/database/integrity --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-notif-03-out\integrity.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-03-out\integrity.json --equals databases.0.isIntact=true --length-equals databases.0.differences=0 --equals databases.1.isIntact=true --length-equals databases.1.differences=0
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18503/api/v1/notifications?pageSize=0" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-notif-03-out\notifications.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-03-out\notifications.json --contains items=migrationapplied
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18503/api/v1/import --file docs/automated-testing/startup-and-degradation/fixtures/malformed-import.json --duplicate-resolution review --expect 422 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-03 --pattern "thrown: JsonReaderException" --at-least 1
 ```
 
-**Expected:** three rows, in this order:
+**Expected:** every command exits `0`. `/health` reads `healthy`; the log holds no `no such column` and no
+exception; the integrity check reports both databases intact, with no difference and no extra object; the
+notifications list holds a `migrationapplied` notification, so the migrations ran; and the malformed upload
+answers `422` with its `JsonReaderException` logged, which is the positive control for the zero count.
+
+**`healthy` and intact together are the point.** The first is the startup #312 fixed surviving the read
+that killed it; the second (#305) is the database it leaves matching the schema a fresh install has, so the
+upgrade from this state is not only survived but complete.
+
+**On failure:** `no such column` in the log is the defect itself, the version read moved before the
+migrations again. `unhealthy` with a reason naming a table or column is an intermediate state the migration
+path does not finish correctly: the integrity endpoint lists what differs.
+
+### 5. Read the version history
+
+```
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-notif-03-data\quotinatordata.db --sql "SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber"
+dotnet script scripts/testing/http.csx -- --url http://localhost:18503/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-notif-03-out\version.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-03-out\version.json --equals-xml version=Directory.Build.props#Version
+```
+
+**Expected:** three rows, in this order, and the `json` command exits `0`, printing the running version:
 
 | Application | Version | SequenceNumber | Written by |
 |---|---|---|---|
 | `Quotinator.Api` | `1.8.3` | `0` | the provenance migration, deliberately below the minimum |
-| *(NULL)* | `1.8.4` | `1` | the hand-built fixture, an unreleased build |
-| `Quotinator.Api` | *(the version printed beneath)* | `2` | the running build, appended |
+| *(NULL)* | the version step 3 read | `1` | the intermediate build, before the `Application` column existed |
+| `Quotinator.Api` | the version the `json` command printed | `2` | the running build, appended |
 
-The pre-existing `1.8.4` row survives with its `Application` still `NULL`, and the current version is
+The intermediate build's row survives with its `Application` still `NULL`, and the current version is
 **appended** rather than replacing it.
 
-**The `1.8.3` row at sequence `0` is correct, not a defect.** `BackfillAnnouncementProvenance` inserts
-it at `COALESCE(MIN(SequenceNumber), 2) - 1` on purpose: v1.8.3 predates `System_AppVersion` entirely,
-so every row the table can already hold was written by a later build, and appending it would make "the
-version that ran last" answer 1.8.3 on a machine that has since run newer ones. This step listed only
-two rows until #339's full run and read the third as a failure.
+**The `1.8.3` row at sequence `0` is correct, not a defect.** `BackfillAnnouncementProvenance` inserts it
+at `COALESCE(MIN(SequenceNumber), 2) - 1` on purpose: v1.8.3 predates `System_AppVersion` entirely, so every
+row the table can already hold was written by a later build, and appending it would make "the version that
+ran last" answer 1.8.3 on a machine that has since run newer ones.
 
-**This expectation requires the development version to differ from `1.8.3`**, which it does from
-milestone start (see `docs/workflow/checklist.md`'s *Version during development*) and which is why the
-file is read in the same block rather than a value being written here. While the two were equal,
+**This expectation requires the running version to differ from `1.8.3`**, which it does from milestone
+start (see `docs/workflow/checklist.md`'s *Version during development*). While the two were equal,
 `RecordCurrentAsync` found the migration's own `Quotinator.Api | 1.8.3` row and appended nothing, so the
-running build never appeared and `SelectMostRecent` answered the `1.8.4` fixture row. Measured both
-ways: `1.8.3` produced no third row; `1.9.0-alpha` produced the table above.
+running build never appeared.
 
 ## Observed effect
 
-Well established for the failure: `no such column: Application`, terminating startup after the
-changelog database had already initialised, which is what made the log look healthy up to the point it
-died.
+**Measured 2026-11-08** against `quotinator:local` built from `cd33b5b0`, with `quotinator:pre-312` built
+from `e94e9c82`.
+
+| Stage | Reading |
+|---|---|
+| Released `1.8.3` | Healthy; `System_AppVersion` does not exist |
+| Intermediate build | Healthy; one row, `1.8.3`; reading `Application` fails with `no such column: Application` |
+| Current build | `healthy`; no `no such column` and no exception logged; both databases intact, no difference; `migrationapplied` notifications present; the malformed upload `422`, its `JsonReaderException` logged |
+| Version history | `Quotinator.Api 1.8.3 0`, `NULL 1.8.3 1`, `Quotinator.Api 1.9.0-alpha 2` |
 
 ## Canary
 
-Build the commit before [#312](https://github.com/DutchJaFO/Quotinator/issues/312)'s first code
-change, under a distinct tag, and run steps 3 and 4 against it. The version history is what #312
-added, so step 4 has nothing to read there.
+Build `a15f3168^`, the commit before #312's fix *read the version after migrations*, under a distinct tag,
+and run steps 1 to 4 with that image in step 4's `reenter` in place of `quotinator:local`. Step 4 must fail:
+the build reads `System_AppVersion.Application` before migrating, against exactly the state step 3 proved,
+and does not reach `healthy`.
 
-**The point of this document is the starting state, not the destination**, and that is where its own
-control lies. Steps 1 and 2 land the database one migration past the released baseline rather than on
-it, so a build that only handles an upgrade from the last release fails here while passing its sibling
-`02`. A run that skips step 2 tests the same path `02` already covers.
-
-Never assert the migration's number. Step 2 applies the migration that first creates
-`System_AppVersion` by what it does, since a number goes stale whenever any milestone adds one.
+Steps 2 and 3 are the control inside every run: they prove the starting state from what its schema can and
+cannot answer, so a step 4 that passes did so from the state that broke.
 
 Remove the container, image and worktree afterwards.
 
+**Where the canary has been run, 2026-11-08.** Against `719568d1` (`a15f3168^`), as `quotinator:canary-03`:
+steps 2 and 3 read as in every run, `no such table` and then `no such column: Application`. In step 4 the
+container never answered: `reenter --wait-listening` gave up, `wait-field` read nothing, `docker inspect`
+read `false` with exit code `139`, and the log held one `no such column` line.
+
 ## Cleanup
 
-Read the log before the stop, per the index's *Read the log before the application stops*:
-
-```powershell
-docker logs qt-notif-03-current 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-03-183 --bind $dataDir
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-03-current --bind $dataDir
-Remove-Item $dataDir -Recurse -Force -ErrorAction SilentlyContinue
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-03 --bind C:\repos\Quotinator\.claude\temp\qt-notif-03-data
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-notif-03-data --delete C:\repos\Quotinator\.claude\temp\qt-notif-03-out
+docker rmi quotinator:pre-312
+git worktree remove --force C:\repos\Quotinator\.claude\temp\wt-pre-312
 ```
 
-`qt-notif-03-183` is already removed mid-run; it is named again here so a run abandoned partway leaves nothing
-behind. The data directory is a bind mount rather than a named volume, so removing the directory is
-what removes its data.
+**Expected:** the container, both directories, the image and the worktree are gone.
