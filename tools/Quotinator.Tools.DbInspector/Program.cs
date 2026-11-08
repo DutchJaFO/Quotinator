@@ -33,7 +33,16 @@ catch (SqliteException ex)
     return 1;
 }
 
-Console.WriteLine(TableFormatter.Format(rows.Cast<IDictionary<string, object>>()));
+List<IDictionary<string, object>> table = [.. rows.Cast<IDictionary<string, object>>()];
+Console.WriteLine(TableFormatter.Format(table));
+
+if (parsed.Value.JsonOut is string jsonOut)
+{
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(jsonOut))!);
+    File.WriteAllText(jsonOut, JsonRowWriter.ToJson(table));
+    Console.WriteLine($"Wrote {table.Count} row(s) to {jsonOut}");
+}
+
 return 0;
 
 static void PrintUsage()
@@ -41,7 +50,7 @@ static void PrintUsage()
     Console.WriteLine("Quotinator.Tools.DbInspector — run a SQL query against a Quotinator SQLite database file.");
     Console.WriteLine();
     Console.WriteLine("Usage:");
-    Console.WriteLine("  dotnet run -- --db <path-to-db-file> --sql \"<query>\"");
+    Console.WriteLine("  dotnet run -- --db <path-to-db-file> --sql \"<query>\" [--json-out <path>]");
     Console.WriteLine("  dotnet run -- integrity --db <path-to-db-file>");
     Console.WriteLine();
     Console.WriteLine("Examples:");

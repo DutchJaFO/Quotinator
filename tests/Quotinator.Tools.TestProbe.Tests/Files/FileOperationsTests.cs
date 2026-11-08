@@ -1,5 +1,6 @@
 using System.Text;
 using Quotinator.Tools.TestProbe.Files;
+using Quotinator.Tools.TestProbe.Results;
 
 namespace Quotinator.Tools.TestProbe.Tests.Files;
 
@@ -285,6 +286,60 @@ public sealed class FileOperationsTests
     [TestMethod]
     public void ExpectLength_Missing_Fails()
         => Assert.IsFalse(FileOperations.ExpectLength(InRoot("absent"), 0).Holds);
+
+    [TestMethod]
+    public void SetWriteTime_ExistingFile_SetsIt()
+    {
+        File.WriteAllText(InRoot("f"), "x");
+
+        ExpectationResult result = FileOperations.SetWriteTime(InRoot("f"), new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        Assert.IsTrue(result.Holds);
+        Assert.AreEqual(new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc), File.GetLastWriteTimeUtc(InRoot("f")));
+    }
+
+    [TestMethod]
+    public void SetWriteTime_MissingFile_Fails()
+        => Assert.IsFalse(FileOperations.SetWriteTime(InRoot("absent"), new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc)).Holds);
+
+    [TestMethod]
+    public void ExpectIdenticalIn_AMatchingFileInTheDirectory_Holds()
+    {
+        string directory = InRoot("stored");
+        Directory.CreateDirectory(directory);
+        File.WriteAllBytes(Path.Combine(directory, "other"), [9, 9]);
+        File.WriteAllBytes(Path.Combine(directory, "copy"), [1, 2, 3]);
+        File.WriteAllBytes(InRoot("downloaded"), [1, 2, 3]);
+
+        Assert.IsTrue(FileOperations.ExpectIdenticalIn(InRoot("downloaded"), directory).Holds);
+    }
+
+    [TestMethod]
+    public void ExpectIdenticalIn_NoMatchingFile_Fails()
+    {
+        string directory = InRoot("stored");
+        Directory.CreateDirectory(directory);
+        File.WriteAllBytes(Path.Combine(directory, "copy"), [1, 2, 4]);
+        File.WriteAllBytes(InRoot("downloaded"), [1, 2, 3]);
+
+        Assert.IsFalse(FileOperations.ExpectIdenticalIn(InRoot("downloaded"), directory).Holds);
+    }
+
+    [TestMethod]
+    public void ExpectIdenticalIn_DirectoryMissing_Fails()
+    {
+        File.WriteAllBytes(InRoot("downloaded"), [1, 2, 3]);
+
+        Assert.IsFalse(FileOperations.ExpectIdenticalIn(InRoot("downloaded"), InRoot("absent")).Holds);
+    }
+
+    [TestMethod]
+    public void ExpectIdenticalIn_FileMissing_Fails()
+    {
+        Directory.CreateDirectory(InRoot("stored"));
+
+        Assert.IsFalse(FileOperations.ExpectIdenticalIn(InRoot("absent"), InRoot("stored")).Holds);
+    }
 
     [TestMethod]
     public void ExpectMatches_EnoughMatches_Holds()

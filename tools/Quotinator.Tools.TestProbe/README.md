@@ -79,6 +79,8 @@ into an array (`database.quotes`, `items.0.quote`).
 | `--expect-directory <path>` | Holds when `<path>` is a directory |
 | `--expect-empty-directory <path>` | Holds when `<path>` is a directory with nothing in it |
 | `--expect-length <path> <bytes>` | Holds when the file is exactly `<bytes>` long |
+| `--set-write-time <path> <utc>` | Sets the file's last write time to `<utc>` (for example `2020-01-01`, read as UTC), so it orders as the oldest of several. Fails when the file does not exist |
+| `--expect-identical-in <path> <directory>` | Holds when some file directly in `<directory>` holds exactly the same bytes as `<path>`, compared by SHA-256: for a downloaded copy of a stored file whose name is only known at run time. Every file in the directory is read, so one still held locked fails the check |
 | `--expect-not-empty <path>` | Holds when `<path>` is a file holding at least one byte |
 | `--expect-absent <path>` | Holds when nothing, file or directory, exists at `<path>` |
 | `--expect-matches <directory> <pattern> <minimum>` | Holds when at least `<minimum>` files in `<directory>` match `<pattern>` |

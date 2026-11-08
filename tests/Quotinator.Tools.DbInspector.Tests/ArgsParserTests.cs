@@ -26,6 +26,24 @@ public class ArgsParserTests
     }
 
     [TestMethod]
+    public void Parse_JsonOut_IsParsed()
+    {
+        QueryArgs? result = ArgsParser.Parse(["--db", "C:/data.db", "--sql", "SELECT 1", "--json-out", "C:/out.json"]);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual("C:/out.json", result.Value.JsonOut);
+    }
+
+    [TestMethod]
+    public void Parse_NoJsonOut_LeavesItNull()
+    {
+        QueryArgs? result = ArgsParser.Parse(["--db", "C:/data.db", "--sql", "SELECT 1"]);
+
+        Assert.IsNotNull(result);
+        Assert.IsNull(result.Value.JsonOut);
+    }
+
+    [TestMethod]
     public void Parse_MissingDb_ReturnsNull()
     {
         var result = ArgsParser.Parse(["--sql", "SELECT 1"]);

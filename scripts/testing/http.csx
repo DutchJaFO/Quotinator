@@ -60,6 +60,9 @@
 //   --body-out <path>     Also write the response body to this file (UTF-8, no BOM), parent directories
 //                         created, so a following command reads it from the file rather than through a
 //                         shell pipe (ADR 010: a document step is a single command)
+//   --save <path>         Write the response body to this file byte for byte, for a body that is not
+//                         text, such as a downloaded backup: --body-out decodes it as UTF-8 and would
+//                         corrupt it. Prints the status code instead of the body
 //   --headers-out <path>  Also write the response headers to this file as a JSON object, name to value,
 //                         so a following command can assert on them with TestProbe json
 //   --timeout <seconds>   Request timeout (default: 100)
@@ -268,7 +271,16 @@ string responseBody = await response.Content.ReadAsStringAsync();
 
 Console.Error.WriteLine($"< {status} {response.ReasonPhrase}");
 
-Console.WriteLine(Flag("--status") ? status.ToString() : responseBody);
+string? save = Value("--save");
+Console.WriteLine(Flag("--status") || save is not null ? status.ToString() : responseBody);
+
+if (save is not null)
+{
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(save))!);
+    byte[] responseBytes = await response.Content.ReadAsByteArrayAsync();
+    File.WriteAllBytes(save, responseBytes);
+    Console.Error.WriteLine($"Saved {responseBytes.Length} bytes to {save}");
+}
 
 if (Value("--body-out") is string bodyOut)
 {

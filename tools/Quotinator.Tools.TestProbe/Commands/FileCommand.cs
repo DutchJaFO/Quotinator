@@ -15,12 +15,14 @@ internal sealed class FileCommand : IProbeCommand
         ["--copy"] = (2, values => FileOperations.Copy(values[0], values[1])),
         ["--truncate-half"] =(1, values => FileOperations.TruncateHalf(values[0])),
         ["--sparse"] = (2, values => WithNumber(values[1], bytes => FileOperations.Sparse(values[0], bytes))),
+        ["--set-write-time"] = (2, values => WithUtc(values[1], utc => FileOperations.SetWriteTime(values[0], utc))),
         ["--create-directory"] = (1, values => FileOperations.CreateDirectory(values[0])),
         ["--delete"] = (1, values => FileOperations.Delete(values[0])),
         ["--expect-file"] = (1, values => FileOperations.ExpectFile(values[0])),
         ["--expect-directory"] = (1, values => FileOperations.ExpectDirectory(values[0])),
         ["--expect-empty-directory"] = (1, values => FileOperations.ExpectEmptyDirectory(values[0])),
         ["--expect-length"] = (2, values => WithNumber(values[1], bytes => FileOperations.ExpectLength(values[0], bytes))),
+        ["--expect-identical-in"] = (2, values => FileOperations.ExpectIdenticalIn(values[0], values[1])),
         ["--expect-not-empty"] = (1, values => FileOperations.ExpectNotEmpty(values[0])),
         ["--expect-absent"] =(1, values => FileOperations.ExpectAbsent(values[0])),
         ["--expect-match-count"] = (3, values => WithNumber(values[2], count => FileOperations.ExpectMatchCount(values[0], values[1], (int)count))),
@@ -64,6 +66,11 @@ internal sealed class FileCommand : IProbeCommand
 
         return new ExpectationResult(observations, []);
     }
+
+    private static ExpectationResult WithUtc(string text, Func<DateTime, ExpectationResult> operation)
+        => DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out DateTime utc)
+            ? operation(utc)
+            : ExpectationResult.Failed($"'{text}' is not a date and time");
 
     private static ExpectationResult WithNumber(string text, Func<long, ExpectationResult> operation)
         => long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out long number)

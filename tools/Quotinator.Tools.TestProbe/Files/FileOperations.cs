@@ -79,6 +79,21 @@ internal static class FileOperations
         return ExpectationResult.Passed($"created {path} at {stream.Length} bytes");
     }
 
+    /// <summary>
+    /// Sets the file's last write time, so a test can make it the oldest of several: for a backup the
+    /// application orders by age. Fails when the file does not exist.
+    /// </summary>
+    internal static ExpectationResult SetWriteTime(string path, DateTime utc)
+    {
+        if (!File.Exists(path))
+        {
+            return ExpectationResult.Failed($"{path} is not a file", Describe(path));
+        }
+
+        File.SetLastWriteTimeUtc(path, utc);
+        return ExpectationResult.Passed($"set {path}'s write time to {File.GetLastWriteTimeUtc(path):O}");
+    }
+
     /// <summary>Creates the directory when missing. Fails when a file is in the way.</summary>
     internal static ExpectationResult CreateDirectory(string path)
     {
@@ -151,6 +166,36 @@ internal static class FileOperations
             ? ExpectationResult.Passed(observed)
             : ExpectationResult.Failed($"expected {path} to be {bytes} bytes, it is {length}", observed);
     }
+
+    /// <summary>
+    /// Holds when some file directly in <paramref name="directory"/> holds exactly the same bytes as
+    /// <paramref name="file"/>: for a downloaded copy of a stored file whose name is only known at run time.
+    /// Every file in the directory is read, so a file another process still holds locked fails the check.
+    /// </summary>
+    internal static ExpectationResult ExpectIdenticalIn(string file, string directory)
+    {
+        if (!File.Exists(file))
+        {
+            return ExpectationResult.Failed($"{file} is not a file", Describe(file));
+        }
+
+        if (!Directory.Exists(directory))
+        {
+            return ExpectationResult.Failed($"{directory} is not a directory", Describe(directory));
+        }
+
+        string wanted = Sha256(file);
+        string[] candidates = Directory.GetFiles(directory);
+        string? match = candidates.FirstOrDefault(candidate => Sha256(candidate) == wanted);
+        string observed = $"{file} SHA-256 {wanted}; {candidates.Length} file(s) in {directory}: {string.Join(", ", candidates.Select(Path.GetFileName))}";
+
+        return match is not null
+            ? ExpectationResult.Passed($"{file} is identical to {match} ({wanted})")
+            : ExpectationResult.Failed($"expected a file in {directory} identical to {file}, found none", observed);
+    }
+
+    private static string Sha256(string path)
+        => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
 
     /// <summary>Holds when at least <paramref name="minimum"/> files directly in <paramref name="directory"/> match <paramref name="pattern"/>.</summary>
     internal static ExpectationResult ExpectMatches(string directory, string pattern, int minimum)

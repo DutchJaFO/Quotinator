@@ -14,6 +14,14 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db <path-to-db-file
 
 Both `--db` and `--sql` are required; the tool prints a usage message and exits with code 1 if either is missing. On a SQL error, the message is printed to stderr and the tool exits with code 1.
 
+`--json-out <path>` also writes the rows to `<path>` as a JSON array, one object per row keyed by column
+name, so a test document can assert a value with `Quotinator.Tools.TestProbe -- json` instead of reading
+the printed table:
+
+```bash
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db <path-to-db-file> --sql "SELECT COUNT(*) AS Genres FROM Quotinator_QuoteGenre" --json-out <path>
+```
+
 ### Examples
 
 Check `ImportBatches` provenance (the most common use case — confirming `System`/`Seed`/`UserSeed`/`Import` classification):
