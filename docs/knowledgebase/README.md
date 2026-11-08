@@ -35,3 +35,4 @@ per `knowledgebase.md`'s bootstrapping rule, entries come first and codes are as
 | [The notification raised by a Reset names no application version](a-reset-notification-names-no-app-version.md) | No | 1.9.0-alpha, the only version measured |
 | [A reseed loaded nothing, and the notification recommending it closed as if it had worked](a-reseed-recommendation-does-not-say-what-it-would-load.md) | No | 1.9.0-alpha, the only version measured |
 | [Notifications written at the same moment are listed out of order](notifications-written-together-list-out-of-order.md) | No | 1.9.0-alpha, the only version measured |
+| [The audit export gives every row the export's own moment as its creation date](audit-export-dates-are-the-export-moment.md) | No | 1.9.0-alpha, the only version measured |
