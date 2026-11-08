@@ -1,9 +1,9 @@
-# Seeding takes a backup, a broken schema degrades rather than crashes, and Reset recovers
+# Only a risky start takes a backup, a broken schema degrades rather than crashes, and Reset recovers
 
 **Smoke:** yes
 **Environment:** Fresh + Constrained
 **Deterministic:** yes
-**Traces to:** #254, #327
+**Traces to:** #254, #327, #305
 
 ## Preconditions
 
@@ -22,7 +22,7 @@ reached its own end state:
 
 1. a fresh baseline seed (no backup expected)
 2. an ordinary restart (backup expected)
-3. a deliberately broken schema (degraded, backup taken, restore attempted)
+3. a deliberately broken schema (degraded before anything is loaded, so no backup)
 
 **This document asserted the opposite of
 [`02-startup-backup-gating-and-storage-budget.md`](02-startup-backup-gating-and-storage-budget.md)
@@ -98,26 +98,31 @@ docker stop qt-startup-01
 dotnet script scripts/testing/execute-sql.csx -- --db C:\repos\Quotinator\.claude\temp\qt-startup-01-data\quotinatordata.db --sql "PRAGMA foreign_keys=OFF; DROP TABLE Quotinator_Quote;"
 docker start qt-startup-01
 dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18401/api/v1/health --field status --in unhealthy --timeout 120 --out C:\repos\Quotinator\.claude\temp\qt-startup-01-out\health-degraded.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-01-out\health-degraded.json --equals status=unhealthy
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\before-stop.mark --pattern "thrown: SqliteException" --at-least 1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-01-out\health-degraded.json --equals status=unhealthy --contains reason=Quotinator_Quote
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\before-stop.mark --pattern "thrown: SocketException" --exactly 2
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\before-stop.mark --pattern "thrown: (?!SqliteException|SocketException)" --exactly 0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\before-stop.mark --pattern "thrown: (?!SocketException)" --exactly 0
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-01 --mark C:\repos\Quotinator\.claude\temp\qt-startup-01-out\degraded.mark
-dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-match-count C:\repos\Quotinator\.claude\temp\qt-startup-01-data\backups "*.db" 1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-absent C:\repos\Quotinator\.claude\temp\qt-startup-01-data\backups
 docker inspect -f '{{.State.Running}}' qt-startup-01
 ```
 
-**Expected:** every TestProbe command exits `0`, and `docker inspect` prints `true`.
+**Expected:** every TestProbe command exits `0`, and `docker inspect` prints `true`. `/health` reads
+`unhealthy` with a reason naming `Quotinator_Quote`; nothing is logged as thrown but the two
+`SocketException`s from the stop; and there is still no `backups` directory.
 
-**Nothing here reads a log line's wording.** That seeding failed is shown by `/health` reporting
-`unhealthy` and by the `SqliteException` the exception channel counts; that a backup was taken is shown
-by the file. That the backup is then restored, leaving the database as it was before the attempt, is
-not observable from outside the container, so it is proven where it can be measured: by
-`DatabaseInitializerTests.InitialiseAsync_SeedingFailsOnAlreadyMigratedDatabase_BacksUpFirstAndRethrows`
+**The broken schema is found before anything touches it** (#305). The integrity check runs after the
+migrations and before the content load, finds the table missing, and degrades: no query reaches the
+missing table, so nothing throws, and nothing is loaded, so there is nothing for a backup to protect.
+Before #305 the same drop let seeding run into the missing table, which threw, backed up and restored.
+That backstop still exists for what the check cannot foresee, and is proven where such a failure can be
+produced: `DatabaseInitializerTests.InitialiseAsync_SeedingFailsOnAlreadyMigratedDatabase_BacksUpFirstAndRethrows`
 (`Quotinator.Core.Tests`) for the backup and the failure, and
 `DatabaseInitializerSeedRestoreTests.InitialiseAsync_SeedingFailsAfterWriting_RestoresThePreSeedDatabase`
 (`Quotinator.Data.Tests`, with `InitialiseAsync_SeedingSucceeds_KeepsWhatItWrote` as its positive
 control) for the restore.
+
+**Nothing here reads a log line's wording.** The failure is shown by `/health` and the exception
+channel's count, the absent backup by the directory.
 
 Exactly one backup: the first this test has produced, because step 2 correctly took none. This is the
 case a backup exists for: seeding was about to run against a database it could not repair, and the
@@ -232,14 +237,16 @@ the database is genuinely empty after a Reset.
 
 ## Observed effect
 
-**Measured 2026-10-27** against `quotinator:local` built from `00a9dfe2`.
+**Measured 2026-11-08** against `quotinator:local` built from `870a0502`.
 
 The fresh seed created the database and no `backups` directory, and the restart left it that way, with no
-exception logged before either. After `Quotinator_Quote` was dropped, the restart logged 11
-`SqliteException` throws and 2 `SocketException` throws since the mark taken before the stop, and no
-other type. One backup file exists and the container is running.
+exception logged before either. After `Quotinator_Quote` was dropped, the restart logged 2
+`SocketException` throws since the mark taken before the stop, and no other type. There is no `backups`
+directory, and the container is running.
 
-Degraded, `/health` read `unhealthy` with the generic reason, all seven database reads `503`, the spec
+Degraded, `/health` read `unhealthy` with the reason *"The database's schema does not match the one its
+recorded version defines: missing table Quotinator_Quote."*, followed by both remedies and the integrity
+endpoint. All seven database reads answered `503`, the spec
 `200`, and `/`, `/stats` and `/notifications` `200` with the degraded text and no stack trace. The reset
 answered `401` to a missing and to a wrong key, then `200` with every count `0`, after which `/health`
 read `healthy` and `/quotes/random` `NoResults` with no items. No exception was logged after the

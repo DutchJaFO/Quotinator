@@ -139,13 +139,15 @@ that degraded on everything.
 assertion above worthless.
 ## Observed effect
 
-**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`, truncated from 4,665,344 to
-2,332,672 bytes.
+**Measured 2026-11-08** against `quotinator:local` built from `870a0502`, truncated from 4,661,248 to
+2,330,624 bytes: the process stays up, `/health` settles at `503 unhealthy` with the generic
+initialisation-failure reason, `/openapi/v1.json` returns `200`, and all seven database reads answer
+`503`. The truncation is caught before the integrity check could run, so its reason is not the one #305
+added.
 
-The process stays up and `/health` settles at `503 unhealthy` with the generic initialisation-failure
-reason. `/`, `/stats` and `/notifications` each return `200`, `/openapi/v1.json` returns `200`, and the
-home page carries the degraded text with no stack trace. All seven database reads answer `503`,
-`GET /api/v1/version` with `"status":"degraded"` and no `database` block.
+The rest of this section is from the 2026-10-31 run against `00a9dfe2`, which read further than the steps
+do: `/`, `/stats` and `/notifications` each return `200`, and the home page carries the degraded text with
+no stack trace. `GET /api/v1/version` answered with `"status":"degraded"` and no `database` block.
 
 **The API surface is indistinguishable from `08`'s**, which is why each document pins its own variable
 rather than one standing in for both: the faults differ at the SQLite boundary, and only the recipe

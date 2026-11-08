@@ -219,8 +219,9 @@ remedy does not work. A missing sentinel means the remedy cost the operator thei
 
 ## Observed effect
 
-**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`, upgrading a `1.8.2` volume
-holding the sentinel quote.
+**Measured 2026-11-08** against `quotinator:local` built from `870a0502`, upgrading a `1.8.2` volume
+holding the sentinel quote. The paragraph on a read-only `/data` with no migration pending is from the
+2026-10-31 run against `00a9dfe2`; this run did not repeat it.
 
 The process stays up and `/health` settles at `503 unhealthy` with the data-directory reason:
 
@@ -228,7 +229,7 @@ The process stays up and `/health` settles at `503 unhealthy` with the data-dire
 > container user lacks write permission on it. Restore write access to the data directory and restart.
 > A database Reset cannot resolve this: it writes too.
 
-The log holds 11 `SqliteException` throws. `/openapi/v1.json` answers `200` and all seven database reads
+The log holds 12 `SqliteException` throws. `/openapi/v1.json` answers `200` and all seven database reads
 answer `503`. The reset reaches its handler and refuses with `409`, obstacle
 `DestinationDirectoryNotWritable`, naming *restore write access* first and *retry with
 `allowNoBackup=true`* second.
@@ -236,7 +237,7 @@ answer `503`. The reset reaches its handler and refuses with `409`, obstacle
 `/`, `/stats` and `/notifications` each answer `200`, render the reason, carry no stack trace, keep
 Blazor's error banner hidden, and make no failing request other than a `503`.
 
-**A read-only `/data` with no migration pending degrades too.** Measured the same day by creating a
+**A read-only `/data` with no migration pending degrades too.** Measured on 2026-10-31 by creating a
 database on this build and re-entering it with `--read-only-data`: `503 unhealthy`, the same reason.
 
 **Recovery route, and whether it can succeed.** Reachable: the pages, `/openapi/v1.json` and the reset

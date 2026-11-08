@@ -54,7 +54,7 @@ not asserted: the contract is that the application says it is degraded instead o
 | [Per-file, per-entity-type import/seed report](import-and-staged-actions/19-per-file-import-report.md) | `import-and-staged-actions/` |
 | [Reset is a full wipe with no reseed](database-lifecycle/03-reset-is-a-full-wipe.md) | `database-lifecycle/` |
 | [Startup wait page during database initialisation](startup-and-degradation/03-startup-wait-page.md) | `startup-and-degradation/` |
-| [Seeding takes a backup, a broken schema degrades, and Reset recovers](startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md) | `startup-and-degradation/` |
+| [Only a risky start takes a backup, a broken schema degrades, and Reset recovers](startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md) | `startup-and-degradation/` |
 | [Degraded-state pages survive a genuine migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) | `startup-and-degradation/` |
 | [A recorded schema version ahead of the build degrades and says why](startup-and-degradation/06-schema-version-ahead-of-the-application.md) | `startup-and-degradation/` |
 | [A database that is not a database degrades instead of crashing](startup-and-degradation/08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
@@ -1121,7 +1121,7 @@ an entry needs; a happy-path-only test has nothing to contribute.
 
 ## Observed effects awaiting measurement
 
-**42 of 83 documents describe their effect without having measured it.** Each row below names the
+**40 of 83 documents describe their effect without having measured it.** Each row below names the
 quantity its next run must read, so the measurement is a specific act rather than a vague intention to
 look. A document leaves this list by recording `**Measured <date>**` in its own section, and
 `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails if it does so while its row is still
@@ -1137,7 +1137,6 @@ asserts what it should; what is missing is a reading an entry can quote.
 | [api-surface/05-a-thrown-exception-is-logged.md](api-surface/05-a-thrown-exception-is-logged.md) | The `ERR` line the rejected upload writes, with its exception id |
 | [database-lifecycle/01-file-resource-capture-and-reconstruction.md](database-lifecycle/01-file-resource-capture-and-reconstruction.md) | The captured row count per bundled file, and the hash the reconstruction returns |
 | [database-lifecycle/02-audit-export-and-conflict-data-purge.md](database-lifecycle/02-audit-export-and-conflict-data-purge.md) | The row count the export header reports, and the purge traces per batch |
-| [database-lifecycle/04-a-database-is-complete-for-its-schema-version.md](database-lifecycle/04-a-database-is-complete-for-its-schema-version.md) | Each database's verdict and difference count, fresh, with the extra column, and after the upgrade from the last release |
 | [identity-and-casing/01-canonicalize-explicit-ids-at-capture.md](identity-and-casing/01-canonicalize-explicit-ids-at-capture.md) | The id as echoed back, and what the container logs while resolving a file-authored explicit id |
 | [identity-and-casing/02-quote-id-case-insensitive-lookup.md](identity-and-casing/02-quote-id-case-insensitive-lookup.md) | What the container logs while resolving either casing |
 | [identity-and-casing/03-conversation-line-quote-id-fk-safety.md](identity-and-casing/03-conversation-line-quote-id-fk-safety.md) | The foreign-key violation count either side of the mismatched line |
@@ -1173,7 +1172,6 @@ asserts what it should; what is missing is a reading an entry can quote.
 | [notifications-and-changelog/11-clean-reseed-confirmation.md](notifications-and-changelog/11-clean-reseed-confirmation.md) | The confirmation count per file, and the breakdown's own totals against its parts |
 | [notifications-and-changelog/12-running-action-state.md](notifications-and-changelog/12-running-action-state.md) | The badge text and the control set while the action runs, and the quote count after an interrupted run |
 | [notifications-and-changelog/13-notification-layout.md](notifications-and-changelog/13-notification-layout.md) | The computed `white-space`, the line-box count, and the dialog's height against a non-zero viewport |
-| [startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md](startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md) | The health reason as read for the missing table and for the missing column, and the endpoint's difference for each |
 
 ---
 
@@ -1239,7 +1237,7 @@ The tools this suite runs on:
 
 | # | Test | Smoke |
 |---|---|---|
-| 01 | [Seeding backup, degraded startup, and Reset recovery](startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md) | yes |
+| 01 | [Backup gating, degraded startup, and Reset recovery](startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md) | yes |
 | 02 | [Startup backs up only when there is real work](startup-and-degradation/02-startup-backup-gating-and-storage-budget.md) | no |
 | 03 | [Kestrel serves a wait page during initialisation](startup-and-degradation/03-startup-wait-page.md) | yes |
 | 04 | [Migration replay under restricted write](startup-and-degradation/04-migration-replay-under-restricted-write.md) | no |

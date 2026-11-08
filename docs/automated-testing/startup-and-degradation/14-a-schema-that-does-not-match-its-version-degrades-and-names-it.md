@@ -180,8 +180,19 @@ dotnet script scripts/testing/http.csx -- --url http://localhost:18414/api/v1/he
 
 ## Observed effect
 
-Not yet measured: the first run against a build where startup enforces the check is #305's step 13, and
-its reading replaces this paragraph. Listed under the index's *Observed effects awaiting measurement*.
+**Measured 2026-11-08** against `quotinator:local` built from `870a0502`.
+
+The fresh database was intact, main and changelog, with no difference. With `System_Notification`
+dropped, the restart read `unhealthy` with the reason *"The database's schema does not match the one its
+recorded version defines: missing table System_Notification."*, followed by both remedies and the
+integrity endpoint; the container was running, and all seven database reads answered `503`. `/`, `/stats`,
+`/notifications` and the spec answered `200`, and the endpoint reported the main database not intact with
+one difference, `missing` `table` `System_Notification`. The Reset answered `200`, after which `/health`
+and `/quotes/random` answered `200` and the endpoint reported the database intact.
+
+With `System_Notification.DateDeleted` dropped instead, the reason read *"missing column
+System_Notification.DateDeleted"*, `/quotes/random` answered `503`, and the endpoint reported that one
+column missing. The second Reset and `/health` answered `200`.
 
 ## Canary
 

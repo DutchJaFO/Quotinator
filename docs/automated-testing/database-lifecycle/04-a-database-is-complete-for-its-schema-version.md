@@ -107,10 +107,15 @@ one. That cannot be fixed by editing a baseline: it needs a migration, and it is
 
 ## Observed effect
 
-Not yet measured as a whole. The Upgraded half was read by #305's step 6 on 2026-11-07, against this
-build at `88795817` before this document existed: both databases intact with no difference, after 25 Data
-and 4 App migrations. Listed under the index's *Observed effects awaiting measurement* until a full run
-records it here.
+**Measured 2026-11-08** against `quotinator:local` built from `870a0502`, whose check compares every
+value as written.
+
+The fresh container reported two databases, main and changelog, each intact with no difference. With
+`System_Notification.Stray` added, the restart read `200` on `/health`, and the endpoint reported the main
+database intact with one difference, `extra` `column` `System_Notification.Stray`. The published `1.8.3`
+image read `healthy` on a fresh directory; this build upgraded that database, logging *"migration applied:
+Data v3 → v28, App v5 → v9"*, read `200` on `/health`, and the endpoint reported both databases intact
+with no difference.
 
 ## Canary
 

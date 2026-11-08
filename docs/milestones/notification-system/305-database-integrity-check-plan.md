@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 13: run the full gates, correcting `startup-and-degradation/01` from its measured run.** Every decision is settled (see
+**T1 is the next action, and it is the developer's:** start `Quotinator.Api` in Visual Studio and confirm it starts without error (row 25). Step 14 follows. Every decision is settled (see
 *Decisions*, including D5, found in step 3), the ADR 003 and ADR 009 amendments were approved on
 2026-11-07, and the issue's title and body reflect the widened scope.
 
@@ -609,13 +609,37 @@ Findings, 2026-11-08:
 
 ### 13. Run the full gates
 
-**Status:** ⬜ Not started
+**Status:** 🔄 In progress: T1 remains, the developer's to run
 
 `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`,
 both at 0 warnings and 0 errors; `docker build`; T2 at end-of-issue scope (the smoke set, documents 14
 and `database-lifecycle/04`, and `startup-and-degradation/01`, `06` and `12`, the last two because the
 check is skipped on their paths, and `notifications-and-changelog/07` for the changelog database);
 then T1, the developer starting the app in Visual Studio.
+
+Findings, 2026-11-08, against `quotinator:local` built from `870a0502`:
+
+- **Build and tests**: `dotnet build --configuration Release` and the full `-m:1` run, 0 warnings and 0
+  errors, every test green, after step 11's commit; `docker build` succeeded.
+- **T2, the smoke set's nineteen documents and `database-lifecycle/04`, each run in full and in order.**
+  Documents 14 and 04 are green in every step, the upgrade from the published `1.8.3` image included,
+  under the case-sensitive comparison D6 introduced. Every other document is green except three steps,
+  each a known defect its document already names and none touched by #305:
+  `database-lifecycle/03` step 8 reads every `/version` count as `0` after an import (#468);
+  `notifications-and-changelog/01` step 9 finds no reseed recommendation after a Reset from a
+  notification (#472); and `import-and-staged-actions/14` step 5 has nothing to run until #400.
+- **`startup-and-degradation/01` was corrected from a measured run**, as step 12 planned. The dropped
+  `Quotinator_Quote` is now caught by the check: no `SqliteException`, no backup, and the reason names the
+  table. Its step 3 assertions, its title (in the document and both index tables) and its *Observed
+  effect* were rewritten from that run, and the corrected document was then run again in full, green.
+- **Two other *Observed effect* readings had moved** and were brought up to date: `startup-and-degradation/05`
+  logged 12 `SqliteException` throws where 11 were recorded, and `09`'s file was 4,661,248 bytes before
+  truncation where 4,665,344 were recorded. Neither is asserted.
+- **Documents 14 and 04 recorded their first readings** and left the index's awaiting list, now 40 of 83.
+- **How the run was executed, for whoever repeats it from Git Bash:** paths were single-quoted so their
+  backslashes reach the tools intact, and `MSYS_NO_PATHCONV=1` was set after `startup-and-degradation/10`'s
+  first attempt failed at Docker with `/data/quotinator` rewritten to a Windows path. That attempt is not a
+  reading of the build; the document was re-run from step 1 and is green.
 
 ### 14. Waiting-for-release housekeeping
 
@@ -656,9 +680,9 @@ in step 6; rows 20 and 21 are written red in step 7.
 | 17 | ✅ | Every database declaring migrations performs the check; a changelog database that is not intact is reported without failing its initialisation, so the changelog falls back to the JSON files without affecting main health; a Reset re-runs the check before clearing health, and each of its callers keeps a not-intact Reset degraded on the new reason rather than reporting a refused backup | Unit test / Integration test | `RepositoryStructureTests.EveryDatabaseWithMigrations_PerformsTheIntegrityCheck`, `ChangelogDatabaseInitializerTests.Integrity_MissingTable_ReportedWithoutFailingInitialisation`, `StartupResilienceTests.Startup_ChangelogSchemaDifference_FallsBackToTheJsonFilesAndStaysHealthy`, `DatabaseIntegrityCheckTests.Reset_RerunsTheCheckBeforeClearingHealth`, `AdminEndpointsTests.ResetRebuiltSchemaNotIntact_Returns500NamingTheObjectAndStaysDegraded`, `NotificationActionExecutorTests.DatabaseReset_WhenNotIntact_StaysUnhealthyWithTheNewReason`, `NotificationActionExecutorTests.DatabaseReset_WhenNotIntact_ReportsTheReasonRatherThanABackupObstacle`, `NotificationActionExecutorTests.DatabaseReset_WhenNotIntact_LeavesTheNotificationActive`, `DatabaseRepairActionsTests.ResetNotIntact_NamesWhatIsStillWrong` |
 | 18 | ✅ | Against the real schema, a missing table or column degrades startup with a reason naming it and both remedies; quote endpoints are gated; pages render degraded; a Reset restores health; a complete database is healthy | Integration test | `StartupResilienceTests.Startup_SchemaDifference_HealthReportsUnhealthy`, `StartupResilienceTests.Startup_SchemaDifference_HealthReasonNamesTheObject`, `StartupResilienceTests.Startup_SchemaDifference_QuoteEndpointsAreGated`, `StartupResilienceTests.Startup_SchemaDifference_BlazorPageRendersDegradedUi`, `StartupResilienceTests.Startup_SchemaDifference_ResetRestoresHealth`, `StartupResilienceTests.Startup_RestartOverAnIntactDatabase_ReportsHealthy` (existing, the positive control) |
 | 19 | ✅ | The reason names every difference in engine-neutral words, and both remedies | Unit test | `SchemaIntegrityGuidanceTests.Reason_NamesEveryDifference`, `SchemaIntegrityGuidanceTests.Reason_NamesResetAndRestore`, `SchemaIntegrityGuidanceTests.Reason_UsesNoEngineMetadataNames` |
-| 20 | ❌ | Live: a removed table, and a removed column, each degrade the container with a named reason, and a Reset recovers it; a pre-issue build does not degrade | Live (Docker) | `automated-testing/startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md`, green on this build, red as its canary |
-| 21 | ❌ | Live: a Fresh and an Upgraded container report every database intact through the endpoint, and an added column is reported as extra without degrading | Live (Docker) | `automated-testing/database-lifecycle/04-a-database-is-complete-for-its-schema-version.md` |
+| 20 | ✅ | Live: a removed table, and a removed column, each degrade the container with a named reason, and a Reset recovers it; a pre-issue build does not degrade | Live (Docker) | `automated-testing/startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md`, green on this build, red as its canary |
+| 21 | ✅ | Live: a Fresh and an Upgraded container report every database intact through the endpoint, and an added column is reported as extra without degrading | Live (Docker) | `automated-testing/database-lifecycle/04-a-database-is-complete-for-its-schema-version.md` |
 | 22 | ✅ | The endpoint runs a fresh check on every database, reports intact and not-intact results with every difference, answers while degraded, writes nothing and leaves health unchanged, answers without a key like the other read-only admin endpoints, and is described in the spec | Integration test | `AdminDatabaseIntegrityEndpointTests.IntactDatabases_ReportIntact`, `AdminDatabaseIntegrityEndpointTests.MissingTable_ReportsTheDifference`, `AdminDatabaseIntegrityEndpointTests.ExtraColumn_ReportedButIntact`, `AdminDatabaseIntegrityEndpointTests.Degraded_EndpointStillAnswers`, `AdminDatabaseIntegrityEndpointTests.Check_DoesNotChangeHealth`, `AdminDatabaseIntegrityEndpointTests.WithoutAdminKey_IsAnswered`, `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` |
 | 23 | ✅ | The DbInspector command reports a file's differences and exits non-zero when it is not intact | Unit test | `IntegrityCommandTests.IntactFile_ExitsZero`, `IntegrityCommandTests.MissingTable_ReportsItAndExitsNonZero`, `IntegrityCommandTests.ChangelogFile_ComparedAgainstTheChangelogSchema` |
-| 24 | ❌ | No regression | Build | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all green; T2 end-of-issue scope per step 13 green |
+| 24 | ✅ | No regression | Build | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all green; T2 end-of-issue scope per step 13 green |
 | 25 | ❌ | The application still starts | Manual | T1: the developer starts `Quotinator.Api` in Visual Studio and confirms it starts without error |
