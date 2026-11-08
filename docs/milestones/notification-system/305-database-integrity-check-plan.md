@@ -1,6 +1,6 @@
 # #305: Database integrity check: verify every database's full schema against its migration path at startup
 
-**Status:** In progress (step 9)
+**Status:** In progress (step 10)
 **GitHub issue:** #305
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 9: degrade startup in `Program.cs`, and map a not-intact Reset in its callers.** Every decision is settled (see
+**Execute from step 10: run the check on the changelog database at startup, falling back to the JSON files when it is not intact.** Every decision is settled (see
 *Decisions*, including D5, found in step 3), the ADR 003 and ADR 009 amendments were approved on
 2026-11-07, and the issue's title and body reflect the widened scope.
 
@@ -468,13 +468,37 @@ Findings, 2026-11-08:
 
 ### 9. Degrade startup in `Program.cs`, with no notification
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `SchemaIntegrityGuidance` beside `SchemaOvershootGuidance`, and the `MarkFailed` call after the overshoot
 check. The Reset's three callers map `SchemaNotIntact` too (step 8's finding). The reason uses engine-neutral words (table, column, foreign key, index), never an engine's
 metadata names. **No notification is written**: writing a row into a database known not to match its
 schema is the unprotected write #348 refuses, and the missing object can be `System_Notification`
 itself. The generic catch's wording is #457's.
+
+Findings, 2026-11-08:
+
+- **The reason names every missing or different object and leaves extras out**, since they never
+  degrade. Each is described in words (*missing table X*, *column X has declared type 'B' where 'A' is
+  expected*), and it ends with both remedies and `GET /api/v1/admin/database/integrity`, now
+  `ApiRoutes.DatabaseIntegrity`, for the full list. Startup logs it at `Critical` with the `[Server]`
+  prefix, as the two cases before it do.
+- **A Reset that is not intact replaces the reason rather than keeping the old one.** `MarkFailed` keeps
+  the first reason, and the earlier one no longer describes a database the Reset rebuilt, so
+  `DatabaseHealthState.ReplaceFailure` records the new reason without passing through healthy. The admin
+  endpoint answers `500` with the reason as `detail`, not `409`, since nothing about it can be resolved and
+  retried; the notification action returns `NotificationActionResult.ResetNotIntact`, a new result carrying
+  `FailureReason` and no backup obstacle, and leaves the notification active; the repair control tells the
+  operator what is still wrong. Each written red first: `AdminEndpointsTests.ResetRebuiltSchemaNotIntact_Returns500NamingTheObjectAndStaysDegraded`,
+  `NotificationActionExecutorTests.DatabaseReset_WhenNotIntact_*` (three; the notification one was already
+  green, since the refusal path also returns before dismissing), and
+  `DatabaseRepairActionsTests.ResetNotIntact_NamesWhatIsStillWrong`.
+- **`Startup_SchemaDifference_ResetRestoresHealth` answered `401`**, a step 3 test fault: its admin key was
+  set through `UseSetting`, which a developer's `appsettings.local.json` overrides. It now sets it in
+  memory, as `AdminEndpointsTests` does.
+- **Rows 18, 19 and 22 are green**, and so are the existing `Startup_DomainTableMissing_*`. The full run
+  leaves only `ChangelogDatabaseInitializerTests.Integrity_MissingTable_ReportedWithoutFailingInitialisation`
+  red, which is step 10's.
 
 ### 10. Wire the changelog database
 
@@ -562,12 +586,12 @@ in step 6; rows 20 and 21 are written red in step 7.
 | 14 | ✅ | The reader captures each aspect from a real database, and reads the schema a list of scripts creates in a scratch database of its own | Integration test | `SqliteSchemaSnapshotReaderTests.ReadsTablesColumnsForeignKeysIndexesViewsAndTriggers`, `SqliteSchemaSnapshotReaderTests.ReadScriptsAsync_ReadsTheSchemaTheScriptsCreate` |
 | 15 | ✅ | Main startup: a difference stops the content load, takes no backup and writes nothing; a complete database loads normally | Integration test | `DatabaseIntegrityCheckTests.MissingExpectedTable_DetectedAsSchemaInconsistency_TreatedAsHardFailure`, `DatabaseIntegrityCheckTests.Difference_ContentLoadDoesNotRunAndNothingIsWritten`, `DatabaseIntegrityCheckTests.AllExpectedTablesPresent_PassesCleanly` |
 | 16 | ✅ | The check does not run on a refused migration or an overshoot | Integration test | `DatabaseIntegrityCheckTests.MigrationRefused_IntegrityNotChecked`, `DatabaseIntegrityCheckTests.SchemaVersionOvershoot_IntegrityNotChecked` |
-| 17 | ❌ | Every database declaring migrations performs the check; a changelog database that is not intact is reported without failing its initialisation, so the changelog falls back to the JSON files without affecting main health; a Reset re-runs the check before clearing health | Unit test / Integration test | `RepositoryStructureTests.EveryDatabaseWithMigrations_PerformsTheIntegrityCheck`, `ChangelogDatabaseInitializerTests.Integrity_MissingTable_ReportedWithoutFailingInitialisation`, `DatabaseIntegrityCheckTests.Reset_RerunsTheCheckBeforeClearingHealth` |
-| 18 | ❌ | Against the real schema, a missing table or column degrades startup with a reason naming it and both remedies; quote endpoints are gated; pages render degraded; a Reset restores health; a complete database is healthy | Integration test | `StartupResilienceTests.Startup_SchemaDifference_HealthReportsUnhealthy`, `StartupResilienceTests.Startup_SchemaDifference_HealthReasonNamesTheObject`, `StartupResilienceTests.Startup_SchemaDifference_QuoteEndpointsAreGated`, `StartupResilienceTests.Startup_SchemaDifference_BlazorPageRendersDegradedUi`, `StartupResilienceTests.Startup_SchemaDifference_ResetRestoresHealth`, `StartupResilienceTests.Startup_RestartOverAnIntactDatabase_ReportsHealthy` (existing, the positive control) |
-| 19 | ❌ | The reason names every difference in engine-neutral words, and both remedies | Unit test | `SchemaIntegrityGuidanceTests.Reason_NamesEveryDifference`, `SchemaIntegrityGuidanceTests.Reason_NamesResetAndRestore`, `SchemaIntegrityGuidanceTests.Reason_UsesNoEngineMetadataNames` |
+| 17 | ❌ | Every database declaring migrations performs the check; a changelog database that is not intact is reported without failing its initialisation, so the changelog falls back to the JSON files without affecting main health; a Reset re-runs the check before clearing health, and each of its callers keeps a not-intact Reset degraded on the new reason rather than reporting a refused backup | Unit test / Integration test | `RepositoryStructureTests.EveryDatabaseWithMigrations_PerformsTheIntegrityCheck`, `ChangelogDatabaseInitializerTests.Integrity_MissingTable_ReportedWithoutFailingInitialisation`, `DatabaseIntegrityCheckTests.Reset_RerunsTheCheckBeforeClearingHealth`, `AdminEndpointsTests.ResetRebuiltSchemaNotIntact_Returns500NamingTheObjectAndStaysDegraded`, `NotificationActionExecutorTests.DatabaseReset_WhenNotIntact_StaysUnhealthyWithTheNewReason`, `NotificationActionExecutorTests.DatabaseReset_WhenNotIntact_ReportsTheReasonRatherThanABackupObstacle`, `NotificationActionExecutorTests.DatabaseReset_WhenNotIntact_LeavesTheNotificationActive`, `DatabaseRepairActionsTests.ResetNotIntact_NamesWhatIsStillWrong` |
+| 18 | ✅ | Against the real schema, a missing table or column degrades startup with a reason naming it and both remedies; quote endpoints are gated; pages render degraded; a Reset restores health; a complete database is healthy | Integration test | `StartupResilienceTests.Startup_SchemaDifference_HealthReportsUnhealthy`, `StartupResilienceTests.Startup_SchemaDifference_HealthReasonNamesTheObject`, `StartupResilienceTests.Startup_SchemaDifference_QuoteEndpointsAreGated`, `StartupResilienceTests.Startup_SchemaDifference_BlazorPageRendersDegradedUi`, `StartupResilienceTests.Startup_SchemaDifference_ResetRestoresHealth`, `StartupResilienceTests.Startup_RestartOverAnIntactDatabase_ReportsHealthy` (existing, the positive control) |
+| 19 | ✅ | The reason names every difference in engine-neutral words, and both remedies | Unit test | `SchemaIntegrityGuidanceTests.Reason_NamesEveryDifference`, `SchemaIntegrityGuidanceTests.Reason_NamesResetAndRestore`, `SchemaIntegrityGuidanceTests.Reason_UsesNoEngineMetadataNames` |
 | 20 | ❌ | Live: a removed table, and a removed column, each degrade the container with a named reason, and a Reset recovers it; a pre-issue build does not degrade | Live (Docker) | `automated-testing/startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md`, green on this build, red as its canary |
 | 21 | ❌ | Live: a Fresh and an Upgraded container report every database intact through the endpoint, and an added column is reported as extra without degrading | Live (Docker) | `automated-testing/database-lifecycle/04-a-database-is-complete-for-its-schema-version.md` |
-| 22 | ❌ | The endpoint runs a fresh check on every database, reports intact and not-intact results with every difference, answers while degraded, writes nothing and leaves health unchanged, answers without a key like the other read-only admin endpoints, and is described in the spec | Integration test | `AdminDatabaseIntegrityEndpointTests.IntactDatabases_ReportIntact`, `AdminDatabaseIntegrityEndpointTests.MissingTable_ReportsTheDifference`, `AdminDatabaseIntegrityEndpointTests.ExtraColumn_ReportedButIntact`, `AdminDatabaseIntegrityEndpointTests.Degraded_EndpointStillAnswers`, `AdminDatabaseIntegrityEndpointTests.Check_DoesNotChangeHealth`, `AdminDatabaseIntegrityEndpointTests.WithoutAdminKey_IsAnswered`, `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` |
+| 22 | ✅ | The endpoint runs a fresh check on every database, reports intact and not-intact results with every difference, answers while degraded, writes nothing and leaves health unchanged, answers without a key like the other read-only admin endpoints, and is described in the spec | Integration test | `AdminDatabaseIntegrityEndpointTests.IntactDatabases_ReportIntact`, `AdminDatabaseIntegrityEndpointTests.MissingTable_ReportsTheDifference`, `AdminDatabaseIntegrityEndpointTests.ExtraColumn_ReportedButIntact`, `AdminDatabaseIntegrityEndpointTests.Degraded_EndpointStillAnswers`, `AdminDatabaseIntegrityEndpointTests.Check_DoesNotChangeHealth`, `AdminDatabaseIntegrityEndpointTests.WithoutAdminKey_IsAnswered`, `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` |
 | 23 | ✅ | The DbInspector command reports a file's differences and exits non-zero when it is not intact | Unit test | `IntegrityCommandTests.IntactFile_ExitsZero`, `IntegrityCommandTests.MissingTable_ReportsItAndExitsNonZero`, `IntegrityCommandTests.ChangelogFile_ComparedAgainstTheChangelogSchema` |
 | 24 | ❌ | No regression | Build | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all green; T2 end-of-issue scope per step 13 green |
 | 25 | ❌ | The application still starts | Manual | T1: the developer starts `Quotinator.Api` in Visual Studio and confirms it starts without error |

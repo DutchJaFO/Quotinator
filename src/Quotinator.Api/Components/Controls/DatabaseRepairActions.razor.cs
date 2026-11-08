@@ -47,6 +47,8 @@ public partial class DatabaseRepairActions
                 $"The database was not reset: no backup could be taken first ({obstacle}). "
                 + BackupObstacleGuidance.Cause(obstacle)
                 + " Nothing was changed, so the database is exactly as it was.",
+            { FailureReason: string reason }           =>
+                "The database was reset, but the rebuilt schema still does not match. " + reason,
             _                                         =>
                 "The database was not reset, and no reason was reported. Resolve it from the admin "
                 + "endpoints, or restore a backup taken before the version moved ahead.",

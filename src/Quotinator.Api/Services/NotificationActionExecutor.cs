@@ -10,6 +10,7 @@ using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Schema;
 
 namespace Quotinator.Api.Services;
 
@@ -148,6 +149,16 @@ internal sealed class NotificationActionExecutor(
                 // the notification still describes it. Found 2026-09-26: this result used to be ignored,
                 // marking the database healthy and dismissing the notification anyway.
                 DatabaseOperationResult reset = await databaseInitializer.ResetAsync();
+                // #305 (R3): the reset ran, but the rebuilt schema does not match. The application stays
+                // degraded on that reason, and the notification stays, since the database is still broken.
+                if (reset.SchemaNotIntact)
+                {
+                    string integrityReason = SchemaIntegrityGuidance.Reason(
+                        databaseInitializer.LastIntegrityResult ?? SchemaIntegrityResult.Intact);
+                    databaseHealth.ReplaceFailure(integrityReason);
+                    return NotificationActionResult.ResetNotIntact(integrityReason);
+                }
+
                 if (!reset.Succeeded)
                     return NotificationActionResult.RefusedForBackup(reset.BackupObstacle ?? BackupOutcome.Unclassified);
 

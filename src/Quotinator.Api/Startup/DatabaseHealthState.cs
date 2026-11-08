@@ -56,6 +56,20 @@ internal sealed class DatabaseHealthState
     }
 
     /// <summary>
+    /// Records a failure found by a repair that ran, replacing whatever reason was recorded before it
+    /// (#305): a Reset rebuilds every table, so the earlier reason no longer describes the database, and
+    /// the application stays degraded throughout rather than passing through healthy.
+    /// </summary>
+    /// <param name="reason">A short, user-facing description of the failure the repair found.</param>
+    public void ReplaceFailure(string reason)
+    {
+        bool wasHealthy = IsHealthy;
+        IsHealthy       = false;
+        FailureReason   = reason;
+        if (wasHealthy) Changed?.Invoke();
+    }
+
+    /// <summary>
     /// Clears a previously recorded failure, called after an operation that genuinely repairs the
     /// database (e.g. a successful admin Reset) completes without throwing. Found live, 2026-08-02:
     /// a Reset call that actually fixed the on-disk schema still left every subsequent request

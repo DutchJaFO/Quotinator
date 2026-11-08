@@ -31,6 +31,21 @@ public class DatabaseRepairActionsTests
             "the obstacle's own cause is what tells the operator which of the five refusals they have");
     }
 
+    /// <summary>
+    /// #305: a Reset that ran but left a schema that does not match is not a refused backup, and the
+    /// operator is told what is still wrong rather than that nothing was changed.
+    /// </summary>
+    [TestMethod]
+    public void ResetNotIntact_NamesWhatIsStillWrong()
+    {
+        string? outcome = DatabaseRepairActions.RepairOutcomeText(
+            NotificationActionResult.ResetNotIntact("missing table System_Notification"));
+
+        Assert.IsNotNull(outcome);
+        Assert.Contains("missing table System_Notification", outcome, StringComparison.Ordinal);
+        Assert.DoesNotContain("no reason was reported", outcome, StringComparison.Ordinal);
+    }
+
     /// <summary>A repair that ran leaves nothing to report: the application is healthy and reloads.</summary>
     [TestMethod]
     public void SuccessfulRepair_SaysNothing()

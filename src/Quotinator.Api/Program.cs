@@ -35,6 +35,7 @@ using Quotinator.Data.Notifications;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Schema;
 using Quotinator.Changelog.Services;
 using Quotinator.Converters.BasicJsonArray;
 using Quotinator.Converters.Csv;
@@ -1035,6 +1036,18 @@ try
             dbInitializer.DataSchemaVersion, dbInitializer.SchemaVersion);
         app.Services.GetRequiredService<ILogger<Program>>().LogStartupSchemaOvershoot(overshootReason);
         dbHealth.MarkFailed(overshootReason);
+    }
+
+    // #305: the schema does not match the one its recorded version defines, so a query may fail at any
+    // call site. Degrades with every missing or different object named, and raises no notification:
+    // writing that row into a schema known to differ is the unprotected write #348 refuses, and the
+    // missing object can be System_Notification itself. After the two cases above, which skip the
+    // check and are the more specific faults.
+    if (initialisation.SchemaNotIntact && dbInitializer.LastIntegrityResult is SchemaIntegrityResult integrity)
+    {
+        string integrityReason = SchemaIntegrityGuidance.Reason(integrity);
+        app.Services.GetRequiredService<ILogger<Program>>().LogStartupSchemaNotIntact(integrityReason);
+        dbHealth.MarkFailed(integrityReason);
     }
 }
 // #326: an unwritable data directory is a different fault with a different remedy, and the generic

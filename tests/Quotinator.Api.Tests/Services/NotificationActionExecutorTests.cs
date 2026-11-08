@@ -777,6 +777,58 @@ public class NotificationActionExecutorTests
     }
 
     /// <summary>
+    /// #305 (R3): a Reset that ran but whose rebuilt schema does not match its migration path keeps the
+    /// application degraded, with the new reason replacing the one the Reset was run to clear.
+    /// </summary>
+    [TestMethod]
+    public async Task DatabaseReset_WhenNotIntact_StaysUnhealthyWithTheNewReason()
+    {
+        DatabaseHealthState health = new();
+        health.MarkFailed("some prior failure");
+
+        await CreateExecutor(dbInitializer: ResetNotIntact(), health: health)
+            .ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
+
+        Assert.IsFalse(health.IsHealthy);
+        Assert.Contains("System_Notification", health.FailureReason ?? "", StringComparison.Ordinal);
+    }
+
+    [TestMethod]
+    public async Task DatabaseReset_WhenNotIntact_ReportsTheReasonRatherThanABackupObstacle()
+    {
+        NotificationActionResult result = await CreateExecutor(dbInitializer: ResetNotIntact())
+            .ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
+
+        Assert.IsFalse(result.Succeeded);
+        Assert.IsNull(result.BackupObstacle, "a Reset that ran was not refused for want of a backup");
+        Assert.Contains("System_Notification", result.FailureReason ?? "", StringComparison.Ordinal);
+    }
+
+    [TestMethod]
+    public async Task DatabaseReset_WhenNotIntact_LeavesTheNotificationActive()
+    {
+        FakeNotificationWriter writer = new();
+
+        await CreateExecutor(dbInitializer: ResetNotIntact(), notificationWriter: writer)
+            .ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
+
+        Assert.IsEmpty(writer.DismissByTriggerCalls);
+    }
+
+    private static SpyDatabaseInitializer ResetNotIntact() => new()
+    {
+        ResetResult = DatabaseOperationResult.NotIntact(),
+        LastIntegrityResult = new Quotinator.Data.Schema.SchemaIntegrityResult
+        {
+            Differences =
+            [
+                new Quotinator.Data.Schema.SchemaDifference(
+                    SchemaDifferenceKind.Missing, SchemaObjectKind.Table, "System_Notification", null, null, null),
+            ],
+        },
+    };
+
+    /// <summary>
     /// Two backups a day apart in a folder of their own: the older one is the one to remove. The caller
     /// owns the returned <see cref="TempDirectory"/> and disposes it.
     /// </summary>
@@ -861,7 +913,7 @@ public class NotificationActionExecutorTests
         public IReadOnlyList<AppliedMigrationResult> MigrationsApplied => [];
         public bool SchemaVersionOvershootDetected => false;
         public string DatabaseName => "main";
-        public Quotinator.Data.Schema.SchemaIntegrityResult? LastIntegrityResult => null;
+        public Quotinator.Data.Schema.SchemaIntegrityResult? LastIntegrityResult { get; init; }
         public Task<Quotinator.Data.Schema.SchemaIntegrityResult> CheckIntegrityAsync() => Task.FromResult(Quotinator.Data.Schema.SchemaIntegrityResult.Intact);
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
 

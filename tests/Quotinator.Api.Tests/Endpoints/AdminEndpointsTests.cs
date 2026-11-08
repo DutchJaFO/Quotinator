@@ -469,6 +469,38 @@ public class AdminEndpointsTests
         Assert.Contains("/api/v1/admin/backups", body, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// #305 (R3): a Reset that ran but left a schema that does not match its migration path is not a
+    /// refused backup. It answers 500 naming the object, and the application stays degraded on that reason.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetRebuiltSchemaNotIntact_Returns500NamingTheObjectAndStaysDegraded()
+    {
+        SpyDatabaseInitializer spy = new()
+        {
+            NotIntactWith = new Quotinator.Data.Schema.SchemaIntegrityResult
+            {
+                Differences =
+                [
+                    new Quotinator.Data.Schema.SchemaDifference(
+                        SchemaDifferenceKind.Missing, SchemaObjectKind.Table, "System_Notification", null, null, null),
+                ],
+            },
+        };
+        using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
+
+        HttpResponseMessage response = await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.InternalServerError, response.StatusCode);
+        string body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        Assert.Contains("System_Notification", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("backupObstacle", body, StringComparison.Ordinal);
+        Quotinator.Api.Startup.DatabaseHealthState health = factory.Services.GetRequiredService<Quotinator.Api.Startup.DatabaseHealthState>();
+        Assert.IsFalse(health.IsHealthy);
+        Assert.Contains("System_Notification", health.FailureReason ?? "", StringComparison.Ordinal);
+    }
+
     private sealed class SpyDatabaseInitializer : IDatabaseInitializer
     {
         public bool? LastPreserveSchemaVersion { get; private set; }
@@ -502,7 +534,10 @@ public class AdminEndpointsTests
         public IReadOnlyList<AppliedMigrationResult> MigrationsApplied => [];
         public bool   SchemaVersionOvershootDetected => false;
         public string DatabaseName => "main";
-        public Quotinator.Data.Schema.SchemaIntegrityResult? LastIntegrityResult => null;
+        public Quotinator.Data.Schema.SchemaIntegrityResult? LastIntegrityResult => NotIntactWith;
+
+        /// <summary>#305: set to make the spy's reset run but leave a schema that does not match its migration path.</summary>
+        public Quotinator.Data.Schema.SchemaIntegrityResult? NotIntactWith { get; init; }
         public Task<Quotinator.Data.Schema.SchemaIntegrityResult> CheckIntegrityAsync() => Task.FromResult(Quotinator.Data.Schema.SchemaIntegrityResult.Intact);
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
 
@@ -523,6 +558,8 @@ public class AdminEndpointsTests
                 return Task.FromResult(DatabaseOperationResult.RefusedForBackup(RefuseWith.Value, BackupGuardedStep.Reset));
 
             ResetRan = true;
+            if (NotIntactWith is not null)
+                return Task.FromResult(DatabaseOperationResult.NotIntact());
             return Task.FromResult(DatabaseOperationResult.Success(backupSkippedByOverride: RefuseWith is not null));
         }
 

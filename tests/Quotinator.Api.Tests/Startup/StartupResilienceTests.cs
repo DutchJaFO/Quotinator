@@ -1,6 +1,7 @@
 using System.Data;
 using System.Net;
 using Dapper;
+using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -650,7 +651,10 @@ public class StartupResilienceTests
             : new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             {
                 builder.UseSetting("Quotinator:DataDir", dataDirectory);
-                builder.UseSetting("Quotinator:AdminApiKey", adminKey);
+                // In memory rather than UseSetting: a developer's appsettings.local.json is read after
+                // UseSetting's value and would replace the key, so the reset would answer 401.
+                builder.ConfigureAppConfiguration((_, config) =>
+                    config.AddInMemoryCollection(new Dictionary<string, string?> { ["Quotinator:AdminApiKey"] = adminKey }));
             });
     }
 

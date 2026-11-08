@@ -250,6 +250,20 @@ internal static class AdminEndpoints
         {
             DatabaseOperationResult reset = await db.ResetAsync(preserveSchemaVersion, forceSourceRefresh, allowNoBackup);
 
+            // #305 (R3): the reset ran, but the rebuilt schema does not match its migration path. Not a
+            // refused backup, so not 409: nothing the caller can resolve and retry, since a Reset rebuilds
+            // from the same baseline the expected schema comes from. The application stays degraded on
+            // this reason, replacing the one the Reset was run to clear.
+            if (reset.SchemaNotIntact)
+            {
+                string integrityReason = SchemaIntegrityGuidance.Reason(db.LastIntegrityResult ?? SchemaIntegrityResult.Intact);
+                dbHealth.ReplaceFailure(integrityReason);
+                return Results.Problem(
+                    title: "Reset ran, but the rebuilt schema does not match its migration path",
+                    detail: integrityReason,
+                    statusCode: StatusCodes.Status500InternalServerError);
+            }
+
             // #348: a reset that could not take a backup did not run. 200 means the endpoint did what
             // was asked; this did not, so it is an error whose body carries the cause and what the
             // operator can do about it. 409 rather than 500: nothing failed unexpectedly: the state of
@@ -359,6 +373,7 @@ internal static class AdminEndpoints
         .Produces<DatabaseSeedSummaryResponse>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
         .Produces<ProblemDetails>(StatusCodes.Status409Conflict)
+        .Produces<ProblemDetails>(StatusCodes.Status500InternalServerError)
         .WithDescription(
             "Drops the entire database and rebuilds it from scratch via the baseline schema, equivalent to " +
             "deleting the database file and restarting, except it does **not** reimport any bundled or user " +
@@ -380,6 +395,8 @@ internal static class AdminEndpoints
             "and asserts the reset can complete without one. A backup inside the reserve above the normal quota is still taken; " +
             "only one that would pass the ceiling is refused. A backup skipped this way is " +
             "recorded in the audit trail, so it stays discoverable long after the log has rotated. " +
+            "The rebuilt schema is then checked against the one its migration path defines (issue #305); if it does not match, " +
+            "the call answers `500` naming every missing or different object, and the application stays degraded on that reason. " +
             "Protected by a concurrency-1 limiter: a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 

@@ -15,6 +15,12 @@ public sealed class NotificationActionResult
     /// <summary>What stopped the backup the action needed, when that is why it did not run.</summary>
     public BackupOutcome? BackupObstacle { get; init; }
 
+    /// <summary>
+    /// Why the action left the application degraded when it was not a backup obstacle: a Reset that ran
+    /// but whose rebuilt schema does not match its migration path (#305).
+    /// </summary>
+    public string? FailureReason { get; init; }
+
     /// <summary>An action that ran.</summary>
     public static NotificationActionResult Success() => new() { Succeeded = true };
 
@@ -22,4 +28,9 @@ public sealed class NotificationActionResult
     /// <param name="obstacle">What stopped the backup.</param>
     public static NotificationActionResult RefusedForBackup(BackupOutcome obstacle) =>
         new() { Succeeded = false, BackupObstacle = obstacle };
+
+    /// <summary>A Reset that ran, but whose rebuilt schema does not match its migration path (#305).</summary>
+    /// <param name="reason">The degraded reason, naming every missing or different object and the remedies.</param>
+    public static NotificationActionResult ResetNotIntact(string reason) =>
+        new() { Succeeded = false, FailureReason = reason };
 }
