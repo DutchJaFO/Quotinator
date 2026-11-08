@@ -242,22 +242,62 @@ public class SchemaIntegrityComparerTests
             "every difference is reported, sorted by object name, so a reason reads the same on every run");
     }
 
+    /// <summary>
+    /// Names compare as written (developer decision, 2026-11-08): no official SQLite page states its
+    /// identifier case rule, so none is assumed, and a casing difference between our own scripts shows up
+    /// as soon as it starts.
+    /// </summary>
     [TestMethod]
-    public void NameCasingDiffers_IsNotADifference()
+    public void TableNameCasingDiffers_IsADifference()
     {
-        SchemaSnapshot actual = Sample() with
-        {
-            Tables = [.. Sample().Tables.Select(t => t with
-            {
-                Name    = t.Name.ToUpperInvariant(),
-                Columns = [.. t.Columns.Select(c => c with { Name = c.Name.ToLowerInvariant() })],
-            })],
-        };
+        SchemaSnapshot actual = WithChild(c => c with { Name = "CHILD" });
 
         SchemaIntegrityResult result = SchemaIntegrityComparer.Compare(Sample(), actual);
 
-        Assert.IsTrue(result.IsIntact, "names are identifiers and compare case-insensitively (ADR 024)");
-        Assert.IsEmpty(result.Differences);
+        Assert.IsFalse(result.IsIntact);
+        Assert.Contains(d => d.Kind == SchemaDifferenceKind.Missing && d.ObjectKind == SchemaObjectKind.Table && d.ObjectName == "Child", result.Differences);
+        Assert.Contains(d => d.Kind == SchemaDifferenceKind.Extra && d.ObjectKind == SchemaObjectKind.Table && d.ObjectName == "CHILD", result.Differences);
+    }
+
+    [TestMethod]
+    public void ColumnNameCasingDiffers_IsADifference()
+    {
+        SchemaSnapshot actual = WithChild(c => c with
+        {
+            Columns = [.. c.Columns.Select(col => col.Name == "Name" ? col with { Name = "name" } : col)],
+        });
+
+        SchemaIntegrityResult result = SchemaIntegrityComparer.Compare(Sample(), actual);
+
+        Assert.IsFalse(result.IsIntact);
+        Assert.Contains(d => d.Kind == SchemaDifferenceKind.Missing && d.ObjectName == "Child.Name", result.Differences);
+    }
+
+    [TestMethod]
+    public void ForeignKeyReferenceCasingDiffers_IsADifference()
+    {
+        SchemaSnapshot actual = WithChild(c => c with { ForeignKeys = [c.ForeignKeys[0] with { ReferencedTable = "parent" }] });
+
+        SchemaIntegrityResult result = SchemaIntegrityComparer.Compare(Sample(), actual);
+
+        Assert.IsFalse(result.IsIntact);
+        Assert.Contains(d => d.Kind == SchemaDifferenceKind.Missing && d.ObjectName == "Child(ParentId)->Parent(Id)", result.Differences);
+    }
+
+    [TestMethod]
+    public void ForeignKeyActionCasingDiffers_IsADifference()
+    {
+        SchemaSnapshot actual = WithChild(c => c with
+        {
+            ForeignKeys = [c.ForeignKeys[0] with { OnDelete = c.ForeignKeys[0].OnDelete.ToLowerInvariant() }],
+        });
+
+        SchemaIntegrityResult result = SchemaIntegrityComparer.Compare(Sample(), actual);
+
+        Assert.IsFalse(result.IsIntact);
+        SchemaDifference only = OnlyDifference(result);
+        Assert.AreEqual(SchemaDifferenceKind.Different, only.Kind);
+        Assert.AreEqual(nameof(SchemaForeignKey.OnDelete), only.Aspect);
     }
 
     [TestMethod]

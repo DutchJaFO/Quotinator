@@ -1,6 +1,6 @@
 # #305: Database integrity check: verify every database's full schema against its migration path at startup
 
-**Status:** In progress (step 11)
+**Status:** In progress (step 12)
 **GitHub issue:** #305
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 11: prove each test is wired to its behaviour by mutation.** Every decision is settled (see
+**Execute from step 12: update the documents this changes.** Every decision is settled (see
 *Decisions*, including D5, found in step 3), the ADR 003 and ADR 009 amendments were approved on
 2026-11-07, and the issue's title and body reflect the widened scope.
 
@@ -71,7 +71,7 @@ Checked per `process.md` → Planning step 3, in source order.
 | 020 | Yes, by its reasoning, and literally for the endpoint | The expected schema is derived from each database's own migration path, never from a list kept by hand, which is how the existing drift tests' `ConsumerDomainTables` list came to need maintaining. The endpoint joins the existing admin tag, already declared with a description; `EveryTagAnEndpointUses_IsDeclaredWithADescription` confirms it |
 | 021, 023 | No | No file input, no rule file |
 | 022 | Yes | A difference is detectable by a check, so it is **returned as an outcome, never thrown**. Existing catches stay as the backstop for what the check cannot foresee |
-| 024 | Yes | Object and column names are identifiers, so they compare case-insensitively. A declared column type, default expression or index filter is compared as written, since it is content rather than identity |
+| 024 | No, by D6 | Every compared value compares as written, foreign key actions included: names, declared column types, default expressions, index filters |
 | 025 | Yes | The check writes nothing, at startup or through the endpoint, so there is no backup to place |
 | 026 | Yes, by exclusion | No notification is raised for a failed check: see step 9 |
 
@@ -104,7 +104,7 @@ Checked per `process.md` → Planning step 3, in source order.
 ## Decisions
 
 **All settled.** D1, D2 and D4 are settled by the developer's direction above. D3 is settled as:
-extras are reported, not degrading. R1 to R3 were answered by the developer on 2026-11-07, and D5, an
+extras are reported, not degrading. R1 to R3 were answered by the developer on 2026-11-07, D6 on 2026-11-08 in step 11, and D5, an
 unforeseen circumstance found in step 3, the same day, by following the T2 suite's own method.
 
 **R1. How is the check run on request, by the testing procedure and by an operator?** **Both
@@ -127,6 +127,15 @@ the result (step 6, and T2 document 04's Upgraded scenario). This follows the 20
 withdrawn once that record surfaced. The expected schema is always derived from this build's baseline, so
 the migration condensing planned for this milestone's close needs no change here; the check is repeated
 after it (step 12).
+
+**D6. Does the comparison fold case anywhere?** (Found in step 11; decided 2026-11-08.) **No: everything
+compares as written, names and foreign key actions alike.** No official SQLite page read states how table,
+column or index names are cased, so none is assumed. The developer's
+reasoning: the strictness reports a casing drift between our own scripts as soon as it starts. Measured on a
+scratch database, SQLite itself folds ASCII letters in names (`CREATE TABLE MYTABLE` after `MyTable` is
+refused as existing) and not others (`Ä` and `ä` are two tables). So a casing difference SQLite would ignore
+is reported, as one object missing and another extra. Rows 10 to 12 pass case-sensitively, so no such drift
+exists today; the live upgrade check (row 13) is repeated case-sensitively by document 04 in step 13.
 
 **R3. Does a Reset re-run the check before clearing health?** **Yes.** Developer's reasoning: the check
 is what runs before starting, so it should be what shows that a reset database is in a good state. A
@@ -256,7 +265,7 @@ requires.
 **Status:** ✅ Done; row 13 is checked live in step 6 (D5)
 
 Rows 1 to 19, 22 and 23 of the Verification table. Comparer tests supply both snapshots, covering each
-aspect's missing, different and extra case, several differences at once, case-insensitive names, and the
+aspect's missing, different and extra case, several differences at once, name casing (case-insensitive as written in step 3, case-sensitive since D6), and the
 empty snapshot on both sides. Reader and startup tests use a real temp-file database per test, with the
 sabotage applied by the test, never by editing shipped data.
 
@@ -523,14 +532,44 @@ Findings, 2026-11-08:
 
 ### 11. Prove each test is wired to the behaviour
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-Mutation, each reverted with `git checkout` and re-run green: compare names case-sensitively; drop
+Mutation, each reverted with `git checkout` and re-run green: compare names case-sensitively (run before D6, when names folded case; its reverse, folding case, is run after it); drop
 foreign keys from the reader; treat an extra as a difference; run the content load despite a
 difference; stop skipping on overshoot; omit an object from the reason; remove the check from the
 changelog initializer (the guard test must fail); clear health on Reset without re-running the check;
 have the endpoint return the startup result instead of a fresh check; make the DbInspector command exit
 zero when not intact; let `ReadScriptsAsync` reuse one scratch database across calls.
+
+Findings, 2026-11-08:
+
+- **Each of the first five mutations turned its test red**, and each was reverted:
+  - compare names case-sensitively: `NameCasingDiffers_IsNotADifference`
+  - drop foreign keys from the reader: both `SqliteSchemaSnapshotReaderTests`
+  - treat an extra as a difference: `ExtraObjects_AreReportedButIntact` and `AdminDatabaseIntegrityEndpointTests.ExtraColumn_ReportedButIntact`
+  - run the content load despite a difference: `MissingExpectedTable_DetectedAsSchemaInconsistency_TreatedAsHardFailure` and `Difference_ContentLoadDoesNotRunAndNothingIsWritten`
+  - stop skipping on overshoot: `SchemaVersionOvershoot_IntegrityNotChecked`
+- **The first mutation raised D6**: the developer decided nothing folds case. The casing test was rewritten
+  as four, each red against the case-folding comparer, and the comparer changed. A first pass kept foreign
+  key actions case-insensitive as closed-set keywords, which D6 does not allow; corrected the same day. The
+  full run is green, rows 10 to 12 included.
+- **M6 (omit an object from the reason)** turned `Reason_NamesEveryDifference` and both
+  `Startup_SchemaDifference_HealthReasonNamesTheObject` rows red.
+- **M7 (remove the check from the changelog initializer)** does not compile: the integrity endpoint lists
+  the changelog initializer as an `IIntegrityCheckedDatabase`, so the compiler refuses before the guard test
+  runs. With the endpoint's list reduced as well, so the build succeeds,
+  `RepositoryStructureTests.EveryDatabaseWithMigrations_PerformsTheIntegrityCheck` turned red.
+- **M8 (clear health on Reset without re-running the check)** turned
+  `Reset_RerunsTheCheckBeforeClearingHealth` red.
+- **M9 (the endpoint returns the startup result)** turned only `ExtraColumn_ReportedButIntact` red: it is the
+  one endpoint test that changes the schema after startup, so the others read the same either way. That one
+  is enough to hold the endpoint to a fresh check.
+- **M10 (the DbInspector command exits zero when not intact)** turned
+  `MissingTable_ReportsItAndExitsNonZero` and `ChangelogFile_ComparedAgainstTheChangelogSchema` red.
+- **M11 (`ReadScriptsAsync` reuses one scratch database)** turned
+  `ReadScriptsAsync_ReadsTheSchemaTheScriptsCreate` red.
+- **Every mutation was reverted with `git checkout`**, and the full run on the clean tree is green with 0
+  warnings.
 
 ### 12. Update the documents this changes
 
@@ -592,7 +631,7 @@ in step 6; rows 20 and 21 are written red in step 7.
 | 6 | ✅ | A missing view or trigger is detected | Unit test | `SchemaIntegrityComparerTests.MissingViewOrTrigger_IsADifference` |
 | 7 | ✅ | Extra tables, columns, foreign keys and indexes are reported and leave the result intact | Unit test | `SchemaIntegrityComparerTests.ExtraObjects_AreReportedButIntact` |
 | 8 | ✅ | Every difference is reported, sorted, not only the first | Unit test | `SchemaIntegrityComparerTests.SeveralDifferences_AreAllReportedInOrder` |
-| 9 | ✅ | Names compare case-insensitively; declared values compare as written | Unit test | `SchemaIntegrityComparerTests.NameCasingDiffers_IsNotADifference`, `SchemaIntegrityComparerTests.DeclaredTypeCasingDiffers_IsADifference` |
+| 9 | ✅ | Everything compares as written, so a casing difference in a table, column, foreign key reference, foreign key action or declared value is reported (D6) | Unit test | `SchemaIntegrityComparerTests.TableNameCasingDiffers_IsADifference`, `SchemaIntegrityComparerTests.ColumnNameCasingDiffers_IsADifference`, `SchemaIntegrityComparerTests.ForeignKeyReferenceCasingDiffers_IsADifference`, `SchemaIntegrityComparerTests.ForeignKeyActionCasingDiffers_IsADifference`, `SchemaIntegrityComparerTests.DeclaredTypeCasingDiffers_IsADifference` |
 | 10 | ✅ | Main database: baseline and full replay are identical in every measured aspect | Integration test | `DatabaseIntegrityCheckTests.MainDatabase_BaselineAndReplay_AreIdentical` |
 | 11 | ✅ | Data-owned schema alone: baseline and replay are identical | Integration test | `DatabaseIntegrityCheckTests.DataOwnedSchema_BaselineAndReplay_AreIdentical` |
 | 12 | ✅ | Changelog database: baseline and replay are identical | Integration test | `ChangelogDatabaseInitializerTests.Integrity_BaselineAndReplay_AreIdentical` |

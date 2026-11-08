@@ -8,15 +8,15 @@ namespace Quotinator.Data.Schema;
 /// engine-neutral (ADR 003, design goal 5): it sees only <see cref="SchemaSnapshot"/> values.
 /// </summary>
 /// <remarks>
-/// Names are identifiers and compare case-insensitively; a declared type, default expression or index
-/// filter is content and compares as written; a foreign key action is drawn from a closed set and
-/// compares case-insensitively (ADR 024). An automatic index is matched by its columns, since its name is
-/// the engine's rather than the schema's. A missing or extra table is one difference, not one per object
-/// it held.
+/// Everything compares as written: no official engine documentation states how a schema's text is cased,
+/// so none is assumed, and a casing difference between the migration scripts is reported as soon as it
+/// starts. A name whose casing differs is therefore one object missing and another extra. An automatic
+/// index is matched by its columns, since its name is the engine's rather than the schema's. A missing or
+/// extra table is one difference, not one per object it held.
 /// </remarks>
 public static class SchemaIntegrityComparer
 {
-    private static readonly StringComparer Identifier = StringComparer.OrdinalIgnoreCase;
+    private static readonly StringComparer Name = StringComparer.Ordinal;
 
     /// <summary>Lists every way <paramref name="actual"/> differs from <paramref name="expected"/>.</summary>
     /// <param name="expected">The schema the database's migration path defines.</param>
@@ -38,7 +38,7 @@ public static class SchemaIntegrityComparer
             Differences =
             [
                 .. differences
-                    .OrderBy(d => d.ObjectName, Identifier)
+                    .OrderBy(d => d.ObjectName, Name)
                     .ThenBy(d => d.ObjectKind)
                     .ThenBy(d => d.Aspect, StringComparer.Ordinal),
             ],
@@ -63,8 +63,8 @@ public static class SchemaIntegrityComparer
             (e, a) =>
             {
                 string name = ForeignKeyName(table)(e);
-                AddIfDifferent(differences, SchemaObjectKind.ForeignKey, name, nameof(SchemaForeignKey.OnDelete), e.OnDelete, a.OnDelete, Identifier);
-                AddIfDifferent(differences, SchemaObjectKind.ForeignKey, name, nameof(SchemaForeignKey.OnUpdate), e.OnUpdate, a.OnUpdate, Identifier);
+                AddIfDifferent(differences, SchemaObjectKind.ForeignKey, name, nameof(SchemaForeignKey.OnDelete), e.OnDelete, a.OnDelete, Name);
+                AddIfDifferent(differences, SchemaObjectKind.ForeignKey, name, nameof(SchemaForeignKey.OnUpdate), e.OnUpdate, a.OnUpdate, Name);
             });
 
         Match(expected.Indexes.Where(i => !i.IsAutomatic), actual.Indexes.Where(i => !i.IsAutomatic),
@@ -73,7 +73,7 @@ public static class SchemaIntegrityComparer
             {
                 string name = $"{table}.{e.Name}";
                 AddIfDifferent(differences, SchemaObjectKind.Index, name, nameof(SchemaIndex.IsUnique), Text(e.IsUnique), Text(a.IsUnique), StringComparer.Ordinal);
-                AddIfDifferent(differences, SchemaObjectKind.Index, name, nameof(SchemaIndex.Columns), Columns(e.Columns), Columns(a.Columns), Identifier);
+                AddIfDifferent(differences, SchemaObjectKind.Index, name, nameof(SchemaIndex.Columns), Columns(e.Columns), Columns(a.Columns), Name);
                 AddIfDifferent(differences, SchemaObjectKind.Index, name, nameof(SchemaIndex.Filter), e.Filter, a.Filter, StringComparer.Ordinal);
             });
 
@@ -84,7 +84,7 @@ public static class SchemaIntegrityComparer
     }
 
     private static void CompareOwner(SchemaObject expected, SchemaObject actual, SchemaObjectKind kind, List<SchemaDifference> differences) =>
-        AddIfDifferent(differences, kind, expected.Name, nameof(SchemaObject.Table), expected.Table, actual.Table, Identifier);
+        AddIfDifferent(differences, kind, expected.Name, nameof(SchemaObject.Table), expected.Table, actual.Table, Name);
 
     /// <summary>
     /// Pairs expected and actual objects by key: an unpaired expected object is missing, an unpaired actual
@@ -95,11 +95,11 @@ public static class SchemaIntegrityComparer
         Func<T, string> key, Func<T, string> displayName, SchemaObjectKind kind,
         List<SchemaDifference> differences, Action<T, T> compareMatched)
     {
-        Dictionary<string, T> actualByKey = new(Identifier);
+        Dictionary<string, T> actualByKey = new(Name);
         foreach (T item in actual)
             actualByKey.TryAdd(key(item), item);
 
-        HashSet<string> matched = new(Identifier);
+        HashSet<string> matched = new(Name);
         foreach (T item in expected)
         {
             string itemKey = key(item);
