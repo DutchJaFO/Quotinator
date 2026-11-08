@@ -1,6 +1,6 @@
 # #305: Database integrity check: verify every database's full schema against its migration path at startup
 
-**Status:** In progress (step 13)
+**Status:** Waiting for release
 **GitHub issue:** #305
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,7 +9,9 @@
 
 ## Next action
 
-**T1 is the next action, and it is the developer's:** start `Quotinator.Api` in Visual Studio and confirm it starts without error (row 25). Step 14 follows. Every decision is settled (see
+**Waiting for release.** Every step is done and every verification row is ✅. The issue stays open until
+the release carrying it ships (`issue-closure.md`'s two-gate rule); then the closing comment reproduces
+the Verification table and its box is ticked last. Every decision is settled (see
 *Decisions*, including D5, found in step 3), the ADR 003 and ADR 009 amendments were approved on
 2026-11-07, and the issue's title and body reflect the widened scope.
 
@@ -609,7 +611,7 @@ Findings, 2026-11-08:
 
 ### 13. Run the full gates
 
-**Status:** 🔄 In progress: T1 remains, the developer's to run
+**Status:** ✅ Done: T2, including the extended run, and T1
 
 `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`,
 both at 0 warnings and 0 errors; `docker build`; T2 at end-of-issue scope (the smoke set, documents 14
@@ -641,9 +643,82 @@ Findings, 2026-11-08, against `quotinator:local` built from `870a0502`:
   first attempt failed at Docker with `/data/quotinator` rewritten to a Windows path. That attempt is not a
   reading of the build; the document was re-run from step 1 and is green.
 
+Extended run, 2026-11-08, developer direction: *every startup, backup and database document needs to be
+verified and run*, each run first as written to see what it found, then converted to single commands
+asserting its own data, then re-run. Nothing under `src` or `docker` changed after `870a0502`, so every
+reading below is of the same `quotinator:local`. Each run went into a `.claude/temp` script file, never
+the command line.
+
+- **Every document in `startup-and-degradation/`, `backup/` and `database-lifecycle/` has been run on
+  this build, and none carries a PowerShell block any more.** The fourteen startup documents and
+  `database-lifecycle/03` and `04` were already single commands: the eleven smoke-set ones ran in the
+  first pass above, and `02`, `04` and `07` ran in full, green (29, 16 and 18 commands).
+- **Converted and re-run:** `notifications-and-changelog/03` (its intermediate database now built by a
+  real commit, `e94e9c82`, not hand-written SQL; canary `719568d1`) and `14`; `backup/01` to `08`;
+  `database-lifecycle/01` and `02`. Each now asserts the test's own data, or a relationship between
+  readings, rather than bundled counts.
+- **The conversions found defects the printed forms could not**, because a form that prints a figure for
+  a reader passes whatever the figure is:
+  - notifications written in the same second list in no defined order, filed as #486;
+  - the audit endpoints report the moment of the read as every row's `dateCreated`, filed as #487;
+  - reversing a purged import throws for a condition it has just checked, already #404 (with #475 for
+    the double count): `database-lifecycle/02` step 7 asserts no exception and fails until #404 lands;
+  - `database-lifecycle/01` named four bundled data files where the manifest lists five, and
+    `database-lifecycle/02`'s scoped clear targeted a table the import writes nothing to, so it could not
+    fail.
+- **One of the conversions' own mistakes was caught and corrected:** backup/08's first converted run
+  dropped the assertion that an open notice carries no `resolution`, on the reasoning that the
+  `isDismissed` filter showed it open. A filter selects rows and asserts nothing; TestProbe gained
+  `--absent` and every open notice the document reads asserts it.
+- **The tools grew only where a conversion needed them:** `http.csx --save`; TestProbe `file
+  --expect-identical-in` and `--set-write-time`, `json --equals-json`, `--greater-than-json`,
+  `--length-equals-json`, `--where` and `--absent`; DbInspector `--json-out`; each with unit tests written
+  red first.
+- **`database-lifecycle/01` and `02` and backup/07 and 08 record measurements**, and the index's awaiting
+  list is down to 37 of 83.
+- **Known failures, none caused by #305:** `database-lifecycle/03` step 8 (#468),
+  `notifications-and-changelog/01` step 9 (#472), `import-and-staged-actions/14` step 5 (#400), and
+  `database-lifecycle/02` step 7 (#404).
+
+T1, 2026-11-08, the developer in Visual Studio, over the existing development database:
+
+- **It starts.** The database was at data v3 and app v5: a backup was taken, 25 data and 4 app
+  migrations applied, the integrity check raised nothing, and the banner reported *Quotinator ready* with
+  795 quotes. The changelog database was created at its baseline and served its entries.
+- **Reset and reseed ran from the page**: the Reset backed up and rebuilt from the baseline; the reseed
+  backed up, imported all six configured files and left the conflict fixture in the developer's imports
+  folder awaiting review, as that fixture is meant to.
+- **One `ObjectDisposedException` on a `NetworkStream` was logged when the developer stopped the
+  session**, with the page still connected. It costs nothing: the work had finished and the application
+  was stopping. It is cause 2 of the
+  [transport-connection entry](../../knowledgebase/transport-connection-cancelled-during-a-request.md),
+  which did not list this form and now does.
+
 ### 14. Waiting-for-release housekeeping
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+Done 2026-11-08:
+
+- **Boyscout.** Every `.cs` file a `[#305]` commit touched is in `.editorconfig`'s scoped `IDE0008` and
+  `IDE0090` sections; the six added by the late tool work were missing and are added, and the ratchet
+  surfaced six `var` declarations in `ArgsParserTests.cs`, now explicit. Build at 0 warnings. The new
+  `Sql.SchemaMetadata` reads SQLite's own catalog, which has no entity, so `nameof` does not apply.
+- **Changelog.** `unreleased` gains #305, a highlight, an *added* entry for the check and its endpoint
+  and DbInspector command, and a *changed* entry for Reset verifying what it rebuilt, in `en`, `nl` and
+  `de` in lockstep; `CHANGELOG.md` regenerated alone, as step 12 of the release workflow requires.
+
+Done after T1, 2026-11-08:
+
+- **Process gap check.** Two divergences, both a rule that existed and was not followed, so neither needs
+  a document change: backup/08's dropped assertion broke the suite index's rule against weakening an
+  expectation until the run passes, and its rule that what `json` cannot express becomes a TestProbe
+  option first; and `sed`/`awk` were used during the session despite ADR 010 and `CLAUDE.md`. Both
+  rules are prominent where they live, so the fix is behavioural.
+- **Definition of done.** The four boxes before the closing comment are verified: the expected tests
+  were confirmed red in steps 3 and 7, every requirement is implemented (rows 1 to 25), and the full run
+  is green with no regression (row 24).
+- **Status** moved to `Waiting for release` here and in `overview.md`.
 
 `checklist.md` → *Before closing an issue* → *Waiting for release*: boyscout pass over every touched file
 (each added to `.editorconfig`'s scoped `IDE0008` and `IDE0090` sections when first touched, log
@@ -684,5 +759,5 @@ in step 6; rows 20 and 21 are written red in step 7.
 | 21 | ✅ | Live: a Fresh and an Upgraded container report every database intact through the endpoint, and an added column is reported as extra without degrading | Live (Docker) | `automated-testing/database-lifecycle/04-a-database-is-complete-for-its-schema-version.md` |
 | 22 | ✅ | The endpoint runs a fresh check on every database, reports intact and not-intact results with every difference, answers while degraded, writes nothing and leaves health unchanged, answers without a key like the other read-only admin endpoints, and is described in the spec | Integration test | `AdminDatabaseIntegrityEndpointTests.IntactDatabases_ReportIntact`, `AdminDatabaseIntegrityEndpointTests.MissingTable_ReportsTheDifference`, `AdminDatabaseIntegrityEndpointTests.ExtraColumn_ReportedButIntact`, `AdminDatabaseIntegrityEndpointTests.Degraded_EndpointStillAnswers`, `AdminDatabaseIntegrityEndpointTests.Check_DoesNotChangeHealth`, `AdminDatabaseIntegrityEndpointTests.WithoutAdminKey_IsAnswered`, `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` |
 | 23 | ✅ | The DbInspector command reports a file's differences and exits non-zero when it is not intact | Unit test | `IntegrityCommandTests.IntactFile_ExitsZero`, `IntegrityCommandTests.MissingTable_ReportsItAndExitsNonZero`, `IntegrityCommandTests.ChangelogFile_ComparedAgainstTheChangelogSchema` |
-| 24 | ✅ | No regression | Build | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all green; T2 end-of-issue scope per step 13 green |
-| 25 | ❌ | The application still starts | Manual | T1: the developer starts `Quotinator.Api` in Visual Studio and confirms it starts without error |
+| 24 | ✅ | No regression | Build | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all green, last run 2026-11-08 after every #305 commit (12 projects, 4,953 tests); T2 per step 13, every failure a known defect #305 did not cause |
+| 25 | ✅ | The application still starts | Manual | T1, 2026-11-08: the developer started `Quotinator.Api` in Visual Studio over an existing database, which migrated Data v3 → v28 and App v5 → v9 after a backup, passed the check and reached *Quotinator ready* healthy; a Reset and a reseed from the page then completed |

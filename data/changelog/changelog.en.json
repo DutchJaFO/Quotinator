@@ -3,8 +3,9 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 339, 348, 349, 350, 367, 369, 370, 371, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 423, 424],
+    "issues": [81, 83, 302, 303, 304, 305, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 339, 348, 349, 350, 367, 369, 370, 371, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 419, 420, 422, 423, 424],
     "highlights": [
+      "Quotinator now checks at startup that each database is laid out exactly as its version says it should be. If part of it is missing or has been changed, it starts in a limited state, names what is wrong, and offers to rebuild the database, instead of failing later with an error that hides the cause.",
       "When Quotinator finds a database written by a newer version of itself, it no longer carries on as though nothing were wrong. It cannot know what that newer version changed, so it starts in a limited state, says so plainly, and shows nothing out of that database rather than figures it cannot vouch for. Every page you can still reach offers the way out: rebuild the database at this version's own layout, which discards what it currently holds, or put back a backup taken before it moved ahead.",
       "Quotinator now tells you what it did to your database at startup. A database created for you says so, naming the schema version it was created at, so you know there was nothing to preserve. An update that changed an existing database reports each change separately, saying what it did rather than only its number. An ordinary restart, where neither happened, stays silent.",
       "A database you reset now stays reset. Previously the next restart reloaded the quotes that come with Quotinator, so a reset you made in order to start fresh with your own content was undone by the next restart, add-on update or reboot, and the notification offering to reload was marked as if you had chosen it. A brand-new database still loads the bundled quotes on its first start, and reloading on demand still works.",
@@ -35,6 +36,7 @@
       ]
     },
     "added": [
+      "A schema integrity check at startup: the main database and the changelog database are each compared, case-sensitively, with the full schema their recorded version should have: tables, columns, foreign keys, indexes, views and triggers. A main database missing part of its schema, or holding part of it in a different shape, degrades startup with a reason naming each difference and a Knowledgebase entry; a changelog database that differs falls back to the changelog files. An addition beyond the schema is reported without degrading. `GET /api/v1/admin/database/integrity` runs the same comparison on request, and DbInspector's `integrity` command runs it against a database file (issue #305)",
       "A repair control on every degraded page that can carry one: the startup popup and the REST API, Notifications, Import review and Statistics pages each offer a database Reset with a confirm step, run in place. A Reset refused for want of a backup is reported where the button is, naming the obstacle, rather than failing silently (issue #350)",
       "A notification when Quotinator created the database, carrying the data and app schema versions it was created at (issue #371)",
       "A notification per migration applied to an existing database, naming what that migration did rather than only its version (issue #371)",
@@ -56,6 +58,7 @@
       "Changelog highlights can be marked as worth a startup notification through a reserved `notification` audience, read at runtime rather than rendered into a generated file: the mechanism the what's-new notification uses to choose which highlights to show, never falling back to the full list (issue #307)"
     ],
     "changed": [
+      "A database Reset now checks the database it has just rebuilt against the schema, and reports a failure (`500` from the endpoint, and the reason where the repair control is) rather than success when the rebuild does not match (issue #305)",
       "The wording of the announcement about the renamed operation IDs is updated in place on existing installations, without announcing it again (issue #348)",
       "Quotinator's own automated test documents were repaired so that each runs exactly as written, and so that a run reports only what the test itself caused rather than noise from the way it was run: test maintenance with no effect on the application (issue #411)",
       "Every kind of notification is now covered by a test that produces it the same way the application does and checks what it renders on both surfaces, and an internal lookup table that no part of the display ever consulted was removed: internal work with no change to how a notification looks (issue #308)",

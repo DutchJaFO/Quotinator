@@ -8,7 +8,7 @@
 
 ## Symptom
 
-One or more `Error` lines, in either of two forms:
+One or more `Error` lines, in either of two forms, or a variant of cause 2 below:
 
 ```
 [Runtime - Exception] 909eaa17 thrown: IOException
@@ -53,6 +53,12 @@ When the connection was a browser page's live connection, it reads as an `Operat
 whose frames run through `Http1UpgradeMessageBody` and `System.IO.Pipelines`: the web UI's WebSocket
 closing because the page was navigated away from or closed, or because the application stopped while
 the page was open. Observed 2026-09-18 while driving the notifications page.
+
+Stopping the application while a page is still connected can also read as
+`ObjectDisposedException: Cannot access a disposed object. Object name: 'System.Net.Sockets.NetworkStream'.`:
+the server was still using the connection's stream as the stop disposed it. Observed 2026-11-08 on
+stopping a Visual Studio debugging session six seconds after a reseed had finished, with the page that
+ran it still open; nothing had failed before the stop.
 
 **3. A source download whose connection was cancelled or timed out**: the `IOException` form. Source refresh
 (`Quotinator:AutoUpdateSources`, off by default since #424, so this cause needs it turned on) fetches each manifest-declared file through the standard

@@ -47,7 +47,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#307](https://github.com/DutchJaFO/Quotinator/issues/307) | Changelog highlights: mark specific entries as notification-worthy | Waiting for release | T1 ✅ T2 ✅ | [307-changelog-notification-audience-key-plan.md](307-changelog-notification-audience-key-plan.md) |
 | [#308](https://github.com/DutchJaFO/Quotinator/issues/308) | Notification: multi-line/rich message layout | Waiting for release | T1 ✅ T2 ✅ | [308-notification-rich-layout-plan.md](308-notification-rich-layout-plan.md) |
 | [#309](https://github.com/DutchJaFO/Quotinator/issues/309) | Move changelog content to database-backed System_Changelog table | Waiting for release | T1 ✅ T2 ✅ | [309-system-changelog-table-plan.md](309-system-changelog-table-plan.md) |
-| [#305](https://github.com/DutchJaFO/Quotinator/issues/305) | Database integrity check: verify every database's full schema against its migration path at startup | In progress | T1 ⬜ T2 ⬜ | [305-database-integrity-check-plan.md](305-database-integrity-check-plan.md) |
+| [#305](https://github.com/DutchJaFO/Quotinator/issues/305) | Database integrity check: verify every database's full schema against its migration path at startup | Waiting for release | T1 ✅ T2 ✅ | [305-database-integrity-check-plan.md](305-database-integrity-check-plan.md) |
 | [#306](https://github.com/DutchJaFO/Quotinator/issues/306) | Changelog: empty 'Unreleased' section renders on the About page after a release tag | Planning | T1 ⬜ T2 ⬜ | [306-empty-unreleased-section-plan.md](306-empty-unreleased-section-plan.md) |
 | [#319](https://github.com/DutchJaFO/Quotinator/issues/319) | Notification title and body are not translated | Waiting for release | T1 ✅ T2 ✅ | [319-notification-translations-plan.md](319-notification-translations-plan.md) |
 | [#323](https://github.com/DutchJaFO/Quotinator/issues/323) | Source download: a stalled connection attempt outlives its request and fails every other source on the same host | Waiting for release | T1 ✅ T2 ✅ | [323-source-download-connection-stall-plan.md](323-source-download-connection-stall-plan.md) |
@@ -128,7 +128,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #307 ─── depends on #80; soft-depends on #309: Waiting for release
 #308 ─── depends on #302, #303, #304, #312, #367: Waiting for release
 #309 ─── depends on #80: Waiting for release
-#305 ─── (none); blocks #327: In progress
+#305 ─── (none); blocks #327: Waiting for release
 #306 ─── (none): Planning
 #319 ─── depends on #278, #312; blocks #304, #302, #303, #308: Waiting for release
 #323 ─── (none); blocks #325, #329: Waiting for release
@@ -245,7 +245,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 40 | **#371** ✅ | Waiting for release |
 | 41 | **#350** ✅ | Waiting for release |
 | 42 | **#339** ✅ | Waiting for release; before #327 and #328 |
-| 43 | **#305** 🚧 | In progress; before #327 |
+| 43 | **#305** ✅ | Waiting for release; before #327 |
 | 44 | **#482** | Planning; before #327 and #457 |
 | 45 | **#457** | Planning; before #327; after #482 |
 | 46 | **#454** | Planning; before #327, #455 and #456 |
