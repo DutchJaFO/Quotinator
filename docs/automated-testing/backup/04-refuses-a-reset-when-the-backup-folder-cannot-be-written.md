@@ -31,35 +31,27 @@ that cannot be created, and has a different member of the outcome enum.
 
 ### 1. Seed a healthy database, creating `backups/`
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-04"
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path "$dataDir\backups" | Out-Null
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-backup-04 --port 18384 `
-  --image quotinator:local --bind $dataDir
-
-Test-Path "$dataDir\backups"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-04 --delete C:\repos\Quotinator\.claude\temp\qt-backup-04-out --create-directory C:\repos\Quotinator\.claude\temp\qt-backup-04\backups --create-directory C:\repos\Quotinator\.claude\temp\qt-backup-04-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-backup-04 --port 18384 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-04
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-directory C:\repos\Quotinator\.claude\temp\qt-backup-04\backups
 ```
 
-**Expected:** `True`, and the environment reports healthy.
+**Expected:** the environment reports healthy, and the `file` command exits `0`: `backups/` exists.
 
 **On failure:** if `backups/` is absent the next step tests the wrong member entirely. Stop.
 
 ### 2. Re-enter with the data directory read-only, and attempt a reset
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-04"
-dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-04 --port 18384 `
-  --image quotinator:local --bind $dataDir --read-only-data --wait-listening
-
-$r = dotnet script scripts/testing/http.csx -- --url "http://localhost:18384/api/v1/admin/database/reset" `
-  --method POST --expect 409 | ConvertFrom-Json
-"obstacle=$($r.backupObstacle)"
-"offersOverride=$([bool]($r.remedies -match 'allowNoBackup'))"
+```
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-04 --port 18384 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-04 --read-only-data --wait-listening
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18384/api/v1/admin/database/reset --expect 409 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset.json --equals backupObstacle=DestinationFileNotWritable --length-equals remedies=2
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-text C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset.json "allowNoBackup"
 ```
 
-**Expected:** `409`, `obstacle=DestinationFileNotWritable`, and `offersOverride=True`.
+**Expected:** `409`, and both TestProbe commands exit `0`: obstacle `DestinationFileNotWritable`, two
+remedies, one of them naming `allowNoBackup`.
 
 The override *is* offered here, correctly: at this point nothing has disproved it.
 
@@ -68,37 +60,32 @@ from step 1. A `500` means the refusal is not reached.
 
 ### 3. Take the offered override, and read what comes back
 
-```powershell
-$r2 = dotnet script scripts/testing/http.csx -- `
-  --url "http://localhost:18384/api/v1/admin/database/reset?allowNoBackup=true" `
-  --method POST --expect 409 | ConvertFrom-Json
-"obstacle=$($r2.backupObstacle)"
-"offersOverride=$([bool]($r2.remedies -match 'allowNoBackup'))"
-"remedyCount=$($r2.remedies.Count)"
+```
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18384/api/v1/admin/database/reset?allowNoBackup=true" --expect 409 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset-override.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset-override.json --equals backupObstacle=DestinationFileNotWritable --length-equals remedies=1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-text C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset-override.json "remedies" --expect-no-text C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset-override.json "allowNoBackup"
 ```
 
 **Expected:** `409` again, since the override cannot help, because the data directory the reset itself must
-write to is the thing that is read-only, with `offersOverride=False` and `remedyCount` of 1.
+write to is the thing that is read-only: one remedy, and no mention of `allowNoBackup`.
 
-**This is the assertion that matters.** The first response offered a remedy; the caller took it; it
-failed. Offering it again would send the operator round the same loop, which is worse than offering
-nothing. `remedyCount=1` confirms removing it left something actionable behind rather than an empty list.
+**This is the assertion that matters, and step 2 is its control.** The first response offered a remedy;
+the caller took it; it failed. Offering it again would send the operator round the same loop, which is
+worse than offering nothing. The same read that found `allowNoBackup` in step 2 finds it absent here, and
+one remedy confirms removing it left something actionable behind rather than an empty list.
 
-**On failure:** `offersOverride=True` means the guidance has regressed to repeating advice the request
-itself just disproved.
+**On failure:** `allowNoBackup` in the response means the guidance has regressed to repeating advice the
+request itself just disproved.
 
 ### 4. Remount writable, and confirm a reset then works
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-04"
-dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-04 --port 18384 `
-  --image quotinator:local --bind $dataDir
-
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18384/api/v1/admin/database/reset" `
-  --method POST --expect 200 --status
+```
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-04 --port 18384 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-04
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18384/api/v1/admin/database/reset --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18384/api/v1/health --expect 200 --status
 ```
 
-**Expected:** healthy, and `200`.
+**Expected:** healthy, the reset `200`, and `/health` still `200` after it.
 
 **The positive control.** Steps 2 and 3 both assert refusals, so both would hold against a build that
 refused every reset, the same container and the same data directory, differing only in the read-only
@@ -110,11 +97,13 @@ steps 2 and 3 prove nothing about it.
 
 ## Observed effect
 
-**Measured 2026-08-28** against `quotinator:local`.
+**Measured 2026-11-08** against `quotinator:local` built from `ea9bd594`, in this form and in the
+PowerShell form it replaced.
 
 The first attempt answers `409` with `DestinationFileNotWritable` and two remedies: restore write
 access, or retry with the override. The second attempt, using that override, answers `409` again with
-one remedy: restore write access. The disproved option is gone.
+one remedy: restore write access. The disproved option is gone. Remounted writable, the same directory's
+reset answered `200`, after which `/health` still read `200`.
 
 This scenario also found a defect in the pre-flight itself. `Directory.CreateDirectory` on a directory
 that already exists is a no-op that succeeds happily on a read-only mount, so the check reported ready
@@ -141,8 +130,9 @@ Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-04"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-04 --bind $dataDir
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
 ```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-04 --bind C:\repos\Quotinator\.claude\temp\qt-backup-04
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-04 --delete C:\repos\Quotinator\.claude\temp\qt-backup-04-out
+```
+
+**Expected:** the container and both directories are gone.

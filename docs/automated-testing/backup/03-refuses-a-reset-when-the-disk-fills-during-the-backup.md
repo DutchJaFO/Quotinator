@@ -36,22 +36,28 @@ sees free space before the copy starts; the copy is what exhausts it.
 - **The data does not survive the container**, which is acceptable here only because this test never
   restarts: it seeds, attempts one reset, and asserts. A scenario needing its database across a restart
   must not use this flag.
-- **The quote count is read before and after.** The failure this guards against reported success while
-  destroying data, so "it refused" is not enough on its own: the data has to still be there.
+- **The test's own quote is read before and after.** The failure this guards against reported success
+  while destroying data, so "it refused" is not enough on its own: the data has to still be there. The
+  [sentinel quote](../startup-and-degradation/fixtures/sentinel-quote.json) is this document's own, so
+  nothing here depends on what the bundled sources hold.
+- **The fill is [`fill-volume.csx`](../../../scripts/testing/fill-volume.csx)**, which reads the free space
+  and the database's size inside the container, writes the filler, and reads the free space again, so the
+  derivation above is one command, and it fails when the fill did not take.
 
 ## Steps
 
-### 1. Seed into a size-capped data directory
+### 1. Seed into a size-capped data directory, and store the test's own quote
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-backup-03 --port 18383 `
-  --image quotinator:local --tmpfs-data 64m
-
-$before = (Invoke-RestMethod "http://localhost:18383/api/v1/version").database.quotes
-"quotesBefore=$before"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-03-out --create-directory C:\repos\Quotinator\.claude\temp\qt-backup-03-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-backup-03 --port 18383 --image quotinator:local --tmpfs-data 64m
+dotnet script scripts/testing/http.csx -- --url http://localhost:18383/api/v1/import --method POST --file docs/automated-testing/startup-and-degradation/fixtures/sentinel-quote.json --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18383/api/v1/quotes/5e7a1c3d-9b2f-4e6a-8d0c-b1f2a3e4c5d6 --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-03-out\sentinel-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-03-out\sentinel-before.json --equals source="Quotinator Test Harness"
 ```
 
-**Expected:** the environment reports healthy and `quotesBefore` is non-zero.
+**Expected:** the environment reports healthy, the import answers `200`, and the `json` command exits `0`:
+the sentinel is stored and readable by its id.
 
 **The ceiling is not calibrated against the dataset**, only comfortably larger than a seed, so growth in
 the bundled content cannot silently make this step fail or the next one stop testing anything.
@@ -61,61 +67,54 @@ raise it: no assertion below depends on its value.
 
 ### 2. Leave less room than a copy needs, measured rather than assumed
 
-```powershell
-$avail = [int](((docker exec qt-backup-03 df -k /data | Select-Object -Last 1) -split '\s+')[3])
-$dbKB  = [int]((docker exec qt-backup-03 du -k /data/quotinatordata.db) -split '\s+')[0]
-$spare = [int]($dbKB / 2)
-
-docker exec qt-backup-03 dd if=/dev/zero of=/data/filler.bin bs=1024 count=$($avail - $spare) 2>$null
-$left = [int](((docker exec qt-backup-03 df -k /data | Select-Object -Last 1) -split '\s+')[3])
-"leftKB=$left dbKB=$dbKB roomForACopy=$($left -ge $dbKB)"
+```
+dotnet script scripts/testing/fill-volume.csx -- --container qt-backup-03 --file /data/quotinatordata.db
 ```
 
-**Expected:** `roomForACopy=False`.
+**Expected:** the command exits `0`, printing `roomForACopy=False`.
 
 **Nothing here is a figure this document chose.** A copy costs what the database costs, so leaving half
-of that free is always a whole copy short, whatever the dataset has grown to. The two numbers printed are
+of that free is always a whole copy short, whatever the dataset has grown to. The two sizes printed are
 evidence, not the gate: the gate is `roomForACopy`.
 
-**On failure:** `roomForACopy=True` means the fill did not take, and the backup below would succeed, so
-the test would pass without ever reaching its own condition.
+**On failure:** exit code `1` with `roomForACopy=True` means the fill did not take, and the backup below
+would succeed, so the test would pass without ever reaching its own condition.
 
 ### 3. Attempt a reset, which must refuse
 
-```powershell
-$r = dotnet script scripts/testing/http.csx -- --url "http://localhost:18383/api/v1/admin/database/reset" `
-  --method POST --expect 409 | ConvertFrom-Json
-"obstacle=$($r.backupObstacle)"
+```
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18383/api/v1/admin/database/reset --expect 409 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-03-out\reset.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-03-out\reset.json --equals backupObstacle=DiskFilledDuringBackup
 ```
 
-**Expected:** `409` with `obstacle=DiskFilledDuringBackup`.
+**Expected:** `409`, and the `json` command exits `0` on `DiskFilledDuringBackup`.
 
 **On failure:** a `200` is the exact regression this document exists to catch. See Observed effect.
 A `500` means the failure escaped unhandled instead of being reported.
 
-### 4. Confirm the database is still there
+### 4. Confirm the test's own quote is still there
 
-```powershell
-$after = (Invoke-RestMethod "http://localhost:18383/api/v1/version").database.quotes
-"quotesAfter=$after"
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18383/api/v1/quotes/5e7a1c3d-9b2f-4e6a-8d0c-b1f2a3e4c5d6 --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-03-out\sentinel-after-refusal.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-03-out\sentinel-after-refusal.json --equals source="Quotinator Test Harness"
 ```
 
-**Expected:** the same non-zero count as step 1.
+**Expected:** `200`, and the `json` command exits `0`: the sentinel is unchanged.
 
-**On failure:** a count of `0` means the reset ran despite refusing: the database was destroyed and the
-only restore point is a truncated fragment. This assertion is the substantive one; step 2's status code
-alone would not catch it.
+**On failure:** a `404` means the reset ran despite refusing: the database was destroyed and the only
+restore point is a truncated fragment. This assertion is the substantive one; step 3's status code alone
+would not catch it.
 
 ### 5. Give it room back, and confirm a reset then works
 
-```powershell
+```
 docker exec qt-backup-03 rm /data/filler.bin
-
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18383/api/v1/admin/database/reset" `
-  --method POST --expect 200 --status
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18383/api/v1/admin/database/reset --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18383/api/v1/quotes/5e7a1c3d-9b2f-4e6a-8d0c-b1f2a3e4c5d6 --expect 404 --status
 ```
 
-**Expected:** `200`.
+**Expected:** the reset answers `200`, and the sentinel now answers `404`: this time the reset ran, which
+is what separates step 4's `200` from a sentinel that would have survived anything.
 
 **The remedy is applied to the same container**, so the only thing that changed between the refusal and
 the success is the space the filler was occupying. A second container at a different ceiling would have
@@ -129,6 +128,11 @@ is also what proves step 3's stated remedy, *"free disk space and retry"*, is re
 document's whole premise is wrong. Investigate rather than giving it more room until it passes.
 
 ## Observed effect
+
+**Measured 2026-11-08** against `quotinator:local` built from `ea9bd594`, in this form and in the
+PowerShell form it replaced. The fill left 2,308 KB against a 4,620 KB database (`roomForACopy=False`);
+the reset answered `409` / `DiskFilledDuringBackup`; the sentinel was still there afterwards; and with the
+filler removed the same container's reset answered `200`, after which the sentinel answered `404`.
 
 **Rewritten and re-measured 2026-09-28** against `quotinator:local`. The behaviour is unchanged, the
 reset refuses with `DiskFilledDuringBackup` and the quotes are still there, but the document no longer
@@ -189,6 +193,9 @@ Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-03
 ```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-03
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-03-out
+```
+
+**Expected:** the container and the output directory are gone.

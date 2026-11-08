@@ -26,88 +26,72 @@ would let one pass on the other's behalf.
 - **The container is removed before the file is touched.** `destroy` is `docker rm -f`, a kill rather
   than a clean stop, so the sidecars can survive it, which is why the bullet above deletes them rather
   than relying on a checkpoint.
-- **The second start waits for *listening*, not healthy**, since degrading is the expected outcome.
+- **The second start waits for *listening*, then polls `status`**, since degrading is the expected outcome
+  and the startup wait page answers `503` too.
+- **Nothing here reads what the database holds.** The fault is the file being cut short, so step 1
+  asserts only that a healthy database exists, never a count, which would depend on the bundled sources.
 
 ## Steps
 
-### 1. Seed a healthy database and record its size
+### 1. Seed a healthy database
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-02"
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-backup-02 --port 18382 `
-  --image quotinator:local --bind $dataDir
-
-(Invoke-RestMethod "http://localhost:18382/api/v1/version").database.quotes
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-02 --delete C:\repos\Quotinator\.claude\temp\qt-backup-02-out --create-directory C:\repos\Quotinator\.claude\temp\qt-backup-02 --create-directory C:\repos\Quotinator\.claude\temp\qt-backup-02-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-backup-02 --port 18382 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-02
+dotnet script scripts/testing/http.csx -- --url http://localhost:18382/api/v1/health --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-02-out\health-seeded.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-02-out\health-seeded.json --equals status=healthy
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-file C:\repos\Quotinator\.claude\temp\qt-backup-02\quotinatordata.db
 ```
 
-**Expected:** a non-zero quote count.
+**Expected:** every command exits `0`: the application reports `healthy`, and `quotinatordata.db` is a file.
 
 **On failure:** a fresh seed that cannot reach healthy is not this test's subject. Stop.
 
 ### 2. Stop the container and cut the database in half
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-02"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-02 --bind $dataDir
-
-$path = "$dataDir\quotinatordata.db"
-$len  = (Get-Item $path).Length
-$fs   = [System.IO.File]::Open($path, 'Open', 'Write')
-$fs.SetLength([int64]($len / 2))
-$fs.Close()
-Remove-Item "$dataDir\quotinatordata.db-wal","$dataDir\quotinatordata.db-shm" -ErrorAction SilentlyContinue
-"truncated $len -> $((Get-Item $path).Length)"
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-02 --bind C:\repos\Quotinator\.claude\temp\qt-backup-02
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --truncate-half C:\repos\Quotinator\.claude\temp\qt-backup-02\quotinatordata.db --delete C:\repos\Quotinator\.claude\temp\qt-backup-02\quotinatordata.db-wal --delete C:\repos\Quotinator\.claude\temp\qt-backup-02\quotinatordata.db-shm
 ```
 
-**Expected:** the reported new length is half the old one, and both are megabytes rather than bytes.
+**Expected:** the `file` command exits `0`, reporting the new length as half the old one, both megabytes
+rather than bytes.
 
 **On failure:** a file-in-use error means the container did not stop. Re-run `destroy` and retry.
 
 ### 3. Start the current build and attempt a reset
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-02"
-dotnet script scripts/testing/test-env.csx -- create --name qt-backup-02 --port 18382 `
-  --image quotinator:local --bind $dataDir --wait-listening
-
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18382/api/v1/health" --expect 503 --status
-
-$r = dotnet script scripts/testing/http.csx -- --url "http://localhost:18382/api/v1/admin/database/reset" `
-  --method POST --expect 409 | ConvertFrom-Json
-"obstacle=$($r.backupObstacle)"
-"offersOverride=$([bool]($r.remedies -match 'allowNoBackup'))"
+```
+dotnet script scripts/testing/test-env.csx -- create --name qt-backup-02 --port 18382 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-02 --wait-listening
+dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18382/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-backup-02-out\health.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-02-out\health.json --equals status=unhealthy
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18382/api/v1/admin/database/reset --expect 409 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-02-out\reset.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-02-out\reset.json --equals backupObstacle=SourceUnreadable --length-equals remedies=2
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-text C:\repos\Quotinator\.claude\temp\qt-backup-02-out\reset.json "remedies" --expect-no-text C:\repos\Quotinator\.claude\temp\qt-backup-02-out\reset.json "allowNoBackup"
 ```
 
-**Expected:** `503` from health, then `409` with `obstacle=SourceUnreadable` and
-`offersOverride=False`.
+**Expected:** `status = unhealthy`, then `409` with obstacle `SourceUnreadable`, two remedies, and none
+of them mentioning `allowNoBackup`.
 
 A truncated file reports the same obstacle as an unreadable one, and that is correct rather than a
 missed distinction: SQLite cannot read either, so neither can be backed up, and the remedy is the same.
 What this document proves is that the *route* to that outcome works for truncation too, which the
 unit tests, which use non-database bytes, do not exercise.
 
-**On failure:** a `200` from health means the truncation did not take. A `500` from the reset means the
-refusal is not reached on this path even though it is on `01`'s.
+**On failure:** `healthy` means the truncation did not take. A `500` from the reset means the refusal is
+not reached on this path even though it is on `01`'s.
 
 ### 4. Apply the remedy, and confirm a reset then works
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-02"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-02 --bind $dataDir
-
-Remove-Item "$dataDir\quotinatordata.db"
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-backup-02 --port 18382 `
-  --image quotinator:local --bind $dataDir
-
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18382/api/v1/admin/database/reset" `
-  --method POST --expect 200 --status
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-02 --bind C:\repos\Quotinator\.claude\temp\qt-backup-02
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-02\quotinatordata.db
+dotnet script scripts/testing/test-env.csx -- create --name qt-backup-02 --port 18382 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-02
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18382/api/v1/admin/database/reset --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18382/api/v1/health --expect 200 --status
 ```
 
-**Expected:** healthy, and `200`.
+**Expected:** healthy, the reset `200`, and `/health` still `200` after it.
 
 **The positive control.** Step 3 asserts a refusal; on its own that would pass against a build refusing
 every reset. This shows the refusal is caused by the truncation and nothing else, and that the remedy
@@ -117,9 +101,12 @@ the refusal names actually resolves it.
 
 ## Observed effect
 
-**Measured 2026-08-28** against `quotinator:local`: a 4,562,944-byte database cut to 2,281,472 bytes
-degrades at startup and answers a reset attempt with `409` / `SourceUnreadable`, carrying the same two
-remedies as `01`: replace the file, or restore an older backup.
+**Measured 2026-11-08** against `quotinator:local` built from `ea9bd594`: a 4,669,440-byte database cut to
+2,334,720 bytes degrades at startup (`status = unhealthy`) and answers a reset attempt with `409` /
+`SourceUnreadable`, carrying the same two remedies as `01`, neither naming the override: move or delete
+the file and restart, or restore an older backup. With the file deleted, the next start reached healthy
+and a reset answered `200`, after which `/health` still read `200`. The PowerShell form this document had
+until then read the same.
 
 Before #348 this same call returned an unhandled `500`.
 
@@ -144,8 +131,9 @@ Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-02"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-02 --bind $dataDir
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
 ```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-02 --bind C:\repos\Quotinator\.claude\temp\qt-backup-02
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-02 --delete C:\repos\Quotinator\.claude\temp\qt-backup-02-out
+```
+
+**Expected:** the container and both directories are gone.

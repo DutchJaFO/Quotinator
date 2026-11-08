@@ -539,6 +539,7 @@
     <File Path="scripts/testing/corrupt-csv-cell.csx" />
     <File Path="scripts/testing/dismiss-notifications.csx" />
     <File Path="scripts/testing/execute-sql.csx" />
+    <File Path="scripts/testing/fill-volume.csx" />
     <File Path="scripts/testing/http.csx" />
     <File Path="scripts/testing/startup-window.csx" />
     <File Path="scripts/testing/sqlite-storage-probe.csx" />
