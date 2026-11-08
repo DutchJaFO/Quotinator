@@ -25,277 +25,188 @@ the one option that keeps a restore point.
   backup a startup takes before loading content is measured against the absolute ceiling, not the 90%
   operating quota: filling to 95% leaves it room in the reserve, and the content loads (measured). At the
   ceiling it refuses with `BudgetExceeded`, and the notification's own check, which does use the
-  operating quota, agrees. `SetLength` allocates without writing a gigabyte.
+  operating quota, agrees. A sparse file allocates without writing a gigabyte.
 - **The filler is made the oldest backup.** Its write time is set to 2020, before any backup a cycle
   leaves behind. That makes removing the oldest backup enough to clear the quota, so *Remove the oldest
   backup, then back up and reseed* is offered; left newest, removing the oldest would free only a few
   megabytes and the option would rightly be withheld.
 - **The pending load is the genre re-seed, and it is produced by removing the genre rows.** Since
   [#423](https://github.com/DutchJaFO/Quotinator/issues/423) a start only loads the configured files into
-  a database it created itself, so an emptied quote table no longer gives a restart anything to load and
-  a Reset no longer reaches this refusal at all. Quotes present with genres absent is the one state in
-  which a start that did not create the database still loads content, which is `ReSeedGenresIfEmptyAsync`.
-  It is reached by editing the database, which this document could previously avoid: the application has
-  no operation that produces it, and that is the point of #423 rather than a gap in it.
-- **The edit is made while the container is stopped.** `test-env.csx reenter` stops cleanly (`docker stop
-  -t 15`) precisely so SQLite checkpoints and leaves no `-wal`/`-shm` sidecar behind; writing to the file
-  underneath a running container would be writing to a database mid-checkpoint. So each cycle stops,
-  edits, then re-enters.
+  a database it created itself, so an emptied quote table no longer gives a restart anything to load.
+  Quotes present with genres absent is the one state in which a start that did not create the database
+  still loads content, which is `ReSeedGenresIfEmptyAsync`. It is reached by editing the database: the
+  application has no operation that produces it, and that is the point of #423 rather than a gap in it.
+  Rows, not schema, are removed, so the integrity check (#305) has nothing to report.
+- **The genre count is the evidence of a load having run or been refused.** No endpoint reports it, so
+  DbInspector reads it from the file, read-only, and writes it as JSON (`--json-out`) for TestProbe.
+- **The edit is made while the container is stopped.** `docker stop -t 15` lets SQLite checkpoint and leave
+  no `-wal`/`-shm` sidecar behind; writing to the file underneath a running container would be writing to a
+  database mid-checkpoint. So each cycle stops, edits, then re-enters.
 - **Each option is proven in its own cycle.** An option that succeeds loads content and resolves the
-  notification, so each of the three is reached by repeating the wipe, fill and restart.
-  `Refuse-ContentLoad` below is that cycle, so every option starts from the same state.
-- **Count this notification by its kind, never the total.** How many notifications exist depends on
-  producers this test is not about.
-- **The page is driven through the DOM, and a click is retried until Confirm appears.** Controls need
-  the Blazor circuit, and a click issued before it connects is swallowed, as the running-action
-  document records.
-- **An option is waited on until its action has returned, as the page itself shows it.** While the
-  executor call is in flight the page marks it running with a spinner, and removes that when the call
-  returns (#367), so each script waits, at most 120 seconds, for the spinner to appear and then go.
-  Nothing else is read for this: not the notification, the audit trail or the log. The results asserted
-  afterwards (content present, notification resolved, backups and audit entries) are read once the
-  action has finished.
-- **Every list read here is wrapped in `@(...)`**, per the index's *A count is evidence only if the
-  instrument counts the right thing*: a function returning one notification hands back the object, not a
-  one-element array, and its `.Count` is empty in Windows PowerShell 5.1 (measured on the first run).
-- **The startup popup renders once per process run**, so it is read before the Notifications page in
-  each cycle that reads it.
+  notification, so each of the three is reached by repeating the refusing cycle: remove the genre rows,
+  fill the budget, restart. Steps 2, 6 and 7 each run it, written out in full.
+- **The notification is read by its kind, never by position or total.** How many notifications exist
+  depends on producers this test is not about, and rows written in the same second have no defined order
+  (#486). [`notification-of-kind.js`](../../../scripts/testing/page-scripts/notification-of-kind.js) reads it.
+- **The page is driven through the DOM, and a click is retried until Confirm appears.**
+  [`notification-option-run.js`](../../../scripts/testing/page-scripts/notification-option-run.js) does
+  this, since controls need the Blazor circuit and a click issued before it connects is swallowed, then
+  waits, at most 120 seconds, for the page's running spinner to appear and go (#367). The results asserted
+  afterwards are read once the action has finished.
+- **The backup count is exact, derived from what each step leaves.** The filler matches `*.db` too: one file
+  after step 2, still one after step 5, which takes no backup, one after step 6, which removes the filler
+  and takes one backup, and two after step 7, whose cycle adds a filler beside that backup, whose manual
+  removal takes it away again, and whose option takes one more.
+- **The startup popup renders once per process run**, so it is read before the Notifications page.
 - **The log is read before each stop.**
+
 ## Steps
 
 ### 1. Seed a healthy database
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-06"
-$out     = "C:\repos\Quotinator\.claude\temp\qt-backup-06-captures"
-Remove-Item -Recurse -Force $dataDir, $out -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path "$dataDir\backups", $out | Out-Null
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-backup-06 --port 18386 `
-  --image quotinator:local --bind $dataDir
-
-$key  = @{ "X-Api-Key" = "smoketest" }
-$base = "http://localhost:18386/api/v1"
-function Quote-Count { (Invoke-RestMethod "$base/quotes?pageSize=1").totalCount }
-function Refused-Notifications {
-  @((Invoke-RestMethod "$base/notifications?pageSize=0").items | Where-Object { $_.metadataKind -eq 'backuprefused' -and -not $_.isDismissed })
-}
-# The pending load is the genre re-seed, so the genre table is this document's evidence of a load
-# having run or having been refused. No endpoint reports it, so it is read from the file with
-# DbInspector, read-only: execute-sql.csx runs ExecuteNonQuery and cannot return a count.
-function Genre-Count {
-  @(dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
-      --sql "SELECT COUNT(*) AS Genres FROM Quotinator_QuoteGenre") -join "`n"
-}
-"quotes=$(Quote-Count) genres=$(Genre-Count)"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-06 --delete C:\repos\Quotinator\.claude\temp\qt-backup-06-out --create-directory C:\repos\Quotinator\.claude\temp\qt-backup-06\backups --create-directory C:\repos\Quotinator\.claude\temp\qt-backup-06-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-backup-06 --port 18386 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-06
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18386/api/v1/quotes?pageSize=1" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\quotes-seeded.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\quotes-seeded.json --greater-than totalCount=0
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-backup-06\quotinatordata.db --sql "SELECT COUNT(*) AS Genres FROM Quotinator_QuoteGenre" --json-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-seeded.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-seeded.json --greater-than 0.Genres=0
 ```
 
-**Expected:** the environment reports healthy, `quotes` above `0`, and `Genre-Count` printing DbInspector's
-own `Genres` header above a count above `0`.
+**Expected:** the environment reports healthy, and both `json` commands exit `0`: quotes above `0`, and
+genres above `0`.
 
 **This is the positive control for the whole document.** With room for a backup, a startup loads content;
 everything below asserts what happens without that room.
 
-### 2. Define the refusing cycle, and run it
+### 2. Run the refusing cycle, and confirm the content load was refused without degrading
 
-```powershell
-function Refuse-ContentLoad {
-  $filler = Join-Path $dataDir "backups\filler.db"
-  Remove-Item $filler -ErrorAction SilentlyContinue
-
-  docker logs qt-backup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
-
-  # Stopped first, and cleanly, so SQLite checkpoints and the edit is not made underneath a running
-  # container. reenter would stop it too, but only after this edit had already been written.
-  docker stop -t 15 qt-backup-06
-  dotnet script scripts/testing/execute-sql.csx -- --db "$dataDir\quotinatordata.db" `
-    --sql "DELETE FROM Quotinator_QuoteGenre;"
-
-  $stream = [System.IO.File]::Create($filler)
-  $stream.SetLength([int64]1073741824)
-  $stream.Close()
-  (Get-Item $filler).LastWriteTimeUtc = [datetime]'2020-01-01'
-
-  dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-06 --port 18386 `
-    --image quotinator:local --bind $dataDir
-}
-
-Refuse-ContentLoad
-"health=$(dotnet script scripts/testing/http.csx -- --url "$base/health" --status)"
-"quotes=$(Quote-Count)"
-Genre-Count
-"refusalLogged=$([bool](docker logs qt-backup-06 2>&1 | Select-String -SimpleMatch 'seeding refused: no backup could be taken (BudgetExceeded)'))"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-backup-06 --pattern "\[Runtime - Exception\]" --exactly 0
+docker stop -t 15 qt-backup-06
+dotnet script scripts/testing/execute-sql.csx -- --db C:\repos\Quotinator\.claude\temp\qt-backup-06\quotinatordata.db --sql "DELETE FROM Quotinator_QuoteGenre;"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-06\backups\filler.db --sparse C:\repos\Quotinator\.claude\temp\qt-backup-06\backups\filler.db 1073741824 --set-write-time C:\repos\Quotinator\.claude\temp\qt-backup-06\backups\filler.db 2020-01-01
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-06 --port 18386 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-06
+dotnet script scripts/testing/http.csx -- --url http://localhost:18386/api/v1/health --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18386/api/v1/quotes?pageSize=1" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\quotes-refused.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\quotes-refused.json --greater-than totalCount=0
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-backup-06\quotinatordata.db --sql "SELECT COUNT(*) AS Genres FROM Quotinator_QuoteGenre" --json-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-refused.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-refused.json --equals 0.Genres=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-backup-06 --pattern "seeding refused: no backup could be taken \(BudgetExceeded\)" --at-least 1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-match-count C:\repos\Quotinator\.claude\temp\qt-backup-06\backups "*.db" 1
 ```
 
-**Expected:** the log read before the stop finds nothing, the restart reports healthy, then `health=200`,
-`quotes` still above `0`, `Genres` `0` and `refusalLogged=True`.
+**Expected:** every command exits `0`: nothing thrown before the stop, the restart healthy with `/health`
+`200`, quotes still above `0`, genres `0`, the refusal logged naming `BudgetExceeded`, and the filler the
+only file in `backups/`.
 
-**On failure:** `Genres` above `0` means the content loaded without its backup: the refusal this whole
+**On failure:** genres above `0` means the content loaded without its backup: the refusal this whole
 document is about did not happen. A health other than `200` means the refusal degraded the application,
-which a content-load refusal must not do; the schema is intact. `quotes=0` means the wipe removed more
+which a content-load refusal must not do; the schema is intact. Quotes at `0` means the wipe removed more
 than the genre rows, and every assertion below reads a state this document never set up.
 
 ### 3. Confirm the refusal is a notification offering exactly the options that can run
 
-```powershell
-$refused = @(Refused-Notifications)
-"found=$($refused.Count)"
-"type=$($refused[0].type)"
-"clearsOnReseed=$($refused[0].dismissTriggerKey -eq 'reseed')"
-"offered=$($refused[0].availableActions -join ',')"
+```
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#backuprefused" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused.png --script-file scripts/testing/page-scripts/notification-of-kind.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused.json --equals active=1 --equals type=actionrequired --equals dismissTriggerKey=reseed --equals availableActions=removeoldestbackupthenreseed,reseedwithoutbackup
 ```
 
-**Expected:** `found=1`, `type=actionrequired`, `clearsOnReseed=True`, and
-`offered=removeoldestbackupthenreseed,reseedwithoutbackup`.
+**Expected:** the `json` command exits `0`: one active `actionrequired` notification, cleared by a reseed,
+offering exactly `removeoldestbackupthenreseed,reseedwithoutbackup`.
 
 **The absence matters as much as the presence.** `backupthenreseed` is not offered because no backup can
 be taken; listing it would offer an option that then refuses, which is the defect #348 was reopened for.
+The exact list asserts both halves.
 
-**On failure:** `found=0` with step 2 passing is the pre-#348 behaviour: refused, and silent.
+**On failure:** `active=0` with step 2 passing is the pre-#348 behaviour: refused, and silent.
 
 ### 4. Confirm both surfaces render the options and the Knowledgebase link
 
-```powershell
-$rowScript = @'
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-let row = null;
-for (let i = 0; i < 40 && !row; i++) {
-  row = [...document.querySelectorAll('tr')].find(r => r.textContent.includes('Content was not loaded'));
-  if (!row) await sleep(250);
-}
-if (!row) return { found: false };
-const r = row.getBoundingClientRect();
-return { found: true, innerHeight: window.innerHeight,
-         buttons: [...row.querySelectorAll('button')].map(b => b.textContent.trim()),
-         links: [...row.querySelectorAll('a[target=_blank]')].map(a => a.href),
-         x: r.x, y: r.y, width: r.width, height: r.height };
-'@
-$popup = $rowScript | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/" `
-  --out "$out\popup.png" --height 1100 --script-stdin | ConvertFrom-Json
-$page  = $rowScript | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications" `
-  --out "$out\page.png" --height 1100 --script-stdin | ConvertFrom-Json
-"popup found=$($popup.found) links=$($popup.links -join ',') buttons=$($popup.buttons.Count) innerHeight=$($popup.innerHeight)"
-"page  found=$($page.found) links=$($page.links -join ',') innerHeight=$($page.innerHeight)"
-"page  buttons=$($page.buttons -join ' | ')"
+```
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/#Content was not loaded" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\popup.png --height 1100 --script-file scripts/testing/page-scripts/notification-row-by-text.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\popup.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\popup.json --equals found=true --greater-than innerHeight=0 --equals buttonCount=0 --contains links=docs/knowledgebase/no-backup-could-be-taken.md
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#Content was not loaded" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\page.png --height 1100 --script-file scripts/testing/page-scripts/notification-row-by-text.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\page.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\page.json --equals found=true --greater-than innerHeight=0 --equals "buttons=Remove the oldest backup, then back up and reseed | Reseed without a backup | Dismiss" --contains links=docs/knowledgebase/no-backup-could-be-taken.md
 ```
 
-**Expected:** both surfaces find the row with a non-zero `innerHeight`, and both link
-`https://github.com/DutchJaFO/Quotinator/blob/main/docs/knowledgebase/no-backup-could-be-taken.md`. The
-popup is read-only, so `buttons=0`. The page's buttons are
-`Remove the oldest backup, then back up and reseed | Reseed without a backup | Dismiss`, with no
-`Back up, then reseed`. `popup.png` and `page.png` show the row.
+**Expected:** both `json` commands exit `0`. Both surfaces find the row with a non-zero viewport and link the
+Knowledgebase entry `no-backup-could-be-taken.md`. The popup is read-only, so it carries no button; the
+page's buttons are exactly the two options and `Dismiss`, with no `Back up, then reseed`. `popup.png` and
+`page.png` show the row.
 
 ### 5. Reseed without a backup, through the page: asked first, then run and recorded
 
-```powershell
-$backupsBefore = @(Get-ChildItem "$dataDir\backups").Count
-$without = @'
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const row = () => [...document.querySelectorAll('tr')].find(r => r.textContent.includes('Content was not loaded'));
-const btn = t => [...(row()?.querySelectorAll('button') ?? [])].find(b => b.textContent.trim() === t);
-for (let i = 0; i < 40 && !row(); i++) await sleep(250);
-let tries = 0;
-while (!btn('Confirm') && tries++ < 20) { btn('Reseed without a backup')?.click(); await sleep(500); }
-const asked = [...row().querySelectorAll('.form-text')].map(e => e.textContent.trim());
-const askedLinks = [...row().querySelectorAll('a[target=_blank]')].map(a => a.href);
-btn('Confirm').click();
-let sawRunning = false, finished = false;
-for (let i = 0; i < 240 && !finished; i++) {
-  await sleep(500);
-  const running = document.querySelector('.badge.bg-info .spinner-border') !== null;
-  sawRunning = sawRunning || running;
-  finished = sawRunning && !running;
-}
-return { asked, askedLinks, sawRunning, finished };
-'@
-$result = $without | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications" `
-  --out "$out\without-backup.png" --script-stdin | ConvertFrom-Json
-"asked=$($result.asked -join ' / ')"
-"askedLinks=$($result.askedLinks.Count) sawRunning=$($result.sawRunning) finished=$($result.finished)"
-Genre-Count
-"stillRefused=$(@(Refused-Notifications).Count) backupsAdded=$(@(Get-ChildItem "$dataDir\backups").Count - $backupsBefore)"
-"skipLogged=$([bool](docker logs qt-backup-06 2>&1 | Select-String -SimpleMatch 'reseed proceeding WITHOUT a backup (BudgetExceeded)'))"
-"skipAudited=$(@((Invoke-RestMethod "$base/admin/audit?table=Database&pageSize=0").items | Where-Object { $_.operation -eq 'BackupSkipped' }).Count)"
+```
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#Content was not loaded|Reseed without a backup" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\without-backup.png --script-file scripts/testing/page-scripts/notification-option-run.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\without-backup.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\without-backup.json --equals confirmOffered=true --contains asked=BudgetExceeded --greater-than askedLinks=0 --equals sawRunning=true --equals finished=true
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-backup-06\quotinatordata.db --sql "SELECT COUNT(*) AS Genres FROM Quotinator_QuoteGenre" --json-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-without-backup.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-without-backup.json --greater-than 0.Genres=0
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#backuprefused" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused-after-without.png --script-file scripts/testing/page-scripts/notification-of-kind.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused-after-without.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused-after-without.json --equals active=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-match-count C:\repos\Quotinator\.claude\temp\qt-backup-06\backups "*.db" 1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-backup-06 --pattern "reseed proceeding WITHOUT a backup \(BudgetExceeded\)" --at-least 1
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#Database" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\audit-without.png --script-file scripts/testing/page-scripts/audit-operations.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\audit-without.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\audit-without.json --equals status=200 --equals operations.BackupSkipped=1
 ```
 
-**Expected:** `asked` names the obstacle (`BudgetExceeded`) before anything ran, with the Knowledgebase
-link beside it (`askedLinks` at least `1`), then `sawRunning=True`, `finished=True`, `Genres` back above
-`0`, `stillRefused=0`, `backupsAdded=0`, `skipLogged=True` and `skipAudited=1`.
+**Expected:** every command exits `0`. Before anything ran, the row asked, naming `BudgetExceeded`, with the
+Knowledgebase link beside it; then the action ran and finished. Genres are back above `0`, the refusal is
+no longer active, no backup was added (the filler is still the only file), the skip is logged, and one
+`BackupSkipped` entry is in the audit trail.
 
-**On failure:** a reseed that ran without `asked` naming the obstacle took the user's permission without
+**On failure:** a reseed that ran without asking, naming the obstacle, took the user's permission without
 telling them what they were agreeing to.
 
 ### 6. Remove the oldest backup, then back up and reseed, through the page
 
-```powershell
-Refuse-ContentLoad
-"refused=$(@(Refused-Notifications).Count)"
-Genre-Count
-
-$remove = @'
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const row = () => [...document.querySelectorAll('tr')].find(r => r.textContent.includes('Content was not loaded'));
-const btn = t => [...(row()?.querySelectorAll('button') ?? [])].find(b => b.textContent.trim() === t);
-for (let i = 0; i < 40 && !row(); i++) await sleep(250);
-let tries = 0;
-while (!btn('Confirm') && tries++ < 20) { btn('Remove the oldest backup, then back up and reseed')?.click(); await sleep(500); }
-btn('Confirm').click();
-let sawRunning = false, finished = false;
-for (let i = 0; i < 240 && !finished; i++) {
-  await sleep(500);
-  const running = document.querySelector('.badge.bg-info .spinner-border') !== null;
-  sawRunning = sawRunning || running;
-  finished = sawRunning && !running;
-}
-return { sawRunning, finished };
-'@
-$result = $remove | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications" `
-  --out "$out\remove-oldest.png" --script-stdin | ConvertFrom-Json
-"sawRunning=$($result.sawRunning) finished=$($result.finished) fillerGone=$(-not (Test-Path "$dataDir\backups\filler.db"))"
-Genre-Count
-$ops = (Invoke-RestMethod "$base/admin/audit?table=Database&pageSize=0").items.operation
-"removalAudited=$(@($ops | Where-Object { $_ -eq 'BackupDeleted' }).Count) backupAudited=$(@($ops | Where-Object { $_ -eq 'BackedUp' }).Count)"
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-backup-06 --pattern "\[Runtime - Exception\]" --exactly 0
+docker stop -t 15 qt-backup-06
+dotnet script scripts/testing/execute-sql.csx -- --db C:\repos\Quotinator\.claude\temp\qt-backup-06\quotinatordata.db --sql "DELETE FROM Quotinator_QuoteGenre;"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-06\backups\filler.db --sparse C:\repos\Quotinator\.claude\temp\qt-backup-06\backups\filler.db 1073741824 --set-write-time C:\repos\Quotinator\.claude\temp\qt-backup-06\backups\filler.db 2020-01-01
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-06 --port 18386 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-06
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#backuprefused" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused-again.png --script-file scripts/testing/page-scripts/notification-of-kind.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused-again.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused-again.json --equals active=1
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-backup-06\quotinatordata.db --sql "SELECT COUNT(*) AS Genres FROM Quotinator_QuoteGenre" --json-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-refused-again.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-refused-again.json --equals 0.Genres=0
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#Content was not loaded|Remove the oldest backup, then back up and reseed" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\remove-oldest.png --script-file scripts/testing/page-scripts/notification-option-run.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\remove-oldest.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\remove-oldest.json --equals confirmOffered=true --equals sawRunning=true --equals finished=true
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-absent C:\repos\Quotinator\.claude\temp\qt-backup-06\backups\filler.db --expect-match-count C:\repos\Quotinator\.claude\temp\qt-backup-06\backups "*.db" 1
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-backup-06\quotinatordata.db --sql "SELECT COUNT(*) AS Genres FROM Quotinator_QuoteGenre" --json-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-remove-oldest.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-remove-oldest.json --greater-than 0.Genres=0
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#Database" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\audit-remove.png --script-file scripts/testing/page-scripts/audit-operations.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\audit-remove.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\audit-remove.json --equals operations.BackupDeleted=1 --equals operations.BackedUp=1
 ```
 
-**Expected:** `refused=1` with `Genres` `0` after the cycle, then `sawRunning=True`, `finished=True`,
-`Genres` back above `0`, `fillerGone=True`, `removalAudited=1` and `backupAudited=1`.
+**Expected:** every command exits `0`. The cycle refuses again (one active refusal, genres `0`); then the
+option runs and finishes, the filler is gone and one backup stands in its place, genres are back above
+`0`, and the audit trail holds one `BackupDeleted` and one `BackedUp`.
 
-**On failure:** `fillerGone=True` with `Genres` still `0` means the backup was removed and nothing was
-loaded: a restore point given up for nothing.
+**On failure:** the filler gone with genres still `0` means the backup was removed and nothing was loaded:
+a restore point given up for nothing.
 
 ### 7. Resolve the obstacle by hand, and confirm backing up first is offered and works
 
-```powershell
-Refuse-ContentLoad
-Remove-Item "$dataDir\backups\filler.db"
-"offered=$(@(Refused-Notifications)[0].availableActions -join ',')"
-
-$backup = @'
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const row = () => [...document.querySelectorAll('tr')].find(r => r.textContent.includes('Content was not loaded'));
-const btn = t => [...(row()?.querySelectorAll('button') ?? [])].find(b => b.textContent.trim() === t);
-for (let i = 0; i < 40 && !row(); i++) await sleep(250);
-let tries = 0;
-while (!btn('Confirm') && tries++ < 20) { btn('Back up, then reseed')?.click(); await sleep(500); }
-btn('Confirm').click();
-let sawRunning = false, finished = false;
-for (let i = 0; i < 240 && !finished; i++) {
-  await sleep(500);
-  const running = document.querySelector('.badge.bg-info .spinner-border') !== null;
-  sawRunning = sawRunning || running;
-  finished = sawRunning && !running;
-}
-return { sawRunning, finished };
-'@
-$backupsBefore = @(Get-ChildItem "$dataDir\backups").Count
-$result = $backup | dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications" `
-  --out "$out\back-up-first.png" --script-stdin | ConvertFrom-Json
-"sawRunning=$($result.sawRunning) finished=$($result.finished) backupsAdded=$(@(Get-ChildItem "$dataDir\backups").Count - $backupsBefore)"
-Genre-Count
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-backup-06 --pattern "\[Runtime - Exception\]" --exactly 0
+docker stop -t 15 qt-backup-06
+dotnet script scripts/testing/execute-sql.csx -- --db C:\repos\Quotinator\.claude\temp\qt-backup-06\quotinatordata.db --sql "DELETE FROM Quotinator_QuoteGenre;"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-06\backups\filler.db --sparse C:\repos\Quotinator\.claude\temp\qt-backup-06\backups\filler.db 1073741824 --set-write-time C:\repos\Quotinator\.claude\temp\qt-backup-06\backups\filler.db 2020-01-01
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-06 --port 18386 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-06
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-06\backups\filler.db
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#backuprefused" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused-resolved.png --script-file scripts/testing/page-scripts/notification-of-kind.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused-resolved.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused-resolved.json --equals active=1 --equals availableActions=backupthenreseed
+dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#Content was not loaded|Back up, then reseed" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\back-up-first.png --script-file scripts/testing/page-scripts/notification-option-run.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\back-up-first.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\back-up-first.json --equals confirmOffered=true --equals sawRunning=true --equals finished=true
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-match-count C:\repos\Quotinator\.claude\temp\qt-backup-06\backups "*.db" 2
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-backup-06\quotinatordata.db --sql "SELECT COUNT(*) AS Genres FROM Quotinator_QuoteGenre" --json-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-back-up-first.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-back-up-first.json --greater-than 0.Genres=0
 ```
 
-**Expected:** `offered=backupthenreseed`, the only option once a backup can be taken, then `sawRunning=True`, `finished=True`,
-`Genres` back above `0` and `backupsAdded=1`.
+**Expected:** every command exits `0`. With the filler removed by hand, the one active refusal now offers
+only `backupthenreseed`, the option that keeps a restore point; it runs and finishes, adds one backup beside
+step 6's, and genres are back above `0`.
 
 **This step is the remedy proven.** The Knowledgebase entry tells an operator with a full quota to remove
 old backups; done by hand here, it brings back the option that keeps a restore point, and that option
@@ -303,28 +214,27 @@ loads the content.
 
 ## Observed effect
 
-**Measured 2026-10-10** against `quotinator:local`, re-read on the genre re-seed setup #423 moved this
-document to. Every step passes as written.
+**Measured 2026-11-08** against `quotinator:local` built from `01ab4ef6`, in this form and in the
+PowerShell form it replaced, with the same readings.
 
-The seeded container reports `quotes=795` and `Genres` `25`. With the genre rows removed and the budget
-full, the next start loads nothing and stays healthy (`health=200`, `quotes=795` unchanged, `Genres` `0`),
-and logs `seeding refused: no backup could be taken (BudgetExceeded)`. One `actionrequired` notification,
-*Content was not loaded: no backup could be taken*, offers
-`removeoldestbackupthenreseed,reseedwithoutbackup` over REST, and the page renders exactly those two as
-buttons, plus `Dismiss`, with the Knowledgebase link beside them; the read-only startup popup renders the
-row and the link with `buttons=0`.
+The seeded container reports `795` quotes and `25` genres. With the genre rows removed and the budget
+full, the next start loads nothing and stays healthy (`/health` `200`, quotes unchanged, genres `0`), and
+logs `seeding refused: no backup could be taken (BudgetExceeded)`. One active `actionrequired`
+notification, *Content was not loaded: no backup could be taken*, cleared by a reseed, offers
+`removeoldestbackupthenreseed,reseedwithoutbackup`, and the page renders exactly those two as buttons,
+plus `Dismiss`, with the Knowledgebase link beside them; the read-only startup popup renders the row and
+the link with no button.
 
 *Reseed without a backup* first shows *No backup can be taken right now (BudgetExceeded), so this reseed
-will leave no restore point…* with the link, then reseeds `Genres` back to `25`, writes no backup
-(`backupsAdded=0`), logs `reseed proceeding WITHOUT a backup (BudgetExceeded)` and records one
-`BackupSkipped` audit entry. *Remove the oldest backup, then back up and reseed* removes the filler
-(`fillerGone=True`), takes one backup and reseeds to `25`; both are audited (`removalAudited=1
-backupAudited=1`). With the filler removed by hand, only *Back up, then reseed* is offered, and it writes
-one backup (`backupsAdded=1`) and reseeds to `25`. No `[Runtime - Exception]` line at any stop.
+will leave no restore point…* with the link, then reseeds the genres, writes no backup, logs `reseed
+proceeding WITHOUT a backup (BudgetExceeded)` and records one `BackupSkipped` audit entry. *Remove the
+oldest backup, then back up and reseed* removes the filler, takes one backup and reseeds; both are audited.
+With the filler removed by hand, only *Back up, then reseed* is offered, and it writes one backup and
+reseeds. No `[Runtime - Exception]` line at any stop.
 
-**The earlier run, 2026-09-26**, measured the same behaviour through the Reset-based setup, reading
-`quotes=0` where this one reads `Genres` `0` and `795` quotes where this one reads `Genres` `25`. What
-follows was found on those first runs and is kept because each item is still held by a test.
+**The earlier runs, 2026-09-26 and 2026-10-10**, measured the same behaviour, the first through the
+Reset-based setup #423 since retired. What follows was found on those first runs and is kept because each
+item is still held by a test.
 
 **The first runs found two application defects and three in this document.**
 
@@ -343,8 +253,8 @@ admin reseed endpoint, and a startup that loaded content). Held by
 `InitialiseAsync_ContentLoadedAfterAnEarlierRefusal_ResolvesTheRefusal`, whose fixture had been building
 the import path with a notification writer that did nothing, which is why no unit test had seen it.
 
-The document's own faults are in *Determinism*: a one-element list read without `@(...)`, a resolved row
-waited on after it had left the view, and a leftover filler that made the next cycle's own Reset refuse.
+The document's own faults then were a one-element list read without `@(...)`, a resolved row waited on
+after it had left the view, and a leftover filler that made the next cycle's own Reset refuse.
 
 **Also measured, and recorded rather than asserted: a startup's content-load backup is measured against
 the absolute ceiling, not the 90% operating quota.** A 95% filler leaves it room in the reserve, and the
@@ -374,9 +284,10 @@ exists to catch. Step 2's log line fails there on wording alone.
 
 ## Cleanup
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-06"
-docker logs qt-backup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-06 --bind $dataDir
-Remove-Item -Recurse -Force $dataDir, "C:\repos\Quotinator\.claude\temp\qt-backup-06-captures" -ErrorAction SilentlyContinue
 ```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-backup-06 --pattern "\[Runtime - Exception\]" --exactly 0
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-06 --bind C:\repos\Quotinator\.claude\temp\qt-backup-06
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-06 --delete C:\repos\Quotinator\.claude\temp\qt-backup-06-out
+```
+
+**Expected:** the `log` command exits `0`, and the container and both directories are gone.

@@ -30,39 +30,33 @@ prove the loop closes.
   this document worked around it by hashing inside the container and blamed the host filesystem; the
   cause was ours, and it is fixed at source (`Pooling=false` on the destination connection). Hashing
   from the host now is the check that the leak has not returned.
-- **`$_.ErrorDetails.Message` is null in Windows PowerShell 5.1** for these responses. The body is read
-  off the exception's response stream instead; a snippet relying on `ErrorDetails` reports an empty
-  obstacle and looks like a failure of the endpoint.
+- **The download is saved byte for byte** (`http.csx --save`), since `--body-out` decodes a body as text
+  and would corrupt a database file. It is then matched against the stored backups by content
+  (`TestProbe file --expect-identical-in`), because the stored file's name is a timestamp known only at
+  run time.
 
 ## Steps
 
 ### 1. Seed a healthy database
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-05"
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path "$dataDir\backups" | Out-Null
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-backup-05 --port 18385 `
-  --image quotinator:local --bind $dataDir
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-05 --delete C:\repos\Quotinator\.claude\temp\qt-backup-05-out --create-directory C:\repos\Quotinator\.claude\temp\qt-backup-05\backups --create-directory C:\repos\Quotinator\.claude\temp\qt-backup-05-out
+dotnet script scripts/testing/test-env.csx -- create --name qt-backup-05 --port 18385 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-05
 ```
 
 **Expected:** the environment reports healthy.
 
 ### 2. Confirm status says a backup is possible, and take one
 
-```powershell
-$key  = @{ "X-Api-Key" = "smoketest" }
-$base = "http://localhost:18385/api/v1/admin/backups"
-
-$status = Invoke-RestMethod -Uri "$base/status" -Headers $key
-"canBackUp=$($status.canBackUp) used=$($status.storage.usedBytes) quota=$($status.storage.quotaBytes) reserveInUse=$($status.storage.reserveInUse)"
-
-$created = Invoke-RestMethod -Uri "$base/create" -Method POST -Headers $key
-"created=$($created.name) size=$($created.sizeBytes)"
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18385/api/v1/admin/backups/status --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-05-out\status-before.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-05-out\status-before.json --equals canBackUp=true --equals storage.usedBytes=0 --equals storage.reserveInUse=false
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18385/api/v1/admin/backups/create --expect 201 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-05-out\created.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-05-out\created.json --not-empty name --greater-than sizeBytes=0
 ```
 
-**Expected:** `canBackUp=True`, `used=0`, `reserveInUse=False`, then a created file name with a non-zero
+**Expected:** status answers `200` and create `201 Created`, and both `json` commands exit `0`: a backup is
+possible with nothing used and the reserve not in use, and the created backup has a name and a non-zero
 size.
 
 **This is the positive control for the whole document.** Everything below asserts a refusal, and a build
@@ -73,38 +67,27 @@ quota.
 
 ### 3. Fill the folder to its ceiling, and confirm status now says a backup is not possible
 
-```powershell
-$filler = Join-Path $dataDir "backups\filler.db"
-$stream = [System.IO.File]::Create($filler)
-$stream.SetLength([int64]1073741824)
-$stream.Close()
-
-$status = Invoke-RestMethod -Uri "$base/status" -Headers $key
-"canBackUp=$($status.canBackUp) obstacle=$($status.obstacle) reserveInUse=$($status.storage.reserveInUse) remedies=$($status.remedies.Count)"
-$status.remedies
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --sparse C:\repos\Quotinator\.claude\temp\qt-backup-05\backups\filler.db 1073741824 --expect-length C:\repos\Quotinator\.claude\temp\qt-backup-05\backups\filler.db 1073741824
+dotnet script scripts/testing/http.csx -- --url http://localhost:18385/api/v1/admin/backups/status --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-05-out\status-full.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-05-out\status-full.json --equals canBackUp=false --equals obstacle=BudgetExceeded --equals storage.reserveInUse=true --length-equals remedies=3 --contains "remedies.0=GET /api/v1/admin/backups" --contains "remedies.0=DELETE /api/v1/admin/backups/{name}"
 ```
 
-**Expected:** `canBackUp=False`, `obstacle=BudgetExceeded`, `reserveInUse=True`, and three remedies, the
-first of which names `GET /api/v1/admin/backups` and `DELETE /api/v1/admin/backups/{name}`.
+**Expected:** the filler is `1073741824` bytes, and the `json` command exits `0`: no backup is possible,
+the obstacle is `BudgetExceeded`, the reserve is in use, and of three remedies the first names
+`GET /api/v1/admin/backups` and `DELETE /api/v1/admin/backups/{name}`.
 
-**On failure:** a `canBackUp=True` here means the status endpoint is not measuring against the ceiling,
+**On failure:** `canBackUp=true` here means the status endpoint is not measuring against the ceiling,
 and step 4's refusal would be for some other reason.
 
 ### 4. Confirm a reset now refuses, naming the same obstacle
 
-```powershell
-try {
-  Invoke-WebRequest -Uri "http://localhost:18385/api/v1/admin/database/reset" -Method POST -Headers $key -UseBasicParsing
-} catch {
-  $resp   = $_.Exception.Response
-  $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
-  $body   = $reader.ReadToEnd(); $reader.Close()
-  "status=$($resp.StatusCode.value__)"
-  ($body | ConvertFrom-Json).backupObstacle
-}
+```
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18385/api/v1/admin/database/reset --expect 409 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-05-out\reset-refused.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-05-out\reset-refused.json --equals backupObstacle=BudgetExceeded
 ```
 
-**Expected:** `409` and `BudgetExceeded`.
+**Expected:** `409`, and the `json` command exits `0` on `BudgetExceeded`.
 
 **The remedy naming the endpoints is the assertion, not decoration.** #348 shipped this text describing an
 action the operator had no way to perform; the point of this step is that it now tells them exactly which
@@ -112,22 +95,17 @@ call resolves it.
 
 ### 5. Apply the remedy through the endpoints, and confirm the reset then works
 
-```powershell
-$list = Invoke-RestMethod -Uri $base -Headers $key
-"totalCount=$($list.totalCount)"
-$list.items | ForEach-Object { "  $($_.name) $($_.sizeBytes)" }
-
-Invoke-RestMethod -Uri "$base/filler.db" -Method DELETE -Headers $key
-
-$after = Invoke-RestMethod -Uri "$base/status" -Headers $key
-"canBackUp=$($after.canBackUp) reserveInUse=$($after.storage.reserveInUse)"
-
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18385/api/v1/admin/database/reset" `
-  --method POST --expect 200 --status
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18385/api/v1/admin/backups --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-05-out\list.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-05-out\list.json --equals totalCount=2 --contains items=filler.db
+dotnet script scripts/testing/http.csx -- --method DELETE --url http://localhost:18385/api/v1/admin/backups/filler.db --expect 204 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18385/api/v1/admin/backups/status --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-05-out\status-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-05-out\status-after.json --equals canBackUp=true --equals storage.reserveInUse=false
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18385/api/v1/admin/database/reset --expect 200 --status
 ```
 
-**Expected:** the list reports both files with their sizes; the delete returns `204`; status returns to
-`canBackUp=True`, `reserveInUse=False`; and the reset returns `200`.
+**Expected:** the list reports two files, the filler among them; the delete returns `204`; status returns
+to a backup being possible with the reserve not in use; and the reset returns `200`.
 
 **This closes the loop the issue was filed for:** the obstacle was reached, the message named a remedy,
 the remedy was performed through the API alone with no filesystem access, and the action that had refused
@@ -135,45 +113,35 @@ now succeeds.
 
 ### 6. Confirm the download returns the backup byte for byte
 
-```powershell
-$name = (Invoke-RestMethod -Uri $base -Headers $key).items[0].name
-Invoke-WebRequest -Uri "$base/$name/content" -Headers $key -OutFile "$dataDir\downloaded.db" -UseBasicParsing
-
-$a = (Get-FileHash "$dataDir\backups\$name" -Algorithm SHA256).Hash
-$b = (Get-FileHash "$dataDir\downloaded.db"  -Algorithm SHA256).Hash
-"match=$($a -eq $b)"
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18385/api/v1/admin/backups --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-05-out\list-after.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18385/api/v1/admin/backups/{name}/content" --value name=C:\repos\Quotinator\.claude\temp\qt-backup-05-out\list-after.json#items.0.name --out C:\repos\Quotinator\.claude\temp\qt-backup-05-out\content-url.txt
+dotnet script scripts/testing/http.csx -- --url-file C:\repos\Quotinator\.claude\temp\qt-backup-05-out\content-url.txt --expect 200 --save C:\repos\Quotinator\.claude\temp\qt-backup-05-out\downloaded.db
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-identical-in C:\repos\Quotinator\.claude\temp\qt-backup-05-out\downloaded.db C:\repos\Quotinator\.claude\temp\qt-backup-05\backups
 ```
 
-**Expected:** `match=True`.
+**Expected:** the download answers `200`, and the `file` command exits `0`, naming the stored backup the
+download is identical to.
 
-**Two assertions in one.** The hashes matching says the download is byte-for-byte. Reading the *stored*
-file from the host at all says no handle is still held on it: the leak that made an immediate download
-fail with an unhandled `500` in T1. A `Get-FileHash` that cannot open the stored file is that leak
-returning, not a test problem.
+**Two assertions in one.** A match says the download is byte for byte. Reading the *stored* files from the
+host at all says no handle is still held on them: the leak that made an immediate download fail with an
+unhandled `500` in T1. A check that cannot open a stored file is that leak returning, not a test problem.
 
 **On failure:** a downloaded backup that does not match the stored file is not a restore point, whatever
 the status code said.
 
 ### 7. Confirm a removal the filesystem refuses says so, rather than failing raw
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-05 --port 18385 `
-  --image quotinator:local --bind $dataDir --read-only-data --wait-listening
-
-$name = (Invoke-RestMethod -Uri $base -Headers $key).items[0].name
-try {
-  Invoke-WebRequest -Uri "$base/$name" -Method DELETE -Headers $key -UseBasicParsing
-} catch {
-  $resp   = $_.Exception.Response
-  $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
-  $body   = $reader.ReadToEnd(); $reader.Close()
-  "status=$($resp.StatusCode.value__)"
-  ($body | ConvertFrom-Json).detail
-}
+```
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-05 --port 18385 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-backup-05 --read-only-data --wait-listening
+dotnet script scripts/testing/http.csx -- --url http://localhost:18385/api/v1/admin/backups --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-05-out\list-read-only.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18385/api/v1/admin/backups/{name}" --value name=C:\repos\Quotinator\.claude\temp\qt-backup-05-out\list-read-only.json#items.0.name --out C:\repos\Quotinator\.claude\temp\qt-backup-05-out\delete-url.txt
+dotnet script scripts/testing/http.csx -- --method DELETE --url-file C:\repos\Quotinator\.claude\temp\qt-backup-05-out\delete-url.txt --expect 409 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-05-out\delete-refused.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-05-out\delete-refused.json --contains "detail=could not be removed" --contains detail=read-only
 ```
 
-**Expected:** `409`, and a detail saying the backup exists but could not be removed because the data
-directory is read-only.
+**Expected:** the listing still answers `200` on the read-only mount, and the removal answers `409` with a
+detail saying the backup exists but could not be removed because the data directory is read-only.
 
 **This is the case the endpoint is most likely to meet in anger:** a read-only mount is what degrades
 startup in the first place, and removing old backups is what the operator is then told to do. The
@@ -181,6 +149,19 @@ listing still answers on the same mount, so the operator can see what is there e
 remove it.
 
 ## Observed effect
+
+**Measured 2026-11-08** against `quotinator:local` built from `01ab4ef6`, in this form and in the
+PowerShell form it replaced. A fresh install reports a backup possible with `0` bytes used against a
+`966,367,641`-byte quota; `create` answers `201` with a 4.7 MB backup. With the 1 GB filler in place the
+status reads `BudgetExceeded`, reserve in use, three remedies, the first naming the list and delete
+endpoints, and a reset answers `409` with the same obstacle. Listing shows both files; deleting the filler
+answers `204`, status recovers, and the reset answers `200`. The downloaded backup, `4,689,920` bytes, is
+identical to the stored backup the reset took, read from the host. On a read-only mount the listing still
+answers and the removal answers `409`, naming the read-only data directory.
+
+The two stored backups carry different version numbers in their names, `_v28_` from `create` and `_v9_`
+from the reset, for the same database: see the Knowledgebase entry
+[*Two backups of the same database show different version numbers*](../../knowledgebase/two-backups-of-one-database-show-different-versions.md).
 
 **Measured 2026-08-29** against `quotinator:local`, before #348's reserve, when step 3 filled to 95% and
 the operating quota refused a backup. Step 3 has filled to the ceiling since.
@@ -237,8 +218,9 @@ Remove the container, image and worktree afterwards.
 
 ## Cleanup
 
-```powershell
-$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-05"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-05 --bind $dataDir
-Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
 ```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-05 --bind C:\repos\Quotinator\.claude\temp\qt-backup-05
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-05 --delete C:\repos\Quotinator\.claude\temp\qt-backup-05-out
+```
+
+**Expected:** the container and both directories are gone.
