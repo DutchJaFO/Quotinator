@@ -551,6 +551,7 @@
     <File Path="scripts/testing/page-scripts/audit-operations.js" />
     <File Path="scripts/testing/page-scripts/degraded-home-text.js" />
     <File Path="scripts/testing/page-scripts/degraded-page-unwritable-data.js" />
+    <File Path="scripts/testing/page-scripts/knowledgebase-link.js" />
     <File Path="scripts/testing/page-scripts/notification-action-cancel.js" />
     <File Path="scripts/testing/page-scripts/notification-action-confirm.js" />
     <File Path="scripts/testing/page-scripts/notification-detail-dialog.js" />

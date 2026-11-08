@@ -112,6 +112,67 @@ public sealed class JsonExpectationParserTests
     }
 
     [TestMethod]
+    public void Parse_EqualsJson_ExpectsTheValueFromTheOtherFile()
+    {
+        string file = WriteTempFile("[{\"Recorded\": 5}]");
+
+        try
+        {
+            IReadOnlyList<JsonExpectation> parsed = JsonExpectationParser.Parse(["--equals-json", $"0.Recorded={file}#0.Recorded"], out _);
+
+            Assert.AreEqual(new JsonExpectation(JsonExpectationKind.EqualTo, "0.Recorded", "5"), parsed[0]);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [TestMethod]
+    public void Parse_GreaterThanJson_ExpectsMoreThanTheValueFromTheOtherFile()
+    {
+        string file = WriteTempFile("{\"database\": {\"schemaVersion\": 5}}");
+
+        try
+        {
+            IReadOnlyList<JsonExpectation> parsed = JsonExpectationParser.Parse(["--greater-than-json", $"database.schemaVersion={file}#database.schemaVersion"], out _);
+
+            Assert.AreEqual(new JsonExpectation(JsonExpectationKind.GreaterThan, "database.schemaVersion", "5"), parsed[0]);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [TestMethod]
+    public void Parse_EqualsJsonWithAPathTheFileDoesNotHave_IsAnError()
+    {
+        string file = WriteTempFile("{}");
+
+        try
+        {
+            _ = JsonExpectationParser.Parse(["--equals-json", $"a={file}#missing"], out IReadOnlyList<string> errors);
+
+            Assert.HasCount(1, errors);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [TestMethod]
+    public void Parse_EqualsJsonWithAMissingFile_IsAnError()
+    {
+        string file = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.json");
+
+        _ = JsonExpectationParser.Parse(["--equals-json", $"a={file}#a"], out IReadOnlyList<string> errors);
+
+        Assert.HasCount(1, errors);
+    }
+
+    [TestMethod]
     public void Parse_EqualsXml_ExpectsTheElementsTextFromTheFile()
     {
         string file = WriteTempFile("<Project><PropertyGroup><Version>1.2.3-alpha</Version></PropertyGroup></Project>");

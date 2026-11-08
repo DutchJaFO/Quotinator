@@ -9,6 +9,14 @@ internal static class JsonExpectationParser
 {
     private const string EqualsXmlOption = "--equals-xml";
 
+    // Each compares against a value read from another JSON file when the options are parsed, so a document
+    // compares two readings it saved at different moments without copying either one into its text.
+    private static readonly Dictionary<string, JsonExpectationKind> FromOtherFileByOption = new()
+    {
+        ["--equals-json"] = JsonExpectationKind.EqualTo,
+        ["--greater-than-json"] = JsonExpectationKind.GreaterThan,
+    };
+
     private static readonly Dictionary<string, JsonExpectationKind> KindsByOption = new()
     {
         ["--equals"] = JsonExpectationKind.EqualTo,
@@ -39,9 +47,9 @@ internal static class JsonExpectationParser
         {
             string option = args[index];
             bool isEqualsXml = option == EqualsXmlOption;
-            JsonExpectationKind kind = JsonExpectationKind.EqualTo;
+            bool isFromOtherFile = FromOtherFileByOption.TryGetValue(option, out JsonExpectationKind kind);
 
-            if (!isEqualsXml && !KindsByOption.TryGetValue(option, out kind))
+            if (!isEqualsXml && !isFromOtherFile && !KindsByOption.TryGetValue(option, out kind))
             {
                 problems.Add($"unknown option '{option}'");
                 break;
@@ -84,6 +92,19 @@ internal static class JsonExpectationParser
                 value = expected;
             }
 
+            if (isFromOtherFile)
+            {
+                string? expected = ReadJsonValue(value, out string? problem);
+
+                if (expected is null)
+                {
+                    problems.Add($"{option}: {problem}");
+                    continue;
+                }
+
+                value = expected;
+            }
+
             if (kind is JsonExpectationKind.GreaterThan or JsonExpectationKind.LengthEquals && !decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
             {
                 problems.Add($"{option} needs a number after '=', got '{value}'");
@@ -95,6 +116,37 @@ internal static class JsonExpectationParser
 
         errors = problems;
         return expectations;
+    }
+
+    private static string? ReadJsonValue(string source, out string? problem)
+    {
+        int separator = source.LastIndexOf('#');
+
+        if (separator <= 0 || separator == source.Length - 1)
+        {
+            problem = $"needs path=file#path, got '{source}'";
+            return null;
+        }
+
+        string file = source[..separator];
+        string path = source[(separator + 1)..];
+
+        if (!File.Exists(file))
+        {
+            problem = $"no file at '{file}'";
+            return null;
+        }
+
+        using System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file));
+
+        if (!JsonPathReader.TryRead(document.RootElement, path, out System.Text.Json.JsonElement element))
+        {
+            problem = $"'{file}' has no value at '{path}'";
+            return null;
+        }
+
+        problem = null;
+        return JsonPathReader.Render(element);
     }
 
     private static string? ReadXmlElement(string source, out string? problem)
