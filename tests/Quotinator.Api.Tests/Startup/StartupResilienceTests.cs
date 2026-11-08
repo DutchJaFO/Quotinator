@@ -10,6 +10,7 @@ using Quotinator.Api.Startup;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.Database;
@@ -574,6 +575,33 @@ public class StartupResilienceTests
 
         Assert.AreEqual(HttpStatusCode.ServiceUnavailable, health.StatusCode, "precondition: the application degraded");
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, $"{route} must render degraded UI, not 500");
+    }
+
+    /// <summary>
+    /// #305 (R2): a changelog database whose schema does not match is not loaded into; the changelog falls
+    /// back to its JSON files, and main-database health is unaffected. The sabotage is a dropped index,
+    /// which the import would tolerate, so only the check can be what stops it: a dropped table makes the
+    /// import fail on its own and would pass without the check.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_ChangelogSchemaDifference_FallsBackToTheJsonFilesAndStaysHealthy()
+    {
+        string dataDirectory = DataDirectoryWithAMigratedDatabase();
+        using (IDbConnection connection =
+            new SqliteConnectionFactory(Path.Combine(dataDirectory, DataPaths.ChangelogDatabaseFile)).CreateConnection())
+        {
+            connection.Execute("DROP INDEX IX_Changelog_Line_ChangelogEntryId;");
+        }
+        SqliteConnection.ClearAllPools();
+
+        using WebApplicationFactory<Program> factory = FactoryFor(dataDirectory);
+        using HttpClient client = factory.CreateClient();
+
+        Assert.AreEqual(HttpStatusCode.OK, (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode,
+            "a changelog database that does not match must not affect main-database health");
+        Assert.AreEqual(ChangelogImportOutcome.Failed,
+            await factory.Services.GetRequiredService<IChangelogImportReadiness>().WaitAsync(TestContext.CancellationToken),
+            "the import must not run into a schema known not to match, so the reader serves the JSON files");
     }
 
     /// <summary>#305: the remedy the reason names works: a Reset rebuilds the schema and health returns.</summary>

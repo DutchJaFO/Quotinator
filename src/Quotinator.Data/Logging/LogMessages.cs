@@ -116,6 +116,18 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Warning, Message = "[Notifications - Conditions] the condition checks could not run, so any notification whose condition changed still says what it said before. The action that ran before them is unaffected and its own answer stands")]
     public static partial void LogNotificationConditionChecksFailed(this ILogger logger, Exception exception);
 
+    /// <summary>Logs one object the changelog database's schema is missing, or holds differently from what its migration path defines (#305).</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Changelog - Init] schema integrity: {Kind:l} {ObjectKind:l} {ObjectName:l}{Detail:l}")]
+    public static partial void LogChangelogSchemaDifference(this ILogger logger, string kind, string objectKind, string objectName, string detail);
+
+    /// <summary>Logs one object the changelog database's schema holds that no migration defines (#305): reported, never a failure.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Changelog - Init] schema integrity: extra {ObjectKind:l} {ObjectName:l} that no migration defines; a migration may have been missed")]
+    public static partial void LogChangelogSchemaExtraObject(this ILogger logger, string objectKind, string objectName);
+
+    /// <summary>Logs that the changelog database's schema does not match its migration path, so the changelog is served from its JSON files (#305).</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Changelog - Init] the schema does not match what its version defines: {Count} object(s) missing or different. Nothing is loaded into it, and the changelog is served from its JSON files; main database health is unaffected")]
+    public static partial void LogChangelogSchemaNotIntact(this ILogger logger, int count);
+
     /// <summary>Logs that the separate changelog database's schema is already fully up to date: no migration needed.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "[Changelog - Init] schema is up to date (v{Version})")]
     public static partial void LogChangelogSchemaUpToDate(this ILogger logger, int version);

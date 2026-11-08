@@ -1,6 +1,6 @@
 # #305: Database integrity check: verify every database's full schema against its migration path at startup
 
-**Status:** In progress (step 10)
+**Status:** In progress (step 11)
 **GitHub issue:** #305
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 10: run the check on the changelog database at startup, falling back to the JSON files when it is not intact.** Every decision is settled (see
+**Execute from step 11: prove each test is wired to its behaviour by mutation.** Every decision is settled (see
 *Decisions*, including D5, found in step 3), the ADR 003 and ADR 009 amendments were approved on
 2026-11-07, and the issue's title and body reflect the widened scope.
 
@@ -502,10 +502,24 @@ Findings, 2026-11-08:
 
 ### 10. Wire the changelog database
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `ChangelogDatabaseInitializer` runs the same check after its migrations. A not-intact result is logged
 at `Error` and the reader falls back to the authored JSON (R2).
+
+Findings, 2026-11-08:
+
+- **The check runs after every initialisation path** (baseline, up to date, migrated) and records its
+  result. Each difference is logged at `Error` and each extra at `Warning` with the `[Changelog - Init]`
+  prefix, and a summary line says the changelog is served from its JSON files and main health is
+  unaffected. Initialisation does not fail.
+- **`Program.cs` marks the changelog import failed instead of running it** when the result is not intact,
+  so the reader serves the JSON files; the content refresh never writes into the schema.
+- **A dropped table could not prove that wiring**: the import fails on its own without the table, and the
+  reader falls back regardless, so a test built on it passed before `Program.cs` changed.
+  `StartupResilienceTests.Startup_ChangelogSchemaDifference_FallsBackToTheJsonFilesAndStaysHealthy` drops
+  `IX_Changelog_Line_ChangelogEntryId` instead, which the import tolerates, and was red before the change.
+- **Row 17 is green.** The full run is green with 0 warnings.
 
 ### 11. Prove each test is wired to the behaviour
 
@@ -586,7 +600,7 @@ in step 6; rows 20 and 21 are written red in step 7.
 | 14 | ✅ | The reader captures each aspect from a real database, and reads the schema a list of scripts creates in a scratch database of its own | Integration test | `SqliteSchemaSnapshotReaderTests.ReadsTablesColumnsForeignKeysIndexesViewsAndTriggers`, `SqliteSchemaSnapshotReaderTests.ReadScriptsAsync_ReadsTheSchemaTheScriptsCreate` |
 | 15 | ✅ | Main startup: a difference stops the content load, takes no backup and writes nothing; a complete database loads normally | Integration test | `DatabaseIntegrityCheckTests.MissingExpectedTable_DetectedAsSchemaInconsistency_TreatedAsHardFailure`, `DatabaseIntegrityCheckTests.Difference_ContentLoadDoesNotRunAndNothingIsWritten`, `DatabaseIntegrityCheckTests.AllExpectedTablesPresent_PassesCleanly` |
 | 16 | ✅ | The check does not run on a refused migration or an overshoot | Integration test | `DatabaseIntegrityCheckTests.MigrationRefused_IntegrityNotChecked`, `DatabaseIntegrityCheckTests.SchemaVersionOvershoot_IntegrityNotChecked` |
-| 17 | ❌ | Every database declaring migrations performs the check; a changelog database that is not intact is reported without failing its initialisation, so the changelog falls back to the JSON files without affecting main health; a Reset re-runs the check before clearing health, and each of its callers keeps a not-intact Reset degraded on the new reason rather than reporting a refused backup | Unit test / Integration test | `RepositoryStructureTests.EveryDatabaseWithMigrations_PerformsTheIntegrityCheck`, `ChangelogDatabaseInitializerTests.Integrity_MissingTable_ReportedWithoutFailingInitialisation`, `DatabaseIntegrityCheckTests.Reset_RerunsTheCheckBeforeClearingHealth`, `AdminEndpointsTests.ResetRebuiltSchemaNotIntact_Returns500NamingTheObjectAndStaysDegraded`, `NotificationActionExecutorTests.DatabaseReset_WhenNotIntact_StaysUnhealthyWithTheNewReason`, `NotificationActionExecutorTests.DatabaseReset_WhenNotIntact_ReportsTheReasonRatherThanABackupObstacle`, `NotificationActionExecutorTests.DatabaseReset_WhenNotIntact_LeavesTheNotificationActive`, `DatabaseRepairActionsTests.ResetNotIntact_NamesWhatIsStillWrong` |
+| 17 | ✅ | Every database declaring migrations performs the check; a changelog database that is not intact is reported without failing its initialisation, so the changelog falls back to the JSON files without affecting main health; a Reset re-runs the check before clearing health, and each of its callers keeps a not-intact Reset degraded on the new reason rather than reporting a refused backup | Unit test / Integration test | `RepositoryStructureTests.EveryDatabaseWithMigrations_PerformsTheIntegrityCheck`, `ChangelogDatabaseInitializerTests.Integrity_MissingTable_ReportedWithoutFailingInitialisation`, `StartupResilienceTests.Startup_ChangelogSchemaDifference_FallsBackToTheJsonFilesAndStaysHealthy`, `DatabaseIntegrityCheckTests.Reset_RerunsTheCheckBeforeClearingHealth`, `AdminEndpointsTests.ResetRebuiltSchemaNotIntact_Returns500NamingTheObjectAndStaysDegraded`, `NotificationActionExecutorTests.DatabaseReset_WhenNotIntact_StaysUnhealthyWithTheNewReason`, `NotificationActionExecutorTests.DatabaseReset_WhenNotIntact_ReportsTheReasonRatherThanABackupObstacle`, `NotificationActionExecutorTests.DatabaseReset_WhenNotIntact_LeavesTheNotificationActive`, `DatabaseRepairActionsTests.ResetNotIntact_NamesWhatIsStillWrong` |
 | 18 | ✅ | Against the real schema, a missing table or column degrades startup with a reason naming it and both remedies; quote endpoints are gated; pages render degraded; a Reset restores health; a complete database is healthy | Integration test | `StartupResilienceTests.Startup_SchemaDifference_HealthReportsUnhealthy`, `StartupResilienceTests.Startup_SchemaDifference_HealthReasonNamesTheObject`, `StartupResilienceTests.Startup_SchemaDifference_QuoteEndpointsAreGated`, `StartupResilienceTests.Startup_SchemaDifference_BlazorPageRendersDegradedUi`, `StartupResilienceTests.Startup_SchemaDifference_ResetRestoresHealth`, `StartupResilienceTests.Startup_RestartOverAnIntactDatabase_ReportsHealthy` (existing, the positive control) |
 | 19 | ✅ | The reason names every difference in engine-neutral words, and both remedies | Unit test | `SchemaIntegrityGuidanceTests.Reason_NamesEveryDifference`, `SchemaIntegrityGuidanceTests.Reason_NamesResetAndRestore`, `SchemaIntegrityGuidanceTests.Reason_UsesNoEngineMetadataNames` |
 | 20 | ❌ | Live: a removed table, and a removed column, each degrade the container with a named reason, and a Reset recovers it; a pre-issue build does not degrade | Live (Docker) | `automated-testing/startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md`, green on this build, red as its canary |

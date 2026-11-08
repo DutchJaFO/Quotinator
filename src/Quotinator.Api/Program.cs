@@ -957,9 +957,15 @@ await app.StartAsync();
 // Step 14 removed a keep-alive connection that was eagerly resolved here: it existed only to stop the
 // former shared-cache in-memory database from being destroyed when its last connection closed. A file
 // needs no such scaffolding.
+// #305 (R2): a changelog schema that does not match its migration path is not loaded into. The
+// initializer has already logged every difference at Error; marking the import failed sends the reader
+// to the JSON files, and the content refresh below is not started. Main-database health is untouched.
+bool changelogSchemaIntact = true;
 try
 {
-    await app.Services.GetRequiredService<ChangelogDatabaseInitializer>().InitialiseAsync();
+    ChangelogDatabaseInitializer changelogInitializer = app.Services.GetRequiredService<ChangelogDatabaseInitializer>();
+    await changelogInitializer.InitialiseAsync();
+    changelogSchemaIntact = changelogInitializer.LastIntegrityResult?.IsIntact ?? true;
 }
 catch (Exception ex)
 {
@@ -985,6 +991,12 @@ startupBackgroundWork.Start(async () =>
     // rather than assuming the emptiness is meaningful, so a silent return here would leave it waiting
     // out its whole budget before falling back.
     IChangelogImportReadiness readiness = app.Services.GetRequiredService<IChangelogImportReadiness>();
+    if (!changelogSchemaIntact)
+    {
+        readiness.MarkFailed();
+        return;
+    }
+
     try
     {
         await app.Services.GetRequiredService<ChangelogSystemContentImporter>().RefreshAsync();

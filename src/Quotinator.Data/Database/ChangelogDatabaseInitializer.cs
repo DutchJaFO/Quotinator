@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Logging;
 using Quotinator.Data.Queries;
 using Quotinator.Data.Schema;
@@ -87,6 +88,36 @@ public sealed class ChangelogDatabaseInitializer(
     internal Task InitialiseForTestingAsync(bool forceIncremental) => InitialiseAsync(forceIncremental);
 
     private async Task InitialiseAsync(bool forceIncremental)
+    {
+        await ApplySchemaAsync(forceIncremental);
+        await RecordIntegrityAsync();
+    }
+
+    /// <summary>
+    /// Runs the integrity check after this database's migrations (#305), records it as
+    /// <see cref="LastIntegrityResult"/>, and logs every difference and every extra object. A result that
+    /// is not intact does not fail initialisation: the caller falls back to the JSON files (R2).
+    /// </summary>
+    private async Task RecordIntegrityAsync()
+    {
+        SchemaIntegrityResult result = await CheckIntegrityAsync();
+        LastIntegrityResult = result;
+
+        foreach (SchemaDifference difference in result.Differences)
+        {
+            if (difference.Kind == SchemaDifferenceKind.Extra)
+                logger.LogChangelogSchemaExtraObject(difference.ObjectKind.ToString(), difference.ObjectName);
+            else
+                logger.LogChangelogSchemaDifference(
+                    difference.Kind.ToString(), difference.ObjectKind.ToString(), difference.ObjectName,
+                    difference.Aspect is null ? string.Empty : $" ({difference.Aspect}: expected '{difference.Expected}', actual '{difference.Actual}')");
+        }
+
+        if (!result.IsIntact)
+            logger.LogChangelogSchemaNotIntact(result.Differences.Count(d => d.Kind != SchemaDifferenceKind.Extra));
+    }
+
+    private async Task ApplySchemaAsync(bool forceIncremental)
     {
         using SqliteConnection connection = (SqliteConnection)factory.CreateConnection();
         await connection.OpenAsync();
