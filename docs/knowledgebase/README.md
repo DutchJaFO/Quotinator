@@ -28,7 +28,7 @@ per `knowledgebase.md`'s bootstrapping rule, entries come first and codes are as
 | [/version reports old counts after an import](version-counts-are-stale-after-an-import.md) | No | 1.9.0-alpha, the only version measured |
 | [Applying an import batch answers 200, but nothing was imported](applying-a-batch-that-does-not-exist-answers-200.md) | No | 1.9.0-alpha, the only version measured |
 | [A quote's date is missing after an import that reported success](a-quote-date-is-lost-when-its-source-is-declared-without-one.md) | No | 1.9.0-alpha, the only version measured |
-| [The database is empty after a Reset from a notification, and no notification says so](a-reset-from-a-notification-leaves-no-reseed-recommendation.md) | No | 1.9.0-alpha, the only version measured |
+| [The database is empty after a Reset from a notification or the degraded page, and no notification says so](a-reset-from-a-notification-leaves-no-reseed-recommendation.md) | No | 1.9.0-alpha, the only version measured |
 | [The review list is empty, but a file is waiting for review](an-unknown-status-on-import-actions-answers-200.md) | No | 1.9.0-alpha, the only version measured |
 | [The log shows the same exception thrown several times](one-exception-is-logged-as-thrown-several-times.md) | No | 1.9.0-alpha, the only version measured |
 | [A notification's metadata mixes field-name styles, and shows a number for its reason](notification-metadata-field-names-differ-by-kind.md) | No | 1.9.0-alpha, the only version measured |
