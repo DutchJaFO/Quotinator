@@ -25,9 +25,9 @@ public static class AuditMigrations
         """;
 
     /// <summary>
-    /// Renames <c>AuditEntries</c> to <c>System_AuditEntries</c> (and its two indexes) so the table
-    /// is recognised as protected system data by <c>Sql.Schema.GetUserTables</c>'s generic, escaped
-    /// <c>System\_%</c> pattern match.
+    /// Renames <c>AuditEntries</c> to <c>System_AuditEntries</c> (and its two indexes). The prefix once
+    /// kept the table through a Reset; a Reset now replaces the whole database (ADR 027), and the
+    /// migration text stays as it shipped.
     /// </summary>
     public const string RenameAuditEntriesToSystemAuditEntries = """
         ALTER TABLE AuditEntries RENAME TO System_AuditEntries;

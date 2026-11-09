@@ -58,9 +58,9 @@ internal static class Sql
 
         // Detects a completely empty database — zero tables of any kind, including the version
         // tables themselves. Used to decide whether a fresh database can take the one-step baseline
-        // path instead of replaying migration history. Deliberately not GetUserTables (below),
-        // which excludes System_-prefixed tables by design — a database containing only an empty
-        // version table is not "empty" for baseline purposes.
+        // path instead of replaying migration history. Every table counts, the version tables
+        // included: a database containing only an empty version table is not "empty" for baseline
+        // purposes.
         internal const string AnyTableExists =
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%';";
 

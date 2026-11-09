@@ -314,10 +314,10 @@ internal static class AdminEndpoints
 
             dbHealth.MarkHealthy();
             // #278: dismiss any ActionRequired notification recommending a Reset, now that one has
-            // actually completed. Reset itself drops and rebuilds System_Notification along with
-            // every other table (no protected/excluded set; see CLAUDE.md's "No exception-based
-            // migration recovery"), so in practice this call always affects zero rows immediately
-            // after ResetAsync: the table is already empty. Kept anyway, matching #278's own
+            // actually completed. Reset replaces the whole database, System_Notification included
+            // (ADR 027), and the only row it writes itself, #482's set-aside notice, carries no
+            // dismiss trigger, so in practice this call always affects zero rows immediately after
+            // ResetAsync. Kept anyway, matching #278's own
             // explicit wiring instruction: it's the correct call site for the general mechanism
             // (a future action that does *not* wipe the whole database would make it load-bearing),
             // and it's harmless here.
@@ -329,8 +329,8 @@ internal static class AdminEndpoints
             // caller reset in order to decide what goes back in, and choosing for them is the exact
             // bundled-side-effect that policy forbids.
             //
-            // After ResetAsync, never before: the reset drops and rebuilds System_Notification with
-            // every other table, so a row written earlier would not survive.
+            // After ResetAsync, never before: the reset replaces the whole database, so a row written
+            // earlier would not survive.
             await NotificationSeeding.SeedWhileUnresolvedAsync(
                 notificationReader, notificationWriter, NotificationType.ActionRequired,
                 new ReseedRecommendedMetadataDto

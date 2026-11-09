@@ -1039,7 +1039,7 @@ public sealed class QuotinatorDatabaseInitializer(
     // declare its own url/github manifest entry is still UserSeed, never Seed, so provenance
     // always reflects which folder the file was actually scanned from. A bundled file is always
     // Seed regardless of whether it has a URL; "System" is reserved for the database's own
-    // System_-prefixed infrastructure tables (see Sql.Schema.GetUserTables), not for quote
+    // System_-prefixed infrastructure tables (ADR 015's domain prefixes), not for quote
     // content provenance; internally-authored bundled content (e.g. quotinator-curated.json) is
     // still replaceable, re-seeded content, just like externally-sourced bundled content.
     private static ImportBatchType DetermineType(SeedBatchOrigin origin) =>

@@ -149,15 +149,18 @@ public interface IDatabaseInitializer : IIntegrityCheckedDatabase
     Task ReseedAsync(bool forceSourceRefresh = false);
 
     /// <summary>
-    /// Drops and rebuilds the entire database from the fresh-database baseline schema. Does not
-    /// reimport any source file afterward; reimporting bundled/user content is a separate, deliberate
-    /// operator decision (a subsequent reseed), not something Reset should force as a side effect.
-    /// Updates the row-count properties when done. No table is protected from the wipe, including
+    /// Replaces the whole database with a new one built from the fresh-database baseline schema,
+    /// whatever state the old file is in (ADR 027). A readable database is backed up first; a file
+    /// that cannot be read is set aside in the backup folder's reserved folder instead (ADR 025). Does
+    /// not reimport any source file afterward; reimporting bundled/user content is a separate,
+    /// deliberate operator decision (a subsequent reseed), not something Reset should force as a side
+    /// effect. Updates the row-count properties when done. No table survives, including the
     /// audit-trail tables; see ADR 014.
     /// </summary>
     /// <param name="preserveSchemaVersion">
-    /// When <c>true</c>, existing schema migration history is left untouched instead of being cleared
-    /// and replayed from scratch. Defaults to <c>false</c>, matching the historical behaviour.
+    /// When <c>true</c>, both version tables' per-version rows are carried into the new database in
+    /// place of the single row the baseline writes. A file that cannot be read keeps the baseline's
+    /// rows. Defaults to <c>false</c>.
     /// </param>
     /// <param name="forceSourceRefresh">Same meaning as <see cref="ReseedAsync"/>'s parameter of the same name.</param>
     /// <param name="allowNoBackup">
@@ -167,9 +170,9 @@ public interface IDatabaseInitializer : IIntegrityCheckedDatabase
     /// nobody later hunts for a backup that was never made.
     /// </param>
     /// <returns>
-    /// Whether the reset ran, and if not, which backup obstacle refused it. Refusing is a result rather
-    /// than an exception: a full backup folder is an ordinary operating condition with remedies, not an
-    /// unforeseen fault.
+    /// Whether the reset ran, and if not, which backup obstacle or reset obstacle refused it. Refusing is
+    /// a result rather than an exception: a full backup folder or an unwritable data directory is an
+    /// ordinary operating condition with remedies, not an unforeseen fault.
     /// </returns>
     Task<DatabaseOperationResult> ResetAsync(
         bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false);
