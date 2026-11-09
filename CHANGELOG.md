@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-11-08 21:37 UTC]: do not edit by hand.*
+##### *GENERATED FILE [2026-11-09 08:41 UTC]: do not edit by hand.*
 
 # Changelog
 
@@ -34,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - When a quote file brings changes that need your decision, Quotinator now tells you instead of leaving them to be discovered. A new Import review page lists every such change, and both the notification and the page let you keep what is stored or take what the file brought. Most conflicts are still best fixed by correcting the file and reloading; a fuller side-by-side review is planned.
 - Quotinator now writes every error it runs into to its log, including the ones it deals with itself, so a problem can be traced wherever Quotinator runs: each error carries a short reference that ties together every line written about it.
 - Quotinator no longer downloads updated quote sources when it starts, unless you turn that on. It uses the quotes that come with each release as they are, so a slow or unreachable download site can no longer hold up startup. If you relied on the automatic update, turn it back on in the add-on's options or in your configuration.
+- If your database file is damaged or not a database at all, resetting it now works. Quotinator moves the damaged file aside, where you can still find it, and starts you again with a new database, instead of refusing the reset and leaving you to delete the file by hand.
 
 ### Added
 - A schema integrity check at startup: the main database and the changelog database are each compared, case-sensitively, with the full schema their recorded version should have: tables, columns, foreign keys, indexes, views and triggers. A main database missing part of its schema, or holding part of it in a different shape, degrades startup with a reason naming each difference and a Knowledgebase entry; a changelog database that differs falls back to the changelog files. An addition beyond the schema is reported without degrading. `GET /api/v1/admin/database/integrity` runs the same comparison on request, and DbInspector's `integrity` command runs it against a database file (issue #305)
@@ -132,6 +133,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Re-importing the bundled quote data no longer repeatedly flags the same already-resolved conflicts for review on every reseed: a correction that already fixed a conflict on one reseed is now correctly recognised as still fixed on the next, instead of being flagged as broken again every time (issue #374)
 - A curator's decision to keep a quote's original date when two conflicting copies of it exist now actually takes effect. Previously it could be silently overridden by whichever copy was processed last, so the quote could keep showing the wrong date even after the conflict was supposedly resolved (issue #378)
 - Stopping the application while its startup work was still running in the background left that work running against services already shut down, with its database connections still open. The application now waits for that work to finish before it reports stopped (issue #424)
+- A reset of a database file that could not be read was refused, with or without the option to skip the backup, leaving stopping the application and deleting the file by hand as the only way out. A reset now rebuilds the database whatever state the old file is in: a file that cannot be read is never treated as a backup, but moved with its write-ahead files into an `unreadable` folder inside the backup folder, where it counts towards backup storage, and a notification names it. A failed backup copy also no longer leaves a partial file that the backup list offered as a restore point (issue #482)
 
 ### Removed
 - The `Quotinator__NotificationDefaultExpiryHours` setting has been removed. It set how long a notification stayed visible before expiring, which no longer applies now that notifications only expire when the one that created it says so: the setting had nothing left to control (issue #312)

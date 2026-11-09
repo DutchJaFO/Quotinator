@@ -106,7 +106,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#383](https://github.com/DutchJaFO/Quotinator/issues/383) | Notification detail table has no totals line | Waiting for release | T1 ✅ | [383-notification-detail-totals-line-plan.md](383-notification-detail-totals-line-plan.md) |
 | [#389](https://github.com/DutchJaFO/Quotinator/issues/389) | A staged review batch cannot be discarded once the planner has staged a no-op in it as Applied | Waiting for release | T1 ✅ T2 ✅ | [389-discard-keeps-plan-time-no-ops-plan.md](389-discard-keeps-plan-time-no-ops-plan.md) |
 | [#390](https://github.com/DutchJaFO/Quotinator/issues/390) | A reseed imports the file list captured at startup, not the files currently in either folder | Planning | T1 ⬜ T2 ⬜ | none |
-| [#482](https://github.com/DutchJaFO/Quotinator/issues/482) | A Reset cannot rebuild a database SQLite cannot read | In progress | T1 ⬜ T2 ⬜ | [482-reset-rebuilds-an-unreadable-database-plan.md](482-reset-rebuilds-an-unreadable-database-plan.md) |
+| [#482](https://github.com/DutchJaFO/Quotinator/issues/482) | A Reset cannot rebuild a database SQLite cannot read | In progress | T1 ⬜ T2 ✅ | [482-reset-rebuilds-an-unreadable-database-plan.md](482-reset-rebuilds-an-unreadable-database-plan.md) |
 | [#457](https://github.com/DutchJaFO/Quotinator/issues/457) | The health reason for an unreadable database file misdiagnoses it as a schema-version mismatch | Planning | T1 ⬜ T2 ⬜ | none |
 | [#454](https://github.com/DutchJaFO/Quotinator/issues/454) | The pages answer a bare 500 when the key ring cannot be used, though /health reports the fault | Planning | T1 ⬜ T2 ⬜ | none |
 | [#455](https://github.com/DutchJaFO/Quotinator/issues/455) | An unusable keys directory is reported as an unwritable data directory, and a Reset clears it from /health while it remains | Planning | T1 ⬜ T2 ⬜ | none |
@@ -246,7 +246,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 41 | **#350** ✅ | Waiting for release |
 | 42 | **#339** ✅ | Waiting for release; before #327 and #328 |
 | 43 | **#305** ✅ | Waiting for release; before #327 |
-| 44 | **#482** 🚧 | In progress; before #327 and #457 |
+| 44 | **#482** 🚧 | In progress, T2 done, T1 with the developer; before #327 and #457 |
 | 45 | **#457** | Planning; before #327; after #482 |
 | 46 | **#454** | Planning; before #327, #455 and #456 |
 | 47 | **#455** | Planning; before #327; after #454 |
