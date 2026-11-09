@@ -109,7 +109,7 @@ file in `backups/` itself means something was kept as a backup that must not be.
 
 ```
 dotnet script scripts/testing/http.csx -- --url http://localhost:18381/api/v1/notifications --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-01-out\notifications.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-01-out\notifications.json --where items:metadataKind=UnreadableDatabaseSetAside --length-equals items=1 --contains items.0.body=unreadable
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-01-out\notifications.json --where items:metadataKind=unreadabledatabasesetaside --length-equals items=1 --contains items.0.body=unreadable
 ```
 
 **Expected:** exactly one notification of that kind, whose text names the `unreadable` folder.

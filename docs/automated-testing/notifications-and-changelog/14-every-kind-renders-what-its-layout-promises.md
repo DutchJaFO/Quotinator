@@ -31,13 +31,17 @@ rendering assertion passing over a page nobody could reach in practice:
 | `SchemaVersionOvershoot` | a consumer schema version rolled one past this build, then a restart |
 | `ReseedRecommended` | a database reset, which leaves the database empty |
 
-**`BackupRefused`, `BackupQuotaReached`, `BackupMaxExceeded` and `MigrationApplied` are not produced
-here.** Each needs a state no other kind here shares: a startup that cannot take a backup loads no content
+**`BackupRefused`, `BackupQuotaReached`, `BackupMaxExceeded`, `MigrationApplied` and
+`UnreadableDatabaseSetAside` are not produced here.** Each needs a state no other kind here shares: a
+startup that cannot take a backup loads no content
 ([`../backup/06`](../backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md)), a backups folder
 past its quota or its maximum ([`../backup/08`](../backup/08-backups-continue-from-the-reserve-until-the-ceiling-refuses-one.md)),
-and an upgrade from an earlier build's database
-([`16`](16-each-applied-migration-says-what-it-did.md)). Each of those documents produces its kind and
-renders it on both surfaces. Every cold start here takes the baseline path, which applies no individual
+an upgrade from an earlier build's database
+([`16`](16-each-applied-migration-says-what-it-did.md)), and a Reset of a database file that cannot be
+read ([`../backup/01`](../backup/01-a-reset-sets-aside-a-database-it-cannot-read.md)). Each of the first
+four documents produces its kind and renders it on both surfaces; `backup/01` produces its kind and reads
+it from the API, and its page rendering is the same no-detail, `Dismiss`-only row `DatabaseCreated` has,
+asserted by `NotificationTableTests`. Every cold start here takes the baseline path, which applies no individual
 migration, so `migrationapplied` must be absent, and the exact kind list asserts that it is.
 
 **The overshoot's trigger is a version row, not a notification row.** Inserting `MAX(Version) + 1` into
