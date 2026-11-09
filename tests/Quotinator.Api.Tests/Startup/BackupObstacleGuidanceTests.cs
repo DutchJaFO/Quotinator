@@ -1,4 +1,5 @@
 using Quotinator.Api.Startup;
+using Quotinator.Constants.Routes;
 using Quotinator.Data.Enums;
 
 namespace Quotinator.Api.Tests.Startup;
@@ -61,13 +62,24 @@ public class BackupObstacleGuidanceTests
     }
 
     /// <summary>
-    /// A database SQLite will not open cannot be dropped table by table either, so the override has nothing
-    /// to proceed with. The first version of this guidance offered it anyway.
+    /// An unreadable database cannot be migrated or have content loaded into it without a backup, and the
+    /// override would not change that, so it is never offered for this obstacle. The first version of this
+    /// guidance offered it anyway.
     /// </summary>
     [TestMethod]
     public void SourceUnreadable_DoesNotOfferTheOverride()
     {
         Assert.DoesNotContain(r => r.Contains(OverrideMarker, StringComparison.Ordinal), BackupObstacleGuidance.Remedies(BackupOutcome.SourceUnreadable));
+    }
+
+    /// <summary>
+    /// #482: a Reset sets an unreadable file aside and rebuilds the database, so the remedy for it is a
+    /// Reset run from inside the application, not stopping it to delete the file by hand.
+    /// </summary>
+    [TestMethod]
+    public void SourceUnreadable_OffersAReset()
+    {
+        Assert.Contains(r => r.Contains(ApiRoutes.DatabaseReset, StringComparison.Ordinal), BackupObstacleGuidance.Remedies(BackupOutcome.SourceUnreadable));
     }
 
     /// <summary>Once the override has been tried and still refused, repeating it is advice the request disproved.</summary>

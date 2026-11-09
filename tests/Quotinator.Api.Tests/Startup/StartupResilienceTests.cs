@@ -1,11 +1,13 @@
 using System.Data;
 using System.Net;
+using System.Text.Json;
 using Dapper;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using Quotinator.Api.Services;
 using Quotinator.Api.Startup;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
@@ -622,6 +624,85 @@ public class StartupResilienceTests
         Assert.AreEqual(HttpStatusCode.OK, (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode);
     }
 
+    /// <summary>#482: the Reset the degraded application offers rebuilds a file SQLite cannot read.</summary>
+    [TestMethod]
+    public async Task Startup_DatabaseFileCorrupt_ResetRecoversToHealthy()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase(AdminKey);
+        using HttpClient client = factory.CreateClient();
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable,
+            (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode, "precondition: the application degraded");
+
+        HttpResponseMessage reset = await PostResetAsync(client);
+
+        Assert.AreEqual(HttpStatusCode.OK, reset.StatusCode, await reset.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        Assert.AreEqual(HttpStatusCode.OK, (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode);
+    }
+
+    /// <summary>
+    /// #482: the notification is written after the new database is in place, names the set-aside file, and
+    /// carries its text in every language rather than English only.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_DatabaseFileCorrupt_ResetLeavesANotificationNamingTheSetAsideFile()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase(AdminKey);
+        using HttpClient client = factory.CreateClient();
+        Assert.AreEqual(HttpStatusCode.OK, (await PostResetAsync(client)).StatusCode, "precondition: the Reset ran");
+        string setAside = Path.GetFileName(Assert.ContainsSingle(
+            SetAsideMainFiles(factory), "precondition: the file was set aside"));
+
+        using HttpRequestMessage request = new(HttpMethod.Get, "/api/v1/notifications");
+        request.Headers.Add("Accept-Language", "nl");
+        using JsonDocument doc = JsonDocument.Parse(
+            await (await client.SendAsync(request, TestContext.CancellationToken)).Content.ReadAsStringAsync(TestContext.CancellationToken));
+
+        JsonElement notification = Assert.ContainsSingle(
+            doc.RootElement.GetProperty("items").EnumerateArray()
+               .Where(n => n.GetProperty("metadataKind").GetString() == "UnreadableDatabaseSetAside"),
+            "no set-aside notification was written");
+        Assert.Contains(setAside, notification.GetProperty("body").GetString()!, StringComparison.Ordinal);
+        Assert.IsTrue(notification.GetProperty("isTranslated").GetBoolean(), "the notification's text exists only in English");
+    }
+
+    /// <summary>
+    /// #482: the degraded page's repair action runs the same Reset through the executor, so it recovers an
+    /// unreadable file too, rather than reporting the refusal it used to.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_DatabaseFileCorrupt_RepairActionRecoversToHealthy()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase(AdminKey);
+        using HttpClient client = factory.CreateClient();
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable,
+            (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode, "precondition: the application degraded");
+
+        using IServiceScope scope = factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<INotificationActionExecutor>()
+            .ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
+
+        Assert.AreEqual(HttpStatusCode.OK, (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode);
+    }
+
+    /// <summary>
+    /// #482: a file occupying the reserved folder's name means the unreadable file has nowhere to go. The
+    /// Reset refuses, names that obstacle rather than a backup one, and leaves the file where it was.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_DatabaseFileCorrupt_ResetWhenTheSetAsideFolderCannotBeCreated_Returns409NamingTheObstacle()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase(AdminKey, blockTheSetAsideFolder: true);
+        using HttpClient client = factory.CreateClient();
+
+        HttpResponseMessage reset = await PostResetAsync(client);
+
+        Assert.AreEqual(HttpStatusCode.Conflict, reset.StatusCode);
+        using JsonDocument body = JsonDocument.Parse(await reset.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        Assert.IsTrue(body.RootElement.TryGetProperty("resetObstacle", out JsonElement obstacle), "the refusal names no reset obstacle: " + body.RootElement);
+        Assert.AreEqual("SetAsideFolderNotWritable", obstacle.GetString());
+        Assert.AreEqual(NotADatabase, File.ReadAllText(Path.Combine(DataDirectoryOf(factory), DataPaths.DatabaseFile)), "the unreadable file was not left in place");
+    }
+
     /// <summary>
     /// #327: the positive control for every scenario that sabotages an empty data directory. Without
     /// it, each degraded assertion above would stay green against a build that degraded on everything.
@@ -674,16 +755,7 @@ public class StartupResilienceTests
         }
 
         SqliteConnection.ClearAllPools();
-        return adminKey is null
-            ? FactoryFor(dataDirectory)
-            : new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
-            {
-                builder.UseSetting("Quotinator:DataDir", dataDirectory);
-                // In memory rather than UseSetting: a developer's appsettings.local.json is read after
-                // UseSetting's value and would replace the key, so the reset would answer 401.
-                builder.ConfigureAppConfiguration((_, config) =>
-                    config.AddInMemoryCollection(new Dictionary<string, string?> { ["Quotinator:AdminApiKey"] = adminKey }));
-            });
+        return adminKey is null ? FactoryFor(dataDirectory) : FactoryWithAdminKey(dataDirectory, adminKey);
     }
 
     /// <summary>
@@ -828,19 +900,59 @@ public class StartupResilienceTests
         }
     }
 
-    private WebApplicationFactory<Program> FactoryWithCorruptDatabase()
+    private const string NotADatabase = "this file is not a SQLite database";
+
+    private WebApplicationFactory<Program> FactoryWithCorruptDatabase(string? adminKey = null, bool blockTheSetAsideFolder = false)
     {
         string dataDirectory = NewDataDirectory();
         // Bytes that are not a SQLite file: the 16-byte header check fails and SQLite reports
         // SQLITE_NOTADB. Deliberately not a truncated real database: that reports SQLITE_CORRUPT from
         // a different code path, and producing one in-process would mean seeding a database first only
         // to chop it, which is slower and pins less. The container scenario covers truncation.
-        File.WriteAllText(
-            Path.Combine(dataDirectory, DataPaths.DatabaseFile),
-            "this file is not a SQLite database");
+        File.WriteAllText(Path.Combine(dataDirectory, DataPaths.DatabaseFile), NotADatabase);
 
-        return FactoryFor(dataDirectory);
+        // #482: a file where the reserved folder belongs, so creating it throws, deterministically and
+        // identically on Windows and Linux, the technique FactoryWithKeysDirectoryBlocked uses.
+        if (blockTheSetAsideFolder)
+        {
+            string backups = Path.Combine(dataDirectory, DataPaths.BackupsFolder);
+            Directory.CreateDirectory(backups);
+            File.WriteAllText(Path.Combine(backups, SetAsideFolderName), "not a directory");
+        }
+
+        return adminKey is null ? FactoryFor(dataDirectory) : FactoryWithAdminKey(dataDirectory, adminKey);
     }
+
+    /// <summary>The reserved folder's name, written out: a contract with the user and #481, not a detail.</summary>
+    private const string SetAsideFolderName = "unreadable";
+
+    private static string DataDirectoryOf(WebApplicationFactory<Program> factory) =>
+        factory.Services.GetRequiredService<IConfiguration>()["Quotinator:DataDir"]!;
+
+    private static string[] SetAsideMainFiles(WebApplicationFactory<Program> factory)
+    {
+        string folder = Path.Combine(DataDirectoryOf(factory), DataPaths.BackupsFolder, SetAsideFolderName);
+        return Directory.Exists(folder)
+            ? [.. Directory.GetFiles(folder).Where(f => !f.EndsWith("-wal", StringComparison.Ordinal) && !f.EndsWith("-shm", StringComparison.Ordinal))]
+            : [];
+    }
+
+    private Task<HttpResponseMessage> PostResetAsync(HttpClient client)
+    {
+        HttpRequestMessage reset = new(HttpMethod.Post, "/api/v1/admin/database/reset");
+        reset.Headers.Add("X-Api-Key", AdminKey);
+        return client.SendAsync(reset, TestContext.CancellationToken);
+    }
+
+    private static WebApplicationFactory<Program> FactoryWithAdminKey(string dataDirectory, string adminKey) =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("Quotinator:DataDir", dataDirectory);
+            // In memory rather than UseSetting: a developer's appsettings.local.json is read after
+            // UseSetting's value and would replace the key, so the reset would answer 401.
+            builder.ConfigureAppConfiguration((_, config) =>
+                config.AddInMemoryCollection(new Dictionary<string, string?> { ["Quotinator:AdminApiKey"] = adminKey }));
+        });
 
     /// <summary>
     /// Records one version beyond whatever this build actually migrated to, rather than a literal:

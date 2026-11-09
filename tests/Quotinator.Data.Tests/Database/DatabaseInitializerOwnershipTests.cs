@@ -1105,13 +1105,11 @@ public class DatabaseInitializerOwnershipTests
     }
 
     /// <summary>
-    /// A genuine, unexpected failure during Reset's migration replay must leave the database exactly
-    /// as it was before the Reset attempt, proving the pre-reset backup is actually restored, not
-    /// just that the failing transaction rolled back (which alone wouldn't undo the table drop that
-    /// already happened before the failing migration ran).
+    /// A genuine, unexpected failure while a Reset builds the new database must leave the existing one
+    /// exactly as it was, and the exception must reach the caller rather than being interpreted.
     /// </summary>
     [TestMethod]
-    public async Task ResetAsync_MigrationFailsDuringReplay_RestoresPreResetBackupAndRethrows()
+    public async Task ResetAsync_MigrationFailsDuringReplay_LeavesTheDatabaseUntouchedAndRethrows()
     {
         using TempDatabase temp = new([]);
 
@@ -1123,8 +1121,7 @@ public class DatabaseInitializerOwnershipTests
         await db.InitialiseAsync();
 
         // A different, deliberately-broken migration list for the same database file: forces the
-        // consumer phase to fail genuinely during Reset's replay (the working table was already
-        // dropped by the time this runs).
+        // consumer phase to fail genuinely while the Reset builds the new database.
         IReadOnlyList<SchemaMigration> poisonMigrations =
         [
             new SchemaMigration { Version = 1, Sql = "THIS IS NOT VALID SQL;", Description = "Fails on purpose, so the restore path can be observed." },
@@ -1136,7 +1133,33 @@ public class DatabaseInitializerOwnershipTests
         using SqliteConnection conn = new($"Data Source={temp.DbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         int probeValue = await conn.ExecuteScalarAsync<int>("SELECT Id FROM Probe;");
-        Assert.AreEqual(999, probeValue, "Pre-reset data must be fully restored after a failed reset, not left dropped");
+        Assert.AreEqual(999, probeValue, "Pre-reset data must be intact after a failed reset");
+    }
+
+    /// <summary>
+    /// #482: the same failure on a file SQLite cannot read. Nothing is set aside until the new database is
+    /// built, so the unreadable file is still where it was, and the exception reaches the caller.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetAsync_CorruptDatabase_FailedRebuild_LeavesTheFileInPlace()
+    {
+        using TempDatabase temp = new([]);
+        SqliteConnection.ClearAllPools();
+        File.WriteAllText(temp.DbPath, "this file is not a SQLite database");
+
+        IReadOnlyList<SchemaMigration> poisonMigrations =
+        [
+            new SchemaMigration { Version = 1, Sql = "THIS IS NOT VALID SQL;", Description = "Fails on purpose, so the rebuild fails." },
+        ];
+        ResettableTestInitializer db = CreateResettableInitializer(temp.DbPath, poisonMigrations);
+
+        await Assert.ThrowsExactlyAsync<SqliteException>(() => db.ResetAsync());
+
+        Assert.AreEqual("this file is not a SQLite database", File.ReadAllText(temp.DbPath), "the unreadable file was moved or replaced");
+        Assert.IsFalse(
+            Directory.Exists(Path.Combine(Path.GetDirectoryName(temp.DbPath)!, "backups", "unreadable"))
+            && Directory.EnumerateFiles(Path.Combine(Path.GetDirectoryName(temp.DbPath)!, "backups", "unreadable")).Any(),
+            "something was set aside although the rebuild failed");
     }
 
     public TestContext TestContext { get; set; }

@@ -124,6 +124,21 @@ public class BackupStorageBudgetTests
         Assert.AreEqual(350L, BackupStorageBudget.UsedBytes(_backups.Path));
     }
 
+    /// <summary>
+    /// #482: a file in a subfolder occupies the same disk the ceiling is about, so it counts. A Reset sets
+    /// an unreadable database aside in one, and that file counts from the moment it arrives.
+    /// </summary>
+    [TestMethod]
+    public void UsedBytes_FileInASubfolder_IsCounted()
+    {
+        WriteFile("one.db", 100);
+        string subfolder = Path.Combine(_backups.Path, "unreadable");
+        Directory.CreateDirectory(subfolder);
+        File.WriteAllBytes(Path.Combine(subfolder, "set-aside.db"), new byte[250]);
+
+        Assert.AreEqual(350L, BackupStorageBudget.UsedBytes(_backups.Path));
+    }
+
     /// <summary>An empty folder is zero used, not an error.</summary>
     [TestMethod]
     public void UsedBytes_EmptyFolder_IsZero() => Assert.AreEqual(0L, BackupStorageBudget.UsedBytes(_backups.Path));

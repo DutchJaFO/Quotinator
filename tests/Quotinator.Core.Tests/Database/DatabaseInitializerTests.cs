@@ -29,7 +29,7 @@ using Quotinator.Core.Services;
 namespace Quotinator.Core.Tests.Database;
 
 [TestClass]
-public class DatabaseInitializerTests
+public partial class DatabaseInitializerTests
 {
     private static readonly string RepoRoot =
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
