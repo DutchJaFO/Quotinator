@@ -11,6 +11,7 @@ using Quotinator.Data.Paths;
 using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Schema;
+using Quotinator.Logging;
 
 namespace Quotinator.Data.Database;
 
@@ -285,6 +286,13 @@ public class DatabaseInitializer(
             Sql         = NotificationDatabaseLifecycleMigrations.WidenMetadataKindForDatabaseLifecycle,
             Description = "Lets a notification report that the database was created, and that a migration was applied to it.",
         },
+        // #482: one rebuild, for the reason migrations 15, 18, 25 and 26 give.
+        new SchemaMigration
+        {
+            Version     = 29,
+            Sql         = NotificationUnreadableDatabaseMigrations.WidenMetadataKindForUnreadableDatabase,
+            Description = "Lets a notification report that a Reset set aside a database file it could not read.",
+        },
     ];
 
     // Data's own baseline fragment: creates every Data-owned table directly under its final,
@@ -484,7 +492,7 @@ public class DatabaseInitializer(
             Title             TEXT,
             Metadata          TEXT,
             MetadataKind      TEXT
-                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied', 'ImportReviewPending', 'BackupRefused', 'BackupQuotaReached', 'BackupMaxExceeded', 'DatabaseCreated', 'MigrationApplied')),
+                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied', 'ImportReviewPending', 'BackupRefused', 'BackupQuotaReached', 'BackupMaxExceeded', 'DatabaseCreated', 'MigrationApplied', 'UnreadableDatabaseSetAside')),
             AppVersionId      TEXT    REFERENCES System_AppVersion(Id),
             OriginalLanguage  TEXT    NOT NULL DEFAULT 'en',
             DismissReason     TEXT
@@ -677,9 +685,9 @@ public class DatabaseInitializer(
         MigrationsResult migrations = await ApplyMigrationsAsync(connection);
 
         // #371: assigned here rather than inside ApplyMigrationsAsync, and that placement is
-        // load-bearing. DropAndRebuildAsync calls ApplyMigrationsAsync too, against a database it has
-        // just dropped every table from, so both of these would read as a freshly created database
-        // after an operator's Reset. Assigning in the startup path only leaves a Reset unable to
+        // load-bearing. RebuildAsync calls ApplyMigrationsAsync too, against the new database it is
+        // building from nothing, so both of these would read as a freshly created database after an
+        // operator's Reset. Assigning in the startup path only leaves a Reset unable to
         // disturb either one.
         DatabaseWasCreated = migrations.DatabaseWasCreated;
         MigrationsApplied  = migrations.Applied;
@@ -841,16 +849,36 @@ public class DatabaseInitializer(
     public async Task<DatabaseOperationResult> ResetAsync(
         bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false)
     {
-        // #348: check before acting. A Reset drops every table, so it is the last operation that should
-        // run without a restore point, and a full backup folder or an unwritable destination is an
-        // ordinary condition with a remedy, not something to discover by throwing halfway through.
-        // allowNoBackup is the operator accepting responsibility for proceeding with no restore point,
-        // and that is all it means: a Reset inside the reserve takes its backup without it.
-        BackupOutcome readiness = CheckBackupReadiness();
-        if (readiness != BackupOutcome.Succeeded && !allowNoBackup)
+        // #482: read every page first, before any storage check. A Reset recreates the database whatever
+        // state the old file is in, and a file that cannot be read is never a backup, so it needs none:
+        // a full backup folder must not stop it, and that check would refuse first if it ran first.
+        _resetSourceReadable = IsDatabaseFileReadable();
+        _setAsidePath = null;
+
+        BackupOutcome readiness = BackupOutcome.Succeeded;
+        if (_resetSourceReadable)
         {
-            Logger.LogResetRefusedNoBackup(readiness.ToString());
-            return DatabaseOperationResult.RefusedForBackup(readiness, BackupGuardedStep.Reset);
+            // #348: check before acting. A Reset replaces the whole database, so it is the last operation
+            // that should run without a restore point, and a full backup folder or an unwritable
+            // destination is an ordinary condition with a remedy, not something to discover by throwing
+            // halfway through. allowNoBackup is the operator accepting responsibility for proceeding with
+            // no restore point, and that is all it means: a Reset inside the reserve takes its backup
+            // without it.
+            readiness = CheckBackupReadiness();
+            if (readiness != BackupOutcome.Succeeded && !allowNoBackup)
+            {
+                Logger.LogResetRefusedNoBackup(readiness.ToString());
+                return DatabaseOperationResult.RefusedForBackup(readiness, BackupGuardedStep.Reset);
+            }
+        }
+        else
+        {
+            Logger.LogResetSourceUnreadable();
+            if (CheckSetAsideReadiness() is ResetObstacle obstacle)
+            {
+                Logger.LogResetRefusedCannotSetAside(obstacle.ToString());
+                return DatabaseOperationResult.RefusedForReset(obstacle);
+            }
         }
 
         using SqliteConnection connection = (SqliteConnection)_factory.CreateConnection();
@@ -859,15 +887,6 @@ public class DatabaseInitializer(
         if (readiness != BackupOutcome.Succeeded)
             Logger.LogResetProceedingWithoutBackup(readiness.ToString());
 
-        // The backstop the pre-flight cannot replace. CheckBackupReadiness inspects storage and the
-        // destination: it never reads the database, so an unreadable *source* passes it and only
-        // reveals itself here. Found live: a corrupt file cleared the check, then failed inside
-        // DropAllTablesAsync, which reaches sqlite_master, and reached the client as an unhandled 500:
-        // the very defect this issue exists to remove, surviving in a path the unit tests did not cover.
-        //
-        // The override cannot rescue this one either: a database SQLite will not open cannot be dropped
-        // table-by-table, so "proceed without a backup" has nothing to proceed with. It is reported as
-        // SourceUnreadable whose remedy is to replace the file from outside the application.
         try
         {
             await OnResetAsync(connection, preserveSchemaVersion, forceSourceRefresh);
@@ -876,20 +895,16 @@ public class DatabaseInitializer(
         // the check could not see in advance. It carries the outcome, so nothing is guessed here.
         catch (DatabaseBackupUnavailableException ex)
         {
+            Logger.LogExceptionHandled(ex, "the Reset was refused for want of a backup");
             Logger.LogResetRefusedNoBackup(ex.Outcome.ToString());
             return DatabaseOperationResult.RefusedForBackup(ex.Outcome, BackupGuardedStep.Reset);
         }
-        catch (SqliteException ex) when (ex.SqliteErrorCode is 26 or 11 or 14 or 8)
+        // #482: the file could not be set aside or replaced, found only once the move was attempted.
+        catch (DatabaseResetRefusedException ex)
         {
-            // 26/11 are the source; 14/8 are the storage refusing a write the pre-flight's probe should
-            // have caught first. Both are included because the backstop's job is to be wider than the
-            // check, not to mirror it: a code reaching here at all means the check missed something.
-            BackupOutcome obstacle = ex.SqliteErrorCode is 26 or 11
-                ? BackupOutcome.SourceUnreadable
-                : BackupOutcome.DestinationFileNotWritable;
-
-            Logger.LogResetRefusedNoBackup(obstacle.ToString());
-            return DatabaseOperationResult.RefusedForBackup(obstacle, BackupGuardedStep.Reset);
+            Logger.LogExceptionHandled(ex, "the Reset was refused: the unreadable database could not be set aside");
+            Logger.LogResetRefusedCannotSetAside(ex.Obstacle.ToString());
+            return DatabaseOperationResult.RefusedForReset(ex.Obstacle);
         }
 
         // #305 (R3): the check that runs before starting is what shows a rebuilt database is in a good
@@ -898,9 +913,87 @@ public class DatabaseInitializer(
         if (!await IsSchemaIntactAsync())
             return DatabaseOperationResult.NotIntact();
 
+        // #482: after the new database is in place, never before, since the notification is a row in it.
+        if (_setAsidePath is not null)
+            await OnUnreadableDatabaseSetAsideAsync(Path.GetFileName(_setAsidePath));
+
         await OnResetCompletedAsync();
         return DatabaseOperationResult.Success(backupSkippedByOverride: readiness != BackupOutcome.Succeeded);
     }
+
+    // #482: per-Reset state the subclass's OnResetAsync cannot carry, since its signature is not ours to
+    // change. A Reset runs one at a time (the admin limiter and SharedSeedLock), so one field serves.
+    private bool _resetSourceReadable = true;
+    private string? _setAsidePath;
+
+    /// <summary>
+    /// Whether SQLite can read every page of the database file (#482). <c>PRAGMA quick_check</c>, not an
+    /// open or a <c>sqlite_master</c> read: SQLite's page copy does not validate what it copies, so a file
+    /// whose first page reads and whose later pages do not would otherwise be backed up as if sound. A file
+    /// that does not exist is readable: a Reset creates it, as a first start would.
+    /// </summary>
+    private bool IsDatabaseFileReadable()
+    {
+        if (!File.Exists(_options.DbPath))
+            return true;
+
+        // Immutable and read-only, and both are load-bearing. The check must leave the file and its sidecars
+        // exactly as it found them, since they are what is set aside: a read-write open of a damaged file
+        // lets SQLite discard a -wal it cannot use, and even a read-only open rewrites the -shm. Immutable
+        // reads the main file alone, with no locking and no shared memory, which also means a WAL database
+        // on a read-only mount opens. Found by ResetAsync_CorruptDatabaseWithSidecars_MovesTheSidecarsWithIt.
+        string immutable = new SqliteConnectionStringBuilder
+        {
+            DataSource = new Uri(Path.GetFullPath(_options.DbPath)).AbsoluteUri + "?immutable=1",
+            Mode       = SqliteOpenMode.ReadOnly,
+            Pooling    = false,
+        }.ToString();
+
+        try
+        {
+            using SqliteConnection probe = new(immutable);
+            probe.Open();
+            return string.Equals(probe.ExecuteScalar<string>("PRAGMA quick_check;"), "ok", StringComparison.Ordinal);
+        }
+        // ADR 022: nothing lets the code ask whether a file is a database without reading it, so the
+        // exception is the answer, handled here, at the first point an outcome can be formed.
+        catch (SqliteException ex) when (ex.SqliteErrorCode is 26 or 11)
+        {
+            Logger.LogExceptionHandled(ex, "the database file was judged unreadable");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// What would stop an unreadable file being set aside and replaced (#482), checked before anything
+    /// moves: the data directory, where the new database is built and placed, and the reserved folder the
+    /// file moves into. Writing a probe is the only way to answer either, as in
+    /// <see cref="CheckBackupReadiness"/>.
+    /// </summary>
+    private ResetObstacle? CheckSetAsideReadiness()
+    {
+        if (!DirectoryWriteProbe.CanCreateFileIn(Path.GetDirectoryName(Path.GetFullPath(_options.DbPath))!))
+            return ResetObstacle.DataDirectoryNotWritable;
+
+        string folder = SetAsideFolder;
+        try { Directory.CreateDirectory(folder); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Logger.LogExceptionHandled(ex, "the reserved folder for unreadable databases could not be created");
+            return ResetObstacle.SetAsideFolderNotWritable;
+        }
+
+        return DirectoryWriteProbe.CanCreateFileIn(folder) ? null : ResetObstacle.SetAsideFolderNotWritable;
+    }
+
+    private string SetAsideFolder => Path.Combine(_options.BackupsPath, BackupFileNames.UnreadableFolderName);
+
+    /// <summary>
+    /// Called once a Reset has set aside a database file it could not read and the new database is in
+    /// place and intact (#482). Override to tell the operator; the base implementation does nothing.
+    /// </summary>
+    /// <param name="setAsideFileName">The set-aside file's name inside the reserved folder.</param>
+    protected virtual Task OnUnreadableDatabaseSetAsideAsync(string setAsideFileName) => Task.CompletedTask;
 
     /// <inheritdoc/>
     public async Task<DatabaseBackupResult> CreateBackupAsync()
@@ -986,7 +1079,7 @@ public class DatabaseInitializer(
 
     /// <summary>
     /// Called unconditionally after a genuinely fresh database is created via the baseline path
-    /// (<see cref="ApplyBaselineAsync"/>) and after every <see cref="DropAndRebuildAsync"/> call:
+    /// (<see cref="ApplyBaselineAsync"/>) and after every <see cref="RebuildAsync"/> call:
     /// i.e. after both "first ever install" and "any reset," the two moments a database can be
     /// missing content it structurally needs to function. Override to populate designated system
     /// tables (vital, non-optional reference/configuration content) from whatever source the
@@ -1009,74 +1102,142 @@ public class DatabaseInitializer(
     #region Protected utilities for subclasses
 
     /// <summary>
-    /// Drops the entire database (every table, with no protected/excluded set of any kind) and
-    /// recreates it from scratch via the same baseline path a fresh install uses (#156). Reset is a
-    /// full wipe: <c>Audit_Entry</c> and every other <c>Import_</c>/<c>Audit_</c>/<c>System_</c>-prefixed
-    /// table Quotinator.Data itself owns is dropped along with the consumer's own tables and does
-    /// not survive: a deliberate tradeoff (see ADR 014); an operator who wants to keep audit-trail
-    /// data retrieves it beforehand via the admin audit export endpoint (#249). When
-    /// <paramref name="preserveSchemaVersion"/> is <c>true</c>, both <c>System_SchemaVersion</c>'s
-    /// and <c>System_ConsumerSchemaVersion</c>'s granular per-version rows are snapshotted first and
-    /// restored afterward, in place of the single collapsed row the baseline path would otherwise
-    /// leave: preserving history granularity symmetrically for both counters now that both are
-    /// wiped, not just the consumer's. <see cref="SeedSystemContentAsync"/> is invoked exactly once
-    /// regardless of which path <see cref="ApplyMigrationsAsync"/> takes: once truly empty (which a
-    /// full wipe always leaves it), that call already invokes it internally when a baseline is
-    /// configured, so this method only calls it directly for the (rare) case where no baseline is
-    /// configured and the incremental-replay-from-zero path runs instead. A full backup is always
-    /// taken before any destructive step; any failure anywhere in the rebuild restores it and
-    /// rethrows, without attempting to interpret what went wrong.
+    /// Replaces the database with a new one built from scratch through the same path a fresh install
+    /// uses (#156, #482). Nothing is dropped and no table survives: <c>Audit_Entry</c> and every other
+    /// table goes with the old database, a deliberate tradeoff (ADR 014); an operator who wants to keep
+    /// the audit trail exports it first (#249). See ADR 027 for the rules this implements.
+    /// <para>
+    /// The new database is built beside the old one, and only then put in place, so a failure while
+    /// building leaves the old file exactly as it was. How it is put in place depends on whether the old
+    /// file could be read. A readable one is backed up first (ADR 025) and the new database is copied over
+    /// it through SQLite's backup API, so a connection already open on it sees the new database rather
+    /// than going on with a file moved out from under it. An unreadable one is never backed up: it is moved,
+    /// with its sidecars, into the reserved folder, and the new file takes its place.
+    /// </para>
+    /// <para>
+    /// When <paramref name="preserveSchemaVersion"/> is <c>true</c>, both version tables' per-version rows
+    /// are carried into the new database in place of the single row the baseline writes. An unreadable
+    /// file's rows cannot be read, so the baseline's own are kept.
+    /// </para>
     /// </summary>
-    protected async Task DropAndRebuildAsync(SqliteConnection connection, bool preserveSchemaVersion = false)
+    /// <param name="connection">An open connection on the database, which a Reset of an unreadable file closes and reopens on the new one.</param>
+    /// <param name="preserveSchemaVersion">Whether to carry the version history into the new database.</param>
+    protected async Task RebuildAsync(SqliteConnection connection, bool preserveSchemaVersion = false)
     {
-        List<SystemSchemaVersionRow> savedDataVersions = preserveSchemaVersion
-            ? [.. await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllDataVersions)]
-            : [];
-        List<SystemSchemaVersionRow> savedConsumerVersions = preserveSchemaVersion
-            ? [.. await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllConsumerVersions)]
-            : [];
+        bool readable = _resetSourceReadable;
+        List<SystemSchemaVersionRow> savedDataVersions = [];
+        List<SystemSchemaVersionRow> savedConsumerVersions = [];
+        string? backupPath = null;
 
-        DatabaseBackupResult resetBackup = CreateBackup(connection, SchemaVersion);
-
-        // #348: the last gate before every table is dropped, and the one the pre-flight cannot stand in
-        // for. Found live on a size-capped volume: the disk filled *during* the copy, SQLite abandoned a
-        // truncated backup file, and this method carried on and rebuilt the database anyway: returning
-        // 200 with the only restore point being an unusable fragment. Strictly worse than the unhandled
-        // 500 this issue set out to remove, because it looked like success.
-        //
-        // Thrown rather than returned: this runs inside OnResetAsync, whose signature belongs to
-        // subclasses, so there is no result to hand back from here. ResetAsync catches it and converts
-        // it into the same refusal a pre-flight failure produces: the exception is the transport, not
-        // the report.
-        if (!resetBackup.Succeeded)
-            throw new DatabaseBackupUnavailableException(resetBackup.Outcome, resetBackup.Error);
-
-        string? backupPath = resetBackup.Path;
-
-        try
+        if (readable)
         {
-            await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
-            await DropAllTablesAsync(connection);
-            await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
-            bool tookBaselinePath = (await ApplyMigrationsAsync(connection, skipOwnBackup: true)).TookBaselinePath;
-
             if (preserveSchemaVersion)
             {
-                await connection.ExecuteAsync(Sql.Schema.DeleteAllDataVersions);
-                foreach (SystemSchemaVersionRow row in savedDataVersions)
-                    await connection.ExecuteAsync(Sql.Schema.InsertDataVersion, new { v = row.Version, at = row.AppliedAt });
-
-                await connection.ExecuteAsync(Sql.Schema.DeleteAllConsumerVersions);
-                foreach (SystemSchemaVersionRow row in savedConsumerVersions)
-                    await connection.ExecuteAsync(Sql.Schema.InsertConsumerVersion, new { v = row.Version, at = row.AppliedAt });
+                savedDataVersions     = [.. await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllDataVersions)];
+                savedConsumerVersions = [.. await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllConsumerVersions)];
             }
 
-            if (!tookBaselinePath)
-                await SeedSystemContentAsync(connection);
+            DatabaseBackupResult resetBackup = CreateBackup(connection, SchemaVersion);
+
+            if (resetBackup.Outcome == BackupOutcome.SourceUnreadable)
+            {
+                // The file changed after the check, or carries damage the check could not see: the copy
+                // is what found it. It is treated as the unreadable file it is; the copy left nothing.
+                readable = false;
+                _resetSourceReadable = false;
+                savedDataVersions = [];
+                savedConsumerVersions = [];
+                Logger.LogResetSourceUnreadable();
+                if (CheckSetAsideReadiness() is ResetObstacle obstacle)
+                    throw new DatabaseResetRefusedException(obstacle);
+            }
+            // #348: the last gate before the database is replaced, and the one the pre-flight cannot stand
+            // in for. Found live on a size-capped volume: the disk filled *during* the copy, and the Reset
+            // carried on, returning 200 with the only restore point an unusable fragment.
+            //
+            // Thrown rather than returned: this runs inside OnResetAsync, whose signature belongs to
+            // subclasses, so there is no result to hand back from here. ResetAsync converts it into the
+            // same refusal a pre-flight failure produces.
+            else if (!resetBackup.Succeeded)
+            {
+                throw new DatabaseBackupUnavailableException(resetBackup.Outcome, resetBackup.Error);
+            }
+            else
+            {
+                backupPath = resetBackup.Path;
+
+                // The backup folder may be elsewhere, so a backup taken says nothing about the data
+                // directory, where the new database is built.
+                if (!DirectoryWriteProbe.CanCreateFileIn(DataDirectory))
+                    throw new DatabaseResetRefusedException(ResetObstacle.DataDirectoryNotWritable);
+            }
+        }
+
+        string buildPath = _options.DbPath + ".rebuild";
+        try
+        {
+            await BuildDatabaseAsync(buildPath, preserveSchemaVersion && readable, savedDataVersions, savedConsumerVersions);
+
+            if (readable)
+                ReplaceInPlace(connection, buildPath, backupPath);
+            else
+                await SetAsideAndReplaceAsync(connection, buildPath);
+        }
+        finally
+        {
+            DeleteDatabaseFiles(buildPath);
+        }
+    }
+
+    private string DataDirectory => Path.GetDirectoryName(Path.GetFullPath(_options.DbPath))!;
+
+    /// <summary>
+    /// Builds a new database at <paramref name="buildPath"/> through the path a fresh install takes:
+    /// the baseline when one is configured, otherwise every migration from zero, then system content.
+    /// </summary>
+    private async Task BuildDatabaseAsync(
+        string buildPath, bool carryVersions,
+        List<SystemSchemaVersionRow> savedDataVersions, List<SystemSchemaVersionRow> savedConsumerVersions)
+    {
+        DeleteDatabaseFiles(buildPath);
+
+        // Unpooled, so closing it releases the file: it is moved or copied the moment this returns.
+        using SqliteConnection build = new(new SqliteConnectionStringBuilder { DataSource = buildPath, Pooling = false }.ToString());
+        await build.OpenAsync();
+        EnableWal(build);
+
+        bool tookBaselinePath = (await ApplyMigrationsAsync(build, skipOwnBackup: true)).TookBaselinePath;
+
+        if (carryVersions)
+        {
+            await build.ExecuteAsync(Sql.Schema.DeleteAllDataVersions);
+            foreach (SystemSchemaVersionRow row in savedDataVersions)
+                await build.ExecuteAsync(Sql.Schema.InsertDataVersion, new { v = row.Version, at = row.AppliedAt });
+
+            await build.ExecuteAsync(Sql.Schema.DeleteAllConsumerVersions);
+            foreach (SystemSchemaVersionRow row in savedConsumerVersions)
+                await build.ExecuteAsync(Sql.Schema.InsertConsumerVersion, new { v = row.Version, at = row.AppliedAt });
+        }
+
+        if (!tookBaselinePath)
+            await SeedSystemContentAsync(build);
+    }
+
+    /// <summary>
+    /// Copies the newly built database over a readable one, through the open <paramref name="connection"/>
+    /// so every connection on the file sees it. A copy that fails partway restores the backup taken first.
+    /// </summary>
+    private void ReplaceInPlace(SqliteConnection connection, string buildPath, string? backupPath)
+    {
+        try
+        {
+            using SqliteConnection build = new(new SqliteConnectionStringBuilder { DataSource = buildPath, Pooling = false }.ToString());
+            build.Open();
+            build.BackupDatabase(connection);
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "[Database - Init] reset failed: restoring pre-reset backup, database left unchanged...");
+            Logger.LogError(ex, "[Database - Init] reset failed while replacing the database: restoring the pre-reset backup...");
             if (backupPath is not null)
             {
                 RestoreBackup(connection, backupPath);
@@ -1084,6 +1245,60 @@ public class DatabaseInitializer(
             }
             throw;
         }
+    }
+
+    /// <summary>
+    /// Moves an unreadable database and its sidecars into the reserved folder under a name no other
+    /// set-aside file has, then moves the new database into its place (#482). The live connection is
+    /// closed and its pool cleared first, since a file still open cannot be moved on every platform, and
+    /// reopened on the new database afterwards.
+    /// </summary>
+    private async Task SetAsideAndReplaceAsync(SqliteConnection connection, string buildPath)
+    {
+        string setAside = UniqueSetAsidePath();
+
+        await connection.CloseAsync();
+        SqliteConnection.ClearPool(connection);
+
+        List<(string From, string To)> moved = [];
+        try
+        {
+            foreach (string suffix in DatabaseFileSuffixes)
+            {
+                if (!File.Exists(_options.DbPath + suffix))
+                    continue;
+
+                File.Move(_options.DbPath + suffix, setAside + suffix);
+                moved.Add((_options.DbPath + suffix, setAside + suffix));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A move that copies between volumes and then fails leaves a partial copy; nothing partial is
+            // left behind, and every file already moved goes back where it was.
+            Logger.LogExceptionHandled(ex, "the unreadable database could not be set aside");
+            foreach ((string from, string to) in Enumerable.Reverse(moved))
+                File.Move(to, from);
+            DeleteDatabaseFiles(setAside);
+            await connection.OpenAsync();
+            throw new DatabaseResetRefusedException(ResetObstacle.SetAsideMoveFailed, ex);
+        }
+
+        File.Move(buildPath, _options.DbPath);
+        await connection.OpenAsync();
+
+        _setAsidePath = setAside;
+        Logger.LogUnreadableDatabaseSetAside(setAside);
+    }
+
+    /// <summary>A path in the reserved folder that no set-aside file occupies, so two never overwrite each other.</summary>
+    private string UniqueSetAsidePath()
+    {
+        string stem = $"{Path.GetFileNameWithoutExtension(_options.DbPath)}_unreadable_{DateTime.UtcNow:yyyyMMddTHHmmssfff}Z";
+        string candidate = Path.Combine(SetAsideFolder, stem + ".db");
+        for (int n = 2; File.Exists(candidate); n++)
+            candidate = Path.Combine(SetAsideFolder, $"{stem}_{n}.db");
+        return candidate;
     }
 
     private sealed record SystemSchemaVersionRow(long Version, string AppliedAt);
@@ -1191,13 +1406,19 @@ public class DatabaseInitializer(
             Pooling    = false,
         }.ToString();
 
-        using SqliteConnection dest = new(destConnectionString);
+        SqliteConnection dest = new(destConnectionString);
         try { dest.Open(); }
-        catch (Exception ex) { return DatabaseBackupResult.Failed(BackupOutcome.DestinationFileNotWritable, ex); }
+        catch (Exception ex)
+        {
+            dest.Dispose();
+            return DatabaseBackupResult.Failed(BackupOutcome.DestinationFileNotWritable, ex);
+        }
 
+        DatabaseBackupResult result;
         try
         {
             connection.BackupDatabase(dest);
+            result = DatabaseBackupResult.Success(backupPath);
         }
         catch (SqliteException ex)
         {
@@ -1205,16 +1426,43 @@ public class DatabaseInitializer(
             // fills partway through the copy fails at this same statement as an unreadable source, and
             // reporting a full volume as a corrupt database would send an operator after a fault that
             // is not there. SqliteErrorCode is a code, not a parsed message.
-            return DatabaseBackupResult.Failed(ClassifyCopyFailure(ex), ex);
+            result = DatabaseBackupResult.Failed(ClassifyCopyFailure(ex), ex);
         }
         catch (Exception ex)
         {
-            return DatabaseBackupResult.Failed(BackupOutcome.Unclassified, ex);
+            result = DatabaseBackupResult.Failed(BackupOutcome.Unclassified, ex);
+        }
+        finally
+        {
+            dest.Dispose();
+        }
+
+        // #482: a failed copy leaves the file it was writing, and the backups folder is listed as restore
+        // points. A fragment is never one, so it does not outlive the attempt that made it.
+        if (!result.Succeeded)
+        {
+            try { DeleteDatabaseFiles(backupPath); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // The refusal stands either way; an undeletable fragment is reported, not raised over it.
+                Logger.LogExceptionHandled(ex, "a failed backup's fragment could not be deleted");
+            }
+            return result;
         }
 
         Logger.LogBackupComplete();
-        return DatabaseBackupResult.Success(backupPath);
+        return result;
     }
+
+    /// <summary>Deletes a database file and its <c>-wal</c> and <c>-shm</c> sidecars, where present.</summary>
+    /// <param name="path">The database file.</param>
+    private static void DeleteDatabaseFiles(string path)
+    {
+        foreach (string suffix in DatabaseFileSuffixes)
+            File.Delete(path + suffix);
+    }
+
+    private static readonly string[] DatabaseFileSuffixes = ["", "-wal", "-shm"];
 
     // SQLITE_NOTADB (26) and SQLITE_CORRUPT (11) are the source; SQLITE_FULL (13) is the volume. Any
     // other code is reported as unclassified rather than guessed at: an unnamed variant is an
@@ -1342,9 +1590,9 @@ public class DatabaseInitializer(
             return new MigrationsResult(TookBaselinePath: false, DatabaseWasCreated: isEmptyDatabase, Obstacle: null, Applied: []);
         }
 
-        // skipOwnBackup: DropAndRebuildAsync (Reset) already took its own backup before this call:
-        // Data's counter is never wiped by Reset, so this condition would otherwise fire pointlessly
-        // (a redundant second backup) on every Reset.
+        // skipOwnBackup: a Reset builds its new database in a file of its own (RebuildAsync), and has
+        // already backed up the database it replaces, where that one could be read; a backup of a
+        // database being built from nothing would protect nothing.
         DatabaseBackupResult? migrationBackup = !skipOwnBackup && (dataCurrent > 0 || consumerCurrent > 0)
             ? CreateBackup(connection, Math.Max(dataCurrent, consumerCurrent))
             : null;
@@ -1448,7 +1696,7 @@ public class DatabaseInitializer(
     /// an empty list if the phase was already up to date. No exception handling here: if a
     /// migration's SQL throws, <c>using var tx</c> rolls back on unwind and the exception propagates
     /// untouched to the caller, which is responsible for the broader roll-back-to-previous-state
-    /// (see <see cref="ApplyMigrationsAsync"/> and <see cref="DropAndRebuildAsync"/>).
+    /// (see <see cref="ApplyMigrationsAsync"/> and <see cref="RebuildAsync"/>).
     /// </summary>
     /// <remarks>
     /// #371: this used to return the <c>"{Phase} vX → vY"</c> banner string directly. The banner is now
@@ -1502,15 +1750,6 @@ public class DatabaseInitializer(
             .Select(phase => $"{phase.Key} v{phase.Min(m => m.Version) - 1} → v{phase.Max(m => m.Version)}");
 
         return string.Join(", ", spans);
-    }
-
-    // Discovers all user tables at runtime and drops them.
-    // Table names come from sqlite_master (system metadata): string interpolation is safe.
-    private static async Task DropAllTablesAsync(SqliteConnection connection)
-    {
-        List<string> tables = [.. await connection.QueryAsync<string>(Sql.Schema.GetAllTables)];
-        foreach (string table in tables)
-            await connection.ExecuteAsync($"DROP TABLE IF EXISTS [{table}];");
     }
 
     #endregion

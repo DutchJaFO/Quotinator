@@ -1,4 +1,6 @@
 using Quotinator.Constants.Api;
+using Quotinator.Constants.Routes;
+using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
 
 namespace Quotinator.Api.Startup;
@@ -112,21 +114,19 @@ internal static class BackupObstacleGuidance
         // Removing old backups is deliberately absent here: the obstacle is the source, so freeing
         // destination space changes nothing. Naming a remedy that cannot work is the defect #326 fixed
         // for the data-directory case, and repeating it here would be the same mistake in a new place.
-        // No allowNoBackup here, and that omission is measured rather than assumed: a database SQLite
-        // will not open cannot be dropped table-by-table either, so a reset has nothing to work with
-        // whatever the caller accepts. Offering the override would name a remedy that cannot succeed:
-        // the same defect #326 fixed for the data-directory case. The file has to be replaced from
-        // outside the application.
+        // No allowNoBackup either: a migration or a content load into a file that cannot be read cannot
+        // proceed whatever the caller accepts. A Reset can (#482): it needs no backup of a file it cannot
+        // read, and sets the file aside instead of deleting it.
         BackupOutcome.SourceUnreadable =>
         [
-            "Stop the application, move or delete the database file, and restart; the database will be "
-            + "rebuilt empty.",
+            $"Reset the database with POST {ApiRoutes.DatabaseReset}: the unreadable file is set aside in the "
+            + $"\"{BackupFileNames.UnreadableFolderName}\" folder inside the backups folder, and a new, empty database replaces it.",
             "Restore an older backup in place of the unreadable file, then restart.",
         ],
         BackupOutcome.DiskFilledDuringBackup =>
         [
             "Free disk space on the volume holding the data directory, then retry.",
-            "Remove the partially written backup file if one was left behind.",
+            "Removing old backups reclaims some of that space: DELETE /api/v1/admin/backups/{name}.",
         ],
         _ =>
         [

@@ -60,7 +60,7 @@ public partial class DatabaseInitializerTests
 
         await CreateInitializer([]).ResetAsync();
 
-        Assert.HasCount(1, SetAsideFiles(), "the damaged file was not set aside");
+        Assert.HasCount(1, MainSetAsideFiles(), "the damaged file was not set aside");
         Assert.AreEqual(0, BackupFileCount(), "a damaged file was kept as a backup");
     }
 

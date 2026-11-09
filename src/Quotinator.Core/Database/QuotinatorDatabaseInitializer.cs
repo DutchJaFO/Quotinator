@@ -163,6 +163,38 @@ public sealed class QuotinatorDatabaseInitializer(
     }
 
     /// <summary>
+    /// #482: a Reset set aside a database file it could not read. Written into the new database once it is
+    /// in place, which is the only database there is to write it to, and carrying no dismiss trigger: it
+    /// reports an event, and every caller fires the <c>DatabaseReset</c> trigger right after a Reset.
+    /// </summary>
+    /// <param name="setAsideFileName">The set-aside file's name inside the reserved folder.</param>
+    protected override async Task OnUnreadableDatabaseSetAsideAsync(string setAsideFileName)
+    {
+        UnreadableDatabaseSetAsideMetadataDto metadata = new()
+        {
+            FileName = setAsideFileName,
+            Folder = BackupFileNames.UnreadableFolderName,
+            ReleaseState = NotificationReleaseState.NotApplicable,
+        };
+
+        object[] bodyArgs = [setAsideFileName, BackupFileNames.UnreadableFolderName];
+
+        await NotificationSeeding.SeedWhileUnresolvedAsync(
+            _notificationReader, _notificationWriter, NotificationType.Warning, metadata,
+            body: NotificationTranslations.Original(_notificationTextSource, NotificationMessageKeys.UnreadableDatabaseSetAsideBody, bodyArgs),
+            // Left unstated for the reason the backup refusal above gives: the version row a Reset empties
+            // is recorded again only after this returns.
+            appVersionId: null,
+            title: NotificationTranslations.Original(_notificationTextSource, NotificationMessageKeys.UnreadableDatabaseSetAsideTitle),
+            dismissTrigger: null,
+            translations: NotificationTranslations.Build(
+                _notificationTextSource,
+                NotificationMessageKeys.UnreadableDatabaseSetAsideTitle,
+                NotificationMessageKeys.UnreadableDatabaseSetAsideBody,
+                bodyArgs: bodyArgs));
+    }
+
+    /// <summary>
     /// #348: a start that loaded content has done what a reseed does, so it resolves every notification
     /// waiting for one, such as an earlier start's backup refusal. Only once the whole load has returned,
     /// and only if something was actually loaded: a notification is updated after the action that settles
@@ -590,7 +622,7 @@ public sealed class QuotinatorDatabaseInitializer(
         await SharedSeedLock.WaitAsync();
         try
         {
-            await DropAndRebuildAsync(connection, preserveSchemaVersion);
+            await RebuildAsync(connection, preserveSchemaVersion);
         }
         finally
         {

@@ -1082,14 +1082,14 @@ public class DatabaseInitializerOwnershipTests
     // ── Reset backup/restore safety net ─────────────────────────────────────────
 
     // The base DatabaseInitializer's OnResetAsync is a no-op: only a subclass that overrides it
-    // (in production, QuotinatorDatabaseInitializer) actually calls DropAndRebuildAsync. This
+    // (in production, QuotinatorDatabaseInitializer) actually calls RebuildAsync. This
     // minimal test-only subclass exists purely to exercise that method directly.
     private sealed class ResettableTestInitializer(
         IDbConnectionFactory factory, DatabaseOptions options, IReadOnlyList<SchemaMigration> migrations,
         IAuditEntryWriter auditWriter, ICallerContext callerContext, ILogger<DatabaseInitializer> logger) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, NoOpDiskSpaceProvider.Instance)
     {
         protected override Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
-            => DropAndRebuildAsync(connection, preserveSchemaVersion);
+            => RebuildAsync(connection, preserveSchemaVersion);
     }
 
     private static ResettableTestInitializer CreateResettableInitializer(string dbPath, IReadOnlyList<SchemaMigration> consumerMigrations)
@@ -1154,6 +1154,7 @@ public class DatabaseInitializerOwnershipTests
         ResettableTestInitializer db = CreateResettableInitializer(temp.DbPath, poisonMigrations);
 
         await Assert.ThrowsExactlyAsync<SqliteException>(() => db.ResetAsync());
+        SqliteConnection.ClearAllPools();
 
         Assert.AreEqual("this file is not a SQLite database", File.ReadAllText(temp.DbPath), "the unreadable file was moved or replaced");
         Assert.IsFalse(

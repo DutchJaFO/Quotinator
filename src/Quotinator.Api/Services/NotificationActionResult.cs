@@ -21,6 +21,12 @@ public sealed class NotificationActionResult
     /// </summary>
     public string? FailureReason { get; init; }
 
+    /// <summary>
+    /// What stopped a Reset of an unreadable database file, when that is why it did not run (#482). Such a
+    /// Reset needs no backup, so <see cref="BackupObstacle"/> is never set alongside it.
+    /// </summary>
+    public ResetObstacle? ResetObstacle { get; init; }
+
     /// <summary>An action that ran.</summary>
     public static NotificationActionResult Success() => new() { Succeeded = true };
 
@@ -33,4 +39,9 @@ public sealed class NotificationActionResult
     /// <param name="reason">The degraded reason, naming every missing or different object and the remedies.</param>
     public static NotificationActionResult ResetNotIntact(string reason) =>
         new() { Succeeded = false, FailureReason = reason };
+
+    /// <summary>A Reset of an unreadable database file that did not run: the file could not be set aside (#482).</summary>
+    /// <param name="obstacle">What stopped it.</param>
+    public static NotificationActionResult RefusedForReset(ResetObstacle obstacle) =>
+        new() { Succeeded = false, ResetObstacle = obstacle };
 }

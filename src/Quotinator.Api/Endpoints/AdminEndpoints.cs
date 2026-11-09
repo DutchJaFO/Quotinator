@@ -264,6 +264,21 @@ internal static class AdminEndpoints
                     statusCode: StatusCodes.Status500InternalServerError);
             }
 
+            // #482: a Reset of an unreadable file needs no backup, so what stopped it is not one, and the
+            // body names it without a backupObstacle that would send the operator to the wrong folder.
+            if (reset.ResetObstacle is ResetObstacle resetObstacle)
+            {
+                return Results.Problem(
+                    title: "Reset refused: the unreadable database could not be set aside",
+                    detail: ResetObstacleGuidance.Cause(resetObstacle),
+                    statusCode: StatusCodes.Status409Conflict,
+                    extensions: new Dictionary<string, object?>
+                    {
+                        ["resetObstacle"] = resetObstacle.ToString(),
+                        ["remedies"]      = ResetObstacleGuidance.Remedies(resetObstacle),
+                    });
+            }
+
             // #348: a reset that could not take a backup did not run. 200 means the endpoint did what
             // was asked; this did not, so it is an error whose body carries the cause and what the
             // operator can do about it. 409 rather than 500: nothing failed unexpectedly: the state of
@@ -375,11 +390,18 @@ internal static class AdminEndpoints
         .Produces<ProblemDetails>(StatusCodes.Status409Conflict)
         .Produces<ProblemDetails>(StatusCodes.Status500InternalServerError)
         .WithDescription(
-            "Drops the entire database and rebuilds it from scratch via the baseline schema, equivalent to " +
+            "Replaces the database with a new one built from scratch via the baseline schema, equivalent to " +
             "deleting the database file and restarting, except it does **not** reimport any bundled or user " +
-            "quote content afterward (issue #156). Every table is dropped, including the audit log: no table " +
+            "quote content afterward (issue #156). Nothing survives, including the audit log: no table " +
             "is protected from this reset; export the audit trail first via `GET /api/v1/admin/audit/export` " +
             "if you need to keep it (issue #249). " +
+            "It works whatever state the old file is in (issue #482). A database file that cannot be read is never " +
+            "backed up: it is moved, with its `-wal` and `-shm`, into the `unreadable` folder inside the backups folder, " +
+            "where it counts towards backup storage, and a notification names it. If that move cannot be made, the call " +
+            "answers `409 Conflict` naming a `resetObstacle` (`DataDirectoryNotWritable`, `SetAsideFolderNotWritable` " +
+            "or `SetAsideMoveFailed`) and its `remedies`, and nothing is moved or changed. Moving the file needs no free " +
+            "space when the backups folder is on the same volume as the data directory; one configured elsewhere needs " +
+            "room for a copy of it. " +
             "By default, schema migration history is also cleared and rebuilt to the latest version; pass `preserveSchemaVersion=true` to keep the existing migration history's per-version rows instead. " +
             "Auto-updated sources are still refreshed from the network first if stale (or unconditionally when `forceSourceRefresh=true`), " +
             "unless `Quotinator:AutoUpdateSources` is `false`: this only refreshes the on-disk source cache, " +
@@ -389,7 +411,7 @@ internal static class AdminEndpoints
             "Because no content is reimported, a successful reset writes an `ActionRequired` notification " +
             "recommending a reseed (issue #304), runnable from the notifications page; it recommends rather " +
             "than reseeds, since the caller reset in order to decide what goes back in. " +
-            "A reset takes a safety backup first, and **refuses with `409 Conflict` if one cannot be taken** (issue #348): " +
+            "A reset of a readable database takes a safety backup first, and **refuses with `409 Conflict` if one cannot be taken** (issue #348): " +
             "the response names which obstacle stopped it (`backupObstacle`) and what can be done about it (`remedies`). " +
             "Pass `allowNoBackup=true` to proceed anyway: this both accepts responsibility for there being no restore point " +
             "and asserts the reset can complete without one. A backup inside the reserve above the normal quota is still taken; " +

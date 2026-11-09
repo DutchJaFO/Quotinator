@@ -428,8 +428,9 @@ public class StartupResilienceTests
     }
 
     /// <summary>
-    /// #327: the generic reason names two remedies, a Reset and deleting the file. A Reset refuses on a
-    /// file SQLite cannot open, so deleting it is the one that can work, and the reason must carry it.
+    /// #327: the generic reason names two remedies, a Reset and deleting the file, and must carry the
+    /// second as well as the first. Since #482 the Reset recovers a file SQLite cannot open too; which
+    /// remedy the reason leads with for this fault is #457's.
     /// </summary>
     [TestMethod]
     public async Task Startup_DatabaseFileCorrupt_HealthReasonNamesARemedyThatCanWork()
@@ -659,7 +660,7 @@ public class StartupResilienceTests
 
         JsonElement notification = Assert.ContainsSingle(
             doc.RootElement.GetProperty("items").EnumerateArray()
-               .Where(n => n.GetProperty("metadataKind").GetString() == "UnreadableDatabaseSetAside"),
+               .Where(n => string.Equals(n.GetProperty("metadataKind").GetString(), "UnreadableDatabaseSetAside", StringComparison.OrdinalIgnoreCase)),
             "no set-aside notification was written");
         Assert.Contains(setAside, notification.GetProperty("body").GetString()!, StringComparison.Ordinal);
         Assert.IsTrue(notification.GetProperty("isTranslated").GetBoolean(), "the notification's text exists only in English");
@@ -700,7 +701,10 @@ public class StartupResilienceTests
         using JsonDocument body = JsonDocument.Parse(await reset.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.IsTrue(body.RootElement.TryGetProperty("resetObstacle", out JsonElement obstacle), "the refusal names no reset obstacle: " + body.RootElement);
         Assert.AreEqual("SetAsideFolderNotWritable", obstacle.GetString());
-        Assert.AreEqual(NotADatabase, File.ReadAllText(Path.Combine(DataDirectoryOf(factory), DataPaths.DatabaseFile)), "the unreadable file was not left in place");
+        // Shared read: the running application may hold the file open, which is not what is being asserted.
+        using FileStream file = new(Path.Combine(DataDirectoryOf(factory), DataPaths.DatabaseFile), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using StreamReader reader = new(file);
+        Assert.AreEqual(NotADatabase, await reader.ReadToEndAsync(TestContext.CancellationToken), "the unreadable file was not left in place");
     }
 
     /// <summary>

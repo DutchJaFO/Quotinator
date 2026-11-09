@@ -14,6 +14,6 @@ public enum BackupGuardedStep
     /// <summary>Loading the configured content into a database that has none, at startup.</summary>
     ContentLoad,
 
-    /// <summary>Dropping and rebuilding the whole database.</summary>
+    /// <summary>Replacing the whole database with a newly built one.</summary>
     Reset,
 }

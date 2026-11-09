@@ -460,6 +460,8 @@ public class NotificationTableTests
         // #371: one notification per migration, so its description is a sentence rather than a row,
         // and a one-row table would align nothing under a column.
         [NotificationMetadataKind.MigrationApplied]       = false,
+        // #482: its file name and folder are what the body says, so there is nothing further to open.
+        [NotificationMetadataKind.UnreadableDatabaseSetAside] = false,
     };
 
     /// <summary>
@@ -766,6 +768,9 @@ public class NotificationTableTests
             """{"releaseState":"NotApplicable","dataSchemaVersion":28,"appSchemaVersion":9}""",
         NotificationMetadataKind.MigrationApplied =>
             """{"releaseState":"NotApplicable","phase":"Data","migrationVersion":28,"description":"Adds a probe column."}""",
+        // #482: required properties, for the reason #371's two give.
+        NotificationMetadataKind.UnreadableDatabaseSetAside =>
+            """{"releaseState":"NotApplicable","fileName":"quotinatordata_unreadable_20261109T000000000Z.db","folder":"unreadable"}""",
         _ => """{"releaseState":"NotApplicable"}""",
     };
 

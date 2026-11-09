@@ -114,5 +114,16 @@ public enum NotificationMetadataKind
     /// database created at the baseline applies no individual migration at all.
     /// </para>
     /// </summary>
-    MigrationApplied
+    MigrationApplied,
+
+    /// <summary>
+    /// A Reset found the database file could not be read, set it aside in the backups folder's reserved
+    /// folder, and replaced it with a new database (#482): the payload carries the set-aside file's name.
+    /// <para>
+    /// An event, so it carries no dismiss trigger, and its text is static per ADR 026: it records what
+    /// happened to the file, which stays true after the file is later removed. Each Reset sets aside its
+    /// own file, so the name is what identifies it.
+    /// </para>
+    /// </summary>
+    UnreadableDatabaseSetAside
 }

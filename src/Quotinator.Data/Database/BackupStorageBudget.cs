@@ -62,12 +62,16 @@ public static class BackupStorageBudget
         usedBytes + backupBytes > CeilingBytes(options);
 
     /// <summary>
-    /// Total size of every file currently in the backups folder, in bytes. A folder that does not
-    /// exist is zero used, not an error: nothing has been backed up yet.
+    /// Total size of every file currently in the backups folder and its subfolders, in bytes. A folder
+    /// that does not exist is zero used, not an error: nothing has been backed up yet.
+    /// <para>
+    /// Subfolders count because they occupy the same disk the ceiling is about (#482): a database a Reset
+    /// could not read is set aside in one, and counts from the moment it arrives.
+    /// </para>
     /// </summary>
     /// <param name="backupsPath">The backups folder.</param>
     public static long UsedBytes(string backupsPath) =>
         Directory.Exists(backupsPath)
-            ? Directory.EnumerateFiles(backupsPath).Sum(f => new FileInfo(f).Length)
+            ? Directory.EnumerateFiles(backupsPath, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length)
             : 0L;
 }

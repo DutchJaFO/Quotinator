@@ -184,13 +184,14 @@ public class AdminEndpointsTests
     // ── #348: a reset that cannot take a backup ───────────────────────────────
 
     /// <summary>
-    /// Before #348 this state produced an unhandled 500: the state the /health reason told the operator to
-    /// resolve by resetting.
+    /// Before #348 a refused backup produced an unhandled 500. The spy refuses with a full backup folder:
+    /// since #482 a Reset of an unreadable file takes no backup, so <c>SourceUnreadable</c> is no longer
+    /// an obstacle a Reset reports.
     /// </summary>
     [TestMethod]
     public async Task ResetDatabase_WhenNoBackupCanBeTaken_RefusesWithAStatedFailureRatherThanAnUnhandled500()
     {
-        SpyDatabaseInitializer spy = new() { RefuseWith = BackupOutcome.SourceUnreadable };
+        SpyDatabaseInitializer spy = new() { RefuseWith = BackupOutcome.BudgetExceeded };
         using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
 
         HttpResponseMessage response = await CreateClientWithKey(factory)
@@ -288,28 +289,6 @@ public class AdminEndpointsTests
         JsonElement body = await RefusedResetBodyAsync(new SpyDatabaseInitializer { RefuseWith = BackupOutcome.BudgetExceeded });
 
         Assert.Contains("allowNoBackup", AllRemedies(body), StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// Found live: a corrupt database passes the pre-flight, which inspects storage and never the database,
-    /// and then fails inside the table drop. The override cannot rescue that, since there is nothing to drop,
-    /// so offering it would name a remedy that cannot succeed: the defect #326 fixed for the data directory.
-    /// </summary>
-    [TestMethod]
-    public async Task ResetDatabase_WhenTheSourceIsUnreadable_DoesNotOfferTheOverride()
-    {
-        JsonElement body = await RefusedResetBodyAsync(new SpyDatabaseInitializer { RefuseWith = BackupOutcome.SourceUnreadable });
-
-        Assert.DoesNotContain("allowNoBackup", AllRemedies(body), StringComparison.Ordinal);
-    }
-
-    /// <summary>The remedy that does work for an unreadable source is replacing the file from outside the application.</summary>
-    [TestMethod]
-    public async Task ResetDatabase_WhenTheSourceIsUnreadable_OffersReplacingTheFile()
-    {
-        JsonElement body = await RefusedResetBodyAsync(new SpyDatabaseInitializer { RefuseWith = BackupOutcome.SourceUnreadable });
-
-        Assert.Contains("restart", AllRemedies(body), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

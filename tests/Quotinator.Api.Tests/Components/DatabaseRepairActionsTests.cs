@@ -46,6 +46,22 @@ public class DatabaseRepairActionsTests
         Assert.DoesNotContain("no reason was reported", outcome, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// #482: a Reset of an unreadable file that could not set it aside is not a backup refusal, and is told
+    /// as what it is, with the remedy, rather than as a backup problem or a missing reason.
+    /// </summary>
+    [TestMethod]
+    public void RefusedForReset_NamesTheResetObstacleAndItsRemedy()
+    {
+        string? outcome = DatabaseRepairActions.RepairOutcomeText(
+            NotificationActionResult.RefusedForReset(ResetObstacle.DataDirectoryNotWritable));
+
+        Assert.IsNotNull(outcome);
+        Assert.Contains(ResetObstacleGuidance.Cause(ResetObstacle.DataDirectoryNotWritable), outcome, StringComparison.Ordinal);
+        Assert.Contains(ResetObstacleGuidance.Remedies(ResetObstacle.DataDirectoryNotWritable)[0], outcome, StringComparison.Ordinal);
+        Assert.DoesNotContain("no backup could be taken", outcome, StringComparison.Ordinal);
+    }
+
     /// <summary>A repair that ran leaves nothing to report: the application is healthy and reloads.</summary>
     [TestMethod]
     public void SuccessfulRepair_SaysNothing()

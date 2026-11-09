@@ -31,6 +31,13 @@ public sealed class DatabaseOperationResult
     public BackupOutcome? BackupObstacle { get; init; }
 
     /// <summary>
+    /// What stopped a Reset of a database file that could not be read (#482), when that is what stopped
+    /// it. Such a Reset takes no backup, so <see cref="BackupObstacle"/> is <see langword="null"/>
+    /// alongside it: the two never describe the same refusal.
+    /// </summary>
+    public ResetObstacle? ResetObstacle { get; init; }
+
+    /// <summary>
     /// Which guarded step refused, when one did: a caller reports a refused migration differently from a
     /// refused content load. <see langword="null"/> when nothing was refused.
     /// </summary>
@@ -69,4 +76,13 @@ public sealed class DatabaseOperationResult
     public static DatabaseOperationResult RefusedForBackup(BackupOutcome obstacle, BackupGuardedStep step) =>
         new()
         { Succeeded = false, BackupObstacle = obstacle, RefusedStep = step };
+
+    /// <summary>
+    /// A Reset of an unreadable database file refused because the file could not be set aside or replaced
+    /// (#482). Nothing was moved or written.
+    /// </summary>
+    /// <param name="obstacle">What stopped it.</param>
+    public static DatabaseOperationResult RefusedForReset(ResetObstacle obstacle) =>
+        new()
+        { Succeeded = false, ResetObstacle = obstacle, RefusedStep = BackupGuardedStep.Reset };
 }

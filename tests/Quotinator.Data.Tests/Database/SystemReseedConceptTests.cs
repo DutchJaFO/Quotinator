@@ -29,7 +29,7 @@ public class SystemReseedConceptTests
         public int SeedSystemContentCallCount { get; private set; }
 
         protected override Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
-            => DropAndRebuildAsync(connection, preserveSchemaVersion);
+            => RebuildAsync(connection, preserveSchemaVersion);
 
         // Standard-reseed stand-in: deliberately does NOT call SeedSystemContentAsync, proving the
         // two reseed actions stay separate — a standard reseed never touches system content.

@@ -3941,7 +3941,7 @@ public partial class DatabaseInitializerTests
 
     // ── Reset (#156: full wipe + baseline rebuild, no reseed, supersedes #141) ─────────────────
 
-    /// <summary>ResetAsync on an already-seeded database drops and recreates all tables at the empty baseline: it no longer reimports bundled/user content.</summary>
+    /// <summary>ResetAsync on an already-seeded database replaces it with a new one at the empty baseline: it does not reimport bundled/user content.</summary>
     [TestMethod]
     public async Task ResetAsync_AfterInitialise_RebuildsSchemaAndDoesNotReseed()
     {
@@ -4101,31 +4101,6 @@ public partial class DatabaseInitializerTests
         await conn.OpenAsync(TestContext.CancellationToken);
         return await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_ConsumerSchemaVersion WHERE AppliedAt = @marker;", new { marker = MarkerValue });
-    }
-
-    // ── Full-wipe table discovery (#156, supersedes #141's protected-table concept) ────────────
-
-    /// <summary>
-    /// GetAllTables returns literally every real table, with no exclusion of any kind: #156
-    /// retired the System_/Import_/Audit_ protected-table concept GetUserTables used to implement,
-    /// since Reset is now a full, unconditional wipe.
-    /// </summary>
-    [TestMethod]
-    public async Task GetAllTables_ReturnsEveryTableRegardlessOfPrefix()
-    {
-        using SqliteConnection conn = new($"Data Source={_dbPath}");
-        await conn.OpenAsync(TestContext.CancellationToken);
-        await conn.ExecuteAsync("CREATE TABLE System_FooBar (Id INTEGER);");
-        await conn.ExecuteAsync("CREATE TABLE Import_FooBar (Id INTEGER);");
-        await conn.ExecuteAsync("CREATE TABLE Audit_FooBar (Id INTEGER);");
-        await conn.ExecuteAsync("CREATE TABLE FooBar (Id INTEGER);");
-
-        List<string> tables = [.. (await conn.QueryAsync<string>(Sql.Schema.GetAllTables))];
-
-        Assert.Contains("System_FooBar", tables, "System_-prefixed tables must no longer be excluded");
-        Assert.Contains("Import_FooBar", tables, "Import_-prefixed tables must no longer be excluded");
-        Assert.Contains("Audit_FooBar", tables, "Audit_-prefixed tables must no longer be excluded");
-        Assert.Contains("FooBar", tables, "Non-prefixed tables must still be included");
     }
 
     /// <summary>A fresh database creates System_SchemaVersion directly: it is never created under the legacy name and then renamed.</summary>

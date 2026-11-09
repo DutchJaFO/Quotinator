@@ -101,8 +101,17 @@ internal static partial class LogMessages
     public static partial void LogMigrationRefusedNoBackup(this ILogger logger, string obstacle);
 
     /// <summary>Logs that a Reset refused to run because no backup could be taken (#348).</summary>
-    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Backup] reset refused: no backup could be taken ({Obstacle:l}). A reset drops every table, so it does not run without a restore point unless the caller explicitly accepts that")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Backup] reset refused: no backup could be taken ({Obstacle:l}). A reset replaces the whole database, so it does not run without a restore point unless the caller explicitly accepts that")]
     public static partial void LogResetRefusedNoBackup(this ILogger logger, string obstacle);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Init] reset: the database file cannot be read: it is set aside rather than backed up, and a new database replaces it")]
+    public static partial void LogResetSourceUnreadable(this ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Init] reset refused: the unreadable database could not be set aside or replaced ({Obstacle:l}). Nothing was moved or written")]
+    public static partial void LogResetRefusedCannotSetAside(this ILogger logger, string obstacle);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Init] reset: the unreadable database was set aside as {Path}. It may be flawed, and it counts towards backup storage")]
+    public static partial void LogUnreadableDatabaseSetAside(this ILogger logger, string path);
 
     /// <summary>Logs that a Reset ran without a backup because the caller explicitly accepted the risk (#348).</summary>
     [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Backup] reset proceeding WITHOUT a backup ({Obstacle:l}): the caller accepted responsibility. There is no restore point for this reset; do not look for one later")]

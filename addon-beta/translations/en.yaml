@@ -35,6 +35,8 @@ configuration:
     description: >-
       Directory where pre-migration database backups are stored.
       Leave empty to use the default: a backups/ subfolder inside the data directory.
+      A database reset moves a database file it cannot read into an unreadable/ folder here;
+      on another volume that move needs free space for a copy of the file.
   auto_update_sources:
     name: Auto-update sources
     description: >-

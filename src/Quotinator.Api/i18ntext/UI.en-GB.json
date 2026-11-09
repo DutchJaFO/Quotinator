@@ -58,6 +58,8 @@
   "KnowledgebaseEntryLink": "How to resolve this (Knowledgebase)",
   "NotificationBackupRefusedContentLoadTitle": "Content was not loaded: no backup could be taken",
   "NotificationBackupRefusedContentLoadBody": "Quotinator did not load its content, because a backup of the database has to be taken first and none could be ({0}). The Notifications page offers the options that can run now; the linked Knowledgebase entry explains why any others are blocked and how to resolve it.",
+  "NotificationUnreadableDatabaseSetAsideTitle": "The database file could not be read, and was set aside",
+  "NotificationUnreadableDatabaseSetAsideBody": "A database reset found that the database file could not be read. Instead of deleting it, Quotinator moved it to the \"{1}\" folder inside the backups folder as {0}, and replaced it with a new, empty database. The file may be flawed: it was kept so it can be inspected or recovered, and it is not a backup to restore. It counts towards backup storage while it is there.",
   "NotificationBackupQuotaReachedTitle": "Backups have reached their quota",
   "NotificationBackupQuotaReachedBody": "The backups folder holds {0}, past its operating quota of {1}. Backups are still being taken, from the reserve below the ceiling of {2}, but once the folder reaches the ceiling a backup will be refused. Delete older backups, or raise the quota, to bring the folder back under it; this notice clears itself once it is.",
   "NotificationBackupMaxExceededTitle": "Backups have reached their maximum",

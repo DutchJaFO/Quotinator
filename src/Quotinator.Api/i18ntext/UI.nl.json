@@ -58,6 +58,8 @@
   "KnowledgebaseEntryLink": "Zo los je dit op (Knowledgebase)",
   "NotificationBackupRefusedContentLoadTitle": "Inhoud niet geladen: er kon geen back-up worden gemaakt",
   "NotificationBackupRefusedContentLoadBody": "Quotinator heeft zijn inhoud niet geladen, omdat eerst een back-up van de database moet worden gemaakt en dat niet lukte ({0}). De meldingenpagina biedt de opties die nu kunnen worden uitgevoerd; het gekoppelde Knowledgebase-artikel legt uit waarom andere opties geblokkeerd zijn en hoe je dat oplost.",
+  "NotificationUnreadableDatabaseSetAsideTitle": "Het databasebestand kon niet worden gelezen en is apart gezet",
+  "NotificationUnreadableDatabaseSetAsideBody": "Bij het resetten van de database bleek het databasebestand onleesbaar. In plaats van het te verwijderen heeft Quotinator het verplaatst naar de map \"{1}\" in de back-upmap, als {0}, en vervangen door een nieuwe, lege database. Het bestand kan beschadigd zijn: het is bewaard zodat het kan worden onderzocht of hersteld, en het is geen back-up om terug te zetten. Zolang het er staat, telt het mee voor de back-upopslag.",
   "NotificationBackupQuotaReachedTitle": "Back-ups hebben hun quotum bereikt",
   "NotificationBackupQuotaReachedBody": "De back-upmap bevat {0}, boven het werkquotum van {1}. Er worden nog steeds back-ups gemaakt, uit de reserve onder het plafond van {2}, maar zodra de map het plafond bereikt, wordt een back-up geweigerd. Verwijder oudere back-ups of verhoog het quotum om de map er weer onder te brengen; deze melding verdwijnt vanzelf zodra dat zo is.",
   "NotificationBackupMaxExceededTitle": "Back-ups hebben hun maximum bereikt",

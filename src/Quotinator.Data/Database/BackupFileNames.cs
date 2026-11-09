@@ -20,6 +20,14 @@ namespace Quotinator.Data.Database;
 public static class BackupFileNames
 {
     /// <summary>
+    /// The reserved folder inside the backups folder where a Reset sets aside a database file it could not
+    /// read (#482). A file there is never a backup: restoring it would put a broken database back in
+    /// place. It is kept so an operator can see it exists and try to recover it, and it counts towards
+    /// backup storage. Listing, downloading and removing what is in it is #481's.
+    /// </summary>
+    public const string UnreadableFolderName = "unreadable";
+
+    /// <summary>
     /// The zero-byte file <see cref="DatabaseInitializer.CheckBackupReadiness"/> writes and deletes to
     /// prove the backups folder is genuinely writable.
     /// <para>

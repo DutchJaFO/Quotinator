@@ -132,6 +132,16 @@ public static class NotificationMessageKeys
     /// </summary>
     public const string BackupRefusedContentLoadBody = "NotificationBackupRefusedContentLoadBody";
 
+    /// <summary>Title for the notice that a Reset set aside a database file it could not read (#482).</summary>
+    public const string UnreadableDatabaseSetAsideTitle = "NotificationUnreadableDatabaseSetAsideTitle";
+
+    /// <summary>
+    /// Body for the same notice. Receives the set-aside file's name as <c>{0}</c> and the reserved folder's
+    /// name as <c>{1}</c>. Static text per ADR 026: every sentence records what happened, so it stays
+    /// true after the file is removed.
+    /// </summary>
+    public const string UnreadableDatabaseSetAsideBody = "NotificationUnreadableDatabaseSetAsideBody";
+
     /// <summary>Title for the warning that the backups folder has reached its operating quota (#348).</summary>
     public const string BackupQuotaReachedTitle = "NotificationBackupQuotaReachedTitle";
 

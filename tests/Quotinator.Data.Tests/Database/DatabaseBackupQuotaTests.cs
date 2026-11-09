@@ -118,7 +118,7 @@ public class DatabaseBackupQuotaTests
 
         await initializer.ResetAsync();
 
-        Assert.IsFalse(initializer.ResetHookRan, "refusing has to mean the tables were never dropped");
+        Assert.IsFalse(initializer.ResetHookRan, "refusing has to mean the database was never replaced");
     }
 
     /// <summary>The caller has to be told the reset ran without a backup, or the audit trail above it has nothing to record.</summary>

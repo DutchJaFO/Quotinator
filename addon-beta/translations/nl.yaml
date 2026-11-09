@@ -35,6 +35,8 @@ configuration:
     description: >-
       Map waar back-ups van de database vóór migraties worden opgeslagen.
       Laat leeg voor de standaardwaarde: een backups/-submap in de gegevensmap.
+      Een databasereset verplaatst een onleesbaar databasebestand naar een unreadable/-map hierin;
+      op een ander volume heeft die verplaatsing vrije ruimte nodig voor een kopie van het bestand.
   auto_update_sources:
     name: Bronnen automatisch bijwerken
     description: >-

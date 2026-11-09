@@ -75,16 +75,6 @@ internal static class Sql
         internal const string InsertConsumerVersion      = "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) VALUES (@v, @at);";
         internal const string DeleteAllConsumerVersions  = "DELETE FROM System_ConsumerSchemaVersion;";
         internal const string GetAllConsumerVersions     = "SELECT Version, AppliedAt FROM System_ConsumerSchemaVersion;";
-
-        // Returns literally every real table in the database, with no exclusion of any kind. Used
-        // by ResetAsync to discover tables dynamically so that new tables added in future migrations
-        // are dropped without requiring a manual update here. FK checks must be off before dropping
-        // the results (PRAGMA foreign_keys = OFF). Per #156, Reset is a full, unconditional wipe —
-        // there is no "protected system table" concept any more (that was GetUserTables, retired by
-        // #156: previously it excluded Import_/Audit_/System_-prefixed tables from being dropped,
-        // which is exactly the selective-preservation behaviour #156 reverses).
-        internal const string GetAllTables =
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%';";
     }
 
     /// <summary>

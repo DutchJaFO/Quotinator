@@ -43,6 +43,10 @@ public partial class DatabaseRepairActions
         result switch
         {
             { Succeeded: true }                       => null,
+            { ResetObstacle: ResetObstacle obstacle } =>
+                $"The database was not reset ({obstacle}). "
+                + ResetObstacleGuidance.Cause(obstacle) + " "
+                + string.Join(" ", ResetObstacleGuidance.Remedies(obstacle)),
             { BackupObstacle: BackupOutcome obstacle } =>
                 $"The database was not reset: no backup could be taken first ({obstacle}). "
                 + BackupObstacleGuidance.Cause(obstacle)

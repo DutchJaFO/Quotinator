@@ -126,7 +126,9 @@ public class BackupStorageBudgetTests
 
     /// <summary>
     /// #482: a file in a subfolder occupies the same disk the ceiling is about, so it counts. A Reset sets
-    /// an unreadable database aside in one, and that file counts from the moment it arrives.
+    /// an unreadable database aside in one, and that file counts from the moment it arrives. Which files
+    /// the total covers is a decision rather than an accident of the enumeration overload: before #482 it
+    /// was the folder's own files only, and a test asserted that.
     /// </summary>
     [TestMethod]
     public void UsedBytes_FileInASubfolder_IsCounted()
@@ -153,22 +155,6 @@ public class BackupStorageBudgetTests
         string missing = Path.Combine(_backups.Path, "does-not-exist");
 
         Assert.AreEqual(0L, BackupStorageBudget.UsedBytes(missing));
-    }
-
-    /// <summary>
-    /// Only the folder's own files count; a subdirectory's contents do not. Asserted rather than left
-    /// to whichever enumeration overload was reached for: the quota is a claim about this folder, and
-    /// which files it covers has to be a decision rather than an accident.
-    /// </summary>
-    [TestMethod]
-    public void UsedBytes_IgnoresFilesInSubdirectories()
-    {
-        WriteFile("one.db", 100);
-        string nested = Directory.CreateDirectory(Path.Combine(_backups.Path, "nested")).FullName;
-        using (FileStream stream = File.Create(Path.Combine(nested, "deep.db")))
-            stream.SetLength(500);
-
-        Assert.AreEqual(100L, BackupStorageBudget.UsedBytes(_backups.Path));
     }
 
     private static DatabaseOptions Options(int maxGb = 1, int quotaPercent = DatabaseOptions.DefaultBackupQuotaPercent) =>

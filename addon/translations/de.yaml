@@ -35,6 +35,8 @@ configuration:
     description: >-
       Verzeichnis, in dem Datenbanksicherungen vor Migrationen gespeichert werden.
       Leer lassen für den Standardwert: ein backups/-Unterordner im Datenverzeichnis.
+      Ein Zurücksetzen der Datenbank verschiebt eine unlesbare Datenbankdatei in einen Ordner unreadable/ darin;
+      auf einem anderen Volume braucht dieses Verschieben freien Platz für eine Kopie der Datei.
   auto_update_sources:
     name: Quellen automatisch aktualisieren
     description: >-
