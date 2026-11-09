@@ -644,24 +644,31 @@ public class StartupResilienceTests
     /// #482: the notification is written after the new database is in place, names the set-aside file, and
     /// carries its text in every language rather than English only.
     /// </summary>
+    /// <remarks>
+    /// The Reset's own status is deliberately not asserted first. Before #482 the Reset refused, and a test
+    /// stopping on that refusal would be red on a precondition rather than on the notification it claims,
+    /// which the red-first rule does not count (#423). The notification is asserted first, so the test is
+    /// red on its own claim wherever no set-aside notification exists.
+    /// </remarks>
     [TestMethod]
     public async Task Startup_DatabaseFileCorrupt_ResetLeavesANotificationNamingTheSetAsideFile()
     {
         using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase(AdminKey);
         using HttpClient client = factory.CreateClient();
-        Assert.AreEqual(HttpStatusCode.OK, (await PostResetAsync(client)).StatusCode, "precondition: the Reset ran");
-        string setAside = Path.GetFileName(Assert.ContainsSingle(
-            SetAsideMainFiles(factory), "precondition: the file was set aside"));
+        await PostResetAsync(client);
 
         using HttpRequestMessage request = new(HttpMethod.Get, "/api/v1/notifications");
         request.Headers.Add("Accept-Language", "nl");
-        using JsonDocument doc = JsonDocument.Parse(
-            await (await client.SendAsync(request, TestContext.CancellationToken)).Content.ReadAsStringAsync(TestContext.CancellationToken));
+        using HttpResponseMessage listing = await client.SendAsync(request, TestContext.CancellationToken);
+        using JsonDocument doc = JsonDocument.Parse(await listing.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
+        // A degraded application answers this route with a problem document, which carries no list: no
+        // notification can be read from it, which is the absence this test reports.
+        IEnumerable<JsonElement> items = doc.RootElement.TryGetProperty("items", out JsonElement list) ? list.EnumerateArray() : [];
         JsonElement notification = Assert.ContainsSingle(
-            doc.RootElement.GetProperty("items").EnumerateArray()
-               .Where(n => string.Equals(n.GetProperty("metadataKind").GetString(), "UnreadableDatabaseSetAside", StringComparison.OrdinalIgnoreCase)),
-            "no set-aside notification was written");
+            items.Where(n => string.Equals(n.GetProperty("metadataKind").GetString(), "UnreadableDatabaseSetAside", StringComparison.OrdinalIgnoreCase)),
+            $"no set-aside notification was written (GET /api/v1/notifications answered {(int)listing.StatusCode})");
+        string setAside = Path.GetFileName(Assert.ContainsSingle(SetAsideMainFiles(factory), "the notification exists, but no file was set aside"));
         Assert.Contains(setAside, notification.GetProperty("body").GetString()!, StringComparison.Ordinal);
         Assert.IsTrue(notification.GetProperty("isTranslated").GetBoolean(), "the notification's text exists only in English");
     }
