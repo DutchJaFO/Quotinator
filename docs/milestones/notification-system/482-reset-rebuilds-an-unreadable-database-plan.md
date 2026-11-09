@@ -1,6 +1,6 @@
 # #482: A Reset cannot rebuild a database SQLite cannot read
 
-**Status:** In progress (step 4)
+**Status:** In progress (step 5)
 **GitHub issue:** #482
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -272,7 +272,21 @@ after the first.
 
 ### 4. Write the automated documents and confirm them red
 
-**Status:** 🚧 In progress
+**Status:** ✅ Done, 2026-11-09. All five red against `quotinator:canary-482` (built from `69800a23`), each
+at the step it exists for, with every earlier step green; container, image and worktree removed.
+
+| Document | Control steps | Red at | Read |
+|---|---|---|---|
+| `backup/01` | 1–3 | 4 | `409`, `backupObstacle=SourceUnreadable` |
+| `backup/02` | 1–3 | 4 | `409`, `backupObstacle=SourceUnreadable` |
+| `startup-and-degradation/08` | 1–4 | 5 | `409`, `/health` still `503`, no `backups/unreadable/` |
+| `startup-and-degradation/09` | 1–4 | 5 | the same |
+| `backup/09` | 1–3 | 4 | `409` with `backupObstacle=DestinationFileNotWritable` and no `resetObstacle`; file unmoved |
+
+**Two readings beyond the steps.** After `backup/01`'s refused Resets, `backups/` held one `.db` file per
+attempt: the fragment step 3's red run predicted, now seen live. And `backup/09`'s refusal on the old build
+blamed the backup folder rather than the source, so its canary paragraph was corrected from the
+`SourceUnreadable` it had assumed.
 
 - **`backup/01` and `backup/02`** are rewritten and renamed, since their titles state the refusal this
   issue removes: `backup/01-a-reset-sets-aside-a-database-it-cannot-read.md` and
@@ -287,9 +301,19 @@ after the first.
   file is still in place with nothing moved.
 
 Each runs red against a canary: the commit before this issue's first commit, built under
-`quotinator:canary-482`, then the container, image and worktree removed. If `TestProbe` cannot assert
-that a folder holds exactly one file matching a pattern, which the set-aside name needs, that option is
-added to `tools/Quotinator.Tools.TestProbe` in this issue.
+`quotinator:canary-482`, then the container, image and worktree removed. `TestProbe` already had what the
+set-aside name needs (`--expect-match-count`, and `--expect-identical-in` to recognise the file by its
+bytes), so no tool change was needed.
+
+**Written 2026-11-09.** The two rewrites end with a Reset of the now-healthy database as their positive
+control: it takes a backup and leaves the reserved folder as it was, so the set-aside assertions are about
+the unreadable file rather than every Reset. `08` and `09` gain step 5, the recovery, with the old step 5
+moved to 6; their *Observed effect* recovery paragraphs now say the route is asserted rather than
+recording a refusal, and `08`'s note that the reason names the wrong remedy first is restated against
+#457, which owns the reason. All three new or rewritten documents join the README's *Observed effects
+awaiting measurement* list (now 40 of 84) until step 14 measures them, and the index, the solution and
+`startup-and-degradation/09`'s links follow the renames. `AutomatedTestingSuiteTests` and the
+`RepositoryStructureTests` that guard the suite pass after the change.
 
 `database-lifecycle/03`'s fixture gains nothing: the new notification kind is created by a Reset rather
 than surviving one, and notifications are already a category that document reads before and after.
