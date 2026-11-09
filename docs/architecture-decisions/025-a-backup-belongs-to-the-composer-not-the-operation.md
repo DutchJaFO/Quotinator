@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-10-10
-**GitHub issues:** #348, #349, #423
+**GitHub issues:** #348, #349, #423, #482
 
 ---
 
@@ -46,11 +46,21 @@ back-up-then-reseed, remove-oldest-then-reseed, or reseed-without-backup with an
 into a database this run created have no user composing them, so the machinery performing the step takes
 the backup and refuses the step when it cannot
 (`ApplyMigrationsAsync`, `RunInitialisedHookAsync`, reported through `BackupGuardedStep`). `ResetAsync`
-is the same case under operator control rather than at startup: it drops every table, so it takes its
-own backup and `allowNoBackup` is the operator accepting responsibility for going without.
+is the same case under operator control rather than at startup: it replaces the whole database, so it
+takes its own backup of a readable one and `allowNoBackup` is the operator accepting responsibility for
+going without. [ADR 027](027-a-reset-recreates-the-database.md) defines what a Reset does.
 
 **A function that performs one operation does not back up.** `ReseedAsync` is the canonical primitive:
 it reseeds, and that is all.
+
+**A file SQLite cannot read is never a backup.** Copying it would fill the backup folder with something
+offered as a restore point that cannot restore anything. A Reset of such a file therefore takes no
+backup, and no backup-storage condition can refuse it: it moves the file, with its `-wal` and `-shm`,
+into the reserved `unreadable` folder inside the backup folder under a unique name, and leaves a
+notification naming it. Readability is decided by reading every page (`PRAGMA quick_check`), since a
+file whose first page reads can still be damaged beyond it, and it is decided before any storage check.
+A file in the reserved folder is not listed as a backup and is never offered for restore, but it counts
+towards the backup storage ceiling from the moment it arrives, because it occupies the same disk.
 
 ## Consequences
 
@@ -64,6 +74,10 @@ flow composes it; an unattended startup step takes its own; a bare endpoint or a
 Removing a backup from a path that should have one is a real defect, and this ADR is what distinguishes
 that from the asymmetry above. The distinguishing test is whether anybody else in that path is in a
 position to take it.
+
+Moving a set-aside file across filesystems is a copy, so a backup folder on another volume needs free
+space for one copy of the unreadable file; a move that fails refuses the Reset with the file left where
+it was. Listing, downloading and removing a set-aside file is #481.
 
 #423 is the recorded instance of the cost of leaving this undocumented, and the reason this ADR exists
 rather than a fourth code comment.

@@ -25,6 +25,11 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 - **A codebase that does not yet comply does not soften the ADR.** An `Accepted` ADR states what is
   true even while an issue tracks the code catching up, as ADRs 021, 022 and 024 each do today. Never
   extend a non-compliant pattern to something new on the strength of the existing code.
+- **A rule is defined in exactly one place, and every other document points to the ADR that defines it.**
+  `CLAUDE.md`, the workflow guides and the conventions documents name the ADR and say where it applies;
+  they do not restate its rules. A restated copy is not updated when the ADR changes, and the two drift
+  apart: #482 found `CLAUDE.md` and three ADRs describing a Reset the code had stopped performing. When a
+  rule worth keeping lives only outside an ADR, it gets an ADR before anything points to it.
 - ADRs are never deleted. If a decision is reversed, the original ADR is marked **Superseded** and a new ADR is written.
 - Number sequentially from `001`. Do not reuse numbers.
 - Link related GitHub issues in the header.
@@ -61,3 +66,4 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 | 024 | [024-case-insensitivity-serves-identity-not-content-equality.md](024-case-insensitivity-serves-identity-not-content-equality.md) | Case-insensitivity serves identity and lookup, never content equality |
 | 025 | [025-a-backup-belongs-to-the-composer-not-the-operation.md](025-a-backup-belongs-to-the-composer-not-the-operation.md) | A backup belongs to whoever composes the work, never to the operation itself |
 | 026 | [026-notification-content-is-stored-only-when-it-is-static.md](026-notification-content-is-stored-only-when-it-is-static.md) | A notification's text is stored only when it is static; anything that depends on current state is composed from its payload when read |
+| 027 | [027-a-reset-recreates-the-database.md](027-a-reset-recreates-the-database.md) | A Reset recreates the database; a failed migration is restored, never interpreted |

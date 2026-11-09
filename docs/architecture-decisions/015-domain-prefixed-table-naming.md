@@ -106,9 +106,11 @@ long before it reaches a tag, and editing or squashing that migration afterward 
 "up to date" under a smaller migration count, so the edited work never runs there at all. Treat a
 migration as frozen the first time it executes against any real database, including a developer's own.
 
-This applies with extra force to **Data-owned** migrations: `System_SchemaVersion` is never wiped or
-replayed by a Reset (see `DatabaseInitializer.DropAndRebuildAsync`), so a database stranded by an edited
-Data-owned migration has no supported recovery path. Collapsing several migrations into one remains
+This applies with extra force to **Data-owned** migrations: a database stranded by an edited Data-owned
+migration records it as applied in `System_SchemaVersion`, so no startup ever runs the edited version
+there. Its only supported recovery is a Reset, which replaces the whole database with one built from
+the baseline ([ADR 027](027-a-reset-recreates-the-database.md)) and so discards every row the database
+held, the content of every other domain included. Collapsing several migrations into one remains
 correct only for migrations that are still purely theoretical — written in a plan doc, never executed
 anywhere.
 
