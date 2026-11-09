@@ -388,6 +388,7 @@
     <File Path="docs/knowledgebase/a-casing-correction-cannot-be-made.md" />
     <File Path="docs/knowledgebase/two-backups-of-one-database-show-different-versions.md" />
     <File Path="docs/knowledgebase/uploaded-file-is-rejected-as-invalid-json.md" />
+    <File Path="docs/knowledgebase/a-page-capture-stops-producing-frames.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/api-surface/">
     <File Path="docs/automated-testing/api-surface/01-baseline.md" />
