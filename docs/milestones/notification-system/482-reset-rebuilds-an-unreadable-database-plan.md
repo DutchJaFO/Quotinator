@@ -285,6 +285,12 @@ after the first.
 **Status:** ✅ Done, 2026-11-09. All five red against `quotinator:canary-482` (built from `69800a23`), each
 at the step it exists for, with every earlier step green; container, image and worktree removed.
 
+**Re-checked 2026-11-09 before the Definition of done, against the documents as they now stand.**
+`backup/01` and `02` and `startup-and-degradation/08` and `09`, the four the issue lists, were re-run
+against a fresh `quotinator:canary-482` from `69800a23`. Every command before the Reset exited `0`, and
+each failed only on the Reset its step exists for: `Expected 200, got 409` (`backup/01` and `02` at step
+4, `08` and `09` at step 5). Container, image and worktree removed.
+
 | Document | Control steps | Red at | Read |
 |---|---|---|---|
 | `backup/01` | 1–3 | 4 | `409`, `backupObstacle=SourceUnreadable` |
