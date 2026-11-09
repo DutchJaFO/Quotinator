@@ -55,6 +55,7 @@
 //   --full-page           Capture the whole scrollable page rather than the viewport. Ignored when the
 //                         script returns a region
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading;
 using System.Net.Http;
@@ -99,6 +100,7 @@ if (browser is null)
     Console.Error.WriteLine($"No browser found. Looked for:{Environment.NewLine}  {string.Join(Environment.NewLine + "  ", candidates)}");
     return 1;
 }
+string browserPath = browser;
 
 string? script = null;
 if (Value("--script-file") is string scriptFile)
@@ -115,35 +117,67 @@ else if (Flag("--script-stdin"))
     if (script.Length == 0) script = null;
 }
 
-// A port the caller did not choose, so two captures in the same document never collide.
-int port = new Random().Next(9500, 9899);
-string profile = Path.Combine(Path.GetTempPath(), $"qt-capture-{port}");
+Process? proc = null;
+string? profile = null;
+ClientWebSocket? ws = null;
+var pending = new ConcurrentDictionary<int, TaskCompletionSource<JsonNode?>>();
+int nextId = 0;
 
-var startInfo = new ProcessStartInfo(browser)
+// Every call waits a bounded time for its reply. Without the bound, a reply that never comes holds the
+// capture open for good: measured 2026-11-09, Page.captureScreenshot went unanswered in 2 to 4 of every
+// 10 captures against a fresh container, foreground or background alike, with the headless browser
+// still running and the request logged as sent.
+async Task<JsonNode?> Call(string method, object? parameters = null, int timeoutSeconds = 30)
 {
-    UseShellExecute = false,
-    RedirectStandardError = true,
-    RedirectStandardOutput = true
-};
-foreach (string arg in new[]
-{
-    "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
-    "--no-default-browser-check", "--disable-extensions", "--disable-background-networking",
-    $"--remote-debugging-port={port}", $"--user-data-dir={profile}",
-    $"--window-size={width},{height}", "about:blank"
-})
-{
-    startInfo.ArgumentList.Add(arg);
+    int id = ++nextId;
+    var waiter = new TaskCompletionSource<JsonNode?>(TaskCreationOptions.RunContinuationsAsynchronously);
+    pending[id] = waiter;
+    string request = JsonSerializer.Serialize(new { id, method, @params = parameters ?? new { } });
+    await ws!.SendAsync(Encoding.UTF8.GetBytes(request), WebSocketMessageType.Text, true, CancellationToken.None);
+
+    if (await Task.WhenAny(waiter.Task, Task.Delay(TimeSpan.FromSeconds(timeoutSeconds))) != waiter.Task)
+    {
+        pending.TryRemove(id, out _);
+        throw new TimeoutException($"{method} had no reply within {timeoutSeconds} s.");
+    }
+
+    JsonNode? node = await waiter.Task;
+    if (node?["error"] is JsonNode error)
+    {
+        throw new InvalidOperationException($"{method} failed: {error.ToJsonString()}");
+    }
+    return node?["result"];
 }
 
-Console.Error.WriteLine($"$ {Path.GetFileName(browser)} --headless --remote-debugging-port={port} {url}");
-Process proc = Process.Start(startInfo)!;
-
-int exitCode = 0;
-try
+// Starts a browser, opens the page and waits for it to settle. Returns false when the browser never
+// offered a page to drive.
+async Task<bool> LaunchAsync()
 {
-    using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+    // A port the caller did not choose, so two captures in the same document never collide.
+    int port = new Random().Next(9500, 9899);
+    profile = Path.Combine(Path.GetTempPath(), $"qt-capture-{port}");
 
+    var startInfo = new ProcessStartInfo(browserPath)
+    {
+        UseShellExecute = false,
+        RedirectStandardError = true,
+        RedirectStandardOutput = true
+    };
+    foreach (string arg in new[]
+    {
+        "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
+        "--no-default-browser-check", "--disable-extensions", "--disable-background-networking",
+        $"--remote-debugging-port={port}", $"--user-data-dir={profile}",
+        $"--window-size={width},{height}", "about:blank"
+    })
+    {
+        startInfo.ArgumentList.Add(arg);
+    }
+
+    Console.Error.WriteLine($"$ {Path.GetFileName(browserPath)} --headless --remote-debugging-port={port} {url}");
+    proc = Process.Start(startInfo)!;
+
+    using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
     string? pageSocket = null;
     for (int attempt = 0; attempt < 60 && pageSocket is null; attempt++)
     {
@@ -160,49 +194,123 @@ try
     if (pageSocket is null)
     {
         Console.Error.WriteLine($"The browser never offered a page target on port {port}.");
-        return 1;
+        return false;
     }
 
-    using var ws = new ClientWebSocket();
-    await ws.ConnectAsync(new Uri(pageSocket), CancellationToken.None);
+    ClientWebSocket socket = new();
+    await socket.ConnectAsync(new Uri(pageSocket), CancellationToken.None);
+    ws = socket;
+    pending.Clear();
 
-    int nextId = 0;
-    async Task<JsonNode?> Call(string method, object? parameters = null)
+    // One reader owns the socket and hands each reply to the call waiting on its id. A call can then
+    // give up on a reply without touching the socket: cancelling a ClientWebSocket receive aborts the
+    // socket itself, which leaves the page's Blazor circuit half-open, the WebSocketException the
+    // comment in ShutdownAsync exists to avoid.
+    _ = Task.Run(async () =>
     {
-        int id = ++nextId;
-        string request = JsonSerializer.Serialize(new { id, method, @params = parameters ?? new { } });
-        await ws.SendAsync(Encoding.UTF8.GetBytes(request), WebSocketMessageType.Text, true, CancellationToken.None);
-
-        // Everything the page reports arrives on the same socket, so read past the events until the
-        // reply carrying this call's own id shows up.
         byte[] buffer = new byte[64 * 1024];
-        while (true)
+        try
         {
-            var message = new MemoryStream();
-            WebSocketReceiveResult received;
-            do
+            while (socket.State == WebSocketState.Open)
             {
-                received = await ws.ReceiveAsync(buffer, CancellationToken.None);
-                message.Write(buffer, 0, received.Count);
-            }
-            while (!received.EndOfMessage);
-
-            JsonNode? node = JsonNode.Parse(Encoding.UTF8.GetString(message.ToArray()));
-            if ((int?)node?["id"] == id)
-            {
-                if (node?["error"] is JsonNode error)
+                var message = new MemoryStream();
+                WebSocketReceiveResult received;
+                do
                 {
-                    throw new InvalidOperationException($"{method} failed: {error.ToJsonString()}");
+                    received = await socket.ReceiveAsync(buffer, CancellationToken.None);
+                    message.Write(buffer, 0, received.Count);
                 }
-                return node?["result"];
+                while (!received.EndOfMessage && received.MessageType != WebSocketMessageType.Close);
+                if (received.MessageType == WebSocketMessageType.Close) break;
+
+                JsonNode? node = JsonNode.Parse(Encoding.UTF8.GetString(message.ToArray()));
+                if ((int?)node?["id"] is int replyId && pending.TryRemove(replyId, out TaskCompletionSource<JsonNode?>? waiter))
+                {
+                    waiter.TrySetResult(node);
+                }
             }
         }
-    }
+        catch (Exception) { }
+        if (ws == socket)
+        {
+            foreach (TaskCompletionSource<JsonNode?> waiter in pending.Values)
+            {
+                waiter.TrySetException(new InvalidOperationException("The browser closed the connection."));
+            }
+        }
+    });
 
     await Call("Page.enable");
     await Call("Emulation.setDeviceMetricsOverride", new { width, height, deviceScaleFactor = 1, mobile = false });
     await Call("Page.navigate", new { url });
     await Task.Delay(waitMs);
+    return true;
+}
+
+// Whether the page is still producing frames. A page that has stopped never answers
+// Page.captureScreenshot, and asking again on the same page never helps: measured 2026-11-09, on a
+// stuck page plain JavaScript still ran and Page.bringToFront and Emulation.setDeviceMetricsOverride
+// still answered, but requestAnimationFrame never fired and no screenshot request was ever answered.
+// The stall was already there before any page script ran: across 24 captures, the 15 whose page
+// produced a frame right after loading all captured, and the 9 whose page did not all failed. Launch
+// flags that stop a browser throttling background pages did not change the rate (10 failures in 30).
+async Task<bool> ProducesFramesAsync()
+{
+    try
+    {
+        await Call("Runtime.evaluate", new { expression = "new Promise(r => requestAnimationFrame(() => r(1)))", awaitPromise = true, returnByValue = true }, timeoutSeconds: 5);
+        return true;
+    }
+    catch (TimeoutException)
+    {
+        return false;
+    }
+}
+
+// Asks the browser to close rather than killing it. A page torn down with the process still attached
+// leaves its Blazor circuit half-open, and the server logs a WebSocketException for every one —
+// measured 2026-09-24: thirteen captures against one container produced 72 of them, against 0 before
+// any capture ran. That is log noise rather than a fault, but it is noise this suite creates for
+// itself, and it would sit in the middle of the same log the document reads for real exceptions.
+async Task ShutdownAsync()
+{
+    if (ws is { State: WebSocketState.Open })
+    {
+        try { await Call("Browser.close", timeoutSeconds: 5); } catch (Exception) { }
+        try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)); } catch (Exception) { }
+        proc?.WaitForExit(5000);
+    }
+    ws?.Dispose();
+    ws = null;
+    if (proc is not null)
+    {
+        try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
+        try { proc.WaitForExit(5000); } catch { }
+        proc.Dispose();
+        proc = null;
+    }
+    try { if (profile is not null && Directory.Exists(profile)) Directory.Delete(profile, recursive: true); } catch { }
+}
+
+int exitCode = 0;
+try
+{
+    // A stalled page is replaced by a fresh browser before the page script runs, never after: a page
+    // script can press buttons that change the server (a Reset, a confirmed action), and running it
+    // twice would do that twice.
+    const int launchAttempts = 5;
+    for (int launch = 1; ; launch++)
+    {
+        if (!await LaunchAsync()) return 1;
+        if (await ProducesFramesAsync()) break;
+        if (launch == launchAttempts)
+        {
+            Console.Error.WriteLine($"The page produced no frames in {launchAttempts} browsers; a screenshot would never be answered.");
+            return 1;
+        }
+        Console.Error.WriteLine($"The page produced no frames; starting a fresh browser ({launch + 1} of {launchAttempts}).");
+        await ShutdownAsync();
+    }
 
     object? clip = null;
     if (script is not null)
@@ -217,7 +325,7 @@ try
             awaitPromise = true,
             returnByValue = true,
             userGesture = true
-        });
+        }, timeoutSeconds: 120);
 
         if (evaluated?["exceptionDetails"] is JsonNode thrown)
         {
@@ -266,23 +374,15 @@ try
     Directory.CreateDirectory(Path.GetDirectoryName(full)!);
     File.WriteAllBytes(full, Convert.FromBase64String(encoded));
     Console.Error.WriteLine($"Wrote {full} ({new FileInfo(full).Length:n0} bytes)");
-
-    // Ask the browser to close rather than killing it. A page torn down with the process still
-    // attached leaves its Blazor circuit half-open, and the server logs a WebSocketException for every
-    // one — measured 2026-09-24: thirteen captures against one container produced 72 of them, against
-    // 0 before any capture ran. That is log noise rather than a fault, but it is noise this suite
-    // creates for itself, and it would sit in the middle of the same log the document reads for real
-    // exceptions.
-    try { await Call("Browser.close"); } catch (Exception) { }
-    try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None); } catch (Exception) { }
-    proc.WaitForExit(5000);
+}
+catch (Exception failed) when (failed is TimeoutException or InvalidOperationException or WebSocketException)
+{
+    Console.Error.WriteLine($"The capture failed: {failed.Message}");
+    exitCode = 1;
 }
 finally
 {
-    try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
-    try { proc.WaitForExit(5000); } catch { }
-    try { if (Directory.Exists(profile)) Directory.Delete(profile, recursive: true); } catch { }
-    proc.Dispose();
+    await ShutdownAsync();
 }
 
 return exitCode;
