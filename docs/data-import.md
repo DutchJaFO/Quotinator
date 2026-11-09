@@ -78,7 +78,7 @@ Two admin endpoints trigger re-seeding:
 | Endpoint | Behaviour |
 |---|---|
 | `POST /api/v1/admin/database/reseed` | Imports all source files without deleting anything first — adds what is missing, leaves already-correct content untouched, and raises a decision where content disagrees. Schema history (migrations) is preserved. |
-| `POST /api/v1/admin/database/reset` | Full reset: drops and rebuilds the entire database from the baseline schema. Does **not** reimport source files afterward — that is a separate, deliberate operator decision (run a reseed next). Use to recover from a corrupted migration state. |
+| `POST /api/v1/admin/database/reset` | Full reset: replaces the whole database with a new one built from the baseline schema; a database file that cannot be read is set aside in the backup folder's `unreadable/` folder rather than backed up ([ADR 027](architecture-decisions/027-a-reset-recreates-the-database.md)). Does **not** reimport source files afterward — that is a separate, deliberate operator decision (run a reseed next). Use to recover from a corrupted migration state. |
 
 Both endpoints read from the `data/sources/` directory baked into the image. They do not re-download external sources.
 

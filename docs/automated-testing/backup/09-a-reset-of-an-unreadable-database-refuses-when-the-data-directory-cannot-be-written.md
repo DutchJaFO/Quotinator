@@ -94,8 +94,15 @@ names, and this shows it resolves the condition.
 
 ## Observed effect
 
-**Not yet measured** against a build carrying #482; see *Observed effects awaiting measurement* in the
-suite's README.
+**Measured 2026-11-09** against `quotinator:local` built from the working tree at `271c4c54`, the database
+replaced with 34 bytes of text and the data directory mounted read-only.
+
+The Reset answers `409`, titled *Reset refused: the unreadable database could not be set aside*, with
+`resetObstacle=DataDirectoryNotWritable` and no `backupObstacle`. Its detail says the file cannot be read
+and the data directory cannot be written, so the new database can be neither built nor put in place, and
+that nothing was moved or changed. Its one remedy is to restore write access to the data directory and
+retry. The file stays at 34 bytes and `backups/unreadable/` is never created. Remounted writable, the same
+Reset answers `200` and `/health` returns to `200`.
 
 ## Canary
 

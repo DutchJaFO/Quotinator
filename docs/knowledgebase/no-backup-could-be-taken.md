@@ -3,12 +3,13 @@
 **Kind:** diagnostic
 **Entry code:** none yet (allocated when codes are, per `docs/knowledgebase.md`'s bootstrapping rule)
 **Affected versions:** 1.9.0-alpha onwards
-**GitHub issue:** [#348](https://github.com/DutchJaFO/Quotinator/issues/348), [#456](https://github.com/DutchJaFO/Quotinator/issues/456)
+**GitHub issue:** [#348](https://github.com/DutchJaFO/Quotinator/issues/348), [#456](https://github.com/DutchJaFO/Quotinator/issues/456), [#482](https://github.com/DutchJaFO/Quotinator/issues/482)
 
 ## Symptom
 
 Quotinator takes a backup of the database before any step that changes it in a way only a backup could
-undo: applying a migration, loading content into an empty database, and a Reset. When that backup cannot
+undo: applying a migration, loading content into an empty database, and a Reset of a database it can
+read. (A Reset of a file it cannot read takes no backup; see `SourceUnreadable` below.) When that backup cannot
 be taken, the step does not run, and you see one of the following. The value in brackets names the
 obstacle; its section below explains it.
 
@@ -43,7 +44,7 @@ followed by what the obstacle means, what you can do about it, and a link to thi
 in `remedies`. The log reads:
 
 ```
-[Database - Backup] reset refused: no backup could be taken (BudgetExceeded). A reset drops every table, so it does not run without a restore point unless the caller explicitly accepts that
+[Database - Backup] reset refused: no backup could be taken (BudgetExceeded). A reset replaces the whole database, so it does not run without a restore point unless the caller explicitly accepts that
 ```
 
 ## Does it prevent the app or API from functioning?
@@ -128,18 +129,20 @@ when a backup is actually attempted, never by the check made beforehand.
 
 - **Blocked:** every option. No backup of an unreadable file is possible by any means, and loading
   content into it cannot succeed either.
-- **Resolve:** stop the application, move or delete the database file, and restart, which rebuilds it
-  empty; or restore an older backup in its place, then restart.
+- **Resolve:** run a Reset, `POST /api/v1/admin/database/reset`. It needs no backup of a file it cannot
+  read: it moves the file into the `unreadable` folder inside the backups folder and puts a new, empty
+  database in its place. See [the database file cannot be read](the-database-file-cannot-be-read.md).
+  Or restore an older backup in its place, then restart.
 
 ### `DiskFilledDuringBackup`
 
 The volume ran out of space partway through writing the backup, after the check made beforehand had
-passed. The partly written file is not a usable backup.
+passed. The partly written file is removed, since it would not be a usable backup.
 
 - **Blocked:** nothing permanently. The option you chose stopped before loading anything, and the
   notification stays. The options are worked out again from the volume's state when you next look.
-- **Resolve:** free disk space on the volume, and remove the partly written backup file if one was left
-  behind. Then choose an option again.
+- **Resolve:** free disk space on the volume; removing old backups reclaims some of it. Then choose an
+  option again.
 
 ### `Unclassified`
 

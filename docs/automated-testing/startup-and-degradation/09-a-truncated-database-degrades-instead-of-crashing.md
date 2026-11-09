@@ -174,7 +174,10 @@ proves which one was provoked.
 lists answer an unhandled `500` here too**, read in this run. That document holds the finding, so the
 same paragraph does not drift apart in both.
 
-**Recovery route.** Asserted by step 5 since #482, and not yet measured against a build carrying it.
+**Recovery route.** Asserted by step 5 since #482. **Measured 2026-11-09** against `quotinator:local` built
+from the working tree at `271c4c54`, the file truncated from 4,698,112 to 2,349,056 bytes: the Reset
+answered `200`, `/health` returned to `200`, and the truncated file was in `backups/unreadable/` as
+`quotinatordata_unreadable_20261109T085238322Z.db`.
 Deleting the file and restarting also returns the container to `200`, which is step 6's positive control.
 
 ## Canary

@@ -1,4 +1,4 @@
-# Startup reports that database initialisation failed, and a Reset is refused
+# Startup reports that database initialisation failed on a file that cannot be read
 
 **Kind:** diagnostic
 **Entry code:** —
@@ -13,9 +13,6 @@
 {"status":"unhealthy","reason":"Database initialisation failed. This often means the database's recorded schema version doesn't match its actual on-disk schema (e.g. after an interrupted upgrade). Resolve with an explicit database Reset (POST /api/v1/admin/database/reset) or by stopping the app, deleting the database file, and restarting."}
 ```
 
-and the Reset it recommends answers `409`, *"Reset refused: no backup could be taken"*, with obstacle
-`SourceUnreadable`. Retrying with `allowNoBackup=true` is refused the same way.
-
 ## Does it prevent the app or API from functioning?
 
 **Yes.** The application is degraded: every endpoint that reads the database answers `503`. The pages,
@@ -23,26 +20,33 @@ the API reference at `/scalar/v1` and the spec at `/openapi/v1.json` still answe
 
 ## Cause
 
-The same reason is given for two different conditions, and the Reset's refusal tells them apart:
+The same reason is given for two different conditions:
 
-- **The database file cannot be read at all** (the Reset refuses with `SourceUnreadable`). The file is
-  not a SQLite database, or it was cut short, for example by a disk filling up, a copy interrupted
-  partway, or something other than Quotinator writing to it. Despite what the reason says, the schema
-  version is not the problem: nothing in the file can be read.
-- **The schema does not match its recorded version** (the Reset runs). This is what the reason describes,
-  for instance after an interrupted upgrade; a Reset resolves it.
+- **The database file cannot be read at all.** The file is not a SQLite database, or it was cut short,
+  for example by a disk filling up, a copy interrupted partway, or something other than Quotinator
+  writing to it. Despite what the reason says, the schema version is not the problem: nothing in the file
+  can be read.
+- **The schema does not match its recorded version**, for instance after an interrupted upgrade. This is
+  what the reason describes.
 
 ## Remedy
 
-For a file that cannot be read:
+Run the Reset the reason names, `POST /api/v1/admin/database/reset`, or press *Reset the database* on the
+page the application shows while degraded. It works in both cases:
 
-- **Restore a backup** taken before the file was damaged, if you want your data back. Backups are kept in
-  the `backups` folder of the data directory, and are listed by `GET /api/v1/admin/backups`.
-- **Otherwise start with a new database**: stop the container, delete `quotinatordata.db` (and any
-  `quotinatordata.db-wal` and `quotinatordata.db-shm` beside it) from the data directory, and start it
-  again. Quotinator creates a fresh database and loads the bundled content.
+- **A file that cannot be read** is never backed up. It is moved, with any `quotinatordata.db-wal` and
+  `quotinatordata.db-shm` beside it, into the `unreadable` folder inside the backup folder, a new database
+  takes its place, and a notification names the file. It counts towards backup storage until it is
+  removed.
+- **A readable database** is backed up first, then replaced.
 
-For a schema that does not match its version, run the Reset the reason names.
+The new database is empty: run a reseed to load the bundled content. To get your data back instead,
+**restore a backup** taken before the file was damaged; backups are listed by
+`GET /api/v1/admin/backups`.
+
+If the Reset answers `409` with a `resetObstacle`, the file could not be moved: the data directory or the
+backup folder cannot be written, or the move to a backup folder on another volume ran out of space. The
+response's `remedies` say what to change; nothing was moved.
 
 ## Notes
 
@@ -52,8 +56,8 @@ defines](the-schema-does-not-match-its-recorded-version.md). This reason remains
 cannot reach, a file that cannot be read among them.
 
 Found by #327's `startup-and-degradation/08` and `09` (2026-10-23). #457 tracks the reason telling an
-unreadable file apart from a schema-version mismatch. [#482](https://github.com/DutchJaFO/Quotinator/issues/482)
-tracks a Reset rebuilding a file it cannot read, instead of refusing, which will make the second remedy
-above an in-app action.
-[#444](https://github.com/DutchJaFO/Quotinator/issues/444) plans restoring a backup from inside the
-application, local or uploaded, which will make the first remedy above an in-app action.
+unreadable file apart from a schema-version mismatch. #482 made the Reset rebuild a file it cannot read,
+instead of refusing. [#481](https://github.com/DutchJaFO/Quotinator/issues/481) plans listing,
+downloading and removing a set-aside file, and
+[#444](https://github.com/DutchJaFO/Quotinator/issues/444) restoring a backup from inside the
+application, local or uploaded.

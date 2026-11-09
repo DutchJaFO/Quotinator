@@ -159,8 +159,8 @@ measurement found something worse than the bug it was written for.
 
 **Before the fix**, this exact scenario returned **`200 OK`**. The log showed
 `[Database - Backup] backing up v5 → …` with no completion line, the backup file on disk was exactly the
-1,380,352 bytes that had been free, truncated, and the reset went on to drop every table and rebuild.
-`DropAndRebuildAsync` had taken the backup result and read only its path, never whether it succeeded.
+1,380,352 bytes that had been free, truncated, and the reset went on to rebuild the database regardless.
+The Reset's rebuild had taken the backup result and read only its path, never whether it succeeded.
 
 So the operator would have been told their reset worked, with their data gone and the only restore point
 an unusable fragment. That is strictly worse than the unhandled `500` #348 set out to remove, because it
@@ -174,6 +174,10 @@ looks like success.
 > Remedies: free disk space and retry; remove the partially written backup file if one was left behind.
 
 and the quote count is unchanged: 799 before, 799 after.
+
+Since #482 a failed copy deletes the file it was writing, so no fragment is left and the second remedy
+reads *"Removing old backups reclaims some of that space"* instead. The status, the obstacle and the
+unchanged quote count are what this document asserts, and #482 moves none of them.
 
 ## Canary
 

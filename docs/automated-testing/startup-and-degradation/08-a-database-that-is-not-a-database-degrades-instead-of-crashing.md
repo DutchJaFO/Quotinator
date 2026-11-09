@@ -175,8 +175,10 @@ to the reset and the backup category. ADR 022 governs it, since a condition the 
 detected is being thrown rather than returned.
 
 **Recovery route.** `POST /api/v1/admin/database/reset` reaches its handler rather than being gated away
-by the `503`. Since #482 it rebuilds the database and sets the file aside, asserted by step 5 and not yet
-measured against a build carrying it. Deleting the file and restarting also returns the container to
+by the `503`. Since #482 it rebuilds the database and sets the file aside: **measured 2026-11-09** against
+`quotinator:local` built from the working tree at `271c4c54`, it answered `200`, `/health` returned to
+`200`, and the 34-byte file was in `backups/unreadable/` as
+`quotinatordata_unreadable_20261109T085231926Z.db`. Deleting the file and restarting also returns the container to
 `200`, which is step 6's positive control.
 
 **The reason's diagnosis does not fit this fault.** `/health` says the recorded schema version probably

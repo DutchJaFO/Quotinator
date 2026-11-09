@@ -143,7 +143,7 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 open row offers an action, the first of them carries the caution and offers `backupthenreseed`, and no
 open row offering an action lacks the caution.
 
-**The warning count is the interesting one.** A Reset drops every table, this row included, so a `1`
+**The warning count is the interesting one.** A Reset replaces the whole database, this row included, so a `1`
 here is the post-reset condition check having raised it again rather than the original row surviving.
 
 **The last command's `0` is evidence because the one before it reads the same filter, less the caution,

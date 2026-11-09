@@ -126,8 +126,17 @@ the truncation and nothing else.
 
 ## Observed effect
 
-**Not yet measured** against a build carrying #482; see *Observed effects awaiting measurement* in the
-suite's README.
+**Measured 2026-11-09** against `quotinator:local` built from the working tree at `271c4c54`, the database
+truncated from 4,714,496 to 2,357,248 bytes.
+
+The start degrades to `unhealthy`, and the Reset answers `200` with `/health` back at `200`. The truncated
+file is moved to `backups/unreadable/quotinatordata_unreadable_20261109T085041559Z.db`, byte-identical to
+the truncated original, with no backup of it in `backups/`. The notification reads exactly as in
+[`01`](01-a-reset-sets-aside-a-database-it-cannot-read.md), naming this file: a truncated file is told
+apart from a readable one by the same check, not by a second path.
+
+The control Reset of the rebuilt database took its own backup, `quotinatordata_v9_20261109T085046518Z.db`,
+and left the set-aside file where it was.
 
 ## Canary
 

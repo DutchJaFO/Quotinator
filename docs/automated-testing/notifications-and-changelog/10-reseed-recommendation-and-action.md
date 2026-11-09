@@ -177,8 +177,8 @@ worktree). Without this the document proves only that something happens, not tha
 the absence it was written for.
 
 A detail worth recording for whoever reads the row counts: after step 4 the *total* number of rows
-carrying this kind is `1`, not `2`. Reset drops and rebuilds `System_Notification` with every other
-table, so the dismissed row from step 3 does not survive it. That is consistent with Reset being a full
+carrying this kind is `1`, not `2`. Reset replaces the whole database, `System_Notification`
+included, so the dismissed row from step 3 does not survive it. That is consistent with Reset being a full
 wipe, and it means this document cannot use "a dismissed row is still present" as evidence of anything
 after a reset.
 
