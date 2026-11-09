@@ -1,6 +1,6 @@
 # #482: A Reset cannot rebuild a database SQLite cannot read
 
-**Status:** In progress (step 13, T1)
+**Status:** Waiting for release
 **GitHub issue:** #482
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,8 +9,8 @@
 
 ## Next action
 
-**Step 13, T1, by the developer.** Every other step is done, T2 included. Verification row 36 is the only
-one open, and it closes when the developer confirms step 13's reproduction in Visual Studio.
+**Waiting for release.** Every verification row is ✅. What remains is `process.md`'s *Waiting for release*
+list: tick the issue's Definition of done on GitHub, and close it once a release ships it.
 
 ---
 
@@ -526,7 +526,20 @@ classified there before it is fixed.
 
 ### 13. T1
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-11-09, confirmed by the developer in Visual Studio.
+
+- **The degraded start:** a database file of non-database bytes degraded the start (`SQLite Error 26: 'file is
+  not a database'` from `EnableWal`) and the degraded dialog offered *Reset the database*.
+- **The Reset:** it judged the file unreadable and set it aside as
+  `backups\unreadable\quotinatordata_unreadable_20261109T215541074Z.db`, created a new database at baseline
+  (data v29, app v9) and logged `reset complete`.
+- **After the Reset:** the page returned to the healthy application, and the Notifications page listed the
+  set-aside notification.
+- **No reseed was offered**, leaving the database empty. That is #472: the degraded page's button runs the
+  Reset through `NotificationActionExecutor`, whose `DatabaseReset` case writes no reseed recommendation,
+  where `POST /admin/database/reset` does.
+- **Its control,** an ordinary update of a version-5 database in the same session, backed it up and migrated
+  it (data v3 → v29, app v5 → v9) with its counts intact.
 
 The developer starts the application in Visual Studio against a database file replaced with non-database
 bytes, confirms the degraded page loads, presses *Reset the database* and *Confirm*, and confirms the
@@ -623,6 +636,6 @@ None yet.
 | 33 | ✅ | A degraded start on a non-database file is recovered by the Reset its reason names | Live (Docker) | `startup-and-degradation/08`, every step exits `0`, including the new recovery step |
 | 34 | ✅ | The same for a truncated file | Live (Docker) | `startup-and-degradation/09`, every step exits `0`, including the new recovery step |
 | 35 | ✅ | A Reset of a readable database is still a full wipe (control: green before and after) | Live (Docker) | `database-lifecycle/03-reset-is-a-full-wipe.md`, every step exits `0` except step 8, which is #468 as the document states; steps 9 to 12, the Reset itself, all `0` |
-| 36 | ❌ | The degraded page's *Reset the database* recovers the application and shows the notification | Manual | Step 13: the developer confirms the page returns healthy and the Notifications page lists the set-aside notification |
+| 36 | ✅ | The degraded page's *Reset the database* recovers the application and shows the notification | Manual | Step 13: the developer confirms the page returns healthy and the Notifications page lists the set-aside notification |
 | 37 | ✅ | Every test step 2 classified as *Unchanged*, *Changes* or *Extended* passes, and the full suite is clean | Build | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: `0 Warning(s)  0 Error(s)`, all tests pass |
 | 38 | ✅ | `capture-page.csx`, which verifies this issue, never waits forever and leaves nothing in the container log | Live (Docker) | 30 captures against a fresh container, all written, 9 after a fresh browser, `[Runtime - Exception]` count `0`; then `notifications-and-changelog/01` and `14` with every `[Runtime - Exception]` check `0` |
