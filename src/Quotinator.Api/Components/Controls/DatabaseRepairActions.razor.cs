@@ -38,24 +38,28 @@ public partial class DatabaseRepairActions
     /// What the operator is told after the repair ran, or <see langword="null"/> when it ran and there
     /// is nothing left to say, because the application is healthy and the page reloads into it.
     /// </summary>
+    /// <remarks>
+    /// The sentences around the obstacle come from the translation files. The obstacle's own cause and
+    /// remedies come from <see cref="ResetObstacleGuidance"/> and <see cref="BackupObstacleGuidance"/>,
+    /// which the API's problem responses share and which are English for now (#333).
+    /// </remarks>
     /// <param name="result">The outcome the action returned.</param>
-    internal static string? RepairOutcomeText(NotificationActionResult result) =>
+    /// <param name="text">The translated strings for the current culture.</param>
+    internal static string? RepairOutcomeText(NotificationActionResult result, Quotinator.Api.I18nText.UI text) =>
         result switch
         {
             { Succeeded: true }                       => null,
             { ResetObstacle: ResetObstacle obstacle } =>
-                $"The database was not reset ({obstacle}). "
+                WithObstacle(text.DatabaseRepairRefusedForReset, obstacle.ToString()) + " "
                 + ResetObstacleGuidance.Cause(obstacle) + " "
                 + string.Join(" ", ResetObstacleGuidance.Remedies(obstacle)),
             { BackupObstacle: BackupOutcome obstacle } =>
-                $"The database was not reset: no backup could be taken first ({obstacle}). "
-                + BackupObstacleGuidance.Cause(obstacle)
-                + " Nothing was changed, so the database is exactly as it was.",
+                WithObstacle(text.DatabaseRepairRefusedForBackup, obstacle.ToString()) + " "
+                + BackupObstacleGuidance.Cause(obstacle) + " "
+                + text.DatabaseRepairNothingChanged,
             { FailureReason: string reason }           =>
-                "The database was reset, but the rebuilt schema still does not match. " + reason,
-            _                                         =>
-                "The database was not reset, and no reason was reported. Resolve it from the admin "
-                + "endpoints, or restore a backup taken before the version moved ahead.",
+                text.DatabaseRepairResetNotIntact + " " + reason,
+            _                                         => text.DatabaseRepairNoReasonReported,
         };
 
     #endregion
@@ -66,6 +70,11 @@ public partial class DatabaseRepairActions
     [Inject] private INotificationActionExecutor ActionExecutor { get; set; } = default!;
 
     private Quotinator.Api.I18nText.UI Text = new();
+
+    // A plain Replace rather than string.Format: the template comes from a translation file, and a
+    // placeholder typo there must render as text rather than throw (CLAUDE.md's IApiLocalizer.Format rule).
+    private static string WithObstacle(string template, string obstacle) =>
+        template.Replace("{0}", obstacle, StringComparison.Ordinal);
 
     private bool ConfirmingReset;
     private bool Repairing;
@@ -85,7 +94,7 @@ public partial class DatabaseRepairActions
         try
         {
             RepairOutcome = RepairOutcomeText(
-                await ActionExecutor.ExecuteAsync(NotificationDismissTrigger.DatabaseReset));
+                await ActionExecutor.ExecuteAsync(NotificationDismissTrigger.DatabaseReset), Text);
         }
         finally
         {

@@ -15,6 +15,42 @@ namespace Quotinator.Api.Tests.Components;
 public class DatabaseRepairActionsTests
 {
     /// <summary>
+    /// The English strings the control renders, read from the baseline translation file so a test
+    /// asserts the text an operator actually sees rather than a copy of it.
+    /// </summary>
+    private static readonly Quotinator.Api.I18nText.UI Text = BaselineText();
+
+    /// <summary>
+    /// #482: every outcome sentence comes from the translation files, so a Dutch or German operator is
+    /// not told in English what the repair did. A key missing from the baseline would render as nothing.
+    /// </summary>
+    [TestMethod]
+    public void EveryOutcomeSentence_ComesFromTheTranslationFiles()
+    {
+        string?[] outcomes =
+        [
+            DatabaseRepairActions.RepairOutcomeText(NotificationActionResult.RefusedForReset(ResetObstacle.SetAsideMoveFailed), Text),
+            DatabaseRepairActions.RepairOutcomeText(NotificationActionResult.RefusedForBackup(BackupOutcome.BudgetExceeded), Text),
+            DatabaseRepairActions.RepairOutcomeText(NotificationActionResult.ResetNotIntact("reason"), Text),
+            DatabaseRepairActions.RepairOutcomeText(new NotificationActionResult { Succeeded = false }, Text),
+        ];
+        string[] templates =
+        [
+            Text.DatabaseRepairRefusedForReset.Replace("{0}", nameof(ResetObstacle.SetAsideMoveFailed), StringComparison.Ordinal),
+            Text.DatabaseRepairRefusedForBackup.Replace("{0}", nameof(BackupOutcome.BudgetExceeded), StringComparison.Ordinal),
+            Text.DatabaseRepairResetNotIntact,
+            Text.DatabaseRepairNoReasonReported,
+        ];
+
+        for (int i = 0; i < outcomes.Length; i++)
+        {
+            Assert.IsFalse(string.IsNullOrWhiteSpace(templates[i]), $"outcome {i} has no baseline text");
+            Assert.IsNotNull(outcomes[i]);
+            Assert.StartsWith(templates[i], outcomes[i]!, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
     /// A Reset that refused for want of a backup changed nothing, and the operator needs the obstacle
     /// named: this control is the only surface they have, since nothing read from the database is shown
     /// while it is untrusted.
@@ -23,7 +59,7 @@ public class DatabaseRepairActionsTests
     public void RefusedRepair_NamesTheObstacleThatStoppedIt()
     {
         string? outcome = DatabaseRepairActions.RepairOutcomeText(
-            NotificationActionResult.RefusedForBackup(BackupOutcome.BudgetExceeded));
+            NotificationActionResult.RefusedForBackup(BackupOutcome.BudgetExceeded), Text);
 
         Assert.IsNotNull(outcome, "a refusal that says nothing leaves the operator with a button that did nothing");
         Assert.Contains(
@@ -39,7 +75,7 @@ public class DatabaseRepairActionsTests
     public void ResetNotIntact_NamesWhatIsStillWrong()
     {
         string? outcome = DatabaseRepairActions.RepairOutcomeText(
-            NotificationActionResult.ResetNotIntact("missing table System_Notification"));
+            NotificationActionResult.ResetNotIntact("missing table System_Notification"), Text);
 
         Assert.IsNotNull(outcome);
         Assert.Contains("missing table System_Notification", outcome, StringComparison.Ordinal);
@@ -54,7 +90,7 @@ public class DatabaseRepairActionsTests
     public void RefusedForReset_NamesTheResetObstacleAndItsRemedy()
     {
         string? outcome = DatabaseRepairActions.RepairOutcomeText(
-            NotificationActionResult.RefusedForReset(ResetObstacle.DataDirectoryNotWritable));
+            NotificationActionResult.RefusedForReset(ResetObstacle.DataDirectoryNotWritable), Text);
 
         Assert.IsNotNull(outcome);
         Assert.Contains(ResetObstacleGuidance.Cause(ResetObstacle.DataDirectoryNotWritable), outcome, StringComparison.Ordinal);
@@ -62,10 +98,27 @@ public class DatabaseRepairActionsTests
         Assert.DoesNotContain("no backup could be taken", outcome, StringComparison.Ordinal);
     }
 
+    private static Quotinator.Api.I18nText.UI BaselineText()
+    {
+        string baseline = Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+            "src", "Quotinator.Api", "i18ntext", "UI.en-GB.json");
+        Dictionary<string, string> strings =
+            System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(baseline))!;
+
+        Quotinator.Api.I18nText.UI text = new();
+        foreach (System.Reflection.FieldInfo field in typeof(Quotinator.Api.I18nText.UI).GetFields())
+        {
+            if (field.FieldType == typeof(string) && strings.TryGetValue(field.Name, out string? value))
+                field.SetValue(text, value);
+        }
+        return text;
+    }
+
     /// <summary>A repair that ran leaves nothing to report: the application is healthy and reloads.</summary>
     [TestMethod]
     public void SuccessfulRepair_SaysNothing()
     {
-        Assert.IsNull(DatabaseRepairActions.RepairOutcomeText(NotificationActionResult.Success()));
+        Assert.IsNull(DatabaseRepairActions.RepairOutcomeText(NotificationActionResult.Success(), Text));
     }
 }
