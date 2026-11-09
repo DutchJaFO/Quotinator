@@ -1,6 +1,6 @@
 # #482: A Reset cannot rebuild a database SQLite cannot read
 
-**Status:** In progress (step 5)
+**Status:** In progress (step 10)
 **GitHub issue:** #482
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -320,7 +320,12 @@ than surviving one, and notifications are already a category that document reads
 
 ### 5. Count subfolders towards backup storage
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-11-09. `UsedBytes_FileInASubfolder_IsCounted` green.
+
+**Missed by step 2's search:** `BackupStorageBudgetTests.UsedBytes_IgnoresFilesInSubdirectories`
+asserted the opposite decision, and its name matched none of the patterns searched. It is *Removed*,
+replaced by the test above, whose comment records that the folder's own files only was the earlier
+decision.
 
 `BackupStorageBudget.UsedBytes` enumerates recursively, so every check sharing it (the readiness check,
 the attempt, `BackupQuotaCheck`, `BackupMaxExceededCheck` and `GetUsage`) counts the reserved folder from
@@ -329,7 +334,19 @@ is #481's requirement 1 and 4.
 
 ### 6. Classify the old file before anything else
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-11-09. `IsDatabaseFileReadable` and `CheckSetAsideReadiness` in `DatabaseInitializer`.
+
+**The check opens the file `immutable`, read-only, and that is load-bearing.** The red tests found that
+any other open alters what is being set aside: a read-write open of a damaged file let SQLite discard a
+`-wal` it could not use, and even a read-only open rewrote the `-shm`, both caught by
+`ResetAsync_CorruptDatabaseWithSidecars_MovesTheSidecarsWithIt`. `immutable=1` reads the main file alone,
+with no locking and no shared memory, which also lets it open a WAL database on a read-only mount without
+creating a `-shm` it cannot write.
+
+**A failed backup copy no longer leaves a fragment, for every caller.** `CreateBackup` deletes the file it
+was writing when the copy fails, so the defect step 3 found is gone from on-demand backups and migrations
+too, not only from a Reset. `DiskFilledDuringBackup`'s remedy *"remove the partially written backup file"*
+became false with it, and was replaced.
 
 `ResetAsync` probes readability first and branches. The readable branch keeps today's order: readiness
 check, refusal or override, backup. A backup that fails with `SourceUnreadable` switches to the
@@ -349,7 +366,16 @@ keeps is covered by a test.
 
 ### 7. Rebuild beside the database and put it in place
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-11-09. `RebuildAsync`, `BuildDatabaseAsync`, `ReplaceInPlace`, `SetAsideAndReplaceAsync`;
+`DropAllTablesAsync` and `Sql.Schema.GetAllTables` removed with their test. Every Reset test in Core
+(21) and Data green; the readable branch's existing tests, including every #348 refusal, unchanged.
+
+**A finding outside this issue, preserved rather than fixed: `allowNoBackup=true` cannot take effect.**
+When a readable database's backup cannot be taken, the override passes the pre-flight, and then the
+Reset's own backup fails the same check and refuses. No test exercised the override against a real
+backup failure: `ResetAsync_WithTheOverride_ReportsThatTheBackupWasSkipped` uses a double whose Reset
+takes no backup. `RebuildAsync` keeps that behaviour exactly, so this issue changes nothing about it; it
+is raised with the developer to file separately.
 
 `DropAndRebuildAsync` becomes `RebuildAsync`, with the behaviour under *How it is built*. The connection
 `OnResetAsync` receives is closed and its pool cleared before an unreadable file is moved, then reopened
@@ -361,7 +387,12 @@ changing the hook's signature. The build file is removed on every failure path.
 
 ### 8. Write the set-aside notification
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-11-09. Migration 29. `NotificationMetadataKind_IsAcceptedByTheBaseline` and
+`..._IsAcceptedByTheIncrementalReplay` ran red for `UnreadableDatabaseSetAside` between declaring it and
+widening the `CHECK`, then green. Written through `OnUnreadableDatabaseSetAsideAsync`, type `Warning`, in
+all three languages; `NotificationTableTests` and `notifications-and-changelog/14` extended. The API
+reports `metadataKind` in lower case, as the suite's existing documents already assume, so `backup/01`
+and `02` were corrected to `unreadabledatabasesetaside`.
 
 - `NotificationMetadataKind.UnreadableDatabaseSetAside`, its `UnreadableDatabaseSetAsideMetadataDto`
   (the file name and the reserved folder; no prose), its entry in `NotificationMetadataKinds`, the
@@ -377,7 +408,10 @@ changing the hook's signature. The build file is removed on every failure path.
 
 ### 9. Correct the guidance, the log text and the endpoint descriptions
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-11-09. `ResetObstacleGuidance` with its test; the endpoint, the executor and
+`DatabaseRepairActions` handle `ResetObstacle`; the `[Description]`, `docs/api-endpoints.md` and the
+`backup_path` option text in all six add-on translation files carry the cross-volume limit. The new log
+lines use `[Database - Init]`, the prefix the Reset already logs under, rather than a new one.
 
 `BackupObstacleGuidance`'s `SourceUnreadable` cause and remedies name a Reset, which now sets the file
 aside, instead of stopping the application to delete it. Question 2's obstacles get a
@@ -392,7 +426,7 @@ case; it is checked against the new refusal from question 2 and given one if the
 
 ### 10. Leave no contradiction in the documentation
 
-**Status:** ⬜ Not started
+**Status:** 🚧 In progress
 
 In `docs [#482]` commits after the code, one per document family, each ADR edited in place with no
 revision section, per the ADR README.
