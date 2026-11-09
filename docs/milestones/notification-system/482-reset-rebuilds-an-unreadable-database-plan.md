@@ -9,8 +9,9 @@
 
 ## Next action
 
-**Waiting for release.** Every verification row is ✅. What remains is `process.md`'s *Waiting for release*
-list: tick the issue's Definition of done on GitHub, and close it once a release ships it.
+**Waiting for release.** Every verification row is ✅, and step 3's red run is re-checked and corrected.
+What remains is `process.md`'s *Waiting for release* list: tick the issue's Definition of done on GitHub,
+and close it once a release ships it.
 
 ---
 
@@ -225,9 +226,18 @@ fixed.
 
 ### 3. Write the failing unit tests and confirm them red
 
-**Status:** ✅ Done, 2026-11-09. Run against the code at `670e6e56`: 23 red on their own assertions, 6
-controls green, and the two tests that need a type this issue introduces deferred to the commit that
-introduces it.
+**Status:** ✅ Done, 2026-11-09. Run against the code at `670e6e56`: 23 red, 6 controls green, and the two
+tests that need a type this issue introduces deferred to the commit that introduces it.
+
+**Re-checked 2026-11-09 before the Definition of done, and corrected.** All 23 were re-run at `b3afc9b4`,
+the test commit before the fix, and each failing line read against what its test claims. 22 failed on
+their own claim. `Startup_DatabaseFileCorrupt_ResetLeavesANotificationNamingTheSetAsideFile` did not: it
+stopped on `precondition: the Reset ran` (`409`), so its claim, a notification naming the set-aside file,
+was never shown red, and "23 red on their own assertions" above overstated it. The test now asserts the
+notification first, reading an unreadable listing as an empty one, since a degraded application answers
+`GET /api/v1/notifications` with a problem document. Re-run with that file at `b3afc9b4`, it is red on its
+own assertion, *no set-aside notification was written (GET /api/v1/notifications answered 503)*; at the
+current commit all 51 `StartupResilienceTests` are green and the build has 0 warnings.
 
 Every test in the Verification table marked *Unit test*, written before any production change and run
 against the current code. A test counts as red only when it fails on its own assertion after its
