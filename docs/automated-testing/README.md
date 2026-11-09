@@ -1124,7 +1124,7 @@ an entry needs; a happy-path-only test has nothing to contribute.
 
 ## Observed effects awaiting measurement
 
-**37 of 83 documents describe their effect without having measured it.** Each row below names the
+**40 of 84 documents describe their effect without having measured it.** Each row below names the
 quantity its next run must read, so the measurement is a specific act rather than a vague intention to
 look. A document leaves this list by recording `**Measured <date>**` in its own section, and
 `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails if it does so while its row is still
@@ -1138,6 +1138,9 @@ asserts what it should; what is missing is a reading an entry can quote.
 | [api-surface/03-unicode-aware-search-toggle.md](api-surface/03-unicode-aware-search-toggle.md) | The `matching` figure each of the two containers returns for the same accented query |
 | [api-surface/04-endpoint-naming-and-operation-ids.md](api-surface/04-endpoint-naming-and-operation-ids.md) | The operation count in the published spec, and the `[Api - GetQuoteById]` line as emitted |
 | [api-surface/05-a-thrown-exception-is-logged.md](api-surface/05-a-thrown-exception-is-logged.md) | The `ERR` line the rejected upload writes, with its exception id |
+| [backup/01-a-reset-sets-aside-a-database-it-cannot-read.md](backup/01-a-reset-sets-aside-a-database-it-cannot-read.md) | The set-aside file's name and size, the notification's text, and the backup the control Reset takes |
+| [backup/02-a-reset-sets-aside-a-truncated-database.md](backup/02-a-reset-sets-aside-a-truncated-database.md) | The truncated and set-aside sizes, the notification's text, and the backup the control Reset takes |
+| [backup/09-a-reset-of-an-unreadable-database-refuses-when-the-data-directory-cannot-be-written.md](backup/09-a-reset-of-an-unreadable-database-refuses-when-the-data-directory-cannot-be-written.md) | The refusal body, cause and remedies as served |
 | [identity-and-casing/01-canonicalize-explicit-ids-at-capture.md](identity-and-casing/01-canonicalize-explicit-ids-at-capture.md) | The id as echoed back, and what the container logs while resolving a file-authored explicit id |
 | [identity-and-casing/02-quote-id-case-insensitive-lookup.md](identity-and-casing/02-quote-id-case-insensitive-lookup.md) | What the container logs while resolving either casing |
 | [identity-and-casing/03-conversation-line-quote-id-fk-safety.md](identity-and-casing/03-conversation-line-quote-id-fk-safety.md) | The foreign-key violation count either side of the mismatched line |
@@ -1263,14 +1266,15 @@ different question in each.
 
 | # | Test | Smoke |
 |---|---|---|
-| 01 | [Refuses a reset when the source cannot be read](backup/01-refuses-a-reset-when-the-source-cannot-be-read.md) | no |
-| 02 | [Refuses a reset when the database is truncated](backup/02-refuses-a-reset-when-the-database-is-truncated.md) | no |
+| 01 | [A reset sets aside a database it cannot read, and rebuilds it](backup/01-a-reset-sets-aside-a-database-it-cannot-read.md) | no |
+| 02 | [A reset sets aside a truncated database, not only an unrecognisable one](backup/02-a-reset-sets-aside-a-truncated-database.md) | no |
 | 03 | [Refuses a reset when the disk fills during the backup](backup/03-refuses-a-reset-when-the-disk-fills-during-the-backup.md) | no |
 | 04 | [Refuses a reset when the backup folder cannot be written](backup/04-refuses-a-reset-when-the-backup-folder-cannot-be-written.md) | no |
 | 05 | [A full backups folder is resolvable from inside the application](backup/05-a-full-quota-is-resolvable-from-inside-the-application.md) | no |
 | 06 | [A startup that cannot take a backup loads nothing, and offers only the options that can run](backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md) | no |
 | 07 | [A migration that cannot take a backup leaves the database unmigrated, and says why](backup/07-a-migration-that-cannot-take-a-backup-leaves-the-database-unmigrated.md) | no |
 | 08 | [Backups continue from the reserve, with a warning, until the ceiling refuses one](backup/08-backups-continue-from-the-reserve-until-the-ceiling-refuses-one.md) | no |
+| 09 | [A reset of an unreadable database refuses when the data directory cannot be written](backup/09-a-reset-of-an-unreadable-database-refuses-when-the-data-directory-cannot-be-written.md) | no |
 
 ### `notifications-and-changelog/`
 

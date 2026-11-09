@@ -3,7 +3,7 @@
 **Smoke:** yes
 **Environment:** Fresh + Constrained
 **Deterministic:** yes
-**Traces to:** #327
+**Traces to:** #327, #482
 
 ## Preconditions
 
@@ -19,8 +19,8 @@ the file can be truncated from the host.
 and a file that is not a database are different faults reaching SQLite through different code paths,
 and each has a variable its own `Determinism` has to pin. Folding them together would let one pass on
 the other's behalf. The same split exists one category over, between
-[`backup/01`](../backup/01-refuses-a-reset-when-the-source-cannot-be-read.md) and
-[`backup/02`](../backup/02-refuses-a-reset-when-the-database-is-truncated.md), for the same reason.
+[`backup/01`](../backup/01-a-reset-sets-aside-a-database-it-cannot-read.md) and
+[`backup/02`](../backup/02-a-reset-sets-aside-a-truncated-database.md), for the same reason.
 
 ## Determinism
 
@@ -37,10 +37,10 @@ the other's behalf. The same split exists one category over, between
   field, the technique [`01`](01-seeding-backup-degraded-startup-and-reset-recovery.md) established.
 ## Explicitly not covered here
 
-- **How the degraded pages render, and what the recovery routes offer.** This document proves the
-  application says it is degraded instead of crashing, which is #327's contract. The pages and the Reset
-  are recorded under *Observed effect*, and [`backup/02`](../backup/02-refuses-a-reset-when-the-database-is-truncated.md)
-  provokes this same state to assert the Reset path.
+- **How the degraded pages render.** This document proves the application says it is degraded instead
+  of crashing, which is #327's contract, and that the Reset its reason names recovers it (#482). The pages
+  are recorded under *Observed effect*, and [`backup/02`](../backup/02-a-reset-sets-aside-a-truncated-database.md)
+  provokes this same state to assert what the Reset does with the file.
 ## Steps
 
 ### 1. Seed a healthy database and record its size
@@ -114,7 +114,24 @@ recognise as wrong than an empty result.
 **On failure:** a `200` with a body from any of the seven means an endpoint answered from a database the
 initializer could not read. A `500` means it reached the database and threw rather than being gated.
 
-### 5. Remove the sabotage, and confirm the container is healthy
+### 5. Recover through the Reset the reason names
+
+```
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18409/api/v1/admin/database/reset --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18409/api/v1/health --expect 200 --status
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-match-count C:\repos\Quotinator\.claude\temp\qt-startup-09\backups\unreadable "*.db" 1
+```
+
+**Expected:** the Reset answers `200`, `/health` returns to `200`, and the truncated file is in the
+reserved folder `backups/unreadable/`.
+
+**The remedy works from inside the application** (#482). A degraded state an operator can only leave by
+stopping the container and deleting a file is not one a Home Assistant add-on user can necessarily
+resolve, which is what #327 requires of every degraded state.
+
+**On failure:** a `409` with obstacle `SourceUnreadable` is the refusal #482 removed.
+
+### 6. Remove the sabotage, and confirm the container is healthy
 
 ```
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-09 --bind C:\repos\Quotinator\.claude\temp\qt-startup-09
@@ -157,10 +174,8 @@ proves which one was provoked.
 lists answer an unhandled `500` here too**, read in this run. That document holds the finding, so the
 same paragraph does not drift apart in both.
 
-**Recovery route, recorded rather than asserted.** Reachable: `POST /api/v1/admin/database/reset` reaches
-its handler and answers `409 Conflict`, obstacle `SourceUnreadable`. **Not workable as offered**: its
-remedies are moving or deleting the file and restarting, or restoring an older backup. Deleting the file
-and restarting returns the container to `200`, which is step 5's positive control.
+**Recovery route.** Asserted by step 5 since #482, and not yet measured against a build carrying it.
+Deleting the file and restarting also returns the container to `200`, which is step 6's positive control.
 
 ## Canary
 
@@ -168,7 +183,11 @@ and restarting returns the container to `200`, which is step 5's positive contro
 step. That build predates the gating of `/version` while degraded, so step 4 reads `200` from
 `/api/v1/version`.
 
-**The positive control this run produces for itself.** Step 5 removes the truncation and reads `200` in
+**#482's step.** `quotinator:canary-482`, built from `69800a23`, the commit before #482, run through steps 1
+to 5: step 5's Reset must answer `409` with obstacle `SourceUnreadable`. **Run 2026-11-09:** steps 1 to 4
+passed, and step 5 read `409`, `/health` stayed `503`, and no `backups/unreadable/` existed.
+
+**The positive control this run produces for itself.** Step 6 removes the truncation and reads `200` in
 the same environment, so a build that degraded unconditionally fails there. Step 3's `unhealthy` is the
 other half: it ends the run when the truncation did not take, so step 4 cannot pass against a healthy
 container.

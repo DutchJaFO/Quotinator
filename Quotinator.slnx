@@ -410,14 +410,15 @@
     <File Path="docs/automated-testing/database-lifecycle/04-a-database-is-complete-for-its-schema-version.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/backup/">
-    <File Path="docs/automated-testing/backup/01-refuses-a-reset-when-the-source-cannot-be-read.md" />
-    <File Path="docs/automated-testing/backup/02-refuses-a-reset-when-the-database-is-truncated.md" />
+    <File Path="docs/automated-testing/backup/01-a-reset-sets-aside-a-database-it-cannot-read.md" />
+    <File Path="docs/automated-testing/backup/02-a-reset-sets-aside-a-truncated-database.md" />
     <File Path="docs/automated-testing/backup/03-refuses-a-reset-when-the-disk-fills-during-the-backup.md" />
     <File Path="docs/automated-testing/backup/04-refuses-a-reset-when-the-backup-folder-cannot-be-written.md" />
     <File Path="docs/automated-testing/backup/05-a-full-quota-is-resolvable-from-inside-the-application.md" />
     <File Path="docs/automated-testing/backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md" />
     <File Path="docs/automated-testing/backup/07-a-migration-that-cannot-take-a-backup-leaves-the-database-unmigrated.md" />
     <File Path="docs/automated-testing/backup/08-backups-continue-from-the-reserve-until-the-ceiling-refuses-one.md" />
+    <File Path="docs/automated-testing/backup/09-a-reset-of-an-unreadable-database-refuses-when-the-data-directory-cannot-be-written.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/startup-and-degradation/">
     <File Path="docs/automated-testing/startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md" />
