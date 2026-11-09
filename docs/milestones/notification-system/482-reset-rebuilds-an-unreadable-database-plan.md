@@ -1,6 +1,6 @@
 # #482: A Reset cannot rebuild a database SQLite cannot read
 
-**Status:** Planning
+**Status:** In progress (step 4)
 **GitHub issue:** #482
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -58,14 +58,15 @@ A readable file is not swapped because on Linux a pooled connection keeps the ol
 go on writing to the moved file, and on Windows the move fails outright. An unreadable file can be
 swapped because the degraded state already gates every database read, and its pool is cleared first.
 
-**Readability is decided by reading, before any storage check.** A cheap read of `sqlite_master` on the
-old file classifies it, using the same `SQLITE_NOTADB` (26) and `SQLITE_CORRUPT` (11) codes
-`ClassifyCopyFailure` already uses. It must come first: `CheckBackupReadiness` refuses a full backup
-folder before anything reads the file, and the issue requires that a full backup folder does not stop
-the Reset of an unreadable file. A file whose header reads but whose pages are corrupt passes the probe
-and then fails the backup copy with `SourceUnreadable`; that file takes the unreadable branch too, and
-the fragment the failed copy left in the backup folder is deleted, since it would otherwise be listed as
-a backup.
+**Readability is decided by reading every page, before any storage check.** `PRAGMA quick_check` on the
+old file classifies it: anything but `ok`, or the `SQLITE_NOTADB` (26) and `SQLITE_CORRUPT` (11) codes
+`ClassifyCopyFailure` already uses, means unreadable. Opening the file or reading `sqlite_master` is not
+enough: SQLite's page copy does not validate what it copies, so a file whose first page reads and whose
+later pages are damaged would be copied into the backup folder as a backup, the exact thing the issue
+forbids. It must come first: `CheckBackupReadiness` refuses a full backup folder before anything reads
+the file, and the issue requires that a full backup folder does not stop the Reset of an unreadable file.
+A backup copy that still fails with `SourceUnreadable`, because the file changed after the check, takes
+the unreadable branch too, and the fragment it left is deleted.
 
 **The notification is written by the initializer, after the new database is in place.** A protected
 hook on `DatabaseInitializer`, overridden in `QuotinatorDatabaseInitializer`, follows the
@@ -151,7 +152,40 @@ behaviour, so the issue page states the scope this plan executes.
 
 ### 2. Review every affected test and automated document
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-11-09. Classification below, then the inventory it was drawn from.
+
+**Classification.** A file not named here was read and holds only *Unchanged* tests: its tests reach a
+Reset through a readable database, a stub `IDatabaseInitializer` or a route list, none of which this
+issue changes.
+
+| File / document | Test or passage | Class | Why |
+|---|---|---|---|
+| `AdminEndpointsTests` | `ResetDatabase_WhenTheSourceIsUnreadable_DoesNotOfferTheOverride`, `..._OffersReplacingTheFile` | Removed | A Reset can no longer refuse with `SourceUnreadable`; row 22 asserts what replaces it |
+| `AdminEndpointsTests` | `ResetDatabase_WhenNoBackupCanBeTaken_RefusesWithAStatedFailureRatherThanAnUnhandled500` | Changes | Its spy refuses with `SourceUnreadable`, an obstacle a Reset can no longer report; switched to `BudgetExceeded`, which still reaches the same `409`. The assertion is unchanged |
+| `AdminEndpointsTests` | the comment above `..._DoesNotOfferTheOverride` (*"fails inside the table drop"*) | Removed | Goes with its test |
+| `BackupObstacleGuidanceTests` | `SourceUnreadable_DoesNotOfferTheOverride` | Changes | Assertion stays (decision 7); its comment's reason, *"cannot be dropped table by table"*, is replaced by the true one: migration and content load cannot proceed without a backup |
+| `DatabaseInitializerOwnershipTests` | `ResetAsync_MigrationFailsDuringReplay_RestoresPreResetBackupAndRethrows` | Changes | The assertion (pre-reset data intact, exception rethrown) holds, but its name and comment say a backup is restored after a table drop. Renamed `..._LeavesTheDatabaseUntouchedAndRethrows`, comment restated |
+| `DatabaseInitializerOwnershipTests`, `SystemReseedConceptTests`, `UserSystemReseedConceptTests` | the test doubles' `OnResetAsync => DropAndRebuildAsync(...)` | Changes | Mechanical: the method is renamed `RebuildAsync` (step 7) |
+| `DatabaseInitializerOwnershipTests` | `NotificationMetadataKind_IsAcceptedByTheBaseline`, `..._IsAcceptedByTheIncrementalReplay` | Extended | `UnreadableDatabaseSetAside` row |
+| `DatabaseInitializerTests` | `GetAllTables_ReturnsEveryTableRegardlessOfPrefix` | Removed | Tests the query step 7 retires, if nothing else uses it |
+| `DatabaseInitializerTests` | `ResetAsync_AfterInitialise_RebuildsSchemaAndDoesNotReseed` | Changes | Comment only: *"drops and recreates all tables"* |
+| `DatabaseBackupQuotaTests` | `ResetAsync_WhenNoBackupCanBeTaken_NeverReachesTheDestructiveStep` | Changes | Message only: *"the tables were never dropped"* |
+| `StartupResilienceTests` | `Startup_DatabaseFileCorrupt_HealthReasonNamesARemedyThatCanWork` | Changes | Comment only: *"A Reset refuses on a file SQLite cannot open"* becomes false. The assertion is about the health reason's wording, which is #457's |
+| `NotificationTableTests` | the per-kind maps at the payload-rendering tests | Extended | `UnreadableDatabaseSetAside` entries |
+| `DatabaseRepairActionsTests` | `RepairOutcomeText` cases | Extended | A case for the new refusal (decision 2), if the executor's result reaches the control |
+| `NotificationActionExecutorTests` | `ResetDatabase_IsOffered_WhenABackupCanBeTaken`, `ResetDatabase_IsWithheld_WhenABackupCannotBeTaken` | Unchanged | Checked deliberately: availability serves the Notifications page, which renders only while the database is readable, and a readable database still needs its backup. The degraded page's repair control does not consult availability, so an unreadable file is never withheld its Reset |
+| `DatabaseBackupQuotaTests`, `DatabaseIntegrityCheckTests`, `ConflictResolutionTests`, `SourceCacheWiringTests`, `BackupQuotaWarningTests`, the rest of `DatabaseInitializerTests` | every Reset test | Unchanged | Readable databases; the readable branch keeps its order and its backup |
+| `DatabaseBackupOutcomeTests` | `CorruptSourceDatabase_IsReportedAsSourceUnreadable` and its sibling | Unchanged | `CreateBackup` on a corrupt file still reports `SourceUnreadable`; the Reset now acts on it rather than refusing |
+| `backup/01`, `backup/02` | whole document | Changes | Renamed and rewritten (step 4) |
+| `backup/03` | *Observed effect*'s reference to `DropAndRebuildAsync`, and *"drop every table"* | Changes | The method's new name, and wording |
+| `backup/08` | *"A Reset drops every table, this row included"* | Changes | Wording; what the step measures is unchanged |
+| `notifications-and-changelog/10` | its description of the Reset as *"drops and rebuilds"* | Changes | Wording, found by step 3's guard |
+| `startup-and-degradation/08`, `09` | *Observed effect*'s recovery paragraph; a new final recovery step | Changes | Step 4 |
+| `notifications-and-changelog/14` | the kind list | Extended | `UnreadableDatabaseSetAside` |
+| `README.md` (automated testing) | the `backup/` index | Changes | Two renamed rows, `backup/09` added |
+| `backup/03`, `04`, `05`; `database-lifecycle/03`; `startup-and-degradation/01`, `02`, `03`, `05`, `06`, `10`, `14`; `notifications-and-changelog/01`, `10`, `12`; `import-and-staged-actions/19` | everything else | Unchanged | Reset of a readable database, or the Reset route as a setup step |
+
+**Inventory**
 
 Before any test is written, every existing test that exercises a Reset, a backup refusal, backup
 storage or the notification kinds is read and classified, and the classification is recorded here
@@ -177,21 +211,23 @@ Each test is one of four:
 | Class | Means | What happens |
 |---|---|---|
 | Unchanged | Its assertion holds after the fix | Run in step 12 as a regression check |
-| Changes | It asserts behaviour this issue deliberately changes | Rewritten to the new behaviour, with the reason recorded here, so a changed test is never mistaken for a weakened one |
+| Changes | It asserts behaviour this issue deliberately changes, or its name, comment or message describes the old Reset | Rewritten to the new behaviour, with the reason recorded here, so a changed test is never mistaken for a weakened one. A test's comment is documentation, and decision 5 leaves no contradiction there either |
 | Removed | It asserts a state a Reset can no longer reach, such as the `SourceUnreadable` refusal | Deleted, naming the test that now covers what replaced it |
 | Extended | It enumerates something this issue adds to, such as every notification kind | Given the new member |
 
-Already known: `GetAllTables_ReturnsEveryTableRegardlessOfPrefix` is *Removed* with the query;
-`AdminEndpointsTests.ResetDatabase_WhenTheSourceIsUnreadable_*` is *Removed*;
-`NotificationTableTests`, `NotificationMetadataKind_IsAcceptedBy*` and `notifications-and-changelog/14`
-are *Extended* with `UnreadableDatabaseSetAside`; `backup/01` and `02` *Change*, as step 4 describes.
-Tests that restore a backup after a failed Reset *Change*, since a failed rebuild now never touches the
-live database. The search may miss a test that reaches a Reset indirectly; step 12's full run is what
-catches those, and any it finds are classified here too.
+The search was widened twice: by test name (`Reset`, `Rebuild`, `Drop`, `Backup`, `Unreadable`,
+`Corrupt`), which added `StartupBackupRefusalTests`, `DatabaseBackupPreflightTests`, the
+`AdminBackup*EndpointTests` and `DatabaseBackupReaderTests` (all *Unchanged*: backup readiness and the
+backup endpoints, which this issue does not touch beyond step 5's counting); and by the phrases step 10
+searches documents for, which found the comment-only *Changes* above. A test that reaches a Reset
+indirectly may still be missed; step 12's full run catches it, and it is classified here before it is
+fixed.
 
 ### 3. Write the failing unit tests and confirm them red
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-11-09. Run against the code at `670e6e56`: 23 red on their own assertions, 6
+controls green, and the two tests that need a type this issue introduces deferred to the commit that
+introduces it.
 
 Every test in the Verification table marked *Unit test*, written before any production change and run
 against the current code. A test counts as red only when it fails on its own assertion after its
@@ -199,17 +235,44 @@ preconditions passed, not because a precondition such as the Reset returning `20
 #423 required. Rows marked *control* must be green now and stay green. The tests land in their own
 `test [#482]` commit before any production code.
 
-`ResetAsync_CorruptDatabase_TakesNoBackup` also answers a question this plan cannot from reading: whether
-today's refused Reset leaves a fragment from its failed copy in the backup folder. If it does, that is
-recorded here as part of what this issue fixes.
+The new Reset tests live in `DatabaseInitializerTests.UnreadableReset.cs`, a partial of the existing
+class. The reserved folder's name and the new notification kind and obstacle are written as literals in
+the tests rather than read from production constants: they are a contract with the user and with #481,
+and a rename must fail a test rather than follow silently. That is also what lets every test compile,
+and so run red, before the constants exist.
+
+**What the red run found.**
+
+- **A refused Reset of a corrupt file leaves a fragment in the backup folder, and the backup listing
+  offers it as a restore point.** `ResetAsync_CorruptDatabase_TakesNoBackup` and
+  `ResetAsync_CorruptDatabase_SetAsideFileIsNotListedAsABackup` are both red on it: the failed copy
+  leaves its destination file behind, and `GET /api/v1/admin/backups` lists it. This issue removes it
+  by never attempting the copy for an unreadable file, and step 6 deletes any fragment a copy still
+  leaves.
+- **Opening the file is not a sufficient readability check**, recorded under *How it is built*: the
+  probe is `PRAGMA quick_check`, which reads every page. Found while designing
+  `ResetAsync_DatabaseCorruptBeyondItsHeader_SetsItAsideAndKeepsNoBackup`, whose fixture's first page
+  reads and whose later pages do not.
+- **Three rows were controls, not red tests**, and are marked so in the table: a connection opened
+  before a readable Reset already sees the rebuilt database (row 10), a failed rebuild of a readable
+  database already leaves it as it was (row 12), and every ADR is already indexed (row 30). Each guards
+  a property the change must keep.
+- **Two tests need the code they test before they can compile**, and are written in the same commit as
+  that code: `ResetObstacleGuidanceTests.EveryObstacle_HasACauseAndARemedy` enumerates an enum that does
+  not exist yet, and the kind-acceptance tests in `DatabaseInitializerOwnershipTests` enumerate
+  `NotificationMetadataKind` themselves, so they turn red the moment its new member is declared and the
+  `CHECK` has not yet been widened. That moment is their red run, recorded at step 8.
+- **The documentation guard found more than step 10 listed**: `IDatabaseInitializer.cs`'s Reset summary,
+  `notifications-and-changelog/10`, and further lines in `backup/01` and `backup/03`. Step 10 now names
+  them.
 
 The fixture builders follow `startup-and-degradation/08` and `09`: 34 bytes of text for *not a
-database*, and a seeded file cut short for *truncated*. *Corrupt beyond its header* overwrites a page
-after the first, so the probe passes and the copy fails.
+database*, and a seeded file cut short for *truncated*. *Corrupt beyond its header* overwrites every page
+after the first.
 
 ### 4. Write the automated documents and confirm them red
 
-**Status:** ⬜ Not started
+**Status:** 🚧 In progress
 
 - **`backup/01` and `backup/02`** are rewritten and renamed, since their titles state the refusal this
   issue removes: `backup/01-a-reset-sets-aside-a-database-it-cannot-read.md` and
@@ -252,9 +315,9 @@ directory and the reserved folder being writable (`DirectoryWriteProbe`), refuse
 The probe is where ADR 022 places the catch: SQLite offers no way to ask whether a file is a database
 without reading it, so the `SqliteException` is legitimate, is caught at the probe as the first point an
 outcome can be formed, and is logged through `LogExceptionHandled`. The same holds for an `IOException`
-from a move across filesystems. The probe reads `sqlite_master`, an engine-specific read ADR 003's design
-goal 5 permits inside `Quotinator.Data` because nothing engine-neutral answers the question; a `SELECT 1`
-does not touch the file.
+from a move across filesystems. The probe is `PRAGMA quick_check`, an engine-specific read ADR 003's
+design goal 5 permits inside `Quotinator.Data` for verifying a database's integrity, because nothing
+engine-neutral answers the question.
 
 The `catch (SqliteException) when 26 or 11 or 14 or 8` backstop is reworked: an unreadable source can no
 longer be a refusal, and codes 14 and 8 now come from building or placing the new file. Every branch it
@@ -320,7 +383,7 @@ revision section, per the ADR README.
 - **ADR 025:** the set-aside decision (question 6), and its Reset paragraph reworded from *"drops every
   table"* to replacing the database.
 - **ADR 003:** design goal 5's example *"listing the tables a Reset drops"* replaced by the readability
-  probe, which is now the metadata read a Reset makes.
+  probe, `PRAGMA quick_check`, which is now the metadata read a Reset makes.
 - **ADR 014:** its context describes the pre-#156 Reset as current (*"Today, all four audit-trail tables
   are excluded from the tables a Reset drops"*); restated as the Reset that is.
 - **ADR 015:** *"`System_SchemaVersion` is never wiped or replayed by a Reset"* corrected, and its
@@ -333,7 +396,8 @@ policy* each become a short statement naming ADR 027, 014 or 025, with no restat
 principle itself is added to *Authoritative sources* (decision 8), and to the ADR README's rules.
 
 **Other documents, which describe:** `docs/api-endpoints.md` and `docs/data-import.md` (both say the
-Reset *"drops the entire database"*), `docs/database-conventions.md`'s audit-trail row that still calls
+Reset *"drops the entire database"*), `IDatabaseInitializer.cs`'s Reset summary (*"drops and rebuilds"*),
+the automated documents step 2 classifies as *Changes*, `docs/database-conventions.md`'s audit-trail row that still calls
 #156 *"proposed"*, `docs/knowledgebase/the-database-file-cannot-be-read.md` (its remedy becomes the
 Reset; its retention decided at close by `docs/knowledgebase.md`'s rule) and
 `docs/knowledgebase/no-backup-could-be-taken.md`, and the comments in `DatabaseInitializer.cs` and
@@ -407,17 +471,17 @@ None yet.
 |---|--------|-------------|--------|--------------|
 | 1 | ❌ | A Reset of a file that is not a database rebuilds an empty database | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabase_RebuildsAnEmptyDatabase` |
 | 2 | ❌ | A Reset of a truncated file rebuilds an empty database | Unit test | `DatabaseInitializerTests.ResetAsync_TruncatedDatabase_RebuildsAnEmptyDatabase` |
-| 3 | ❌ | A file corrupt beyond its header is set aside too, and the failed copy leaves no fragment | Unit test | `DatabaseInitializerTests.ResetAsync_DatabaseCorruptBeyondItsHeader_SetsItAsideAndLeavesNoBackupFragment` |
+| 3 | ❌ | A file corrupt beyond its header is set aside too, and nothing of it is kept as a backup | Unit test | `DatabaseInitializerTests.ResetAsync_DatabaseCorruptBeyondItsHeader_SetsItAsideAndKeepsNoBackup` |
 | 4 | ❌ | The unreadable file is moved into the reserved folder | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabase_MovesTheFileToTheReservedFolder` |
 | 5 | ❌ | Its `-wal` and `-shm` move with it | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabaseWithSidecars_MovesTheSidecarsWithIt` |
 | 6 | ❌ | An unreadable file is never treated as a backup | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabase_TakesNoBackup` |
 | 7 | ❌ | The set-aside file is not listed as a backup | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabase_SetAsideFileIsNotListedAsABackup` |
 | 8 | ❌ | A readable database still gets its backup first (control: green before and after) | Unit test | `DatabaseInitializerTests.ResetAsync_HealthyDatabase_StillTakesItsBackup` |
 | 9 | ❌ | A readable database leaves nothing in the reserved folder (control: green before and after) | Unit test | `DatabaseInitializerTests.ResetAsync_HealthyDatabase_LeavesNoFileInTheReservedFolder` |
-| 10 | ❌ | A connection opened before a readable Reset sees the rebuilt database | Unit test | `DatabaseInitializerTests.ResetAsync_HealthyDatabase_AConnectionOpenedBeforeTheResetSeesTheRebuiltDatabase` |
+| 10 | ❌ | A connection opened before a readable Reset sees the rebuilt database (control: green before and after) | Unit test | `DatabaseInitializerTests.ResetAsync_HealthyDatabase_AConnectionOpenedBeforeTheResetSeesTheRebuiltDatabase` |
 | 11 | ❌ | A failed backup of a readable database still refuses, and the override still works (control: green before and after) | Unit test | `dotnet test tests/Quotinator.Core.Tests --configuration Release --filter "FullyQualifiedName~DatabaseInitializerTests.ResetAsync"`: every existing #348 refusal and override test passes |
-| 12 | ❌ | A failed rebuild of a readable database leaves it as it was | Unit test | `DatabaseInitializerTests.ResetAsync_HealthyDatabase_FailedRebuild_LeavesTheDatabaseAsItWas` |
-| 13 | ❌ | A failed rebuild of an unreadable file leaves that file in place, with nothing moved | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabase_FailedRebuild_LeavesTheFileInPlace` |
+| 12 | ❌ | A failed rebuild of a readable database leaves it as it was, and the exception reaches the caller (control: green before and after) | Unit test | `DatabaseInitializerOwnershipTests.ResetAsync_MigrationFailsDuringReplay_LeavesTheDatabaseUntouchedAndRethrows`, renamed from `..._RestoresPreResetBackupAndRethrows` (step 2) |
+| 13 | ❌ | A failed rebuild of an unreadable file leaves that file in place, with nothing moved, and the exception reaches the caller | Unit test | `DatabaseInitializerOwnershipTests.ResetAsync_CorruptDatabase_FailedRebuild_LeavesTheFileInPlace` |
 | 14 | ❌ | Files in subfolders of the backup folder count towards storage | Unit test | `BackupStorageBudgetTests.UsedBytes_FileInASubfolder_IsCounted` |
 | 15 | ❌ | The set-aside file counts from the moment it arrives | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabase_SetAsideFileCountsTowardsBackupStorage` |
 | 16 | ❌ | A full backup folder does not stop the Reset of an unreadable file | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabaseWithAFullBackupFolder_StillRebuilds` |
@@ -425,16 +489,16 @@ None yet.
 | 18 | ❌ | Two unreadable files never overwrite each other | Unit test | `DatabaseInitializerTests.ResetAsync_TwoCorruptDatabases_KeepsBothFiles` |
 | 19 | ❌ | An unwritable data directory still refuses, naming its obstacle, with the file untouched | Live (Docker) | `backup/09-a-reset-of-an-unreadable-database-refuses-when-the-data-directory-cannot-be-written.md`, every step exits `0` |
 | 20 | ❌ | `preserveSchemaVersion=true` on an unreadable file proceeds with the baseline's own version rows | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabase_PreserveSchemaVersion_ProceedsWithTheBaselineVersionRows` |
-| 21 | ❌ | The new payload kind is accepted by the baseline and the incremental replay alike | Unit test | `DatabaseInitializerOwnershipTests.NotificationMetadataKind_IsAcceptedByTheBaseline` and `.NotificationMetadataKind_IsAcceptedByTheIncrementalReplay`, each with a new `UnreadableDatabaseSetAside` row; `.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` stays green |
+| 21 | ❌ | The new payload kind is accepted by the baseline and the incremental replay alike | Unit test | `DatabaseInitializerOwnershipTests.NotificationMetadataKind_IsAcceptedByTheBaseline` and `.NotificationMetadataKind_IsAcceptedByTheIncrementalReplay`, which enumerate the enum and so cover the new member without an edit, red between declaring it and widening the `CHECK` (step 8); `.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` stays green |
 | 22 | ❌ | A Reset of an unreadable file through the endpoint returns the application to healthy | Unit test | `StartupResilienceTests.Startup_DatabaseFileCorrupt_ResetRecoversToHealthy` |
 | 23 | ❌ | The Reset leaves a notification naming the set-aside file, written after the wipe, with its text stored in every language | Unit test | `StartupResilienceTests.Startup_DatabaseFileCorrupt_ResetLeavesANotificationNamingTheSetAsideFile` |
 | 24 | ❌ | The degraded page's repair action recovers an unreadable file too | Unit test | `StartupResilienceTests.Startup_DatabaseFileCorrupt_RepairActionRecoversToHealthy` |
-| 25 | ❌ | The endpoint answers the new refusal as `409`, naming its obstacle and remedies | Unit test | `AdminEndpointsTests.ResetDatabase_WhenTheDataDirectoryCannotBeWritten_Returns409NamingTheObstacle`. `ResetDatabase_WhenTheSourceIsUnreadable_DoesNotOfferTheOverride` and `.ResetDatabase_WhenTheSourceIsUnreadable_OffersReplacingTheFile` are removed, since a Reset can no longer produce that refusal; row 22 asserts what replaces it |
+| 25 | ❌ | The endpoint answers the new refusal as `409`, naming its obstacle, and leaves the unreadable file where it was | Unit test | `StartupResilienceTests.Startup_DatabaseFileCorrupt_ResetWhenTheSetAsideFolderCannotBeCreated_Returns409NamingTheObstacle`, against the real initializer: a file occupying the reserved folder's name blocks it deterministically on every platform. `ResetDatabase_WhenTheSourceIsUnreadable_DoesNotOfferTheOverride` and `.ResetDatabase_WhenTheSourceIsUnreadable_OffersReplacingTheFile` are removed, since a Reset can no longer produce that refusal; row 22 asserts what replaces it |
 | 26 | ❌ | The `SourceUnreadable` guidance names a Reset, and still offers no override | Unit test | `BackupObstacleGuidanceTests.SourceUnreadable_OffersAReset`; `.SourceUnreadable_DoesNotOfferTheOverride` stays green |
-| 27 | ❌ | Every new refusal obstacle has a cause and at least one remedy | Unit test | `ResetObstacleGuidanceTests.EveryObstacle_HasACauseAndARemedy` |
-| 28 | ❌ | No document or comment describes a Reset as dropping tables, or an unreadable file as unresettable | Unit test | `RepositoryStructureTests.NothingDescribesAResetAsDroppingTables`, searching `CLAUDE.md`, `docs/` outside milestone plan docs, and the endpoint `[Description]`s for step 10's phrases |
-| 29 | ❌ | The `CLAUDE.md` passages on Reset, migration recovery and backups point to ADRs 027, 025 and 014 instead of restating them, and the pointer principle is written down | Unit test | `RepositoryStructureTests.ClaudeMdResetPassagesPointToTheirAdrs`: each passage links its ADR and carries none of the rule phrases the ADR defines; `CLAUDE.md`'s *Authoritative sources* and the ADR README state the principle |
-| 30 | ❌ | ADR 027 exists and is indexed | Unit test | `RepositoryStructureTests.EveryAdrIsIndexed`, new, written in step 3: every file in `docs/architecture-decisions/` has a row in the README index, and is listed in `Quotinator.slnx`. No such guard exists today (searched 2026-11-09) |
+| 27 | ❌ | Every new refusal obstacle has a cause and at least one remedy | Unit test | `ResetObstacleGuidanceTests.EveryObstacle_HasACauseAndARemedy`, written with the enum it enumerates (step 3) |
+| 28 | ❌ | No document or comment describes a Reset as dropping tables, or an unreadable file as unresettable | Unit test | `RepositoryStructureTests.NothingDescribesAResetAsDroppingTables`, searching `CLAUDE.md`, `docs/` and `addon/` Markdown, and every `.cs` file under `src/` and `tests/`, excluding milestone plan docs and released changelogs, which record their own moment |
+| 29 | ❌ | The `CLAUDE.md` passages on Reset, migration recovery and backups point to ADRs 027, 025 and 014 instead of restating them, and the pointer principle is written down | Unit test | `RepositoryStructureTests.ClaudeMdResetPassagesPointToTheirAdrs`, one row per passage: it links its ADR and carries none of that ADR's working terms (the audit-trail row is green today and guards it); `RepositoryStructureTests.ThePointerPrincipleIsWrittenDown`, for `CLAUDE.md` and the ADR README |
+| 30 | ❌ | ADR 027 exists and is indexed (control: green before and after, a guard for the ADR this issue adds) | Unit test | `RepositoryStructureTests.EveryAdrIsIndexed`: every numbered file in `docs/architecture-decisions/` has a row in the README index and is listed in `Quotinator.slnx`. No such guard existed before (searched 2026-11-09) |
 | 31 | ❌ | On a real volume, a Reset of a non-database file recovers, sets it aside and notifies | Live (Docker) | `backup/01-a-reset-sets-aside-a-database-it-cannot-read.md`, every step exits `0` |
 | 32 | ❌ | The same for a truncated file | Live (Docker) | `backup/02-a-reset-sets-aside-a-truncated-database.md`, every step exits `0` |
 | 33 | ❌ | A degraded start on a non-database file is recovered by the Reset its reason names | Live (Docker) | `startup-and-degradation/08`, every step exits `0`, including the new recovery step |
