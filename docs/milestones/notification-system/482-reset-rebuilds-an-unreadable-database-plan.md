@@ -9,9 +9,10 @@
 
 ## Next action
 
-**Waiting for release.** Every verification row is ✅, and step 3's red run is re-checked and corrected.
-What remains is `process.md`'s *Waiting for release* list: tick the issue's Definition of done on GitHub,
-and close it once a release ships it.
+**Waiting for release.** Every verification row is ✅, step 3's red run is re-checked and corrected, and
+the *Waiting for release* checklist is complete (see *Closing checks*). What remains is the *Released*
+phase: the milestone's merge to `main`, a tag, the fix confirmed in the released image, then the closing
+comment with the verification table, approved before the issue is closed.
 
 ---
 
@@ -390,8 +391,10 @@ keeps is covered by a test.
 When a readable database's backup cannot be taken, the override passes the pre-flight, and then the
 Reset's own backup fails the same check and refuses. No test exercised the override against a real
 backup failure: `ResetAsync_WithTheOverride_ReportsThatTheBackupWasSkipped` uses a double whose Reset
-takes no backup. `RebuildAsync` keeps that behaviour exactly, so this issue changes nothing about it; it
-is raised with the developer to file separately.
+takes no backup. `RebuildAsync` keeps that behaviour exactly, so this issue changes nothing about it.
+The defect predates this issue (`DropAndRebuildAsync` at `670e6e56` takes the same backup) and breaks
+#348's requirement 4, so #348 was moved back to `In progress` to fix it as its step 29 (developer
+decision, 2026-11-12).
 
 `DropAndRebuildAsync` becomes `RebuildAsync`, with the behaviour under *How it is built*. The connection
 `OnResetAsync` receives is closed and its pool cleared before an unreadable file is moved, then reopened
@@ -609,7 +612,38 @@ regenerated with `--max-releases 3`; the add-on changelogs are not.
 
 ## Scope changes
 
-None yet.
+**Two refusals the issue does not name, and one claim it makes that holds only on one volume**
+(decisions 1 and 2, accepted 2026-11-09; recorded here and on the issue 2026-11-12):
+
+- **The issue says moving the unreadable file needs no extra disk space.** That holds only when the backup
+  folder shares a filesystem with the data directory. When `Quotinator:BackupPath` or the add-on's
+  `backup_path` puts it on another volume, the move is a copy that needs room. If it fails, the Reset
+  refuses with `SetAsideMoveFailed`, the old file untouched and any partial copy removed. The limit is
+  stated in the endpoint description and in the `backup_path` option text.
+- **An unwritable reserved folder refuses too**, as `SetAsideFolderNotWritable`, beside the issue's
+  `DataDirectoryNotWritable`: the file has nowhere to go. All three are a new `ResetObstacle`, answered `409`
+  with their own cause and remedies, rather than a `BackupOutcome`, which would name the wrong location.
+
+Nothing the issue requires was deferred.
+
+---
+
+## Closing checks
+
+The *Waiting for release* items the Verification table does not carry, done 2026-11-12.
+
+- **Process gap check: no document change.** Two things diverged while this issue was worked, and the
+  existing rules caught both: step 2's search missed `BackupStorageBudgetTests.UsedBytes_IgnoresFilesInSubdirectories`,
+  which step 12's full run would have caught and step 5 found first; and step 3 recorded 23 tests red on
+  their own assertions when one had stopped on a precondition, which #423's rule caught on re-check.
+- **A finding outside this issue went to its owner**: the `allowNoBackup` defect (step 7) is #348's step
+  29, and row 11 is worded so it no longer claims the override works.
+- **T2 coverage after `f1b58673`.** Step 14 ran on the working tree at `271c4c54`, before `f1b58673` moved
+  the repair control's outcome sentences into the translation files. T1 (step 13) ran after it and drove
+  that control end to end, so it covers the change; the milestone-close full T2 run covers it again.
+- **The knowledgebase entry** `the-database-file-cannot-be-read.md` never reached a release, so
+  `docs/knowledgebase.md`'s rule deletes it when the last issue it names closes. It also names #457, #348
+  and #444, so closing this issue alone does not delete it.
 
 ---
 
@@ -627,7 +661,7 @@ None yet.
 | 8 | ✅ | A readable database still gets its backup first (control: green before and after) | Unit test | `DatabaseInitializerTests.ResetAsync_HealthyDatabase_StillTakesItsBackup` |
 | 9 | ✅ | A readable database leaves nothing in the reserved folder (control: green before and after) | Unit test | `DatabaseInitializerTests.ResetAsync_HealthyDatabase_LeavesNoFileInTheReservedFolder` |
 | 10 | ✅ | A connection opened before a readable Reset sees the rebuilt database (control: green before and after) | Unit test | `DatabaseInitializerTests.ResetAsync_HealthyDatabase_AConnectionOpenedBeforeTheResetSeesTheRebuiltDatabase` |
-| 11 | ✅ | A failed backup of a readable database still refuses, and the override still works (control: green before and after) | Unit test | `dotnet test tests/Quotinator.Core.Tests --configuration Release --filter "FullyQualifiedName~DatabaseInitializerTests.ResetAsync"`: every existing #348 refusal and override test passes |
+| 11 | ✅ | A failed backup of a readable database still refuses, and the override behaves as it did before this issue (control: green before and after). That the override cannot complete a Reset whose backup fails is #348's step 29, not a regression here | Unit test | `dotnet test tests/Quotinator.Core.Tests --configuration Release --filter "FullyQualifiedName~DatabaseInitializerTests.ResetAsync"`: every existing #348 refusal and override test passes |
 | 12 | ✅ | A failed rebuild of a readable database leaves it as it was, and the exception reaches the caller (control: green before and after) | Unit test | `DatabaseInitializerOwnershipTests.ResetAsync_MigrationFailsDuringReplay_LeavesTheDatabaseUntouchedAndRethrows`, renamed from `..._RestoresPreResetBackupAndRethrows` (step 2) |
 | 13 | ✅ | A failed rebuild of an unreadable file leaves that file in place, with nothing moved, and the exception reaches the caller | Unit test | `DatabaseInitializerOwnershipTests.ResetAsync_CorruptDatabase_FailedRebuild_LeavesTheFileInPlace` |
 | 14 | ✅ | Files in subfolders of the backup folder count towards storage | Unit test | `BackupStorageBudgetTests.UsedBytes_FileInASubfolder_IsCounted` |
