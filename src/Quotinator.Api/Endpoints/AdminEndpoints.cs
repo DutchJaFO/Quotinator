@@ -381,7 +381,10 @@ internal static class AdminEndpoints
                 StageDirections = db.StageDirectionCount,
                 SoundCues       = db.SoundCueCount,
                 Conversations   = db.ConversationCount,
-                Reports         = db.LastSeedReport
+                Reports         = db.LastSeedReport,
+                // #348: the caller learns here whether the Reset left a restore point; a Reset that left
+                // none must not look like one that did. The audit row above is the database's own record.
+                Backup          = RestorePointDto.From(reset.RestorePoint),
             });
         })
         .WithName("ResetDatabase")
@@ -417,8 +420,10 @@ internal static class AdminEndpoints
             "the response names which obstacle stopped it (`backupObstacle`) and what can be done about it (`remedies`). " +
             "Pass `allowNoBackup=true` to proceed anyway: this both accepts responsibility for there being no restore point " +
             "and asserts the reset can complete without one. A backup inside the reserve above the normal quota is still taken; " +
-            "only one that would pass the ceiling is refused. A backup skipped this way is " +
-            "recorded in the audit trail, so it stays discoverable long after the log has rotated. " +
+            "only one that would pass the ceiling is refused. " +
+            "Every successful reset says what it left to restore from in `backup` (issue #348): `outcome` is `Succeeded` with the " +
+            "backup's file `name`, `SetAside` with the unreadable file's `name`, or `Skipped` with the `obstacle` that stopped the " +
+            "backup when `allowNoBackup=true` was used. A skipped backup is also recorded in the audit trail. " +
             "The rebuilt schema is then checked against the one its migration path defines (issue #305); if it does not match, " +
             "the call answers `500` naming every missing or different object, and the application stays degraded on that reason. " +
             "Protected by a concurrency-1 limiter: a second call while one is in progress receives `429 Too Many Requests` immediately. " +

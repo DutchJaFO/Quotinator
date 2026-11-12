@@ -54,6 +54,7 @@
   "NotificationsRemoveOldestBackupThenReseedButton": "Älteste Sicherung entfernen, dann sichern und neu befüllen",
   "NotificationsReseedWithoutBackupButton": "Ohne Sicherung neu befüllen",
   "NotificationsReseedWithoutBackupConfirm": "Derzeit kann keine Sicherung erstellt werden ({0}), daher gibt es nach diesem Neubefüllen keinen Wiederherstellungspunkt. Fahren Sie nur fort, wenn Sie das akzeptieren; der Knowledgebase-Eintrag erklärt, wie sich das Hindernis zuerst beheben lässt.",
+  "NotificationsActionRanWithoutBackup": "Das Neubefüllen lief ohne Sicherung ({0}), daher gibt es dafür keinen Wiederherstellungspunkt.",
   "NotificationsBackupCaution": "Der Sicherungsordner hat sein Kontingent erreicht: Die Sicherung, die dies erstellt, geht zulasten der Reserve und wird abgelehnt, wenn sie die Obergrenze überschreiten würde.",
   "KnowledgebaseEntryLink": "So lässt sich das beheben (Knowledgebase)",
   "NotificationBackupRefusedContentLoadTitle": "Inhalte nicht geladen: Es konnte keine Sicherung erstellt werden",

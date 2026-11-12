@@ -854,6 +854,7 @@ public class DatabaseInitializer(
         // a full backup folder must not stop it, and that check would refuse first if it ran first.
         _resetSourceReadable = IsDatabaseFileReadable();
         _setAsidePath = null;
+        _resetBackupPath = null;
 
         BackupOutcome readiness = BackupOutcome.Succeeded;
         if (_resetSourceReadable)
@@ -921,7 +922,7 @@ public class DatabaseInitializer(
             await OnUnreadableDatabaseSetAsideAsync(Path.GetFileName(_setAsidePath));
 
         await OnResetCompletedAsync();
-        return DatabaseOperationResult.Success(backupSkippedByOverride: _resetBackupSkipped);
+        return DatabaseOperationResult.Success(ResetRestorePoint(readiness));
     }
 
     // #482: per-Reset state the subclass's OnResetAsync cannot carry, since its signature is not ours to
@@ -929,6 +930,22 @@ public class DatabaseInitializer(
     private bool _resetSourceReadable = true;
     private bool _resetBackupSkipped;
     private string? _setAsidePath;
+    private string? _resetBackupPath;
+
+    /// <summary>
+    /// #348: what the Reset left behind to restore from, returned to its caller, which is the one that has
+    /// to know when there is none. <see langword="null"/> only for a subclass whose Reset does not rebuild
+    /// through <see cref="RebuildAsync"/>, which takes no backup and sets nothing aside.
+    /// </summary>
+    /// <param name="skippedFor">Why no backup could be taken, used when the override skipped it.</param>
+    private RestorePointResult? ResetRestorePoint(BackupOutcome skippedFor)
+    {
+        if (_setAsidePath is not null)
+            return RestorePointResult.SetAside(Path.GetFileName(_setAsidePath));
+        if (_resetBackupSkipped)
+            return RestorePointResult.Skipped(skippedFor);
+        return _resetBackupPath is null ? null : RestorePointResult.BackedUp(Path.GetFileName(_resetBackupPath));
+    }
 
     /// <summary>
     /// Whether SQLite can read every page of the database file (#482). <c>PRAGMA quick_check</c>, not an
@@ -1176,6 +1193,7 @@ public class DatabaseInitializer(
             else
             {
                 backupPath = resetBackup.Path;
+                _resetBackupPath = backupPath;
 
                 // The backup folder may be elsewhere, so a backup taken says nothing about the data
                 // directory, where the new database is built.

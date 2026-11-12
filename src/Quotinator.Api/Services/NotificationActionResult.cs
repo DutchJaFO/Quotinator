@@ -1,3 +1,4 @@
+using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
 
 namespace Quotinator.Api.Services;
@@ -27,8 +28,16 @@ public sealed class NotificationActionResult
     /// </summary>
     public ResetObstacle? ResetObstacle { get; init; }
 
+    /// <summary>
+    /// What an action that replaced data left behind to restore from (#348): a Reset or a reseed.
+    /// <see langword="null"/> for an action that replaces nothing.
+    /// </summary>
+    public RestorePointResult? RestorePoint { get; init; }
+
     /// <summary>An action that ran.</summary>
-    public static NotificationActionResult Success() => new() { Succeeded = true };
+    /// <param name="restorePoint">What it left behind to restore from, when it replaced data.</param>
+    public static NotificationActionResult Success(RestorePointResult? restorePoint = null) =>
+        new() { Succeeded = true, RestorePoint = restorePoint };
 
     /// <summary>An action that did not run because no backup could be taken first.</summary>
     /// <param name="obstacle">What stopped the backup.</param>

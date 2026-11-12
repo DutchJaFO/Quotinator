@@ -339,6 +339,58 @@ public class AdminEndpointsTests
     }
 
     /// <summary>
+    /// #348: the caller that asked for the Reset learns from the response that it left no restore point,
+    /// not from a log line or an audit row it would have to go looking for.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetDatabase_WithOverride_ReportsTheSkippedBackupInTheResponse()
+    {
+        JsonElement body = await CompletedResetBodyAsync(
+            new SpyDatabaseInitializer { RefuseWith = BackupOutcome.BudgetExceeded }, "?allowNoBackup=true");
+
+        Assert.AreEqual(nameof(RestorePointOutcome.Skipped), BackupProperty(body, "outcome"));
+    }
+
+    [TestMethod]
+    public async Task ResetDatabase_WithOverride_NamesWhyNoBackupWasTakenInTheResponse()
+    {
+        JsonElement body = await CompletedResetBodyAsync(
+            new SpyDatabaseInitializer { RefuseWith = BackupOutcome.BudgetExceeded }, "?allowNoBackup=true");
+
+        Assert.AreEqual(nameof(BackupOutcome.BudgetExceeded), BackupProperty(body, "obstacle"));
+    }
+
+    /// <summary>A Reset that took its backup names it, so the caller knows what it would restore from.</summary>
+    [TestMethod]
+    public async Task ResetDatabase_WhenTheBackupSucceeds_NamesTheBackupInTheResponse()
+    {
+        JsonElement body = await CompletedResetBodyAsync(new SpyDatabaseInitializer());
+
+        Assert.AreEqual(SpyBackupName, BackupProperty(body, "name"));
+    }
+
+    private const string SpyBackupName = "spy-backup.db";
+
+    /// <summary>Posts a reset the spy completes and returns the body; the 200 is a precondition.</summary>
+    private async Task<JsonElement> CompletedResetBodyAsync(SpyDatabaseInitializer spy, string query = "")
+    {
+        using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
+
+        HttpResponseMessage response = await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/admin/database/reset" + query, null, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "precondition: the reset completed");
+        using JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        return doc.RootElement.Clone();
+    }
+
+    /// <summary>A property of the response's <c>backup</c> object, or <see langword="null"/> when either is absent.</summary>
+    private static string? BackupProperty(JsonElement body, string name) =>
+        body.TryGetProperty("backup", out JsonElement backup) && backup.TryGetProperty(name, out JsonElement value)
+            ? value.GetString()
+            : null;
+
+    /// <summary>
     /// Posts a reset the spy refuses and returns the problem body. The 409 is a precondition, asserted with
     /// its own message, so a test failing here is traceable to the refusal not happening rather than to the
     /// statement the test makes about the body.
@@ -523,7 +575,7 @@ public class AdminEndpointsTests
         public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
 
         public BackupOutcome CheckBackupReadiness(long bytesFreedFirst = 0) => BackupOutcome.Succeeded;
-        public Task<DatabaseBackupResult> CreateBackupAsync() => Task.FromResult(DatabaseBackupResult.Success("spy-backup.db"));
+        public Task<DatabaseBackupResult> CreateBackupAsync() => Task.FromResult(DatabaseBackupResult.Success(SpyBackupName));
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
 
         public Task<DatabaseOperationResult> ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false)
@@ -539,7 +591,12 @@ public class AdminEndpointsTests
             ResetRan = true;
             if (NotIntactWith is not null)
                 return Task.FromResult(DatabaseOperationResult.NotIntact());
-            return Task.FromResult(DatabaseOperationResult.Success(backupSkippedByOverride: RefuseWith is not null));
+            // Mirrors the real initializer's restore point: skipped, by the override, for the obstacle that
+            // would have refused; otherwise the backup it took.
+            return Task.FromResult(DatabaseOperationResult.Success(
+                RefuseWith is BackupOutcome skippedFor
+                    ? RestorePointResult.Skipped(skippedFor)
+                    : RestorePointResult.BackedUp(SpyBackupName)));
         }
 
         public Task<SeedPreviewResult> PreviewSeedAsync()

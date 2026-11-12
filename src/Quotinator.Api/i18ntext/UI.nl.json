@@ -54,6 +54,7 @@
   "NotificationsRemoveOldestBackupThenReseedButton": "Oudste back-up verwijderen, dan back-up maken en opnieuw vullen",
   "NotificationsReseedWithoutBackupButton": "Opnieuw vullen zonder back-up",
   "NotificationsReseedWithoutBackupConfirm": "Er kan nu geen back-up worden gemaakt ({0}), dus na dit opnieuw vullen is er geen herstelpunt. Ga alleen verder als je dat accepteert; het Knowledgebase-artikel legt uit hoe je het probleem eerst oplost.",
+  "NotificationsActionRanWithoutBackup": "Het opnieuw vullen is zonder back-up uitgevoerd ({0}), dus er is geen herstelpunt voor.",
   "NotificationsBackupCaution": "De back-upmap zit op het quotum: de back-up die dit maakt komt uit de reserve, en wordt geweigerd als die het plafond zou overschrijden.",
   "KnowledgebaseEntryLink": "Zo los je dit op (Knowledgebase)",
   "NotificationBackupRefusedContentLoadTitle": "Inhoud niet geladen: er kon geen back-up worden gemaakt",

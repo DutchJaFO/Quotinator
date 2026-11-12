@@ -40,4 +40,10 @@ public sealed class DatabaseSeedSummaryResponse
 
     /// <summary>Per-file, per-entity-type new/modified/blocked/discarded/pending/stale action report (issue #221).</summary>
     public required IReadOnlyList<FileImportReport> Reports { get; init; }
+
+    /// <summary>
+    /// What a Reset left behind to restore from (#348). Set by <c>.../database/reset</c> only; the reseed
+    /// endpoint takes no backup and leaves it absent.
+    /// </summary>
+    public RestorePointDto? Backup { get; init; }
 }

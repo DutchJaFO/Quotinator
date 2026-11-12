@@ -717,6 +717,52 @@ public class NotificationActionExecutorTests
         Assert.DoesNotContain("backup", db.Calls);
     }
 
+    /// <summary>
+    /// #348: the user agreed to go without a backup, but the action's result is what says it actually
+    /// did; the page reports the outcome from it rather than assuming what the user chose happened.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_ReseedWithoutBackup_ReturnsASkippedRestorePoint()
+    {
+        NotificationActionResult result = await CreateExecutor(dbInitializer: BackupFails(BackupOutcome.BudgetExceeded))
+            .ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.ReseedWithoutBackup);
+
+        Assert.AreEqual(RestorePointOutcome.Skipped, result.RestorePoint?.Outcome);
+    }
+
+    [TestMethod]
+    public async Task Reseed_ReseedWithoutBackup_NamesWhyNoBackupWasTaken()
+    {
+        NotificationActionResult result = await CreateExecutor(dbInitializer: BackupFails(BackupOutcome.BudgetExceeded))
+            .ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.ReseedWithoutBackup);
+
+        Assert.AreEqual(BackupOutcome.BudgetExceeded, result.RestorePoint?.Obstacle);
+    }
+
+    /// <summary>A reseed that took its backup names it, so the caller knows what it would restore from.</summary>
+    [TestMethod]
+    public async Task Reseed_BackUpThenReseed_NamesTheBackupItTook()
+    {
+        NotificationActionResult result = await CreateExecutor(dbInitializer: new SpyDatabaseInitializer())
+            .ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.BackUpThenReseed);
+
+        Assert.AreEqual("spy-backup.db", result.RestorePoint?.FileName);
+    }
+
+    /// <summary>The Reset's own restore point reaches the action's caller unchanged, whichever it was.</summary>
+    [TestMethod]
+    public async Task DatabaseReset_WhenItCompletes_ReturnsTheResetsRestorePoint()
+    {
+        SpyDatabaseInitializer db = new()
+        {
+            ResetResult = DatabaseOperationResult.Success(RestorePointResult.BackedUp("reset-backup.db")),
+        };
+
+        NotificationActionResult result = await CreateExecutor(dbInitializer: db).ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
+
+        Assert.AreEqual("reset-backup.db", result.RestorePoint?.FileName);
+    }
+
     /// <summary>A reseed with no restore point is recorded where a later "where is the backup" question finds the answer.</summary>
     [TestMethod]
     public async Task Reseed_ReseedWithoutBackup_RecordsTheSkippedBackupInTheAuditTrail()

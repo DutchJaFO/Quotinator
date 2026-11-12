@@ -180,7 +180,8 @@ internal sealed class NotificationActionExecutor(
                 {
                     logger.LogWarning(ex, "[Server] Failed to record the current app version after Reset; non-fatal, the reset itself still succeeded.");
                 }
-                break;
+                // #348: what the Reset left to restore from reaches whoever ran it.
+                return NotificationActionResult.Success(reset.RestorePoint);
             }
             // #304. Deliberately not a copy of the case above: a reseed replaces content within an
             // intact schema, so it neither degrades health nor empties System_AppVersion, and calling
@@ -203,7 +204,8 @@ internal sealed class NotificationActionExecutor(
                 await databaseInitializer.ReseedAsync();
                 await notificationWriter.DismissByTriggerAsync(
                     NotificationDismissTrigger.Reseed, NotificationResolution.Reseeded);
-                break;
+                // #348: the backup taken or skipped beforehand is the reseed's restore point.
+                return NotificationActionResult.Success(prepared.RestorePoint);
             }
             // #303: the coarse, whole-batch form of the two options the review page offers per action:
             // keep everything as stored, or take everything the file brought. Interim by design: the
@@ -256,7 +258,8 @@ internal sealed class NotificationActionExecutor(
             // The option is the user's permission, given after being shown why no backup can be taken.
             // What they agreed to go without is recorded where a later "where is the backup" question
             // finds it: the log, and the audit trail that outlives it.
-            logger.LogReseedProceedingWithoutBackup(databaseInitializer.CheckBackupReadiness().ToString());
+            BackupOutcome obstacle = databaseInitializer.CheckBackupReadiness();
+            logger.LogReseedProceedingWithoutBackup(obstacle.ToString());
             await auditWriter.WriteAsync(new AuditEntryEntity
             {
                 TableName   = "Database",
@@ -264,7 +267,7 @@ internal sealed class NotificationActionExecutor(
                 Agent       = callerContext.Agent,
                 PerformedAt = DateTime.UtcNow,
             });
-            return NotificationActionResult.Success();
+            return NotificationActionResult.Success(RestorePointResult.Skipped(obstacle));
         }
 
         if (option is NotificationActionOption.RemoveOldestBackupThenReseed)
@@ -276,8 +279,8 @@ internal sealed class NotificationActionExecutor(
         }
 
         DatabaseBackupResult backup = await backupOperations.CreateAsync(ReseedTag);
-        return backup.Succeeded
-            ? NotificationActionResult.Success()
+        return backup is { Succeeded: true, Path: string path }
+            ? NotificationActionResult.Success(RestorePointResult.BackedUp(Path.GetFileName(path)))
             : NotificationActionResult.RefusedForBackup(backup.Outcome);
     }
 }

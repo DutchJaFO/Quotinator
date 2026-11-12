@@ -44,10 +44,16 @@ public sealed class DatabaseOperationResult
     public BackupGuardedStep? RefusedStep { get; init; }
 
     /// <summary>
-    /// Whether the operation ran without a backup because the caller explicitly accepted that. Recorded
-    /// so a later "where is the backup" question has an answer that is not guesswork.
+    /// Whether the operation ran without a backup because the caller explicitly accepted that: read from
+    /// <see cref="RestorePoint"/>, so the two cannot disagree.
     /// </summary>
-    public bool BackupSkippedByOverride { get; init; }
+    public bool BackupSkippedByOverride => RestorePoint?.Outcome == RestorePointOutcome.Skipped;
+
+    /// <summary>
+    /// What a successful Reset left behind to restore from (#348): the backup it took, the file it set
+    /// aside, or that it took none and why. <see langword="null"/> for an operation that replaces nothing.
+    /// </summary>
+    public RestorePointResult? RestorePoint { get; init; }
 
     /// <summary>
     /// Whether the operation stopped because the database's schema does not match the one its migration
@@ -65,10 +71,10 @@ public sealed class DatabaseOperationResult
         { Succeeded = false, SchemaNotIntact = true };
 
     /// <summary>A successful operation.</summary>
-    /// <param name="backupSkippedByOverride">Whether it proceeded without a backup by explicit override.</param>
-    public static DatabaseOperationResult Success(bool backupSkippedByOverride = false) =>
+    /// <param name="restorePoint">What it left behind to restore from, when it replaced the database.</param>
+    public static DatabaseOperationResult Success(RestorePointResult? restorePoint = null) =>
         new()
-        { Succeeded = true, BackupSkippedByOverride = backupSkippedByOverride };
+        { Succeeded = true, RestorePoint = restorePoint };
 
     /// <summary>An operation refused because no backup could be taken.</summary>
     /// <param name="obstacle">Which obstacle stopped it.</param>

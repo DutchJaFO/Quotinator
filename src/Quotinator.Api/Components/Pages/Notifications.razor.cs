@@ -25,6 +25,25 @@ namespace Quotinator.Api.Components.Pages;
 /// </summary>
 public partial class Notifications
 {
+    #region Public
+
+    /// <summary>
+    /// What the operator is told after an action ran, or <see langword="null"/> when there is nothing to
+    /// say beyond the reloaded list (#348). An action that replaced data without leaving a restore point
+    /// says so here: the user agreed to it in a dialog, but the page has to confirm what actually happened.
+    /// </summary>
+    /// <param name="result">The outcome the action returned.</param>
+    /// <param name="text">The translated strings for the current culture.</param>
+    internal static string? ActionOutcomeText(NotificationActionResult result, Quotinator.Api.I18nText.UI text) =>
+        result.RestorePoint is { Outcome: RestorePointOutcome.Skipped } skipped
+            // A plain Replace rather than string.Format: the template comes from a translation file, and a
+            // placeholder typo there must render as text rather than throw.
+            ? text.NotificationsActionRanWithoutBackup.Replace(
+                "{0}", (skipped.Obstacle ?? BackupOutcome.Unclassified).ToString(), StringComparison.Ordinal)
+            : null;
+
+    #endregion
+
     #region Protected
 
     /// <inheritdoc/>
@@ -71,6 +90,9 @@ public partial class Notifications
 
     // #369: replaced on every load. Until the first one there are no rows for it to judge.
     private NotificationActionAvailability Availability = new([]);
+
+    // #348: what the last action run from this page left to say, shown above the list until the next one.
+    private string? ActionOutcome;
 
     private IReadOnlyList<NotificationEntity> FilteredNotifications =>
         [.. AllNotifications.Where(MatchesFilter)];
@@ -135,13 +157,17 @@ public partial class Notifications
     /// </remarks>
     /// <param name="id">The notification whose action is running.</param>
     /// <param name="action">The executor call to make.</param>
-    private async Task RunActionAsync(Guid id, Func<Task> action) =>
+    private async Task RunActionAsync(Guid id, Func<Task<NotificationActionResult>> action)
+    {
+        ActionOutcome = null;
         await Executing.RunExclusivelyAsync(id, async () =>
         {
             await InvokeAsync(StateHasChanged);
             await Task.Yield();
-            await action();
+            // #348: what the action actually did, from its own result, rather than what the user chose.
+            ActionOutcome = ActionOutcomeText(await action(), Text);
         });
+    }
 
     /// <summary>#303: the same path, for an action whose outcome the operator had to choose between.</summary>
     private async Task ExecuteChoiceActionAsync((Guid Id, FieldResolutionChoice Choice) request)

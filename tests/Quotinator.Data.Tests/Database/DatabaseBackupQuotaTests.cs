@@ -178,6 +178,44 @@ public class DatabaseBackupQuotaTests
         Assert.IsTrue(result.BackupSkippedByOverride);
     }
 
+    /// <summary>
+    /// #348: the caller that asked for the Reset is the one that has to know it left no restore point; a
+    /// log line and an audit row are not where it reads the outcome of its own request.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetAsync_WithTheOverride_WhenNoBackupCanBeTaken_ReturnsASkippedRestorePoint()
+    {
+        FillBackupsTo(percentOfCeiling: 100);
+
+        DatabaseOperationResult result = await new RebuildingInitializer(NewOptions(), _dbPath).ResetAsync(allowNoBackup: true);
+
+        Assert.AreEqual(RestorePointOutcome.Skipped, result.RestorePoint?.Outcome);
+    }
+
+    /// <summary>Told that there is no restore point, the caller is also told why none could be taken.</summary>
+    [TestMethod]
+    public async Task ResetAsync_WithTheOverride_WhenNoBackupCanBeTaken_NamesWhyNoBackupWasTaken()
+    {
+        FillBackupsTo(percentOfCeiling: 100);
+
+        DatabaseOperationResult result = await new RebuildingInitializer(NewOptions(), _dbPath).ResetAsync(allowNoBackup: true);
+
+        Assert.AreEqual(BackupOutcome.BudgetExceeded, result.RestorePoint?.Obstacle);
+    }
+
+    /// <summary>
+    /// The other side of the same answer: a Reset that took its backup names the file, which is the one in
+    /// the backups folder, so the caller knows what to restore from.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetAsync_WhenTheBackupSucceeds_NamesTheBackupItTook()
+    {
+        DatabaseOperationResult result = await new RebuildingInitializer(NewOptions(), _dbPath).ResetAsync();
+
+        string? name = result.RestorePoint?.FileName;
+        Assert.IsTrue(name is not null && File.Exists(Path.Combine(_backups, name)), $"the Reset named {name ?? "no backup"}");
+    }
+
     private const string SkippedBackupLine = "reset proceeding WITHOUT a backup";
 
     /// <summary>

@@ -2,6 +2,7 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Core.Database;
 using Quotinator.Data.Database;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Testing.NoOps;
@@ -73,6 +74,32 @@ public partial class DatabaseInitializerTests
 
         string setAside = Assert.ContainsSingle(MainSetAsideFiles(), "the file was not set aside");
         Assert.AreEqual(NotADatabase, File.ReadAllText(setAside), "the set-aside file is not the original");
+    }
+
+    /// <summary>
+    /// #348: an unreadable file is never a backup, so the caller is told where the old file went instead:
+    /// that is what it has to restore from, if anything can be recovered from it.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetAsync_CorruptDatabase_NamesTheFileItSetAside()
+    {
+        WriteNotADatabase();
+
+        DatabaseOperationResult result = await CreateInitializer([]).ResetAsync();
+
+        string setAside = Assert.ContainsSingle(MainSetAsideFiles(), "precondition: the file was set aside");
+        Assert.AreEqual(Path.GetFileName(setAside), result.RestorePoint?.FileName);
+    }
+
+    /// <summary>The same Reset is not reported as a backup taken: the set-aside file was never one.</summary>
+    [TestMethod]
+    public async Task ResetAsync_CorruptDatabase_ReturnsASetAsideRestorePoint()
+    {
+        WriteNotADatabase();
+
+        DatabaseOperationResult result = await CreateInitializer([]).ResetAsync();
+
+        Assert.AreEqual(RestorePointOutcome.SetAside, result.RestorePoint?.Outcome);
     }
 
     [TestMethod]

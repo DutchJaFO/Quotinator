@@ -11,6 +11,11 @@
    The banner says why, and carries the repair, so the empty list is explained rather than puzzling. *@
 <DegradedDatabaseBanner />
 
+@if (ActionOutcome is not null)
+{
+    <div class="alert alert-warning" role="status">@ActionOutcome</div>
+}
+
 @if (AllNotifications.Count > 0)
 {
     <div class="btn-group mb-3" role="group" aria-label="@Text.NotificationsFilterLabel">
