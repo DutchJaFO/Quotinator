@@ -24,13 +24,9 @@ one.
 - **The proof is the data and the responses, never the audit trail.** That the Reset ran is proven by
   the quotes: present before, still present after the refusal, gone after the override, read from
   `/quotes` and from the Reset's own response. That no backup was taken is proven by the files in
-  `backups/`. An audit row only says the application *believes* something happened, so it proves
-  neither.
-- **The audit trail is read in step 5 for #348 requirement 5 only**, which asks for the skipped backup
-  to be recorded where it outlasts the log: that the record exists is the requirement itself, not
-  evidence for anything else. A Reset replaces the whole database, the audit table included (ADR 014),
-  and writes its own `Reset` row in the same second as the `BackupSkipped` row. Rows written in the same
-  second have no defined order (#486), so the step looks for the row by its content, not its position.
+  `backups/`, and that the caller was told so by the Reset's own `backup` object. The audit trail is the
+  database's record of its own actions, indirect evidence at best, so this document does not read it; the
+  `BackupSkipped` row is held by `AdminEndpointsTests.ResetDatabase_WithOverride_WritesAnAuditEntryRecordingTheSkip`.
 
 ## Steps
 
@@ -73,38 +69,24 @@ override. A `409` with the quotes gone means the Reset ran anyway after refusing
 
 ```
 dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18390/api/v1/admin/database/reset?allowNoBackup=true" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-10-out\reset-override.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-10-out\reset-override.json --equals quotes=0
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-10-out\reset-override.json --equals quotes=0 --equals backup.outcome=Skipped --equals backup.obstacle=BudgetExceeded --absent backup.name
 dotnet script scripts/testing/http.csx -- --url http://localhost:18390/api/v1/quotes --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-10-out\quotes-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-10-out\quotes-after.json --equals totalCount=0
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-match-count C:\repos\Quotinator\.claude\temp\qt-backup-10\backups "*.db" 1
 ```
 
-**Expected:** the Reset answers `200` with `quotes=0`, `/quotes` then reads `totalCount=0`, and
-`backups/` still holds one `.db` file, the filler: the database was replaced, and no backup was written.
+**Expected:** the Reset answers `200` with `quotes=0` and a `backup` object reading `outcome=Skipped`,
+`obstacle=BudgetExceeded` and no `name`; `/quotes` then reads `totalCount=0`, and `backups/` still holds
+one `.db` file, the filler. The database was replaced, no backup was written, and the caller was told so.
 
 **This is the assertion the document exists for.** Before #348's step 29 the override passed the
 readiness check, then the Reset took its own backup regardless, hit the same full folder, and answered
 the same `409` the override was meant to get past.
 
 **On failure:** a `409` with `backupObstacle=BudgetExceeded` is that defect. A `200` with quotes still in
-`/quotes` means the Reset reported success without replacing the database. A second `.db` file means a
-backup was taken from somewhere the ceiling does not reach.
-
-### 5. Confirm the skipped backup is recorded (#348 requirement 5)
-
-```
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18390/api/v1/admin/audit?table=Database" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-10-out\audit.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-10-out\audit.json --contains items=BackupSkipped --contains items=Reset
-```
-
-**Expected:** the `json` command exits `0`: among the `Database` rows, one records the skipped backup,
-beside the Reset's own.
-
-This step proves nothing about the Reset or the backup; steps 3 and 4 did that from the data. It checks
-only that the record requirement 5 asks for is written.
-
-**On failure:** no row means the Reset ran without a backup and nothing outlasting the log says so,
-which is what #348 requirement 5 forbids.
+`/quotes` means the Reset reported success without replacing the database. A `200` with no `backup`
+object, or one not reading `Skipped`, means the caller was not told it has no restore point. A second
+`.db` file means a backup was taken from somewhere the ceiling does not reach.
 
 ## Observed effect
 
@@ -122,13 +104,28 @@ The override's Reset answered `200` with every count `0` (`quotes=0`, `sources=0
 `conversations=0`, `reports=[]`), and `/quotes` then read `totalCount=0`. `backups/` held only the
 filler.
 
+**Re-measured 2026-11-12** after the Reset began reporting its restore point (#348 step 30), against an
+image built from the working tree of that step. The same reads as above, and the override's Reset now
+answers with `"backup":{"outcome":"Skipped","obstacle":"BudgetExceeded"}` and no `name`. The audit step
+was removed from this document: it no longer serves as evidence here.
+
 ## Canary
 
-Build the commit before #348's step 29 as `quotinator:canary-348-29` and run steps 1 to 4. Steps 1 to 3
-read the same on both builds. Step 4's Reset must answer `409` with `backupObstacle=BudgetExceeded`, so
-its `http.csx` command fails on the expected `200`, and `/quotes` still holds the seeded quotes.
+Two defects, each with its own canary. Steps 1 to 3 read the same on every build.
 
-**Run 2026-11-12** against `bd84d987`: steps 1 to 3 green, the refusal offering `allowNoBackup`. Step 4's
+- **The override not taking effect (step 29).** Build the commit before step 29 as
+  `quotinator:canary-348-29`. Step 4's Reset answers `409` with `backupObstacle=BudgetExceeded`, so its
+  `http.csx` command fails on the expected `200`, and `/quotes` still holds the seeded quotes.
+- **The caller not being told (step 30).** Build the commit before step 30 as `quotinator:canary-348-30`.
+  Step 4's Reset answers `200` and replaces the database, but carries no `backup` object, so the `json`
+  check on its body fails on `backup.outcome` and `backup.obstacle`.
+
+**Run 2026-11-12** against `b8c970b2`, for step 30: steps 1 to 3 green, `/quotes` at `795` before and
+after the refusal. Step 4's Reset answered `200` with `quotes=0` and no `backup` object; the `json` check
+failed on *backup.outcome: expected 'Skipped', but the field is absent*, and the same for
+`backup.obstacle`.
+
+**Run 2026-11-12** against `bd84d987`, for step 29: steps 1 to 3 green, the refusal offering `allowNoBackup`. Step 4's
 Reset with the override answered `409` (*Expected 200, got 409*), the defect this document exists for;
 `backups/` still held only the filler.
 
