@@ -20,9 +20,10 @@ recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**T1 for step 29, then back to `Waiting for release`.** The issue was moved back to `In progress` on
+**T1 for steps 29 and 30, then back to `Waiting for release`.** The issue was moved back to `In progress` on
 2026-11-12 (developer decision) because requirement 4 was unmet: the override could not take effect on a
-Reset. Step 29 fixed it, and every verification row is ✅ again. What remains is the developer starting
+Reset. Step 29 fixed it; step 30 makes the Reset and the reseed action tell their caller what they left to
+restore from. Every verification row is ✅ again. What remains is the developer starting
 the application in Visual Studio and confirming it starts without error, then the status returns to
 `Waiting for release` and the Definition of done's two unticked boxes are ticked.
 
@@ -1282,6 +1283,45 @@ predate it; a completed Reset after a refused backup does not.
 4. **Live.** A T2 document provoking a refused Reset on a readable database, then the same Reset with
    `allowNoBackup=true` answering `200`, red against a canary built from the current branch.
 
+### 30. The caller is told what the action left to restore from
+**Status:** 🚧 In progress, 2026-11-12. Everything is done except T1, which is the developer's to run.
+
+**The defect (developer, 2026-11-12).** A Reset with `allowNoBackup=true` answered `200` with the same body
+as one that took its backup. The skip reached only the log and the audit trail, and the reseed run without
+a backup from the notifications page said nothing either. A consumer that is not told there is no restore
+point cannot act on it. The audit trail records the database's own actions and is indirect evidence at
+best, and notifications report system status; the outcome of the caller's own request belongs in the
+response to it. `backup/10` had compounded this by using the audit row as its proof.
+
+**What was done.**
+
+- **The shape (developer decision, 2026-11-12):** a `backup` object on the Reset's response, always
+  present on success: `outcome` is `Succeeded` with the backup's file `name`, `SetAside` with the unreadable
+  file's `name`, or `Skipped` with the `obstacle`. `DatabaseOperationResult` and `NotificationActionResult`
+  carry the same as a `RestorePointResult`; `BackupSkippedByOverride` is now read from it, so the two
+  cannot disagree. The reseed endpoint, which takes no backup, leaves `backup` absent.
+- **The notifications page (developer decision, 2026-11-12):** after an action, a reseed run without a
+  backup shows a line saying it left no restore point, naming the obstacle, from the action's own result.
+  New key `NotificationsActionRanWithoutBackup` in en-GB, nl and de.
+- **Red, then green:** the 13 tests named in row 40 failed on their own assertions against the signature
+  state (the types in place, nothing setting them). `NotificationsPageTests.ActionThatTookItsBackup_SaysNothing`
+  guards the other direction and passed on the stub, as a guard against a page that warns after every
+  action. The baseline-text loader moved from `DatabaseRepairActionsTests` into `BaselineUiText` once a
+  second test class needed it.
+- **`backup/10`:** step 4 now asserts the response's `backup` object, and the audit step was removed: the
+  record is held by `AdminEndpointsTests.ResetDatabase_WithOverride_WritesAnAuditEntryRecordingTheSkip`.
+  Green against the working tree; red against `b8c970b2` at step 4, the `backup` object absent.
+- **Docs:** the endpoint's `[Description]`, `docs/api-endpoints.md`, and an unreleased `added` changelog
+  entry in en, nl and de, with `CHANGELOG.md` regenerated.
+- **Build and full suite:** `0 Warning(s)  0 Error(s)`, 5,001 tests across 12 projects, all passing.
+
+**Left to do.** T1, together with step 29's: the developer starts the application in Visual Studio and
+confirms it starts without error.
+
+**Found, not changed here.** `POST /database/reseed` replaces content without taking a backup and says
+nothing about that, and the notifications page does not report a refused action, only reloading the list.
+Both leave a consumer unaware of something it would need to act on.
+
 ---
 
 ## Verification checklist
@@ -1327,6 +1367,7 @@ predate it; a completed Reset after a refused backup does not.
 | 37 | ✅ | A composite action evaluates the conditions once, not once per operation inside it | Unit test | Step 26: the count of evaluations per action, not merely that one happened |
 | 38 | ✅ | A condition check that cannot run does not change the answer of the action it followed | Unit test | Step 26: `AdminBackupEndpointsTests.DeleteBackup_WhenAConditionCheckThrows_StillAnswersTheDeletionsOwnOutcome`, and `backup/05` step 7 live |
 | 39 | ✅ | A Reset with the override completes when no backup can be taken, writes no backup, and reports the skip | Unit test + Automated (T2) | `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_WhenNoBackupCanBeTaken_CompletesTheReset`, `..._ReplacesTheDatabase`, `..._ReportsThatTheBackupWasSkipped`, each red first; `backup/10`, every step exits `0`, red against `bd84d987` at step 4; `ResetObstacleGuidanceTests.DataDirectoryNotWritable_DoesNotClaimTheFileIsUnreadable`, red first; `backup/04` and `backup/09` re-run green |
+| 40 | ✅ | The caller of an action that replaces data is told what it left to restore from: the backup taken, the file set aside, or none and why | Unit test + Automated (T2) | Step 30: `DatabaseBackupQuotaTests` `..._ReturnsASkippedRestorePoint`, `..._NamesWhyNoBackupWasTaken`, `ResetAsync_WhenTheBackupSucceeds_NamesTheBackupItTook`; `DatabaseInitializerTests` `ResetAsync_CorruptDatabase_NamesTheFileItSetAside`, `..._ReturnsASetAsideRestorePoint`; `AdminEndpointsTests` `ResetDatabase_WithOverride_ReportsTheSkippedBackupInTheResponse`, `..._NamesWhyNoBackupWasTakenInTheResponse`, `ResetDatabase_WhenTheBackupSucceeds_NamesTheBackupInTheResponse`; `NotificationActionExecutorTests` `Reseed_ReseedWithoutBackup_ReturnsASkippedRestorePoint`, `..._NamesWhyNoBackupWasTaken`, `Reseed_BackUpThenReseed_NamesTheBackupItTook`, `DatabaseReset_WhenItCompletes_ReturnsTheResetsRestorePoint`; `NotificationsPageTests.ReseedWithoutBackup_SaysThereIsNoRestorePoint`, all red first; `backup/10` step 4 green, red against `b8c970b2` |
 
 ---
 
