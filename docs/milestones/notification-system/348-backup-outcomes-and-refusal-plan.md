@@ -20,11 +20,11 @@ recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**Execute step 29: the override cannot take effect on a Reset.** Found by #482 and confirmed against the
-code on 2026-11-12. The issue was moved back from `Waiting for release` to `In progress` (developer
-decision, 2026-11-12), because requirement 4 is unmet and verification row 5 claimed otherwise. Every
-other step and row still stands. Once step 29 is done and row 39 is ✅, the issue returns to
-`Waiting for release`.
+**T1 for step 29, then back to `Waiting for release`.** The issue was moved back to `In progress` on
+2026-11-12 (developer decision) because requirement 4 was unmet: the override could not take effect on a
+Reset. Step 29 fixed it, and every verification row is ✅ again. What remains is the developer starting
+the application in Visual Studio and confirming it starts without error, then the status returns to
+`Waiting for release` and the Definition of done's two unticked boxes are ticked.
 
 **Before 2026-11-12: all 28 steps were done and all 38 verification rows were ticked. Rows 9 and 19 were left behind when step 19 closed and were ticked afterwards, on a re-run of the three test classes they name (88 green, 2026-09-29). The issue is ready for `Waiting for release`:** tick the Definition of done against what was actually verified, then post the closing comment with the verification table. Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
 issue was reopened 2026-09-26 when a re-verification against the issue's own requirements found three
@@ -1218,7 +1218,42 @@ tries to provoke that obstacle the same way; whether the provider should see the
 issue''s question.
 
 ### 29. The override takes effect on a Reset
-**Status:** ⬜ Not started
+**Status:** 🚧 In progress, 2026-11-12. Everything is done except T1, which is the developer's to run.
+
+**What was done.**
+
+- **Red, then green:** `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_WhenNoBackupCanBeTaken_CompletesTheReset`,
+  `..._ReplacesTheDatabase` and `..._ReportsThatTheBackupWasSkipped`, through a `RebuildingInitializer`
+  double that resets via `RebuildAsync`. All three failed on their own assertions before the fix. The
+  "writes no backup" test the plan named was dropped: it could not be red, since a refused Reset writes no
+  backup either. `backup/10` step 4 checks it live instead.
+- **The fix:** `ResetAsync` sets `_resetBackupSkipped`; `RebuildAsync` skips its backup when that is set
+  and checks that the data directory is writable instead.
+- **The reseed option's override is sound:** `OnReseedAsync` takes no backup of its own, so only the Reset
+  had the defect. No new row.
+- **A knock-on, reworded (developer decision, 2026-11-12):** under the override, a read-only data directory
+  now refuses with `resetObstacle=DataDirectoryNotWritable` rather than the backup refusal. That
+  obstacle's title, cause, log line (`LogResetRefusedCannotSetAside` renamed `LogResetRefusedCannotReplace`)
+  and exception said "the unreadable database could not be set aside", which is false here. They now say the
+  database could not be replaced. `ResetObstacleGuidanceTests.DataDirectoryNotWritable_DoesNotClaimTheFileIsUnreadable`
+  was red first and is now green. The endpoint `[Description]` and `docs/api-endpoints.md` were updated.
+- **`backup/10`, new:** a full backups folder refuses a Reset, then the Reset with `allowNoBackup=true`
+  answers `200`, writes no backup, and leaves a `BackupSkipped` audit row. Green against `quotinator:local`
+  built from the working tree; red against `quotinator:canary-348-29` (`bd84d987`) at step 4 only, with
+  `Expected 200, got 409`. Its step 5 first asserted one audit row and failed: the Reset writes its own
+  `Reset` row too, in the same second, so the step now finds the row by content (#486 leaves same-second
+  order undefined). Indexed in the README and added to the solution.
+- **`backup/04` and `backup/09` re-run green.** `04` step 3 now asserts the override's refusal as
+  `resetObstacle=DataDirectoryNotWritable` with no `backupObstacle` and no claim that the file cannot be
+  read; `09`'s observed effect quotes the new title and cause.
+- **Build and full suite:** `dotnet build --configuration Release` and `dotnet test --configuration Release
+  --verbosity normal -m:1`, `0 Warning(s)  0 Error(s)`, 4,987 tests across 12 projects, all passing.
+- **No changelog entry is needed.** The unreleased `fixed` entry for #348 already says the override lets a
+  Reset proceed without a backup where it can still complete. The defect never shipped, and that sentence
+  is what this step makes true.
+
+**Left to do.** T1: the developer starts the application in Visual Studio and confirms it starts without
+error. Then the status returns to `Waiting for release`.
 
 **The defect.** Requirement 4 says the override lets the operator proceed without a backup. On a Reset it
 cannot. `ResetAsync` lets `allowNoBackup=true` past the readiness check, then `OnResetAsync` reaches
@@ -1257,7 +1292,7 @@ predate it; a completed Reset after a refused backup does not.
 | 2 | ✅ | An unrecognised failure reports as `Unclassified` and carries the underlying error | Unit test | `DatabaseBackupOutcomeTests.CopyFailureThatIsNotASqliteError_IsReportedAsUnclassified` and `..._CarriesTheUnderlyingError` |
 | 3 | ✅ | The content load at startup refuses rather than proceeding unprotected, naming the variant | Unit test | `DatabaseInitializerTests.InitialiseAsync_ContentLoadWithNoBackupPossible_IsRefused`, `..._NamesTheObstacle`, `..._LoadsNothing`, and `...ContentLoadWithAnUnwritableBackupDestination_NamesTheObstacle` |
 | 4 | ✅ | Reset refuses with a stated failure, never an unhandled 500, and does not rebuild | Unit test | `AdminEndpointsTests.ResetDatabase_WhenNoBackupCanBeTaken_RefusesWithAStatedFailureRatherThanAnUnhandled500`, `..._NamesTheObstacle`, `..._DescribesTheCause`, `..._OffersARemedy`; `DatabaseBackupQuotaTests.ResetAsync_WhenNoBackupCanBeTaken_Refuses`, `..._NamesTheObstacle`, `..._NeverReachesTheDestructiveStep` |
-| 5 | ❌ | The override is offered and forwarded only where the action can complete without a backup. Reopened 2026-11-12: a Reset with the override cannot complete when the backup cannot be taken (step 29) | Unit test | `AdminEndpointsTests.ResetDatabase_WhenTheQuotaIsFull_OffersTheOverride`, `...WhenTheSourceIsUnreadable_DoesNotOfferTheOverride`, `...WhenTheSourceIsUnreadable_OffersReplacingTheFile`, `...WhenTheOverrideWasTriedAndStillRefused_DoesNotOfferItAgain`, `...WithOverride_ForwardsTheOverride`; `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_ReportsThatTheBackupWasSkipped` |
+| 5 | ✅ | The override is offered and forwarded only where the action can complete without a backup. Reopened 2026-11-12 and closed by step 29: a Reset with the override could not complete when the backup could not be taken | Unit test | `AdminEndpointsTests.ResetDatabase_WhenTheQuotaIsFull_OffersTheOverride`, `...WhenTheOverrideWasTriedAndStillRefused_DoesNotOfferItAgain`, `...WithOverride_ForwardsTheOverride`; `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_ReportsThatTheBackupWasSkipped` and step 29's three `ResetAsync_WithTheOverride_WhenNoBackupCanBeTaken_*`. The two `...WhenTheSourceIsUnreadable_*` tests were removed by #482, since a Reset no longer refuses an unreadable file |
 | 6 | ✅ | A skipped backup is recorded in the log **and** the audit trail | Unit test | `AdminEndpointsTests.ResetDatabase_WithOverride_WritesAnAuditEntryRecordingTheSkip` (red in step 7); `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_LogsTheSkippedBackup` and `ResetAsync_WhenTheBackupSucceeds_LogsNoSkippedBackup`; a reseed without a backup by step 12's `..._RecordsTheSkippedBackupInTheAuditTrail` and `..._LogsTheSkippedBackup` |
 | 7 | ✅ | Every #348 test asserts one statement, and each is red against the state before its change | Unit test | Step 7: states A to E, every test failing on an assertion; the tests that could not fail removed |
 | 8 | ✅ | A caller can ask whether a backup is possible without attempting one, and the answer agrees with an attempt | Unit test | `DatabaseBackupPreflightTests.CheckBackupReadiness_WhenTheBudgetIsExhausted_ReportsBudgetExceeded`, `..._AgreesWithTheAttempt`, and the same pair for an unwritable destination |
@@ -1291,7 +1326,7 @@ predate it; a completed Reset after a refused backup does not.
 | 36 | ✅ | A folder at or above the max always has an error open, however it got there, and never alongside the warning | Unit test | Step 25: raised at and above the max, absent below it, never open with the warning, and `backup/08` step 9 |
 | 37 | ✅ | A composite action evaluates the conditions once, not once per operation inside it | Unit test | Step 26: the count of evaluations per action, not merely that one happened |
 | 38 | ✅ | A condition check that cannot run does not change the answer of the action it followed | Unit test | Step 26: `AdminBackupEndpointsTests.DeleteBackup_WhenAConditionCheckThrows_StillAnswersTheDeletionsOwnOutcome`, and `backup/05` step 7 live |
-| 39 | ❌ | A Reset with the override completes when no backup can be taken, writes no backup, and reports the skip | Unit test + Automated (T2) | Step 29: the real-initializer tests, red first, and its T2 document |
+| 39 | ✅ | A Reset with the override completes when no backup can be taken, writes no backup, and reports the skip | Unit test + Automated (T2) | `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_WhenNoBackupCanBeTaken_CompletesTheReset`, `..._ReplacesTheDatabase`, `..._ReportsThatTheBackupWasSkipped`, each red first; `backup/10`, every step exits `0`, red against `bd84d987` at step 4; `ResetObstacleGuidanceTests.DataDirectoryNotWritable_DoesNotClaimTheFileIsUnreadable`, red first; `backup/04` and `backup/09` re-run green |
 
 ---
 
