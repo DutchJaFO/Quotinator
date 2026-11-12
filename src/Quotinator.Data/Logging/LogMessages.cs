@@ -107,8 +107,8 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Init] reset: the database file cannot be read: it is set aside rather than backed up, and a new database replaces it")]
     public static partial void LogResetSourceUnreadable(this ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Init] reset refused: the unreadable database could not be set aside or replaced ({Obstacle:l}). Nothing was moved or written")]
-    public static partial void LogResetRefusedCannotSetAside(this ILogger logger, string obstacle);
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Init] reset refused: the database could not be replaced ({Obstacle:l}). Nothing was moved or written")]
+    public static partial void LogResetRefusedCannotReplace(this ILogger logger, string obstacle);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Init] reset: the unreadable database was set aside as {Path}. It may be flawed, and it counts towards backup storage")]
     public static partial void LogUnreadableDatabaseSetAside(this ILogger logger, string path);

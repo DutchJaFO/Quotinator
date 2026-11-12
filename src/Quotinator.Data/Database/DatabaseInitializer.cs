@@ -876,7 +876,7 @@ public class DatabaseInitializer(
             Logger.LogResetSourceUnreadable();
             if (CheckSetAsideReadiness() is ResetObstacle obstacle)
             {
-                Logger.LogResetRefusedCannotSetAside(obstacle.ToString());
+                Logger.LogResetRefusedCannotReplace(obstacle.ToString());
                 return DatabaseOperationResult.RefusedForReset(obstacle);
             }
         }
@@ -884,7 +884,10 @@ public class DatabaseInitializer(
         using SqliteConnection connection = (SqliteConnection)_factory.CreateConnection();
         await connection.OpenAsync();
 
-        if (readiness != BackupOutcome.Succeeded)
+        // #348 step 29: the override has to reach the rebuild, which takes the Reset's own backup. Without
+        // this the same obstacle failed that attempt and the Reset refused anyway.
+        _resetBackupSkipped = readiness != BackupOutcome.Succeeded;
+        if (_resetBackupSkipped)
             Logger.LogResetProceedingWithoutBackup(readiness.ToString());
 
         try
@@ -899,11 +902,11 @@ public class DatabaseInitializer(
             Logger.LogResetRefusedNoBackup(ex.Outcome.ToString());
             return DatabaseOperationResult.RefusedForBackup(ex.Outcome, BackupGuardedStep.Reset);
         }
-        // #482: the file could not be set aside or replaced, found only once the move was attempted.
+        // #482: the database could not be set aside or replaced, found only once it was attempted.
         catch (DatabaseResetRefusedException ex)
         {
-            Logger.LogExceptionHandled(ex, "the Reset was refused: the unreadable database could not be set aside");
-            Logger.LogResetRefusedCannotSetAside(ex.Obstacle.ToString());
+            Logger.LogExceptionHandled(ex, "the Reset was refused: the database could not be replaced");
+            Logger.LogResetRefusedCannotReplace(ex.Obstacle.ToString());
             return DatabaseOperationResult.RefusedForReset(ex.Obstacle);
         }
 
@@ -918,12 +921,13 @@ public class DatabaseInitializer(
             await OnUnreadableDatabaseSetAsideAsync(Path.GetFileName(_setAsidePath));
 
         await OnResetCompletedAsync();
-        return DatabaseOperationResult.Success(backupSkippedByOverride: readiness != BackupOutcome.Succeeded);
+        return DatabaseOperationResult.Success(backupSkippedByOverride: _resetBackupSkipped);
     }
 
     // #482: per-Reset state the subclass's OnResetAsync cannot carry, since its signature is not ours to
     // change. A Reset runs one at a time (the admin limiter and SharedSeedLock), so one field serves.
     private bool _resetSourceReadable = true;
+    private bool _resetBackupSkipped;
     private string? _setAsidePath;
 
     /// <summary>
@@ -1137,9 +1141,16 @@ public class DatabaseInitializer(
                 savedConsumerVersions = [.. await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllConsumerVersions)];
             }
 
-            DatabaseBackupResult resetBackup = CreateBackup(connection, SchemaVersion);
+            // #348 step 29: the operator chose to proceed without a backup, after being told why none can be
+            // taken. Attempting one anyway would hit the same obstacle and refuse what they permitted.
+            DatabaseBackupResult? resetBackup = _resetBackupSkipped ? null : CreateBackup(connection, SchemaVersion);
 
-            if (resetBackup.Outcome == BackupOutcome.SourceUnreadable)
+            if (resetBackup is null)
+            {
+                if (!DirectoryWriteProbe.CanCreateFileIn(DataDirectory))
+                    throw new DatabaseResetRefusedException(ResetObstacle.DataDirectoryNotWritable);
+            }
+            else if (resetBackup.Outcome == BackupOutcome.SourceUnreadable)
             {
                 // The file changed after the check, or carries damage the check could not see: the copy
                 // is what found it. It is treated as the unreadable file it is; the copy left nothing.

@@ -78,8 +78,8 @@ public sealed class DatabaseOperationResult
         { Succeeded = false, BackupObstacle = obstacle, RefusedStep = step };
 
     /// <summary>
-    /// A Reset of an unreadable database file refused because the file could not be set aside or replaced
-    /// (#482). Nothing was moved or written.
+    /// A Reset refused because the database could not be replaced (#482): an unreadable file could not be
+    /// set aside, or the data directory cannot be written. Nothing was moved or written.
     /// </summary>
     /// <param name="obstacle">What stopped it.</param>
     public static DatabaseOperationResult RefusedForReset(ResetObstacle obstacle) =>

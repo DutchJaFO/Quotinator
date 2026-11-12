@@ -40,7 +40,7 @@ public sealed class NotificationActionResult
     public static NotificationActionResult ResetNotIntact(string reason) =>
         new() { Succeeded = false, FailureReason = reason };
 
-    /// <summary>A Reset of an unreadable database file that did not run: the file could not be set aside (#482).</summary>
+    /// <summary>A Reset that did not run because the database could not be replaced (#482).</summary>
     /// <param name="obstacle">What stopped it.</param>
     public static NotificationActionResult RefusedForReset(ResetObstacle obstacle) =>
         new() { Succeeded = false, ResetObstacle = obstacle };

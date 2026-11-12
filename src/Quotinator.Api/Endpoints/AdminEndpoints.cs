@@ -264,12 +264,13 @@ internal static class AdminEndpoints
                     statusCode: StatusCodes.Status500InternalServerError);
             }
 
-            // #482: a Reset of an unreadable file needs no backup, so what stopped it is not one, and the
-            // body names it without a backupObstacle that would send the operator to the wrong folder.
+            // #482: what stopped the Reset is not a backup (an unreadable file needs none, and the override
+            // goes without one, #348 step 29), so the body names it without a backupObstacle that would send
+            // the operator to the wrong folder.
             if (reset.ResetObstacle is ResetObstacle resetObstacle)
             {
                 return Results.Problem(
-                    title: "Reset refused: the unreadable database could not be set aside",
+                    title: "Reset refused: the database could not be replaced",
                     detail: ResetObstacleGuidance.Cause(resetObstacle),
                     statusCode: StatusCodes.Status409Conflict,
                     extensions: new Dictionary<string, object?>
@@ -397,9 +398,10 @@ internal static class AdminEndpoints
             "if you need to keep it (issue #249). " +
             "It works whatever state the old file is in (issue #482). A database file that cannot be read is never " +
             "backed up: it is moved, with its `-wal` and `-shm`, into the `unreadable` folder inside the backups folder, " +
-            "where it counts towards backup storage, and a notification names it. If that move cannot be made, the call " +
-            "answers `409 Conflict` naming a `resetObstacle` (`DataDirectoryNotWritable`, `SetAsideFolderNotWritable` " +
-            "or `SetAsideMoveFailed`) and its `remedies`, and nothing is moved or changed. Moving the file needs no free " +
+            "where it counts towards backup storage, and a notification names it. If that move cannot be made, or the data " +
+            "directory cannot be written, the call answers `409 Conflict` naming a `resetObstacle` (`DataDirectoryNotWritable`, " +
+            "`SetAsideFolderNotWritable` or `SetAsideMoveFailed`) and its `remedies`, and nothing is moved or changed; " +
+            "`DataDirectoryNotWritable` also stops a Reset of a readable database run with `allowNoBackup=true`. Moving the file needs no free " +
             "space when the backups folder is on the same volume as the data directory; one configured elsewhere needs " +
             "room for a copy of it. " +
             "By default, schema migration history is also cleared and rebuilt to the latest version; pass `preserveSchemaVersion=true` to keep the existing migration history's per-version rows instead. " +

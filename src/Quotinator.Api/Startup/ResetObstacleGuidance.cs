@@ -4,8 +4,10 @@ using Quotinator.Data.Enums;
 namespace Quotinator.Api.Startup;
 
 /// <summary>
-/// Turns a <see cref="ResetObstacle"/> into what an operator is told (#482): what stopped a Reset of a
-/// database file that could not be read, and what to do about it. The same cause-and-remedies shape as
+/// Turns a <see cref="ResetObstacle"/> into what an operator is told (#482): what stopped a Reset from
+/// replacing the database, and what to do about it. Two of the three concern a file that could not be
+/// read; an unwritable data directory stops any Reset that gets past its backup, including one run with
+/// the override (#348 step 29). The same cause-and-remedies shape as
 /// <see cref="BackupObstacleGuidance"/>, kept apart because none of these is a backup problem, and the
 /// endpoint and the repair action word them from here.
 /// </summary>
@@ -16,8 +18,8 @@ internal static class ResetObstacleGuidance
     internal static string Cause(ResetObstacle obstacle) => obstacle switch
     {
         ResetObstacle.DataDirectoryNotWritable =>
-            "The database file cannot be read, and the data directory cannot be written, so the new "
-            + "database can be neither built nor put in its place. Nothing was moved or changed.",
+            "The data directory cannot be written, so the new database can be neither built nor put in "
+            + "place of the old one. Nothing was moved or changed.",
         ResetObstacle.SetAsideFolderNotWritable =>
             $"The database file cannot be read, and the \"{BackupFileNames.UnreadableFolderName}\" folder inside "
             + "the backups folder, where it is set aside, could not be created or written. Nothing was moved or changed.",
