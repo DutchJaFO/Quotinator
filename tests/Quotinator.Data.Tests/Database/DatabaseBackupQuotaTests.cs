@@ -139,6 +139,45 @@ public class DatabaseBackupQuotaTests
         Assert.IsTrue(result.BackupSkippedByOverride);
     }
 
+    /// <summary>
+    /// #348 step 29: the override has to get the Reset past an obstacle that its own backup would hit too.
+    /// Found by #482: the readiness check let the override through, then the rebuild took its backup
+    /// regardless, failed on the same full folder and refused. The double above could not see it, since its
+    /// Reset takes no backup; this one rebuilds through <see cref="DatabaseInitializer.RebuildAsync"/>, as
+    /// the application's own initializer does.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetAsync_WithTheOverride_WhenNoBackupCanBeTaken_CompletesTheReset()
+    {
+        FillBackupsTo(percentOfCeiling: 100);
+
+        DatabaseOperationResult result = await new RebuildingInitializer(NewOptions(), _dbPath).ResetAsync(allowNoBackup: true);
+
+        Assert.IsTrue(result.Succeeded, $"the override is permission to proceed without a backup; the Reset answered {result.BackupObstacle}");
+    }
+
+    /// <summary>A Reset that reports success has to have replaced the database: the seeded table is gone.</summary>
+    [TestMethod]
+    public async Task ResetAsync_WithTheOverride_WhenNoBackupCanBeTaken_ReplacesTheDatabase()
+    {
+        FillBackupsTo(percentOfCeiling: 100);
+
+        await new RebuildingInitializer(NewOptions(), _dbPath).ResetAsync(allowNoBackup: true);
+
+        Assert.IsFalse(await ProbeTableExistsAsync(), "the old database is still in place");
+    }
+
+    /// <summary>The same statement as <see cref="ResetAsync_WithTheOverride_ReportsThatTheBackupWasSkipped"/>, through a real rebuild.</summary>
+    [TestMethod]
+    public async Task ResetAsync_WithTheOverride_WhenNoBackupCanBeTaken_ReportsThatTheBackupWasSkipped()
+    {
+        FillBackupsTo(percentOfCeiling: 100);
+
+        DatabaseOperationResult result = await new RebuildingInitializer(NewOptions(), _dbPath).ResetAsync(allowNoBackup: true);
+
+        Assert.IsTrue(result.BackupSkippedByOverride);
+    }
+
     private const string SkippedBackupLine = "reset proceeding WITHOUT a backup";
 
     /// <summary>
@@ -252,6 +291,15 @@ public class DatabaseBackupQuotaTests
         await command.ExecuteNonQueryAsync();
     }
 
+    private async Task<bool> ProbeTableExistsAsync()
+    {
+        using SqliteConnection connection = new(new SqliteConnectionStringBuilder { DataSource = _dbPath, Pooling = false }.ToString());
+        await connection.OpenAsync();
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'Probe'";
+        return Convert.ToInt64(await command.ExecuteScalarAsync()) > 0;
+    }
+
     /// <summary>
     /// Writes filler into the backups folder until it occupies the given share of the ceiling. The
     /// ceiling is 1 GB in these tests, so the files are sized from that rather than from any real
@@ -298,5 +346,18 @@ public class DatabaseBackupQuotaTests
             ResetHookRan = true;
             return Task.CompletedTask;
         }
+    }
+
+    /// <summary>
+    /// Resets the way the application's initializer does, through <see cref="DatabaseInitializer.RebuildAsync"/>,
+    /// so the Reset's own backup is taken or skipped for real.
+    /// </summary>
+    private sealed class RebuildingInitializer(DatabaseOptions options, string dbPath)
+        : DatabaseInitializer(new SqliteConnectionFactory(dbPath), options, [],
+            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
+            NullLogger<DatabaseInitializer>.Instance, new DiskSpaceProvider())
+    {
+        protected override Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
+            => RebuildAsync(connection, preserveSchemaVersion);
     }
 }

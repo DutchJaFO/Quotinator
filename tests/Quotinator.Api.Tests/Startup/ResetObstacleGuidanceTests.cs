@@ -30,4 +30,14 @@ public class ResetObstacleGuidanceTests
     {
         Assert.AreNotEqual(ResetObstacleGuidance.Cause((ResetObstacle)(-1)), ResetObstacleGuidance.Cause(obstacle));
     }
+
+    /// <summary>
+    /// #348 step 29: an unwritable data directory stops the Reset of a readable database too, once the
+    /// override lets it past its backup, so its cause must not claim the file could not be read.
+    /// </summary>
+    [TestMethod]
+    public void DataDirectoryNotWritable_DoesNotClaimTheFileIsUnreadable()
+    {
+        Assert.DoesNotContain("cannot be read", ResetObstacleGuidance.Cause(ResetObstacle.DataDirectoryNotWritable), StringComparison.Ordinal);
+    }
 }
