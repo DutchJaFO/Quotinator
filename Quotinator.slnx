@@ -421,6 +421,7 @@
     <File Path="docs/automated-testing/backup/07-a-migration-that-cannot-take-a-backup-leaves-the-database-unmigrated.md" />
     <File Path="docs/automated-testing/backup/08-backups-continue-from-the-reserve-until-the-ceiling-refuses-one.md" />
     <File Path="docs/automated-testing/backup/09-a-reset-of-an-unreadable-database-refuses-when-the-data-directory-cannot-be-written.md" />
+    <File Path="docs/automated-testing/backup/10-a-reset-with-the-override-proceeds-when-no-backup-can-be-taken.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/startup-and-degradation/">
     <File Path="docs/automated-testing/startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md" />

@@ -94,13 +94,14 @@ names, and this shows it resolves the condition.
 
 ## Observed effect
 
-**Measured 2026-11-09** against `quotinator:local` built from the working tree at `271c4c54`, the database
-replaced with 34 bytes of text and the data directory mounted read-only.
+**Measured 2026-11-12** against `quotinator:local` built from the working tree of #348's step 29, the
+database replaced with 34 bytes of text and the data directory mounted read-only.
 
-The Reset answers `409`, titled *Reset refused: the unreadable database could not be set aside*, with
-`resetObstacle=DataDirectoryNotWritable` and no `backupObstacle`. Its detail says the file cannot be read
-and the data directory cannot be written, so the new database can be neither built nor put in place, and
-that nothing was moved or changed. Its one remedy is to restore write access to the data directory and
+The Reset answers `409`, titled *Reset refused: the database could not be replaced*, with
+`resetObstacle=DataDirectoryNotWritable` and no `backupObstacle`. Its detail says the data directory
+cannot be written, so the new database can be neither built nor put in place of the old one, and that
+nothing was moved or changed. The wording is #348 step 29's: the same obstacle now also stops a readable
+database's Reset run with the override, so it no longer says the file cannot be read. Its one remedy is to restore write access to the data directory and
 retry. The file stays at 34 bytes and `backups/unreadable/` is never created. Remounted writable, the same
 Reset answers `200` and `/health` returns to `200`.
 

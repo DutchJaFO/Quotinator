@@ -62,12 +62,15 @@ from step 1. A `500` means the refusal is not reached.
 
 ```
 dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18384/api/v1/admin/database/reset?allowNoBackup=true" --expect 409 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset-override.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset-override.json --equals backupObstacle=DestinationFileNotWritable --length-equals remedies=1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-text C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset-override.json "remedies" --expect-no-text C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset-override.json "allowNoBackup"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset-override.json --equals resetObstacle=DataDirectoryNotWritable --absent backupObstacle --length-equals remedies=1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-text C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset-override.json "remedies" --expect-no-text C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset-override.json "allowNoBackup" --expect-no-text C:\repos\Quotinator\.claude\temp\qt-backup-04-out\reset-override.json "cannot be read"
 ```
 
-**Expected:** `409` again, since the override cannot help, because the data directory the reset itself must
-write to is the thing that is read-only: one remedy, and no mention of `allowNoBackup`.
+**Expected:** `409` again, since the override cannot help: the data directory the reset itself must
+write to is the thing that is read-only. The override takes the Reset past its backup, so what stops it
+now is named as itself: `resetObstacle=DataDirectoryNotWritable`, no `backupObstacle`, one remedy, no
+mention of `allowNoBackup`, and nothing claiming the database cannot be read. Before #348's step 29 the
+override never got past the backup, and this answered `backupObstacle=DestinationFileNotWritable`.
 
 **This is the assertion that matters, and step 2 is its control.** The first response offered a remedy;
 the caller took it; it failed. Offering it again would send the operator round the same loop, which is
@@ -75,7 +78,9 @@ worse than offering nothing. The same read that found `allowNoBackup` in step 2 
 one remedy confirms removing it left something actionable behind rather than an empty list.
 
 **On failure:** `allowNoBackup` in the response means the guidance has regressed to repeating advice the
-request itself just disproved.
+request itself just disproved. A `backupObstacle` means the override is again stopped by the Reset's own
+backup rather than taking effect (#348 step 29). *Cannot be read* means the refusal describes a readable
+database as unreadable.
 
 ### 4. Remount writable, and confirm a reset then works
 
@@ -97,13 +102,19 @@ steps 2 and 3 prove nothing about it.
 
 ## Observed effect
 
-**Measured 2026-11-08** against `quotinator:local` built from `ea9bd594`, in this form and in the
-PowerShell form it replaced.
+**Measured 2026-11-12** against `quotinator:local` built from the working tree of #348's step 29.
 
 The first attempt answers `409` with `DestinationFileNotWritable` and two remedies: restore write
-access, or retry with the override. The second attempt, using that override, answers `409` again with
-one remedy: restore write access. The disproved option is gone. Remounted writable, the same directory's
-reset answered `200`, after which `/health` still read `200`.
+access, or retry with the override. The second attempt, using that override, answers `409` again,
+titled *Reset refused: the database could not be replaced*, with `resetObstacle=DataDirectoryNotWritable`
+and no `backupObstacle`. Its detail says the data directory cannot be written, so the new database can
+be neither built nor put in place of the old one, and that nothing was moved or changed. Its one remedy
+is to restore write access and retry; the disproved option is gone. Remounted writable, the same
+directory's reset answered `200`, after which `/health` still read `200`.
+
+**Measured 2026-11-08**, against `ea9bd594`, before step 29: the second attempt answered
+`backupObstacle=DestinationFileNotWritable` with the same one remedy. The override never got past the
+Reset's own backup then, so the backup folder was blamed instead of the data directory.
 
 This scenario also found a defect in the pre-flight itself. `Directory.CreateDirectory` on a directory
 that already exists is a no-op that succeeds happily on a read-only mount, so the check reported ready

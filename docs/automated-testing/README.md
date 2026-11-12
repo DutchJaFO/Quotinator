@@ -1124,7 +1124,7 @@ an entry needs; a happy-path-only test has nothing to contribute.
 
 ## Observed effects awaiting measurement
 
-**37 of 84 documents describe their effect without having measured it.** Each row below names the
+**37 of 85 documents describe their effect without having measured it.** Each row below names the
 quantity its next run must read, so the measurement is a specific act rather than a vague intention to
 look. A document leaves this list by recording `**Measured <date>**` in its own section, and
 `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails if it does so while its row is still
@@ -1272,6 +1272,7 @@ different question in each.
 | 07 | [A migration that cannot take a backup leaves the database unmigrated, and says why](backup/07-a-migration-that-cannot-take-a-backup-leaves-the-database-unmigrated.md) | no |
 | 08 | [Backups continue from the reserve, with a warning, until the ceiling refuses one](backup/08-backups-continue-from-the-reserve-until-the-ceiling-refuses-one.md) | no |
 | 09 | [A reset of an unreadable database refuses when the data directory cannot be written](backup/09-a-reset-of-an-unreadable-database-refuses-when-the-data-directory-cannot-be-written.md) | no |
+| 10 | [A reset with the override proceeds when no backup can be taken](backup/10-a-reset-with-the-override-proceeds-when-no-backup-can-be-taken.md) | no |
 
 ### `notifications-and-changelog/`
 
