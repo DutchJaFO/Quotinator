@@ -2,7 +2,8 @@
 // options, separated by a bar (#Content was not loaded|Reseed without a backup). Clicks the option until
 // its Confirm appears, since a click issued before the Blazor circuit connects is swallowed; reads what the
 // row asks before anything runs; confirms; then waits, at most 120 seconds, for the page's running spinner
-// to appear and go, which is the page itself saying the action has returned (#367).
+// to appear and go, which is the page itself saying the action has returned (#367). Then reads the line
+// the page shows about what the action did, if any (#348), as `outcome`.
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const [text, option] = decodeURIComponent(location.hash.slice(1)).split('|');
 const row = () => [...document.querySelectorAll('tr')].find(r => r.textContent.includes(text));
@@ -21,4 +22,6 @@ for (let i = 0; i < 240 && !finished; i++) {
   sawRunning = sawRunning || running;
   finished = sawRunning && !running;
 }
-return { confirmOffered: true, asked, askedLinks, sawRunning, finished };
+// Omitted, not null, when the page shows no line, so a document can assert its absence.
+const outcome = document.querySelector('.alert[role=status]')?.textContent.trim();
+return { confirmOffered: true, asked, askedLinks, sawRunning, finished, ...(outcome ? { outcome } : {}) };

@@ -31,6 +31,14 @@ rendering assertion passing over a page nobody could reach in practice:
 | `SchemaVersionOvershoot` | a consumer schema version rolled one past this build, then a restart |
 | `ReseedRecommended` | a database reset, which leaves the database empty |
 
+**`DatabaseActionResult` is not produced here either.** It records the result of a Reset or a reseed
+run from within the application, which no cold start performs.
+[`../backup/06`](../backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md) runs each reseed option
+from the page and reads its result back, and
+[`../startup-and-degradation/06`](../startup-and-degradation/06-schema-version-ahead-of-the-application.md)
+does the same for a Reset from the repair control. Its page rendering is the same no-detail, `Dismiss`-only row `DatabaseCreated`
+has, asserted by `NotificationTableTests`.
+
 **`BackupRefused`, `BackupQuotaReached`, `BackupMaxExceeded`, `MigrationApplied` and
 `UnreadableDatabaseSetAside` are not produced here.** Each needs a state no other kind here shares: a
 startup that cannot take a backup loads no content

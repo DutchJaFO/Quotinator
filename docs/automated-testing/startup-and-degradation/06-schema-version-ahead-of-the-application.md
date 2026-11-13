@@ -250,13 +250,15 @@ dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/no
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/masterdata/sources --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\version-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\version-after.json --equals database.quotes=0
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18406/notifications --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\reset-result.png --script-file scripts/testing/page-scripts/database-action-results.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\reset-result.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\reset-result.json --equals count=1 --equals type=success --equals action=Reset --equals outcome=Completed --equals restorePoint=Succeeded --equals "title=The database was reset"
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-cancel.mark --pattern "\[Runtime - Exception\]" --exactly 0
 dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18406/api/v1/import --file docs/automated-testing/startup-and-degradation/fixtures/malformed-import.json --duplicate-resolution review --expect 422
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-cancel.mark --pattern "thrown: JsonReaderException" --at-least 1
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-control.mark
 ```
 
-**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. The first `json` command exits `0` on the reason gone, `/health` answers `200`, the quote count is `0`, and the exception count is unchanged since Cancel. The malformed upload answers `422`, and the `log` command after it exits `0` on at least one `JsonReaderException` thrown since Cancel.
+**Expected:** the seven database reads gated while degraded each answer `200` here, which proves every one of them is a real endpoint rather than a path the gate refuses whatever it is. The first `json` command exits `0` on the reason gone, `/health` answers `200`, the quote count is `0`, one result notification records the Reset (a `success`, *The database was reset*, naming the backup it took, #348), and the exception count is unchanged since Cancel. The malformed upload answers `422`, and the `log` command after it exits `0` on at least one `JsonReaderException` thrown since Cancel.
 
 **The malformed upload is the zero count's positive control.** A log with no exception in it is not
 proof that nothing was thrown: it proves it only once the same run has shown the channel recording one.

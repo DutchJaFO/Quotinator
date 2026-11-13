@@ -139,21 +139,26 @@ page's buttons are exactly the two options and `Dismiss`, with no `Back up, then
 
 ```
 dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#Content was not loaded|Reseed without a backup" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\without-backup.png --script-file scripts/testing/page-scripts/notification-option-run.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\without-backup.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\without-backup.json --equals confirmOffered=true --contains asked=BudgetExceeded --greater-than askedLinks=0 --equals sawRunning=true --equals finished=true
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\without-backup.json --equals confirmOffered=true --contains asked=BudgetExceeded --greater-than askedLinks=0 --equals sawRunning=true --equals finished=true --equals "outcome=The reseed ran without a backup (BudgetExceeded), so there is no restore point for it."
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-backup-06\quotinatordata.db --sql "SELECT COUNT(*) AS Genres FROM Quotinator_QuoteGenre" --json-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-without-backup.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-without-backup.json --greater-than 0.Genres=0
 dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#backuprefused" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused-after-without.png --script-file scripts/testing/page-scripts/notification-of-kind.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused-after-without.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\refused-after-without.json --equals active=0
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-match-count C:\repos\Quotinator\.claude\temp\qt-backup-06\backups "*.db" 1
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-backup-06 --pattern "reseed proceeding WITHOUT a backup \(BudgetExceeded\)" --at-least 1
-dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#Database" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\audit-without.png --script-file scripts/testing/page-scripts/audit-operations.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\audit-without.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\audit-without.json --equals status=200 --equals operations.BackupSkipped=1
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18386/notifications --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\result-without.png --script-file scripts/testing/page-scripts/database-action-results.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\result-without.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\result-without.json --equals count=1 --equals type=warning --equals action=Reseed --equals outcome=Completed --equals restorePoint=Skipped --equals backupObstacle=BudgetExceeded --equals "title=The database was reseeded without a backup"
 ```
 
 **Expected:** every command exits `0`. Before anything ran, the row asked, naming `BudgetExceeded`, with the
-Knowledgebase link beside it; then the action ran and finished. Genres are back above `0`, the refusal is
-no longer active, no backup was added (the filler is still the only file), the skip is logged, and one
-`BackupSkipped` entry is in the audit trail.
+Knowledgebase link beside it; then the action ran and finished, and the page said at once that the reseed
+ran without a backup, naming `BudgetExceeded`. Genres are back above `0`, the refusal is no longer active,
+no backup was added (the filler is still the only file), and the skip is logged. One result notification
+records it: a `warning`, *The database was reseeded without a backup*, its payload naming the skipped
+backup and `BudgetExceeded`.
+
+**The audit trail is not read here.** It is the database's record of its own actions, not what the user
+was told; the `BackupSkipped` row is held by `NotificationActionExecutorTests.Reseed_ReseedWithoutBackup_RecordsTheSkippedBackupInTheAuditTrail`.
 
 **On failure:** a reseed that ran without asking, naming the obstacle, took the user's permission without
 telling them what they were agreeing to.
@@ -171,17 +176,19 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-backup-06\quotinatordata.db --sql "SELECT COUNT(*) AS Genres FROM Quotinator_QuoteGenre" --json-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-refused-again.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-refused-again.json --equals 0.Genres=0
 dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#Content was not loaded|Remove the oldest backup, then back up and reseed" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\remove-oldest.png --script-file scripts/testing/page-scripts/notification-option-run.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\remove-oldest.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\remove-oldest.json --equals confirmOffered=true --equals sawRunning=true --equals finished=true
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\remove-oldest.json --equals confirmOffered=true --equals sawRunning=true --equals finished=true --absent outcome
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-absent C:\repos\Quotinator\.claude\temp\qt-backup-06\backups\filler.db --expect-match-count C:\repos\Quotinator\.claude\temp\qt-backup-06\backups "*.db" 1
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-backup-06\quotinatordata.db --sql "SELECT COUNT(*) AS Genres FROM Quotinator_QuoteGenre" --json-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-remove-oldest.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-remove-oldest.json --greater-than 0.Genres=0
-dotnet script scripts/testing/capture-page.csx -- --url "http://localhost:18386/notifications#Database" --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\audit-remove.png --script-file scripts/testing/page-scripts/audit-operations.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\audit-remove.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\audit-remove.json --equals operations.BackupDeleted=1 --equals operations.BackedUp=1
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18386/notifications --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\result-remove.png --script-file scripts/testing/page-scripts/database-action-results.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\result-remove.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\result-remove.json --equals count=2 --equals type=success --equals action=Reseed --equals outcome=Completed --equals restorePoint=Succeeded --equals "title=The database was reseeded"
 ```
 
 **Expected:** every command exits `0`. The cycle refuses again (one active refusal, genres `0`); then the
-option runs and finishes, the filler is gone and one backup stands in its place, genres are back above
-`0`, and the audit trail holds one `BackupDeleted` and one `BackedUp`.
+option runs and finishes, the filler is gone and one backup stands in its place, and genres are back above
+`0`. A second result notification records it: a `success`, *The database was reseeded*, its payload
+naming the backup it took. The page shows no outcome line: a reseed that kept its restore point has
+nothing to warn about.
 
 **On failure:** the filler gone with genres still `0` means the backup was removed and nothing was loaded:
 a restore point given up for nothing.
@@ -202,11 +209,14 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-match-count C:\repos\Quotinator\.claude\temp\qt-backup-06\backups "*.db" 2
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-backup-06\quotinatordata.db --sql "SELECT COUNT(*) AS Genres FROM Quotinator_QuoteGenre" --json-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-back-up-first.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\genres-back-up-first.json --greater-than 0.Genres=0
+dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18386/notifications --out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\result-back-up-first.png --script-file scripts/testing/page-scripts/database-action-results.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-06-out\result-back-up-first.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-06-out\result-back-up-first.json --equals count=3 --equals type=success --equals action=Reseed --equals restorePoint=Succeeded
 ```
 
 **Expected:** every command exits `0`. With the filler removed by hand, the one active refusal now offers
 only `backupthenreseed`, the option that keeps a restore point; it runs and finishes, adds one backup beside
-step 6's, and genres are back above `0`.
+step 6's, and genres are back above `0`. A third result notification records it, a `success` naming the
+backup it took.
 
 **This step is the remedy proven.** The Knowledgebase entry tells an operator with a full quota to remove
 old backups; done by hand here, it brings back the option that keeps a restore point, and that option
