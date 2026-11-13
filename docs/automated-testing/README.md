@@ -122,13 +122,22 @@ All three have been found here, which is why it is written down:
   identically by *compared the rules, none drifted* and by *never compared anything*. A count of zero
   is not evidence that something looked.
 
-**Before concluding that something is unobservable, check all three channels.** This application
-exposes what it did through **logs**, through the **audit trail** (`Audit_Entry` / `GET /admin/audit`),
-and through **API responses**. Searching the log-message definitions alone and finding nothing is not
-evidence that a decision is invisible, found twice in a row during #339: staleness counts turned out to
-be rendered inside an existing report line rather than a message of their own, and the auto-purge turned
-out to write an `Audit_Entry` with `Operation = Purge` rather than log anything. Both were called
-unobservable on a keyword search that only covered logging.
+**Before concluding that something is unobservable, check every channel, and know which of them is
+proof.** This application exposes what it did through **API responses**, the **data** in the database,
+**notifications**, **logs** and the **audit trail** (`Audit_Entry` / `GET /admin/audit`). Searching the
+log-message definitions alone and finding nothing is not evidence that a decision is invisible, found
+twice in a row during #339: staleness counts turned out to be rendered inside an existing report line
+rather than a message of their own, and the auto-purge turned out to write an `Audit_Entry` with
+`Operation = Purge` rather than log anything. Both were called unobservable on a keyword search that only
+covered logging.
+
+**Only a response and the data are proof** (developer direction, 2026-11-12). A notification is the record
+of what the user was told; the audit trail is the database's record of its own actions and logging of
+them, indirect evidence at best; a log line says what the application believed it did. Each can lead to
+the proof, and none stands in for it. Found 2026-11-13 (#348): three documents counted audit rows as
+evidence, and the `Purged` row the seed writes turned out to be written whatever the purge removed, so a
+rising count had never shown that anything existed to remove. Where a document must read a log line
+because nothing else exposes a decision, it says so, and the gap is the application's to close.
 
 **A test cannot distinguish causes the application does not expose.** Where the answer is cause 3 and
 the missing observation is the application's own, the fix belongs in the application: normal logging
@@ -1124,7 +1133,7 @@ an entry needs; a happy-path-only test has nothing to contribute.
 
 ## Observed effects awaiting measurement
 
-**37 of 85 documents describe their effect without having measured it.** Each row below names the
+**36 of 85 documents describe their effect without having measured it.** Each row below names the
 quantity its next run must read, so the measurement is a specific act rather than a vague intention to
 look. A document leaves this list by recording `**Measured <date>**` in its own section, and
 `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails if it does so while its row is still
@@ -1153,7 +1162,6 @@ asserts what it should; what is missing is a reading an entry can quote.
 | [import-and-staged-actions/11-batch-id-validation-and-request-log-status.md](import-and-staged-actions/11-batch-id-validation-and-request-log-status.md) | The status the request log records for each of the three rejected calls |
 | [import-and-staged-actions/12-character-modify-and-explicit-id-on-add.md](import-and-staged-actions/12-character-modify-and-explicit-id-on-add.md) | The id stored for the explicit-uppercase Add, and the Source matched through a differently-cased title |
 | [import-and-staged-actions/13-bulk-decide-via-file-export-import.md](import-and-staged-actions/13-bulk-decide-via-file-export-import.md) | The round trip's own row counts in both wire formats, and the malformed row's report |
-| [import-and-staged-actions/17-source-alias-staleness.md](import-and-staged-actions/17-source-alias-staleness.md) | The pending and stale lists after the fresh seed and after the reseed |
 | [import-and-staged-actions/20-pending-review-alert.md](import-and-staged-actions/20-pending-review-alert.md) | The alert count per file, and each alert's state after its resolution |
 | [import-and-staged-actions/21-reseed-preserves-existing-data.md](import-and-staged-actions/21-reseed-preserves-existing-data.md) | The quote count either side of each reseed, and the surviving batch list |
 | [import-and-staged-actions/22-season-attached-quote-served-through-the-api.md](import-and-staged-actions/22-season-attached-quote-served-through-the-api.md) | The Season reference as served by the list, by `GET /{id}`, and by search |

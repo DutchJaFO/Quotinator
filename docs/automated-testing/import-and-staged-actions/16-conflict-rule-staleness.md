@@ -41,9 +41,11 @@ input*. Editing a bundled rule file and rebuilding the image reaches the same st
 anti-pattern that section names: the mutation bakes into the shared `quotinator:local` tag, so every
 sibling test on that tag runs data that is not in the repository.
 
-**The audit trail records `Purged`, not `Purge`.** This document counted the latter until #339's full
-run, so it read `0` against 8 real traces and the whole "rules out an empty list" table below was
-satisfied by a pattern that could never match.
+**The empty list is explained by the reseed's own response, never by the audit trail.** This document
+used to count `Purged` audit rows before and after the reseed, as proof that action rows existed and were
+removed. Measured 2026-11-13, that proved nothing: the seed writes a `Purged` row for every batch whatever
+it removed, and a reseed of the unchanged bundled corpus stages no action at all. The reseed's response
+says so directly, file by file (#348).
 
 ## Steps
 
@@ -72,49 +74,39 @@ reseed re-plans against a populated database rather than an empty one.
 ### 3. Reseed, then list the stale actions
 
 ```powershell
-function Get-PurgedTraces {
-  $audit = (Invoke-RestMethod "$base/admin/audit?table=Import_Action&pageSize=0" -Headers $key).items
-  @($audit | Where-Object { $_.operation -eq 'Purged' }).Count
-}
-$purgedBefore = Get-PurgedTraces
-
-dotnet script scripts/testing/http.csx -- --method POST --url "$base/admin/database/reseed" --expect 200 --status
+$reseedBody = Join-Path $env:TEMP "qt-import-16-reseed.json"
+dotnet script scripts/testing/http.csx -- --method POST --url "$base/admin/database/reseed" --expect 200 --body-out $reseedBody | Out-Null
+$reports = @((Get-Content $reseedBody -Raw | ConvertFrom-Json).reports)
+$counts  = @($reports | ForEach-Object { $_.entityTypes.PSObject.Properties.Value })
+"reportFiles=$($reports.Count) staged=$(($counts | ForEach-Object { $_.pending + $_.stale + $_.modified + $_.blocked } | Measure-Object -Sum).Sum)"
 
 $log = docker logs qt-import-16 2>&1 | Out-String
-"reportLines=$(([regex]::Matches($log, '\[Database - Seed\].*report: ')).Count)"
 $log -split "`n" | Select-String -SimpleMatch 'rule staleness evaluated'
 
-$purgedAfter = Get-PurgedTraces
-"purgedTraces=$purgedBefore -> $purgedAfter increased=$($purgedAfter -gt $purgedBefore)"
-
 "stale=$((Invoke-RestMethod "$base/import/actions?status=stale&pageSize=0").totalCount)"
+Remove-Item $reseedBody -ErrorAction SilentlyContinue
 ```
 
-**Expected:** the reseed returns `200`; `reportLines` is non-zero, one per bundled
-file, each rendering `stale=0`; a line states that rule staleness was **evaluated** and over how many
-rules; `increased=True`; and `stale=0`.
-
-**The purge traces are compared before and after, not against the batch count.** The first boot
-already purged one set, so after a reseed the total is *two* rounds, measured `4` then `8` on
-2026-08-26 against four bundled files. An equality with the seed-batch count holds only on a fresh boot,
-which is [`17`](17-source-alias-staleness.md)'s step 2, not this one. What this step needs is that the
-reseed's own action rows existed and were removed, and the delta states exactly that.
+**Expected:** the reseed returns `200`; its response carries one report per bundled file
+(`reportFiles` non-zero) and `staged=0`, every entity's `pending`, `stale`, `modified` and `blocked`
+reading `0`; a line states that rule staleness was **evaluated** and over how many rules; and `stale=0`.
 
 **Each reading rules out a different way of producing that empty list**, which is why an empty list on
 its own establishes nothing:
 
 | Reading | Rules out |
 |---|---|
-| Report lines present, one per file | The reseed never re-planned anything |
-| `Purged` traces increased | The action rows existed and were removed, leaving an empty list behind |
+| One report per bundled file in the reseed's response | The reseed never re-planned anything |
+| `staged=0` in that response | Stale actions were staged and then removed, leaving an empty list behind: the reseed staged none, and a batch is purged only once nothing in it is pending, blocked or stale |
 | Evaluation line present | The mechanism never compared the rules at all |
 
 **`stale=0` in the report cannot carry the last one.** It is produced identically by *compared the
 shipped rules, none had drifted* and by *never compared anything*: a count of zero is not evidence
 that something looked.
 
-**On failure:** `reportLines=0` means the reseed did not re-plan, a setup failure, not a staleness
-result; stop. A missing evaluation line means the mechanism's own execution is unobservable, so neither
+**On failure:** `reportFiles=0` means the reseed did not re-plan, a setup failure, not a staleness
+result; stop. `staged` above `0` means the bundled corpus itself now conflicts with the stored data, and
+`stale=0` no longer stands for anything: read which file and entity carry the count. A missing evaluation line means the mechanism's own execution is unobservable, so neither
 the report nor the empty list can establish whether it ran. That is the application's gap rather than
 this document's; see the index's *When the expected situation does not occur*, cause 3, and
 [#347](https://github.com/DutchJaFO/Quotinator/issues/347), which this test remains blocked on.
@@ -158,13 +150,19 @@ Invoke-RestMethod -Method Post -Uri "$base/import/actions/$action2/decide" -Head
   -ContentType 'application/json' -Body '{"quoteText":{"choice":"replace"}}' | Out-Null
 dotnet script scripts/testing/http.csx -- --method POST --url "$base/import/actions/apply?batchId=$batch2" --expect 200 --status | Out-Null
 
-dotnet script scripts/testing/http.csx -- --method POST --url "$base/admin/database/reseed" --expect 200 --status | Out-Null
+$reseedBody = Join-Path $env:TEMP "qt-import-16-reseed.json"
+dotnet script scripts/testing/http.csx -- --method POST --url "$base/admin/database/reseed" --expect 200 --body-out $reseedBody | Out-Null
+$counts = @(@((Get-Content $reseedBody -Raw | ConvertFrom-Json).reports) | ForEach-Object { $_.entityTypes.PSObject.Properties.Value })
+"staged=$(($counts | ForEach-Object { $_.pending + $_.stale + $_.modified + $_.blocked } | Measure-Object -Sum).Sum) reportedStale=$(($counts | Measure-Object -Property stale -Sum).Sum)"
+Remove-Item $reseedBody -ErrorAction SilentlyContinue
 "stale=$((Invoke-RestMethod "$base/import/actions?status=stale&pageSize=0").totalCount)"
 (Invoke-RestMethod "$base/import/actions?status=stale&pageSize=0").items |
   Select-Object entityId, actionType, status
 ```
 
-**Expected:** `stale=1`, and the row is a `Modify` on `$quoteId` with status `Stale`. The rule recorded
+**Expected:** the reseed's response reports `reportedStale=1` and `staged` above `0`, and `stale=1`, the
+row a `Modify` on `$quoteId` with status `Stale`. The response's counts are step 3's reading, so this is
+also its control: the same sum that read `0` there reads above `0` once something is staged. The rule recorded
 the first fixture's text; the reseed offers the curated file's own text; the two differ, so the rule is
 refused rather than reapplied.
 
@@ -190,6 +188,11 @@ Remove-Item $fixture -Recurse -Force -ErrorAction SilentlyContinue
 did not ask for.
 
 ## Observed effect
+
+**Measured 2026-11-13** against `quotinator:local` built from `5285a211`'s tree, after step 3 moved off the
+audit trail (#348). Step 3: the reseed's response carried `5` file reports and `staged=0`; `stale=0`; no
+evaluation line, the #347 gap. Step 4: the reseed's response read `staged=1 reportedStale=1`, and the
+stale list held the `Modify` on `588334be-…`.
 
 **Measured 2026-10-06**, step 4: `stale=1`, a `Modify` on the curated Airplane! quote
 (`588334be-…`) with status `Stale`, after the rule recorded the first fixture's text and the reseed

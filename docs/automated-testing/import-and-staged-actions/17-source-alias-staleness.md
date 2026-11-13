@@ -31,9 +31,11 @@ what gates that.
 bugs below. That is why this check is live: the failing condition only exists when the canonical Source
 has *not* yet been created.
 
-**The audit trail records `Purged`, not `Purge`.** This document counted the latter until #339's full
-run, so it read `0` against 4 real traces and the "rules out an empty list" table below was satisfied
-by a pattern that could never match.
+**The empty lists are explained by data, never by the audit trail.** This document used to compare the
+count of `Purged` audit rows with the count of seed batches. Measured 2026-11-13, that proved nothing:
+the seed writes a `Purged` row for every batch whatever it removed (#348). What does carry it is the
+batch itself: a seed batch is marked `applied`, and only then purged, when none of its actions is
+pending, blocked or stale. On the reseed, the response reports each file's counts directly.
 
 ## Steps
 
@@ -60,9 +62,8 @@ $reportLinesFresh = ([regex]::Matches($log, '\[Database - Seed\].*report: ')).Co
 "reportLines=$reportLinesFresh"
 $log -split "`n" | Select-String -SimpleMatch 'alias staleness evaluated'
 
-$audit = (Invoke-RestMethod "$base/admin/audit?table=Import_Action&pageSize=0" -Headers $key).items
-"purgedTraces=$(@($audit | Where-Object { $_.operation -eq 'Purged' }).Count)"
-"seedBatches=$((Invoke-RestMethod "$base/import/batches?type=seed").totalCount)"
+$seed = @((Invoke-RestMethod "$base/import/batches?type=seed&pageSize=0").items)
+"seedBatches=$($seed.Count) applied=$(@($seed | Where-Object { $_.status -eq 'applied' }).Count) records=$(($seed | Measure-Object -Property recordCount -Sum).Sum)"
 
 "pending=$((Invoke-RestMethod "$base/import/actions?status=pending&pageSize=0").totalCount)"
 "stale=$((Invoke-RestMethod "$base/import/actions?status=stale&pageSize=0").totalCount)"
@@ -70,7 +71,8 @@ $audit = (Invoke-RestMethod "$base/admin/audit?table=Import_Action&pageSize=0" -
 
 **Expected:** the counts have settled; `reportLines` is non-zero, one per bundled file, each
 rendering `stale=0`; a line states that source-alias staleness was **evaluated** and over how many
-aliases; `purgedTraces` matches `seedBatches`; and both `pending` and `stale` read `0`.
+aliases; `applied` equals `seedBatches` and `records` is above `0`; and both `pending` and `stale` read
+`0`.
 
 **Each reading rules out a different way of producing those empty lists**, the same way
 [`16-conflict-rule-staleness.md`](16-conflict-rule-staleness.md) sets out for conflict rules:
@@ -78,7 +80,7 @@ aliases; `purgedTraces` matches `seedBatches`; and both `pending` and `stale` re
 | Reading | Rules out |
 |---|---|
 | Report lines present, one per file | The seed never planned anything |
-| `Purged` traces present | The action rows existed and were removed, leaving empty lists behind |
+| Every seed batch `applied`, with records above `0` | Pending or stale actions were left and then removed, leaving empty lists behind: a batch is marked `applied`, and purged, only when none of its actions is pending, blocked or stale |
 | Evaluation line present | The mechanism never compared the aliases at all |
 
 **On failure:** a missing evaluation line makes this step inconclusive rather than passing: `stale=0`
@@ -89,7 +91,12 @@ one that never ran. See the index's *When the expected situation does not occur*
 ### 3. Reseed and repeat, which is the second of the two paths
 
 ```powershell
-dotnet script scripts/testing/http.csx -- --method POST --url "$base/admin/database/reseed" --expect 200 --status
+$reseedBody = Join-Path $env:TEMP "qt-import-17-reseed.json"
+dotnet script scripts/testing/http.csx -- --method POST --url "$base/admin/database/reseed" --expect 200 --body-out $reseedBody | Out-Null
+$reports = @((Get-Content $reseedBody -Raw | ConvertFrom-Json).reports)
+$counts  = @($reports | ForEach-Object { $_.entityTypes.PSObject.Properties.Value })
+"reportFiles=$($reports.Count) staged=$(($counts | ForEach-Object { $_.pending + $_.stale + $_.modified + $_.blocked } | Measure-Object -Sum).Sum)"
+Remove-Item $reseedBody -ErrorAction SilentlyContinue
 
 $after = docker logs qt-import-17 2>&1 | Out-String
 $reportLinesAfter = ([regex]::Matches($after, '\[Database - Seed\].*report: ')).Count
@@ -101,7 +108,8 @@ $evaluationsAfter = ([regex]::Matches($after, 'alias staleness evaluated')).Coun
 "stale=$((Invoke-RestMethod "$base/import/actions?status=stale&pageSize=0").totalCount)"
 ```
 
-**Expected:** the reseed returns `200`; `increased=True` and `aliasEvaluations` has grown too, since the
+**Expected:** the reseed returns `200` with one report per bundled file and `staged=0`, so it staged
+nothing that a purge could have removed; `increased=True` and `aliasEvaluations` has grown too, since the
 reseed plans every bundled file again; and both `pending` and `stale` read `0`.
 
 **Comparing against step 2 rather than asserting a number** is what makes this the second path rather
@@ -117,6 +125,12 @@ looked.
 reseed's own status code is what separates "nothing was stale" from "the reseed never ran".
 
 ## Observed effect
+
+**Measured 2026-11-13** against `quotinator:local` built from `5285a211`'s tree, after steps 2 and 3 moved
+off the audit trail (#348). Step 2: `5` report lines; `5` seed batches, all `applied`, `795` records;
+`pending=0` and `stale=0`. Step 3: the reseed's response carried `5` file reports and `staged=0`; report
+lines `5 -> 10`; `pending=0` and `stale=0`. `aliasEvaluations=0` in both: the evaluation line does not
+exist yet, the #347 gap the `Fully green after:` field names.
 
 **Two false-positive bugs were found and fixed live via this exact check, neither catchable by unit
 tests alone.**
