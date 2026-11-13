@@ -293,6 +293,13 @@ public class DatabaseInitializer(
             Sql         = NotificationUnreadableDatabaseMigrations.WidenMetadataKindForUnreadableDatabase,
             Description = "Lets a notification report that a Reset set aside a database file it could not read.",
         },
+        // #348: one rebuild, for the reason migrations 15, 18, 25 and 26 give.
+        new SchemaMigration
+        {
+            Version     = 30,
+            Sql         = NotificationDatabaseActionResultMigrations.WidenMetadataKindForDatabaseActionResult,
+            Description = "Lets a notification record the result of a Reset or a reseed run from within the application.",
+        },
     ];
 
     // Data's own baseline fragment: creates every Data-owned table directly under its final,
@@ -492,7 +499,7 @@ public class DatabaseInitializer(
             Title             TEXT,
             Metadata          TEXT,
             MetadataKind      TEXT
-                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied', 'ImportReviewPending', 'BackupRefused', 'BackupQuotaReached', 'BackupMaxExceeded', 'DatabaseCreated', 'MigrationApplied', 'UnreadableDatabaseSetAside')),
+                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied', 'ImportReviewPending', 'BackupRefused', 'BackupQuotaReached', 'BackupMaxExceeded', 'DatabaseCreated', 'MigrationApplied', 'UnreadableDatabaseSetAside', 'DatabaseActionResult')),
             AppVersionId      TEXT    REFERENCES System_AppVersion(Id),
             OriginalLanguage  TEXT    NOT NULL DEFAULT 'en',
             DismissReason     TEXT

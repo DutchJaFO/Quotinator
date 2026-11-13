@@ -61,7 +61,7 @@ public class NotificationActionExecutorTests
         FakeImportActionService importActions = new();
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance));
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance), new RecordingResultRecorder());
 
         await executor.ExecuteAsync(
             NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(batchId), FieldResolutionChoice.Keep);
@@ -83,7 +83,7 @@ public class NotificationActionExecutorTests
         FakeImportActionService importActions = new();
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance));
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance), new RecordingResultRecorder());
 
         await executor.ExecuteAsync(
             NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(batchId), FieldResolutionChoice.Replace);
@@ -102,7 +102,7 @@ public class NotificationActionExecutorTests
         FakeImportActionService importActions = new();
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance));
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance), new RecordingResultRecorder());
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
             executor.ExecuteAsync(NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(Guid.NewGuid().ToString("D"))));
@@ -120,7 +120,7 @@ public class NotificationActionExecutorTests
         FakeImportActionService importActions = new();
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance));
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance), new RecordingResultRecorder());
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
             executor.ExecuteAsync(NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(Guid.NewGuid().ToString("D"))));
@@ -135,7 +135,7 @@ public class NotificationActionExecutorTests
         FakeImportActionService importActions = new();
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance));
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance), new RecordingResultRecorder());
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
             executor.ExecuteAsync(NotificationDismissTrigger.ImportReviewResolved, metadata: null, FieldResolutionChoice.Keep));
@@ -149,7 +149,7 @@ public class NotificationActionExecutorTests
     {
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance));
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance), new RecordingResultRecorder());
 
         Assert.IsTrue(executor.CanExecute(NotificationDismissTrigger.ImportReviewResolved));
     }
@@ -159,7 +159,7 @@ public class NotificationActionExecutorTests
     {
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance));
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance), new RecordingResultRecorder());
 
         Assert.IsTrue(executor.CanExecute(NotificationDismissTrigger.DatabaseReset));
     }
@@ -170,7 +170,7 @@ public class NotificationActionExecutorTests
     {
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance));
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance), new RecordingResultRecorder());
 
         Assert.IsTrue(executor.CanExecute(NotificationDismissTrigger.Reseed));
     }
@@ -183,7 +183,7 @@ public class NotificationActionExecutorTests
         FakeNotificationWriter notificationWriter = new();
         NotificationActionExecutor executor = new(
             dbInitializer, new DatabaseHealthState(), notificationWriter,
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance));
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance), new RecordingResultRecorder());
 
         await executor.ExecuteAsync(NotificationDismissTrigger.Reseed);
 
@@ -214,7 +214,7 @@ public class NotificationActionExecutorTests
         SpyAppVersionTracker appVersionTracker = new();
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), health, new FakeNotificationWriter(),
-            appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance));
+            appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance), new RecordingResultRecorder());
 
         await executor.ExecuteAsync(NotificationDismissTrigger.Reseed);
 
@@ -233,7 +233,7 @@ public class NotificationActionExecutorTests
         FakeNotificationWriter notificationWriter = new();
         SpyAppVersionTracker appVersionTracker = new();
         NotificationActionExecutor executor = new(
-            dbInitializer, health, notificationWriter, appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance));
+            dbInitializer, health, notificationWriter, appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance), new RecordingResultRecorder());
 
         await executor.ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
 
@@ -280,7 +280,7 @@ public class NotificationActionExecutorTests
         DatabaseHealthState health = new();
         NotificationActionExecutor executor = new(
             dbInitializer, health, new FakeNotificationWriter(), new SpyAppVersionTracker(),
-            new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance));
+            new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository(), NoBackups(), BackupsFor(new SpyDatabaseInitializer()), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance), new RecordingResultRecorder());
 
         await executor.ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
 
@@ -297,7 +297,7 @@ public class NotificationActionExecutorTests
         FakeImportBatchRepository? importBatches = null, SpyDatabaseInitializer? dbInitializer = null, IDatabaseBackupReader? backupReader = null,
         DatabaseHealthState? health = null, FakeNotificationWriter? notificationWriter = null, RecordingAuditEntryWriter? auditWriter = null,
         ILogger<NotificationActionExecutor>? logger = null, string? backupsFolder = null, IDatabaseBackupWriter? backupWriter = null,
-        NotificationConditionChecks? conditionChecks = null)
+        NotificationConditionChecks? conditionChecks = null, RecordingResultRecorder? resultRecorder = null)
     {
         SpyDatabaseInitializer db = dbInitializer ?? new SpyDatabaseInitializer();
         IAuditEntryWriter audit = (IAuditEntryWriter?)auditWriter ?? NoOpAuditEntryWriter.Instance;
@@ -307,7 +307,88 @@ public class NotificationActionExecutorTests
             new FakeImportActionService(), importBatches ?? new FakeImportBatchRepository(),
             backupReader ?? (backupsFolder is null ? NoBackups() : BackupsIn(backupsFolder)),
             BackupsFor(db, audit, backupsFolder, backupWriter), audit, NoOpCallerContext.Instance,
-            conditionChecks ?? new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance));
+            conditionChecks ?? new NotificationConditionChecks([], NullLogger<NotificationConditionChecks>.Instance),
+            resultRecorder ?? new RecordingResultRecorder());
+    }
+
+    /// <summary>Records every result handed to it, so a test can assert which end result reached the record.</summary>
+    internal sealed class RecordingResultRecorder : IDatabaseActionResultRecorder
+    {
+        public List<(DatabaseAction Action, NotificationActionResult Result)> Calls { get; } = [];
+
+        public Task RecordAsync(DatabaseAction action, NotificationActionResult result)
+        {
+            Calls.Add((action, result));
+            return Task.CompletedTask;
+        }
+    }
+
+    // ── #348 step 31: every end result of a Reset or reseed run from the application is recorded ──────
+
+    [TestMethod]
+    public async Task DatabaseReset_WhenItCompletes_RecordsItsResult()
+    {
+        RecordingResultRecorder recorder = new();
+
+        NotificationActionResult result = await CreateExecutor(resultRecorder: recorder).ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
+
+        Assert.AreSequenceEqual([(DatabaseAction.Reset, result)], recorder.Calls);
+    }
+
+    [TestMethod]
+    public async Task DatabaseReset_WhenRefused_RecordsTheRefusal()
+    {
+        RecordingResultRecorder recorder = new();
+        SpyDatabaseInitializer db = new() { ResetResult = DatabaseOperationResult.RefusedForBackup(BackupOutcome.BudgetExceeded, BackupGuardedStep.Reset) };
+
+        NotificationActionResult result = await CreateExecutor(dbInitializer: db, resultRecorder: recorder).ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
+
+        Assert.AreSequenceEqual([(DatabaseAction.Reset, result)], recorder.Calls);
+    }
+
+    [TestMethod]
+    public async Task DatabaseReset_WhenNotIntact_RecordsItsResult()
+    {
+        RecordingResultRecorder recorder = new();
+        SpyDatabaseInitializer db = new() { ResetResult = DatabaseOperationResult.NotIntact() };
+
+        NotificationActionResult result = await CreateExecutor(dbInitializer: db, resultRecorder: recorder).ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
+
+        Assert.AreSequenceEqual([(DatabaseAction.Reset, result)], recorder.Calls);
+    }
+
+    [TestMethod]
+    public async Task Reseed_WhenItCompletes_RecordsItsResult()
+    {
+        RecordingResultRecorder recorder = new();
+
+        NotificationActionResult result = await CreateExecutor(resultRecorder: recorder)
+            .ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.BackUpThenReseed);
+
+        Assert.AreSequenceEqual([(DatabaseAction.Reseed, result)], recorder.Calls);
+    }
+
+    [TestMethod]
+    public async Task Reseed_WhenRefused_RecordsTheRefusal()
+    {
+        RecordingResultRecorder recorder = new();
+
+        NotificationActionResult result = await CreateExecutor(dbInitializer: BackupFails(BackupOutcome.DiskFilledDuringBackup), resultRecorder: recorder)
+            .ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.BackUpThenReseed);
+
+        Assert.AreSequenceEqual([(DatabaseAction.Reseed, result)], recorder.Calls);
+    }
+
+    /// <summary>Only a Reset or a reseed records a database action's result; resolving an import review is neither.</summary>
+    [TestMethod]
+    public async Task ImportReviewResolved_RecordsNoDatabaseActionResult()
+    {
+        RecordingResultRecorder recorder = new();
+
+        await CreateExecutor(resultRecorder: recorder)
+            .ExecuteAsync(NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(LiveBatch), FieldResolutionChoice.Keep);
+
+        Assert.IsEmpty(recorder.Calls);
     }
 
     /// <summary>The audited take-and-remove, over the given initializer and, where given, a real backups folder.</summary>

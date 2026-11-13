@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-11-12 21:38 UTC]: do not edit by hand.*
+##### *GENERATED FILE [2026-11-12 22:52 UTC]: do not edit by hand.*
 
 # Changelog
 
@@ -49,6 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `POST /api/v1/notifications/refresh` re-checks every notification whose condition can change and raises or resolves each to match, with no restart and no admin key (issue #348)
 - `GET /api/v1/notifications` reports `backupCaution` on a notification whose options take a backup while the backups folder is at its quota, and the notifications page shows the same caution beside those options (issue #348)
 - A successful `POST /api/v1/admin/database/reset` says what it left to restore from in `backup`: the backup it took, the unreadable file it set aside, or that it took none because `allowNoBackup=true` was used, and why. A reseed run without a backup from the notifications page says on the page that it left no restore point (issue #348)
+- A Reset or reseed run from within the application records its result as a notification: that it was done and the backup it took, that it ran without a backup and why, or that it was refused and what stopped it. The notifications page also says at once when a reseed was refused, and why, where it used to reload the list without a word (issue #348)
 - Every exception the application throws is now logged, whether or not anything catches it: at `Error` when thrown, again at `Error` where it is handled as a response, and at `Critical` where nothing handled it (escaping a request, a thread, or an unobserved task) with one 8-character id tying the lines together. Logging starts before the host is built. Previously an exception the application caught itself was visible only in a debugger (issue #397)
 - Backups can now be managed from the API: list what exists withsizes and dates, take one on demand, download one so it survives the container, and remove one to free space. Each answers even when the database itself is in a limited state (issue #349)
 - A what's-new startup notification after an update, covering every release missed since the last version this instance actually ran: one notification per release, plus the in-development section when it has anything flagged; a fresh install sees only the current version (issue #81)

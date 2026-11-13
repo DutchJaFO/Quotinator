@@ -35,6 +35,7 @@ public static class NotificationMetadataKinds
         [NotificationMetadataKind.DatabaseCreated]        = typeof(DatabaseCreatedMetadataDto),
         [NotificationMetadataKind.MigrationApplied]       = typeof(MigrationAppliedMetadataDto),
         [NotificationMetadataKind.UnreadableDatabaseSetAside] = typeof(UnreadableDatabaseSetAsideMetadataDto),
+        [NotificationMetadataKind.DatabaseActionResult]   = typeof(DatabaseActionResultMetadataDto),
     };
 
     // A null-valued property states nothing and leaves the reader to decide what it was supposed to

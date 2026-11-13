@@ -125,5 +125,16 @@ public enum NotificationMetadataKind
     /// own file, so the name is what identifies it.
     /// </para>
     /// </summary>
-    UnreadableDatabaseSetAside
+    UnreadableDatabaseSetAside,
+
+    /// <summary>
+    /// The end result of a Reset or a reseed run from within the application (#348): the payload carries
+    /// the action, how it ended, what it left to restore from, and what stopped it when it was refused.
+    /// <para>
+    /// An event, so it carries no dismiss trigger, and its text is static per ADR 026: a record of what
+    /// was reported to the user, kept so they can see later that it happened. Every run writes its own,
+    /// identified by the run, so two runs with the same result are never the same notification.
+    /// </para>
+    /// </summary>
+    DatabaseActionResult
 }

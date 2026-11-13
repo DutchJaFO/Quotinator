@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components;
 using Quotinator.Api.Components.Controls;
 using Quotinator.Api.Enums;
 using Quotinator.Api.Services;
+using Quotinator.Api.Startup;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
@@ -32,15 +33,29 @@ public partial class Notifications
     /// say beyond the reloaded list (#348). An action that replaced data without leaving a restore point
     /// says so here: the user agreed to it in a dialog, but the page has to confirm what actually happened.
     /// </summary>
+    /// <param name="trigger">Which action ran, so a refusal is told in that action's own words.</param>
     /// <param name="result">The outcome the action returned.</param>
     /// <param name="text">The translated strings for the current culture.</param>
-    internal static string? ActionOutcomeText(NotificationActionResult result, Quotinator.Api.I18nText.UI text) =>
-        result.RestorePoint is { Outcome: RestorePointOutcome.Skipped } skipped
-            // A plain Replace rather than string.Format: the template comes from a translation file, and a
-            // placeholder typo there must render as text rather than throw.
-            ? text.NotificationsActionRanWithoutBackup.Replace(
-                "{0}", (skipped.Obstacle ?? BackupOutcome.Unclassified).ToString(), StringComparison.Ordinal)
+    internal static string? ActionOutcomeText(
+        NotificationDismissTrigger trigger, NotificationActionResult result, Quotinator.Api.I18nText.UI text)
+    {
+        // #348 step 32: a refusal is an outcome the user has to be told, not one to infer from the reloaded
+        // list. A Reset is told as the repair control tells it, so the two surfaces cannot disagree.
+        if (!result.Succeeded)
+        {
+            if (trigger is NotificationDismissTrigger.DatabaseReset)
+                return DatabaseRepairActions.RepairOutcomeText(result, text);
+
+            if (result.BackupObstacle is BackupOutcome obstacle)
+                return WithObstacle(text.NotificationsReseedRefusedForBackup, obstacle) + " "
+                    + BackupObstacleGuidance.Cause(obstacle) + " "
+                    + text.NotificationsReseedNothingChanged;
+        }
+
+        return result.RestorePoint is { Outcome: RestorePointOutcome.Skipped } skipped
+            ? WithObstacle(text.NotificationsActionRanWithoutBackup, skipped.Obstacle ?? BackupOutcome.Unclassified)
             : null;
+    }
 
     #endregion
 
@@ -124,6 +139,11 @@ public partial class Notifications
         Availability = await ActionExecutor.GetAvailabilityAsync();
     }
 
+    // A plain Replace rather than string.Format: the template comes from a translation file, and a
+    // placeholder typo there must render as text rather than throw.
+    private static string WithObstacle(string template, BackupOutcome obstacle) =>
+        template.Replace("{0}", obstacle.ToString(), StringComparison.Ordinal);
+
     private async Task DismissAsync(Guid id)
     {
         await NotificationWriter.DismissAsync(id);
@@ -140,7 +160,7 @@ public partial class Notifications
             NotificationMetadataDto? metadata =
                 NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata);
 
-            await RunActionAsync(id, () => ActionExecutor.ExecuteAsync(trigger, metadata));
+            await RunActionAsync(id, trigger, () => ActionExecutor.ExecuteAsync(trigger, metadata));
         }
 
         await LoadAsync();
@@ -156,8 +176,9 @@ public partial class Notifications
     /// queues the render; the yield is what lets it reach the browser before the long await begins.
     /// </remarks>
     /// <param name="id">The notification whose action is running.</param>
+    /// <param name="trigger">Which action is running, for the outcome's wording.</param>
     /// <param name="action">The executor call to make.</param>
-    private async Task RunActionAsync(Guid id, Func<Task<NotificationActionResult>> action)
+    private async Task RunActionAsync(Guid id, NotificationDismissTrigger trigger, Func<Task<NotificationActionResult>> action)
     {
         ActionOutcome = null;
         await Executing.RunExclusivelyAsync(id, async () =>
@@ -165,7 +186,7 @@ public partial class Notifications
             await InvokeAsync(StateHasChanged);
             await Task.Yield();
             // #348: what the action actually did, from its own result, rather than what the user chose.
-            ActionOutcome = ActionOutcomeText(await action(), Text);
+            ActionOutcome = ActionOutcomeText(trigger, await action(), Text);
         });
     }
 
@@ -178,7 +199,7 @@ public partial class Notifications
             NotificationMetadataDto? metadata =
                 NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata);
 
-            await RunActionAsync(request.Id, () => ActionExecutor.ExecuteAsync(trigger, metadata, request.Choice));
+            await RunActionAsync(request.Id, trigger, () => ActionExecutor.ExecuteAsync(trigger, metadata, request.Choice));
         }
 
         await LoadAsync();
@@ -194,8 +215,8 @@ public partial class Notifications
                 NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata);
 
             // A refusal changes nothing and leaves the notification active; the reload that follows
-            // shows the options its obstacle still allows.
-            await RunActionAsync(request.Id, () => ActionExecutor.ExecuteAsync(trigger, metadata, option: request.Option));
+            // shows the options its obstacle still allows, and the outcome line says why this one did not run.
+            await RunActionAsync(request.Id, trigger, () => ActionExecutor.ExecuteAsync(trigger, metadata, option: request.Option));
         }
 
         await LoadAsync();

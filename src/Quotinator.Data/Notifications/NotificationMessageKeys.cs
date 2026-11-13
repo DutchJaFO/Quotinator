@@ -142,6 +142,55 @@ public static class NotificationMessageKeys
     /// </summary>
     public const string UnreadableDatabaseSetAsideBody = "NotificationUnreadableDatabaseSetAsideBody";
 
+    // #348: the result of a Reset or a reseed run from within the application. Static text per ADR 026:
+    // each records what the user was told when the action ended, so it stays true afterwards. A title per
+    // action and ending; the bodies an action shares with the other are written once.
+
+    /// <summary>Title: a Reset completed and took its backup first.</summary>
+    public const string DatabaseResetCompletedTitle = "NotificationDatabaseResetCompletedTitle";
+
+    /// <summary>Title: a Reset completed without a backup, by the user's permission.</summary>
+    public const string DatabaseResetWithoutBackupTitle = "NotificationDatabaseResetWithoutBackupTitle";
+
+    /// <summary>Title: a Reset completed and set aside a database file it could not read (#482).</summary>
+    public const string DatabaseResetSetAsideTitle = "NotificationDatabaseResetSetAsideTitle";
+
+    /// <summary>Title: a Reset was refused and changed nothing.</summary>
+    public const string DatabaseResetRefusedTitle = "NotificationDatabaseResetRefusedTitle";
+
+    /// <summary>Title: a Reset ran, but the rebuilt schema does not match (#305).</summary>
+    public const string DatabaseResetNotIntactTitle = "NotificationDatabaseResetNotIntactTitle";
+
+    /// <summary>Title: a reseed completed and took its backup first.</summary>
+    public const string DatabaseReseedCompletedTitle = "NotificationDatabaseReseedCompletedTitle";
+
+    /// <summary>Title: a reseed completed without a backup, by the user's permission.</summary>
+    public const string DatabaseReseedWithoutBackupTitle = "NotificationDatabaseReseedWithoutBackupTitle";
+
+    /// <summary>Title: a reseed was refused and changed nothing.</summary>
+    public const string DatabaseReseedRefusedTitle = "NotificationDatabaseReseedRefusedTitle";
+
+    /// <summary>Body: the backup the action took first. Receives the backup's file name as <c>{0}</c>.</summary>
+    public const string DatabaseActionBackupTakenBody = "NotificationDatabaseActionBackupTakenBody";
+
+    /// <summary>Body: a Reset ran without a backup. Receives the obstacle's name as <c>{0}</c>.</summary>
+    public const string DatabaseResetWithoutBackupBody = "NotificationDatabaseResetWithoutBackupBody";
+
+    /// <summary>Body: a reseed ran without a backup. Receives the obstacle's name as <c>{0}</c>.</summary>
+    public const string DatabaseReseedWithoutBackupBody = "NotificationDatabaseReseedWithoutBackupBody";
+
+    /// <summary>Body: a Reset set aside an unreadable file. Receives the file's name as <c>{0}</c>.</summary>
+    public const string DatabaseResetSetAsideBody = "NotificationDatabaseResetSetAsideBody";
+
+    /// <summary>Body: the action was refused because no backup could be taken. Receives the obstacle's name as <c>{0}</c>.</summary>
+    public const string DatabaseActionRefusedForBackupBody = "NotificationDatabaseActionRefusedForBackupBody";
+
+    /// <summary>Body: a Reset was refused because the database could not be replaced (#482). Receives the obstacle's name as <c>{0}</c>.</summary>
+    public const string DatabaseResetRefusedForResetBody = "NotificationDatabaseResetRefusedForResetBody";
+
+    /// <summary>Body: a Reset ran, but the rebuilt schema does not match (#305).</summary>
+    public const string DatabaseResetNotIntactBody = "NotificationDatabaseResetNotIntactBody";
+
     /// <summary>Title for the warning that the backups folder has reached its operating quota (#348).</summary>
     public const string BackupQuotaReachedTitle = "NotificationBackupQuotaReachedTitle";
 

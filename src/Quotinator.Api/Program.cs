@@ -461,6 +461,7 @@ builder.Services.AddSingleton<BackupOperations>();
 builder.Services.AddSingleton<Quotinator.Data.Notifications.INotificationConditionCheck, Quotinator.Data.Notifications.BackupQuotaCheck>();
 builder.Services.AddSingleton<Quotinator.Data.Notifications.INotificationConditionCheck, Quotinator.Data.Notifications.BackupMaxExceededCheck>();
 builder.Services.AddSingleton<Quotinator.Data.Notifications.NotificationConditionChecks>();
+builder.Services.AddSingleton<IDatabaseActionResultRecorder, DatabaseActionResultRecorder>();
 builder.Services.AddSingleton<INotificationActionExecutor, NotificationActionExecutor>();
 builder.Services.AddSingleton<IAppVersionTracker, AppVersionTracker>();
 

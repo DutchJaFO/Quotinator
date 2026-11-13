@@ -43,6 +43,9 @@ internal sealed class FakeNotificationWriter : INotificationWriter
     /// <summary>Records the metadata passed to each <see cref="WriteAsync"/> call, so a test can assert on structured payloads rather than message text.</summary>
     public List<(string? Metadata, NotificationMetadataKind? Kind)> WrittenMetadata { get; } = [];
 
+    /// <summary>Records the type and title passed to each <see cref="WriteAsync"/> call (#348), index-aligned with the lists above.</summary>
+    public List<(NotificationType Type, string? Title)> WrittenHeadings { get; } = [];
+
     public Task<NotificationEntity> WriteAsync(
         NotificationType type,
         string body,
@@ -56,6 +59,7 @@ internal sealed class FakeNotificationWriter : INotificationWriter
     {
         WrittenMessages.Add(body);
         WrittenMetadata.Add((metadata, metadataKind));
+        WrittenHeadings.Add((type, title));
         NotificationEntity entity = new NotificationEntity
         {
             Type     = new SafeValue<NotificationType?>(type.ToString(), type),

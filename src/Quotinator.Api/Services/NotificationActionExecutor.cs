@@ -29,12 +29,14 @@ namespace Quotinator.Api.Services;
 /// <param name="auditWriter">Records a reseed that ran without a backup (#348).</param>
 /// <param name="callerContext">Names who asked, for that audit entry.</param>
 /// <param name="conditionChecks">Re-checks every notification whose condition an action can change, once the action has finished (#348).</param>
+/// <param name="resultRecorder">Records the end result of a Reset or reseed as a notification (#348).</param>
 internal sealed class NotificationActionExecutor(
     IDatabaseInitializer databaseInitializer, DatabaseHealthState databaseHealth, INotificationWriter notificationWriter,
     IAppVersionTracker appVersionTracker, IVersionService versionService, ILogger<NotificationActionExecutor> logger,
         IImportActionService importActions, IImportBatchRepository importBatches, IDatabaseBackupReader backupReader,
     BackupOperations backupOperations, IAuditEntryWriter auditWriter, ICallerContext callerContext,
-    Quotinator.Data.Notifications.NotificationConditionChecks conditionChecks) : INotificationActionExecutor
+    Quotinator.Data.Notifications.NotificationConditionChecks conditionChecks,
+    IDatabaseActionResultRecorder resultRecorder) : INotificationActionExecutor
 {
     /// <inheritdoc/>
     public bool CanExecute(NotificationDismissTrigger trigger) => trigger switch
@@ -123,6 +125,18 @@ internal sealed class NotificationActionExecutor(
         FieldResolutionChoice? choice = null, NotificationActionOption? option = null)
     {
         NotificationActionResult result = await RunActionAsync(trigger, metadata, choice, option);
+
+        // #348 step 31: every end result of a Reset or a reseed, refusals included, is recorded where the
+        // user can see later that it happened. Here rather than in each case, so no return path is missed.
+        if (trigger switch
+            {
+                NotificationDismissTrigger.DatabaseReset => DatabaseAction.Reset,
+                NotificationDismissTrigger.Reseed        => (DatabaseAction?)DatabaseAction.Reseed,
+                _                                        => null,
+            } is DatabaseAction action)
+        {
+            await resultRecorder.RecordAsync(action, result);
+        }
 
         // #348: once, here, because this is where the action ends. An option can be several operations
         // (remove the oldest backup, take one, then reseed), and re-evaluating after each would run every

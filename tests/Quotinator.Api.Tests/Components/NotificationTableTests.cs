@@ -462,6 +462,8 @@ public class NotificationTableTests
         [NotificationMetadataKind.MigrationApplied]       = false,
         // #482: its file name and folder are what the body says, so there is nothing further to open.
         [NotificationMetadataKind.UnreadableDatabaseSetAside] = false,
+        // #348 step 31: its file name and obstacle are what the body says, so there is nothing further to open.
+        [NotificationMetadataKind.DatabaseActionResult]   = false,
     };
 
     /// <summary>
@@ -771,6 +773,9 @@ public class NotificationTableTests
         // #482: required properties, for the reason #371's two give.
         NotificationMetadataKind.UnreadableDatabaseSetAside =>
             """{"releaseState":"NotApplicable","fileName":"quotinatordata_unreadable_20261109T000000000Z.db","folder":"unreadable"}""",
+        // #348 step 31: required properties, for the reason #371's two give.
+        NotificationMetadataKind.DatabaseActionResult =>
+            """{"releaseState":"NotApplicable","runId":"7f00000e-0000-4000-8000-00000000000f","action":"Reset","outcome":"Completed","restorePoint":"Skipped","backupObstacle":"BudgetExceeded"}""",
         _ => """{"releaseState":"NotApplicable"}""",
     };
 
