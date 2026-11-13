@@ -211,7 +211,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 6 | **#83** ✅ | Waiting for release |
 | 7 | **#309** ✅ | Waiting for release |
 | 8 | **#326** ✅ | Waiting for release |
-| 9 | **#348** 🚧 | In progress; steps 29 and 30, the Reset override and reporting the restore point to the caller, done apart from T1; before #327 |
+| 9 | **#348** 🚧 | In progress; steps 29 to 32 done apart from T1; step 33, T2 proof off the audit trail, in progress; before #327 |
 | 10 | **#424** ✅ | Waiting for release |
 | 11 | **#349** ✅ | Waiting for release |
 | 12 | **#307** ✅ | Waiting for release |

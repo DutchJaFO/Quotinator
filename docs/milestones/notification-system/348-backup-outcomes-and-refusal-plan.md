@@ -20,10 +20,13 @@ recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**T1 for steps 29 and 30, then back to `Waiting for release`.** The issue was moved back to `In progress` on
-2026-11-12 (developer decision) because requirement 4 was unmet: the override could not take effect on a
-Reset. Step 29 fixed it; step 30 makes the Reset and the reseed action tell their caller what they left to
-restore from. Every verification row is ✅ again. What remains is the developer starting
+**Finish step 33 (`import-and-staged-actions/16` and `17`, then the README), then T1 for steps 29 to 33.**
+Steps 31 and 32 are done apart from T1. The
+issue was moved back to `In progress` on 2026-11-12 (developer decision) because requirement 4 was unmet:
+the override could not take effect on a Reset. Step 29 fixed it; step 30 makes the Reset and the reseed
+action tell their caller what they left to restore from. Steps 31 to 33 were added the same day: a result
+notification for a Reset or reseed run from the application, the refused action reported on the
+notifications page, and the T2 documents that used the audit trail as proof. What remains is the developer starting
 the application in Visual Studio and confirming it starts without error, then the status returns to
 `Waiting for release` and the Definition of done's two unticked boxes are ticked.
 
@@ -1318,9 +1321,142 @@ response to it. `backup/10` had compounded this by using the audit row as its pr
 **Left to do.** T1, together with step 29's: the developer starts the application in Visual Studio and
 confirms it starts without error.
 
-**Found, not changed here.** `POST /database/reseed` replaces content without taking a backup and says
-nothing about that, and the notifications page does not report a refused action, only reloading the list.
-Both leave a consumer unaware of something it would need to act on.
+**Found afterwards.** The notifications page does not report a refused action: it only reloads the list.
+Step 32 fixes it. An earlier draft of this step also listed `POST /database/reseed` running without a
+backup; that is correct by ADR 025, which names that endpoint as a primitive that must not back up.
+
+### 31. A Reset or reseed run from the application records its result as a notification
+**Status:** 🚧 In progress, 2026-11-13. Everything is done except T1, which is the developer's to run.
+
+**What was done.**
+
+- **Refusals are recorded too (developer decision, 2026-11-12):** a notification is the lasting record of
+  what was reported to the user, so every end result writes one: completed with a backup (`Success`),
+  without one or with the file set aside (`Warning`), refused or with a schema that still does not match
+  (`Error`).
+- **The kind:** `NotificationMetadataKind.DatabaseActionResult` with `DatabaseActionResultMetadataDto`
+  (run id, action, outcome, restore point, file name, backup and reset obstacles), identified by the run
+  so two runs ending alike are two records. New enums `DatabaseAction` and `DatabaseActionOutcome`. Data
+  migration 30 widens the `MetadataKind` CHECK, and the baseline matches. 8 titles and 7 bodies in
+  `NotificationMessageKeys` and in en-GB, nl and de, static per ADR 026.
+- **The writer:** `DatabaseActionResultRecorder`, called once by `NotificationActionExecutor.ExecuteAsync`
+  for a `DatabaseReset` or `Reseed` trigger, so no return path is missed. It never throws: a record that
+  cannot be written is logged with its exception id (ADR 022), and the action's own result stands.
+- **Red, then green:** `DatabaseActionResultRecorderTests` (type, title and body for each of nine endings,
+  the kind, the backup named, the skip's reason, the Reset obstacle, two runs identified apart) and five
+  `NotificationActionExecutorTests` (`..._RecordsItsResult`, `..._RecordsTheRefusal`) failed on their
+  assertions against the signature state; `ImportReviewResolved_RecordsNoDatabaseActionResult` is the
+  guard the other way. `NotificationMetadataKind_IsAcceptedByTheBaseline` and
+  `..._IsAcceptedByTheIncrementalReplay` failed for the new kind until migration 30, and the two
+  per-kind maps in `NotificationTableTests` until they named it.
+- **Live:** `backup/06` reads one result per reseed option (`warning` for the reseed without a backup,
+  `success` for the other two) and `startup-and-degradation/06` reads the repair control's Reset as one
+  `success`. Both green against the working tree, and both red against `39f6ae94` at exactly those
+  readings (`count = 0`). `notifications-and-changelog/14` names the kind and where it is produced.
+
+**Left to do.** T1, with steps 29, 30 and 32.
+
+**Why (developer, 2026-11-12).** The end result of a Reset or a reseed run from within the application
+results in a notification stating what was done, and clearly indicating when a backup was skipped. A
+notification reports system status and the results of actions that affect it; the audit trail records
+database actions and is not where a user learns what their action did. Requests made over REST are
+answered by their response (step 30) and are not in scope.
+
+**Where.** Every such action runs through `NotificationActionExecutor`: the Notifications page's Reset and
+reseed options, and `DatabaseRepairActions` on the degraded pages. The executor writes the notification
+after the action succeeds, so a Reset's notification lands in the rebuilt database.
+
+**What it needs**, following #482's `UnreadableDatabaseSetAside`, the most recent kind added:
+
+1. A `NotificationMetadataKind` member and payload DTO carrying the action (Reset or reseed) and the
+   restore point (outcome, file name, obstacle), with its identity components.
+2. A Data-owned migration widening `System_Notification.MetadataKind`'s CHECK (a table rebuild, per
+   ADR 008), the baseline updated to match, and the schema-drift tests extended.
+3. Title and body keys in `NotificationMessageKeys` and in en-GB, nl and de. Per ADR 026 the text is
+   stored, since it is a record of what happened and stays true.
+4. Red-first tests: one statement each, per action and per restore-point outcome.
+5. A T2 document running each from the Notifications page and reading the notification back.
+
+**Open questions for the developer.**
+
+1. **A Reset of an unreadable file** already writes #482's set-aside notification. **Answered
+   (developer, 2026-11-12): write both.** Every Reset run from the application writes the result
+   notification, including one that set a file aside; #482's notification stays as it is.
+2. **Type. Answered (developer, 2026-11-12):** `Success` when a backup was taken, `Warning` when it was
+   skipped. A Reset that set an unreadable file aside is `Warning` too (developer, 2026-11-12): the old
+   file was moved, not backed up, and may not be recoverable.
+3. **Step 30's page line**, the immediate *ran without a backup* message, says the same thing as the
+   notification that appears on the reload a moment later. **Answered (developer, 2026-11-12): keep
+   both.** The line is the immediate feedback where the user clicked; the notification is the record. The
+   page also shows an immediate line for a refusal (step 32).
+
+### 32. The notifications page reports a refused action
+**Status:** 🚧 In progress, 2026-11-13. Everything is done except T1, which is the developer's to run.
+
+**What was done.** `Notifications.ActionOutcomeText` takes the trigger: a refused reseed names the obstacle,
+its cause from `BackupObstacleGuidance`, and that nothing changed (new keys
+`NotificationsReseedRefusedForBackup` and `NotificationsReseedNothingChanged`); a refused Reset is told
+exactly as `DatabaseRepairActions` tells it. `NotificationsPageTests.RefusedReseed_NamesTheObstacleThatStoppedIt`,
+`..._StatesTheObstaclesCause` and `RefusedReset_IsToldAsTheRepairControlTellsIt` failed on their
+assertions first. **Not provable live:** a refused option is never offered, so the page cannot be made to
+run one; only a backup that fails after the check passed reaches this line, which the unit tests cover.
+
+**Left to do.** T1, with steps 29, 30 and 31.
+
+**The defect.** `ExecuteOptionActionAsync` discards the action's result: a reseed refused because no backup
+can be taken reloads the list and says nothing. The list then shows the options the obstacle still allows,
+but not why the chosen one did not run. ADR 022's principle applies: a refusal is an outcome the consumer
+must be able to act on, not something to infer from the list.
+
+**What changes.** The page shows the refusal from the action's own result, naming the obstacle and its
+cause from `BackupObstacleGuidance`, the same composition `DatabaseRepairActions.RepairOutcomeText` uses
+for a Reset. A refused reseed needs its own sentence (*"The reseed did not run: no backup could be taken
+first ({0})."*), since the Reset's sentences name a Reset; new keys in en-GB, nl and de. Red first, through
+`Notifications.ActionOutcomeText`.
+
+### 33. T2 documents prove from responses and data, not the audit trail
+**Status:** 🚧 In progress, 2026-11-13. `backup/06` is done. `import-and-staged-actions/16` and `17` are
+next, as decided below, then the `README.md` rewording.
+
+**Found while executing.**
+
+- **The first survey missed `backup/06`**, which read the audit trail through the page script
+  `audit-operations.js` (steps 5 and 6), a form the survey's search for the endpoint path did not match.
+  Its steps now assert the result notifications of step 31 and the page's outcome line instead, and the
+  script, with no user left, is removed.
+- **`16` and `17`'s `Purged` count never proved what it claims.** The seed writes a `Purged` audit row for
+  every batch whatever `DeleteForBatchAsync` removed, ignoring the count it returns
+  (`QuotinatorDatabaseInitializer.cs`, the auto-purge). Measured 2026-11-13 in a scratch container: after
+  the first boot and after a reseed, `Import_Action` held no rows, and the reseed's own report read every
+  entity `unchanged` with `new=0`, `modified=0`, `pending=0` and `stale=0` for all five files. The reseed
+  staged nothing for a purge to remove, so a rising `Purged` count said only that the purge code ran.
+  What rules out *"rows existed and were removed"* is the reseed's response: nothing was staged.
+
+**Why (developer, 2026-11-12).** The results of endpoints and the data in the database are the only
+acceptable proof; the audit trail is secondary, indirect evidence at best.
+
+**Survey, 2026-11-12**, every read of the audit trail in `docs/automated-testing/`:
+
+| Document | Use | Verdict |
+|---|---|---|
+| `import-and-staged-actions/16` step 3 | Counts `Purged` audit rows before and after a reseed to prove the auto-purge removed actions | **Evidence: replace** |
+| `import-and-staged-actions/17` step 3 | Same, for alias staleness | **Evidence: replace** |
+| `backup/06` steps 5 and 6 | Counts `BackupSkipped`, `BackupDeleted` and `BackedUp` rows through `audit-operations.js` | **Evidence: replaced** with step 31's result notifications and the page's outcome line (found while executing) |
+| `database-lifecycle/03` | Reads `/admin/audit` after a Reset to show the table was wiped, leaving only the Reset's own row | Subject: the audit table's own contents are the data a full wipe is about. Kept |
+| `database-lifecycle/02` | Audit export, date range and purge | Subject: the audit endpoints themselves. Kept |
+| `api-surface/02` | The pagination contract on `/admin/audit` | Subject. Kept |
+| `identity-and-casing/04` | Id presentation in `/admin/audit` | Subject. Kept |
+| `startup-and-degradation/08` | Lists the endpoint among those exempt from the health gate | Not a read. Kept |
+| `import-and-staged-actions/05` | Reads `Import_Batch` through DbInspector | Data. Kept; its claim that no `GET /import-batches` listing exists is stale (#251 added one) and is corrected while there |
+| `README.md` *check all three channels* | Names the audit trail as one of three ways the application exposes what it did | **Reworded:** responses and data are the proof, logs and the audit trail lead to it |
+
+**What changes in `16` and `17` (developer decision, 2026-11-13).** Step 3 proves from the reseed's own
+response that every file staged nothing: `pending`, `stale` and `modified` all `0`. The empty stale list is
+then explained by data, and the purge-trace reading and its table row are dropped. Step 4 stays the
+positive control, where staleness actually fires. Each document is re-run green; the plan's first answer,
+the actions reported staged and then read gone, rested on the reseed staging something, which it does not.
+
+---
 
 ---
 
@@ -1368,6 +1504,8 @@ Both leave a consumer unaware of something it would need to act on.
 | 38 | ✅ | A condition check that cannot run does not change the answer of the action it followed | Unit test | Step 26: `AdminBackupEndpointsTests.DeleteBackup_WhenAConditionCheckThrows_StillAnswersTheDeletionsOwnOutcome`, and `backup/05` step 7 live |
 | 39 | ✅ | A Reset with the override completes when no backup can be taken, writes no backup, and reports the skip | Unit test + Automated (T2) | `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_WhenNoBackupCanBeTaken_CompletesTheReset`, `..._ReplacesTheDatabase`, `..._ReportsThatTheBackupWasSkipped`, each red first; `backup/10`, every step exits `0`, red against `bd84d987` at step 4; `ResetObstacleGuidanceTests.DataDirectoryNotWritable_DoesNotClaimTheFileIsUnreadable`, red first; `backup/04` and `backup/09` re-run green |
 | 40 | ✅ | The caller of an action that replaces data is told what it left to restore from: the backup taken, the file set aside, or none and why | Unit test + Automated (T2) | Step 30: `DatabaseBackupQuotaTests` `..._ReturnsASkippedRestorePoint`, `..._NamesWhyNoBackupWasTaken`, `ResetAsync_WhenTheBackupSucceeds_NamesTheBackupItTook`; `DatabaseInitializerTests` `ResetAsync_CorruptDatabase_NamesTheFileItSetAside`, `..._ReturnsASetAsideRestorePoint`; `AdminEndpointsTests` `ResetDatabase_WithOverride_ReportsTheSkippedBackupInTheResponse`, `..._NamesWhyNoBackupWasTakenInTheResponse`, `ResetDatabase_WhenTheBackupSucceeds_NamesTheBackupInTheResponse`; `NotificationActionExecutorTests` `Reseed_ReseedWithoutBackup_ReturnsASkippedRestorePoint`, `..._NamesWhyNoBackupWasTaken`, `Reseed_BackUpThenReseed_NamesTheBackupItTook`, `DatabaseReset_WhenItCompletes_ReturnsTheResetsRestorePoint`; `NotificationsPageTests.ReseedWithoutBackup_SaysThereIsNoRestorePoint`, all red first; `backup/10` step 4 green, red against `b8c970b2` |
+| 41 | ✅ | Every end result of a Reset or reseed run from the application, refusals included, is recorded as a notification saying what was done and whether a backup was skipped | Unit test + Automated (T2) | Step 31: `DatabaseActionResultRecorderTests` and `NotificationActionExecutorTests` `..._RecordsItsResult`, `..._RecordsTheRefusal`, red first; the storage tests for the new kind, red until migration 30; `backup/06` steps 5 to 7 and `startup-and-degradation/06`'s repair, green, red against `39f6ae94` |
+| 42 | ✅ | The notifications page says why an action it ran was refused | Unit test | Step 32: `NotificationsPageTests.RefusedReseed_NamesTheObstacleThatStoppedIt`, `..._StatesTheObstaclesCause`, `RefusedReset_IsToldAsTheRepairControlTellsIt`, red first. Not reachable live: a refused option is never offered |
 
 ---
 
