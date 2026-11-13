@@ -20,8 +20,7 @@ recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**Finish step 33 (`import-and-staged-actions/16` and `17`, then the README), then T1 for steps 29 to 33.**
-Steps 31 and 32 are done apart from T1. The
+**T1 for steps 29 to 33, then back to `Waiting for release`.** Steps 29 to 33 are done apart from it. The
 issue was moved back to `In progress` on 2026-11-12 (developer decision) because requirement 4 was unmet:
 the override could not take effect on a Reset. Step 29 fixed it; step 30 makes the Reset and the reseed
 action tell their caller what they left to restore from. Steps 31 to 33 were added the same day: a result
@@ -1415,8 +1414,23 @@ first ({0})."*), since the Reset's sentences name a Reset; new keys in en-GB, nl
 `Notifications.ActionOutcomeText`.
 
 ### 33. T2 documents prove from responses and data, not the audit trail
-**Status:** 🚧 In progress, 2026-11-13. `backup/06` is done. `import-and-staged-actions/16` and `17` are
-next, as decided below, then the `README.md` rewording.
+**Status:** 🚧 In progress, 2026-11-13. Everything is done except T1, which is the developer's to run.
+
+**What was done.**
+
+- **`backup/06`**, with step 31: see that step.
+- **`import-and-staged-actions/16` step 3** reads the reseed's response: one report per bundled file and
+  `staged`, the sum of every entity's `pending`, `stale`, `modified` and `blocked`, `0`. Step 4's reseed
+  reads the same sum as its control: `staged=1 reportedStale=1` once the conflict is set up. Green
+  2026-11-13.
+- **`import-and-staged-actions/17`** step 2 reads the seed batches (`5`, all `applied`, `795` records),
+  since a seed batch is marked `applied`, and purged, only when nothing in it is pending, blocked or stale;
+  step 3 reads the reseed's response as `16` does. Green 2026-11-13. Both documents' evaluation lines are
+  still absent, the #347 gap they already declare.
+- **`README.md`**: the *check all three channels* passage now names five channels and says only a
+  response and the data are proof, with this step's findings as its example.
+- **No canary for `16` and `17`:** what changed is the evidence each reads, not the behaviour under test,
+  and step 4's control shows the new reading can read above `0`.
 
 **Found while executing.**
 
@@ -1506,6 +1520,7 @@ the actions reported staged and then read gone, rested on the reseed staging som
 | 40 | ✅ | The caller of an action that replaces data is told what it left to restore from: the backup taken, the file set aside, or none and why | Unit test + Automated (T2) | Step 30: `DatabaseBackupQuotaTests` `..._ReturnsASkippedRestorePoint`, `..._NamesWhyNoBackupWasTaken`, `ResetAsync_WhenTheBackupSucceeds_NamesTheBackupItTook`; `DatabaseInitializerTests` `ResetAsync_CorruptDatabase_NamesTheFileItSetAside`, `..._ReturnsASetAsideRestorePoint`; `AdminEndpointsTests` `ResetDatabase_WithOverride_ReportsTheSkippedBackupInTheResponse`, `..._NamesWhyNoBackupWasTakenInTheResponse`, `ResetDatabase_WhenTheBackupSucceeds_NamesTheBackupInTheResponse`; `NotificationActionExecutorTests` `Reseed_ReseedWithoutBackup_ReturnsASkippedRestorePoint`, `..._NamesWhyNoBackupWasTaken`, `Reseed_BackUpThenReseed_NamesTheBackupItTook`, `DatabaseReset_WhenItCompletes_ReturnsTheResetsRestorePoint`; `NotificationsPageTests.ReseedWithoutBackup_SaysThereIsNoRestorePoint`, all red first; `backup/10` step 4 green, red against `b8c970b2` |
 | 41 | ✅ | Every end result of a Reset or reseed run from the application, refusals included, is recorded as a notification saying what was done and whether a backup was skipped | Unit test + Automated (T2) | Step 31: `DatabaseActionResultRecorderTests` and `NotificationActionExecutorTests` `..._RecordsItsResult`, `..._RecordsTheRefusal`, red first; the storage tests for the new kind, red until migration 30; `backup/06` steps 5 to 7 and `startup-and-degradation/06`'s repair, green, red against `39f6ae94` |
 | 42 | ✅ | The notifications page says why an action it ran was refused | Unit test | Step 32: `NotificationsPageTests.RefusedReseed_NamesTheObstacleThatStoppedIt`, `..._StatesTheObstaclesCause`, `RefusedReset_IsToldAsTheRepairControlTellsIt`, red first. Not reachable live: a refused option is never offered |
+| 43 | ✅ | No T2 document uses the audit trail as proof; each proves from a response or the data | Automated (T2) | Step 33: `backup/06`, `import-and-staged-actions/16` and `17` re-run green 2026-11-13, `16` step 4 reading `staged=1` as the control; the survey's table lists every remaining audit read as the documents' subject |
 
 ---
 
