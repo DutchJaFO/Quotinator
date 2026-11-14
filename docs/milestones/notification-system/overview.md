@@ -206,7 +206,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 1 | **#313** ✅ | Waiting for release |
 | 2 | **#323** ✅ | Waiting for release |
 | 3 | **#325** ⛔ | Closed as not planned |
-| 4 | **#312** ✅ | Waiting for release; foundation for the producers below |
+| 4 | **#312** ✅ | Waiting for release |
 | 5 | **#81** ✅ | Waiting for release |
 | 6 | **#83** ✅ | Waiting for release |
 | 7 | **#309** ✅ | Waiting for release |
@@ -243,10 +243,10 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 38 | **#423** ✅ | Waiting for release |
 | 39 | **#371** ✅ | Waiting for release |
 | 40 | **#350** ✅ | Waiting for release |
-| 41 | **#339** ✅ | Waiting for release; before #327 and #328 |
-| 42 | **#305** ✅ | Waiting for release; before #327 |
-| 43 | **#482** ✅ | Waiting for release; before #327, #348 and #457 |
-| 44 | **#348** ✅ | Waiting for release; before #327; after #349 and #482 |
+| 41 | **#339** ✅ | Waiting for release |
+| 42 | **#305** ✅ | Waiting for release |
+| 43 | **#482** ✅ | Waiting for release |
+| 44 | **#348** ✅ | Waiting for release |
 | 45 | **#457** | Planning; before #327; after #482 |
 | 46 | **#454** | Planning; before #327, #455 and #456 |
 | 47 | **#455** | Planning; before #327; after #454 |
