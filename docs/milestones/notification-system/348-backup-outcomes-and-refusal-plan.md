@@ -1,9 +1,9 @@
 # #348: Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #348
 **Tiers required:** T1, T2
-**Depends on:** #349
+**Depends on:** #349, #482
 
 ---
 
@@ -20,14 +20,14 @@ recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**T1 for steps 29 to 33, then back to `Waiting for release`.** Steps 29 to 33 are done apart from it. The
+**Waiting for release, since 2026-11-14.** Tick the Definition of done's *Fix implemented* and *All listed
+tests pass*; the closing comment, with the verification table's 43 rows, waits for the release itself. The
 issue was moved back to `In progress` on 2026-11-12 (developer decision) because requirement 4 was unmet:
 the override could not take effect on a Reset. Step 29 fixed it; step 30 makes the Reset and the reseed
 action tell their caller what they left to restore from. Steps 31 to 33 were added the same day: a result
 notification for a Reset or reseed run from the application, the refused action reported on the
-notifications page, and the T2 documents that used the audit trail as proof. What remains is the developer starting
-the application in Visual Studio and confirming it starts without error, then the status returns to
-`Waiting for release` and the Definition of done's two unticked boxes are ticked.
+notifications page, and the T2 documents that used the audit trail as proof. All five are done, T1
+included (2026-11-14).
 
 **Before 2026-11-12: all 28 steps were done and all 38 verification rows were ticked. Rows 9 and 19 were left behind when step 19 closed and were ticked afterwards, on a re-run of the three test classes they name (88 green, 2026-09-29). The issue is ready for `Waiting for release`:** tick the Definition of done against what was actually verified, then post the closing comment with the verification table. Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
 issue was reopened 2026-09-26 when a re-verification against the issue's own requirements found three
@@ -1221,7 +1221,7 @@ tries to provoke that obstacle the same way; whether the provider should see the
 issue''s question.
 
 ### 29. The override takes effect on a Reset
-**Status:** 🚧 In progress, 2026-11-12. Everything is done except T1, which is the developer's to run.
+**Status:** ✅ Done
 
 **What was done.**
 
@@ -1255,8 +1255,13 @@ issue''s question.
   Reset proceed without a backup where it can still complete. The defect never shipped, and that sentence
   is what this step makes true.
 
-**Left to do.** T1: the developer starts the application in Visual Studio and confirms it starts without
-error. Then the status returns to `Waiting for release`.
+**T1, 2026-11-14 (developer), for steps 29 to 33.** The application started in Visual Studio against the
+developer's own database, applied 27 Data and 4 App migrations (Data v3 → v30, App v5 → v9) after taking
+its backup, and reached `Quotinator ready`. `POST /api/v1/admin/database/reset` answered `200` with
+`"backup": {"outcome": "Succeeded", "name": "quotinatordata_v9_20261114T104131906Z.db"}`, the file the
+log names as written. A reseed run from the notifications page took its backup first and completed. One
+`ObjectDisposedException` on a `NetworkStream` was logged before either action; nothing failed with it,
+which fits a client closing its connection, so it is recorded here and not pursued.
 
 **The defect.** Requirement 4 says the override lets the operator proceed without a backup. On a Reset it
 cannot. `ResetAsync` lets `allowNoBackup=true` past the readiness check, then `OnResetAsync` reaches
@@ -1286,7 +1291,7 @@ predate it; a completed Reset after a refused backup does not.
    `allowNoBackup=true` answering `200`, red against a canary built from the current branch.
 
 ### 30. The caller is told what the action left to restore from
-**Status:** 🚧 In progress, 2026-11-12. Everything is done except T1, which is the developer's to run.
+**Status:** ✅ Done
 
 **The defect (developer, 2026-11-12).** A Reset with `allowNoBackup=true` answered `200` with the same body
 as one that took its backup. The skip reached only the log and the audit trail, and the reseed run without
@@ -1317,15 +1322,14 @@ response to it. `backup/10` had compounded this by using the audit row as its pr
   entry in en, nl and de, with `CHANGELOG.md` regenerated.
 - **Build and full suite:** `0 Warning(s)  0 Error(s)`, 5,001 tests across 12 projects, all passing.
 
-**Left to do.** T1, together with step 29's: the developer starts the application in Visual Studio and
-confirms it starts without error.
+**T1:** passed with step 29's, 2026-11-14; the Reset's `backup` object was read in it.
 
 **Found afterwards.** The notifications page does not report a refused action: it only reloads the list.
 Step 32 fixes it. An earlier draft of this step also listed `POST /database/reseed` running without a
 backup; that is correct by ADR 025, which names that endpoint as a primitive that must not back up.
 
 ### 31. A Reset or reseed run from the application records its result as a notification
-**Status:** 🚧 In progress, 2026-11-13. Everything is done except T1, which is the developer's to run.
+**Status:** ✅ Done
 
 **What was done.**
 
@@ -1353,7 +1357,7 @@ backup; that is correct by ADR 025, which names that endpoint as a primitive tha
   `success`. Both green against the working tree, and both red against `39f6ae94` at exactly those
   readings (`count = 0`). `notifications-and-changelog/14` names the kind and where it is produced.
 
-**Left to do.** T1, with steps 29, 30 and 32.
+**T1:** passed with step 29's, 2026-11-14.
 
 **Why (developer, 2026-11-12).** The end result of a Reset or a reseed run from within the application
 results in a notification stating what was done, and clearly indicating when a backup was skipped. A
@@ -1390,7 +1394,7 @@ after the action succeeds, so a Reset's notification lands in the rebuilt databa
    page also shows an immediate line for a refusal (step 32).
 
 ### 32. The notifications page reports a refused action
-**Status:** 🚧 In progress, 2026-11-13. Everything is done except T1, which is the developer's to run.
+**Status:** ✅ Done
 
 **What was done.** `Notifications.ActionOutcomeText` takes the trigger: a refused reseed names the obstacle,
 its cause from `BackupObstacleGuidance`, and that nothing changed (new keys
@@ -1400,7 +1404,7 @@ exactly as `DatabaseRepairActions` tells it. `NotificationsPageTests.RefusedRese
 assertions first. **Not provable live:** a refused option is never offered, so the page cannot be made to
 run one; only a backup that fails after the check passed reaches this line, which the unit tests cover.
 
-**Left to do.** T1, with steps 29, 30 and 31.
+**T1:** passed with step 29's, 2026-11-14.
 
 **The defect.** `ExecuteOptionActionAsync` discards the action's result: a reseed refused because no backup
 can be taken reloads the list and says nothing. The list then shows the options the obstacle still allows,
@@ -1414,7 +1418,7 @@ first ({0})."*), since the Reset's sentences name a Reset; new keys in en-GB, nl
 `Notifications.ActionOutcomeText`.
 
 ### 33. T2 documents prove from responses and data, not the audit trail
-**Status:** 🚧 In progress, 2026-11-13. Everything is done except T1, which is the developer's to run.
+**Status:** ✅ Done
 
 **What was done.**
 
@@ -1471,6 +1475,52 @@ positive control, where staleness actually fires. Each document is re-run green;
 the actions reported staged and then read gone, rested on the reseed staging something, which it does not.
 
 ---
+
+## Scope changes
+
+**Added on the second reopening, beyond what the issue states** (developer decisions, 2026-11-12 and
+2026-11-13; recorded on the issue 2026-11-14):
+
+- **The caller is told what a Reset or reseed left to restore from (step 30).** Requirement 5 asks for a
+  skipped backup to be recorded in the log and the audit trail. Both still happen, but a consumer that is
+  not told cannot act, and the audit trail is indirect evidence at best. A successful Reset now answers
+  with a `backup` object (`Succeeded` with the backup's name, `SetAside` with the unreadable file's name,
+  or `Skipped` with the obstacle), and a reseed run from the notifications page without a backup says so
+  on the page.
+- **Every Reset or reseed run from the application records its result as a notification (step 31)**,
+  refusals included: a notification is the lasting record of what the user was told. New kind
+  `DatabaseActionResult`, Data migration 30.
+- **The notifications page says why an action it ran was refused (step 32).** It used to reload the list
+  without a word.
+- **The automated documents prove from responses and data, not the audit trail (step 33)**: `backup/06`,
+  `backup/10`, `import-and-staged-actions/16` and `17`, and the suite README's rule.
+
+**Decided against:** `POST /api/v1/admin/database/reseed` reporting a backup. It takes none by design
+(ADR 025), so it stays as it is.
+
+Nothing the issue requires was deferred.
+
+---
+
+## Closing checks
+
+The *Waiting for release* items the Verification table does not carry, done 2026-11-14.
+
+- **Dependencies:** #349 and #482 are both `Waiting for release`. #482 was added to *Depends on* the same
+  day: steps 29 to 31 build on its `ResetObstacle` and set-aside path.
+- **The issue re-read**, its Definition of done included: *Fix implemented* and *All listed tests pass*
+  are ticked against rows 1 to 43; the closing-comment box waits for the release.
+- **Boyscout pass:** every file steps 29 to 33 created or touched is in `.editorconfig`'s scoped `IDE0008`
+  and `IDE0090` sections, and the build reports `0 Warning(s)`. The one log line they add goes through
+  `LogExceptionHandled`, which carries its prefix. No `Sql.*` class was touched. The new enums sit in
+  `Quotinator.Data/Enums`, per ADR 016.
+- **Process gap check: one document changed.** The rule that only a response and the data are proof was
+  the developer's standing direction but was written nowhere the suite reads it; `docs/automated-testing/README.md`
+  now states it (step 33). Two misses of this session's own were caught by existing rules and need no
+  change: step 33's first survey searched only for the endpoint path and missed a page script, and the
+  #348 overview entries drifted from the template until the developer checked them.
+- **Changelog:** the unreleased `added` entries for steps 30 and 31 are in en, nl and de, and
+  `CHANGELOG.md` is regenerated.
 
 ---
 
