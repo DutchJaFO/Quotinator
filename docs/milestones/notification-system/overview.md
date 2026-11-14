@@ -247,34 +247,34 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 42 | **#305** ✅ | Waiting for release |
 | 43 | **#482** ✅ | Waiting for release |
 | 44 | **#348** ✅ | Waiting for release |
-| 45 | **#457** | Planning; before #327; after #482 |
-| 46 | **#454** | Planning; before #327, #455 and #456 |
-| 47 | **#455** | Planning; before #327; after #454 |
-| 48 | **#456** | Planning; before #327; after #454 |
-| 49 | **#453** | Planning; before #327 |
-| 50 | **#428** | Planning; before #327 |
-| 51 | **#327** 🚧 | In progress; after #339 and #305, #482, #457, #454, #455, #456, #453, #428 |
-| 52 | **#328** | Planning; after #339 |
-| 53 | **#329** | Planning; before #324, which consumes its statistics |
-| 54 | **#330** | Planning; before #331 |
-| 55 | **#331** | Planning; after #330 |
-| 56 | **#324** | Planning; after #329/#330/#331 |
-| 57 | **#306** | Planning; independent |
-| 58 | **#351** | Planning; independent, placed late |
-| 59 | **#381** | Planning; independent, deliberately deferred |
-| 60 | **#352** | Planning; after #349 |
-| 61 | **#353** | Planning; after #352 |
-| 62 | **#360** | Planning; before end-of-milestone migration consolidation |
-| 63 | **#390** | Planning; before #368 |
-| 64 | **#368** | Planning; after #390 |
-| 65 | **#416** | Planning; unsequenced, placed last until it is |
-| 66 | **#430** | Planning; before #352 and #353, which cite the convention |
-| 67 | **#431** | Planning; after #353, which builds the shared sanitiser |
-| 68 | **#438** | Planning; early, a smoke document cannot be confirmed until it lands |
-| 69 | **#462** | Planning; before #329 and #331 test live against it |
-| 70 | **#473** | Planning; after #327, and before the milestone-close T2 run |
-| 71 | **#475** | Planning; before #473, whose exception counts read these lines |
-| 72 | **#476** | Planning; before release |
+| 45 | **#457** | Planning |
+| 46 | **#454** | Planning |
+| 47 | **#455** | Planning |
+| 48 | **#456** | Planning |
+| 49 | **#453** | Planning |
+| 50 | **#428** | Planning |
+| 51 | **#327** 🚧 | In progress |
+| 52 | **#328** | Planning |
+| 53 | **#329** | Planning |
+| 54 | **#330** | Planning |
+| 55 | **#331** | Planning |
+| 56 | **#324** | Planning |
+| 57 | **#306** | Planning |
+| 58 | **#351** | Planning |
+| 59 | **#381** | Planning |
+| 60 | **#352** | Planning |
+| 61 | **#353** | Planning |
+| 62 | **#360** | Planning |
+| 63 | **#390** | Planning |
+| 64 | **#368** | Planning |
+| 65 | **#416** | Planning |
+| 66 | **#430** | Planning |
+| 67 | **#431** | Planning |
+| 68 | **#438** | Planning |
+| 69 | **#462** | Planning |
+| 70 | **#473** | Planning |
+| 71 | **#475** | Planning |
+| 72 | **#476** | Planning |
 | 73 | **#477** | Planning |
 | 74 | **#478** | Planning |
 | 75 | **#479** | Planning |
