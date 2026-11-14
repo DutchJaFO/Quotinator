@@ -107,7 +107,10 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#389](https://github.com/DutchJaFO/Quotinator/issues/389) | A staged review batch cannot be discarded once the planner has staged a no-op in it as Applied | Waiting for release | T1 ✅ T2 ✅ | [389-discard-keeps-plan-time-no-ops-plan.md](389-discard-keeps-plan-time-no-ops-plan.md) |
 | [#390](https://github.com/DutchJaFO/Quotinator/issues/390) | A reseed imports the file list captured at startup, not the files currently in either folder | Planning | T1 ⬜ T2 ⬜ | none |
 | [#482](https://github.com/DutchJaFO/Quotinator/issues/482) | A Reset cannot rebuild a database SQLite cannot read | Waiting for release | T1 ✅ T2 ✅ | [482-reset-rebuilds-an-unreadable-database-plan.md](482-reset-rebuilds-an-unreadable-database-plan.md) |
-| [#457](https://github.com/DutchJaFO/Quotinator/issues/457) | The health reason for an unreadable database file misdiagnoses it as a schema-version mismatch | Planning | T1 ⬜ T2 ⬜ | none |
+| [#490](https://github.com/DutchJaFO/Quotinator/issues/490) | Check every database in layers, cheapest first, at startup, before a Reset, and on demand | Planning | T1 ⬜ T2 ⬜ | none |
+| [#457](https://github.com/DutchJaFO/Quotinator/issues/457) | The health reason for an unreadable database file misdiagnoses it as a schema-version mismatch | In progress | T1 ⬜ T2 ⬜ | [457-unreadable-database-health-reason-plan.md](457-unreadable-database-health-reason-plan.md) |
+| [#491](https://github.com/DutchJaFO/Quotinator/issues/491) | A Maintenance page that runs the database check and shows its report | Planning | T1 ⬜ T2 ⬜ | none |
+| [#492](https://github.com/DutchJaFO/Quotinator/issues/492) | Retry the database startup from a degraded state, without restarting the container | Planning | T1 ⬜ T2 ⬜ | none |
 | [#454](https://github.com/DutchJaFO/Quotinator/issues/454) | The pages answer a bare 500 when the key ring cannot be used, though /health reports the fault | Planning | T1 ⬜ T2 ⬜ | none |
 | [#455](https://github.com/DutchJaFO/Quotinator/issues/455) | An unusable keys directory is reported as an unwritable data directory, and a Reset clears it from /health while it remains | Planning | T1 ⬜ T2 ⬜ | none |
 | [#456](https://github.com/DutchJaFO/Quotinator/issues/456) | A degraded start on an unwritable data directory offers remedies that cannot fix it | Planning | T1 ⬜ T2 ⬜ | none |
@@ -189,7 +192,10 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #371 ─── (none): Waiting for release
 #368 ─── depends on #303, #304, #390: Planning
 #482 ─── (none); blocks #327, #348, #457: Waiting for release
-#457 ─── depends on #482; blocks #327: Planning
+#490 ─── (none); blocks #457, #491, #492: Planning
+#457 ─── depends on #482, #490; blocks #327: In progress
+#491 ─── depends on #490; soft-relates to #492: Planning
+#492 ─── depends on #490; soft-relates to #491: Planning
 #454 ─── (none); blocks #327, #455, #456: Planning
 #455 ─── depends on #454; blocks #327: Planning
 #456 ─── depends on #454; blocks #327: Planning
@@ -247,38 +253,41 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 42 | **#305** ✅ | Waiting for release |
 | 43 | **#482** ✅ | Waiting for release |
 | 44 | **#348** ✅ | Waiting for release |
-| 45 | **#457** | Planning |
-| 46 | **#454** | Planning |
-| 47 | **#455** | Planning |
-| 48 | **#456** | Planning |
-| 49 | **#453** | Planning |
-| 50 | **#428** | Planning |
-| 51 | **#327** 🚧 | In progress |
-| 52 | **#328** | Planning |
-| 53 | **#329** | Planning |
-| 54 | **#330** | Planning |
-| 55 | **#331** | Planning |
-| 56 | **#324** | Planning |
-| 57 | **#306** | Planning |
-| 58 | **#351** | Planning |
-| 59 | **#381** | Planning |
-| 60 | **#352** | Planning |
-| 61 | **#353** | Planning |
-| 62 | **#360** | Planning |
-| 63 | **#390** | Planning |
-| 64 | **#368** | Planning |
-| 65 | **#416** | Planning |
-| 66 | **#430** | Planning |
-| 67 | **#431** | Planning |
-| 68 | **#438** | Planning |
-| 69 | **#462** | Planning |
-| 70 | **#473** | Planning |
-| 71 | **#475** | Planning |
-| 72 | **#476** | Planning |
-| 73 | **#477** | Planning |
-| 74 | **#478** | Planning |
-| 75 | **#479** | Planning |
-| 76 | **#480** | Planning |
+| 45 | **#490** | Planning |
+| 46 | **#457** 🚧 | In progress; waits for #490 |
+| 47 | **#491** | Planning |
+| 48 | **#492** | Planning |
+| 49 | **#454** | Planning |
+| 50 | **#455** | Planning |
+| 51 | **#456** | Planning |
+| 52 | **#453** | Planning |
+| 53 | **#428** | Planning |
+| 54 | **#327** 🚧 | In progress |
+| 55 | **#328** | Planning |
+| 56 | **#329** | Planning |
+| 57 | **#330** | Planning |
+| 58 | **#331** | Planning |
+| 59 | **#324** | Planning |
+| 60 | **#306** | Planning |
+| 61 | **#351** | Planning |
+| 62 | **#381** | Planning |
+| 63 | **#352** | Planning |
+| 64 | **#353** | Planning |
+| 65 | **#360** | Planning |
+| 66 | **#390** | Planning |
+| 67 | **#368** | Planning |
+| 68 | **#416** | Planning |
+| 69 | **#430** | Planning |
+| 70 | **#431** | Planning |
+| 71 | **#438** | Planning |
+| 72 | **#462** | Planning |
+| 73 | **#473** | Planning |
+| 74 | **#475** | Planning |
+| 75 | **#476** | Planning |
+| 76 | **#477** | Planning |
+| 77 | **#478** | Planning |
+| 78 | **#479** | Planning |
+| 79 | **#480** | Planning |
 
 ---
 
