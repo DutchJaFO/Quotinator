@@ -95,9 +95,19 @@ inconclusive.
 
 | Caller | Depth | What a failure does |
 |---|---|---|
-| Startup, before anything opens the database for writing | Set by `Quotinator:DatabaseStartupCheck` (`Full` by default) | It is returned as an outcome (ADR 022) and degrades startup with a reason |
+| Startup, before anything opens the database for writing, and again after creating or migrating it | Set by `Quotinator:DatabaseStartupCheck` (`Full` by default) | It is returned as an outcome (ADR 022) and degrades startup with a reason |
 | A Reset | Always `Full` | It decides whether the old file is backed up or set aside (below) |
 | The integrity endpoint | Always `Full` | It is reported layer by layer and never thrown |
+
+**A database is validated in the state it starts in (developer, 2026-11-15).** Startup takes one of three
+paths, and the check follows each:
+
+- **No database:** there is no file to check, so the check before writing establishes only that the data
+  directory can be written. The database is created, then checked, then seeded.
+- **An old database:** the check before writing stops startup on a failure in Storage to Indexes, the
+  layers that judge the file itself. A Schema difference is expected, since the migrations have not run,
+  and does not stop it. After migrating, the check runs again, and that result is startup's.
+- **An up-to-date database:** the check before writing is startup's result.
 
 **`Fast` gives up Indexes and References.** An index that disagrees with its table, a broken unique
 constraint or a dangling reference is then not detected at startup. A Reset and the endpoint still detect

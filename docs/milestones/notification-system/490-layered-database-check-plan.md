@@ -265,7 +265,7 @@ foresaw. Neither is interpreted to decide the database's state (ADR 027).
 ## Decisions
 
 Each was raised per `process.md`, Planning step 3. **All five were accepted as recommended (developer,
-2026-11-14).**
+2026-11-14).** F was missed in planning and decided by the developer at step 8 (2026-11-15).
 
 - **A. The engine-neutral contract above** (developer direction, 2026-11-14).
   - *Recommended:* layers named for **what** is checked, an engine's diagnostic carried only as verbatim
@@ -320,6 +320,21 @@ Each was raised per `process.md`, Planning step 3. **All five were accepted as r
     violation can only come from damage, and References can degrade startup.
   - *Alternative:* degrade on any violation, as the issue says, and accept that existing installations
     may degrade on upgrade.
+- **F. Which state of the database startup validates** (developer, 2026-11-15, raised at step 8). The plan
+  placed the check "before anything opens the database for writing" without walking each startup path, and
+  step 7's Schema layer compares against this build's final schema. A database that needs migrating would
+  then fail Schema on every upgrade. Decided: **a database is validated in the state it starts in.**
+
+  | Startup path | Before anything is written | After creating or migrating |
+  |---|---|---|
+  | No database | Storage alone: there is no file yet | The check runs on the new database, before seeding |
+  | Old database | The check runs; a failure in Storage to Indexes stops startup. A Schema difference is expected and does not | The check runs again; its result is startup's, and a Schema failure degrades startup as #305 does |
+  | Up-to-date database | The check runs, and its result is startup's | — |
+
+  ADR 028's *Who calls it* section records the same. **Why it was open:** the plan stated where startup
+  calls the check but never traced the three startup paths against each layer, and step 7 did not question
+  what "the schema its version defines" means before migrations have run. Decisions A to E were the
+  questions identified; this one was missed in planning.
 
 ---
 
@@ -593,7 +608,12 @@ and E. Register it in DI per database through the keyed connection factories tha
 **Status:** ⬜ Not started
 
 - `InitialiseAsync` runs the check right after `MigrateFilenameIfNeeded()`, before the database is opened
-  for writing, and returns a failure as an outcome.
+  for writing, and returns a failure as an outcome. Per decision F, a Schema failure there does not stop
+  it; after creating or migrating, the check runs again and that result is startup's.
+- **Red-first tests decision F adds** (`DatabaseInitializerTests`):
+  `InitialiseAsync_NoDatabase_ChecksTheCreatedDatabase`,
+  `InitialiseAsync_OldDatabase_KeepsTheCheckTakenAfterMigrating`,
+  `InitialiseAsync_MigratedSchemaStillDiffers_ReturnsTheSchemaOutcome`.
 - The changelog initializer runs it too, and keeps its fallback to the JSON files on a failure.
 - Create `StartupDegradationReasons` and move the #348, #350 and #305 cases into it unchanged.
 - Add this issue's reasons:
