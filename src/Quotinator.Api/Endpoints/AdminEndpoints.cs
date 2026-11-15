@@ -11,7 +11,9 @@ using Quotinator.Constants.RateLimiting;
 using Quotinator.Constants.Routes;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
+using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
+using Quotinator.Data.Database.Checks;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
@@ -83,11 +85,20 @@ internal static class AdminEndpoints
             "real seed run, always accurate against a database that already has the relevant rows. " +
             "Use this before calling `reseed` to understand what will be imported.");
 
-        publicGroup.MapGet("/database/integrity", async (IDatabaseInitializer db, ChangelogDatabaseInitializer changelog) =>
+        publicGroup.MapGet("/database/integrity", async (
+            IDatabaseInitializer db, ChangelogDatabaseInitializer changelog,
+            IDatabaseCheck mainCheck, [FromKeyedServices(DatabaseConnectionKeys.Changelog)] IDatabaseCheck changelogCheck) =>
         {
             List<DatabaseIntegrityDto> databases = [];
-            foreach (IIntegrityCheckedDatabase database in new IIntegrityCheckedDatabase[] { db, changelog })
-                databases.Add(ToDto(database.DatabaseName, await database.CheckIntegrityAsync()));
+            foreach ((IIntegrityCheckedDatabase database, IDatabaseCheck check) in
+                new (IIntegrityCheckedDatabase, IDatabaseCheck)[] { (db, mainCheck), (changelog, changelogCheck) })
+            {
+                // #490: always Full, whatever the startup setting (ADR 028). #305's comparison runs only when the
+                // file itself can be read; otherwise the failing layer is the answer, rather than an exception.
+                DatabaseCheckResult result = await check.CheckAsync(DatabaseCheckDepth.Full);
+                SchemaIntegrityResult? integrity = FileCanBeRead(result) ? await database.CheckIntegrityAsync() : null;
+                databases.Add(ToDto(database.DatabaseName, result, integrity));
+            }
 
             return Results.Ok(new DatabaseIntegrityResponse { Databases = databases });
         })
@@ -95,12 +106,17 @@ internal static class AdminEndpoints
         .WithSummary("Check every database's schema against its migration path")
         .Produces<DatabaseIntegrityResponse>(StatusCodes.Status200OK)
         .WithDescription(
-            "Runs the integrity check now on every database the application has (issue #305), comparing each database's " +
-            "tables, columns, foreign keys, indexes, views and triggers with the schema its own migration path defines. " +
-            "Returns, per database, whether it is intact and every difference: `missing` and `different` objects make a " +
-            "database not intact; `extra` objects are reported without doing so, since they mean a migration may have been " +
-            "missed. `200` means the check ran, whatever it found. Writes nothing and never changes the health status; " +
-            "answers while the database is degraded, when it is most useful. CHECK constraints are not compared.");
+            "Checks every database the application has now. Per database, `layers` reports the layered database check " +
+            "(issue #490): storage, format, journal, pages, indexes, references and schema, in that order, each `passed`, " +
+            "`failed`, `inconclusive`, `notrun` (an earlier layer failed) or `skipped`, with the engine's own `finding` and " +
+            "`elapsedMilliseconds`. It always runs at full depth, whatever the startup setting; `isSound` is whether every " +
+            "layer passed. `isIntact` and `differences` are the schema comparison (issue #305): each database's tables, " +
+            "columns, foreign keys, indexes, views and triggers against the schema its own migration path defines. " +
+            "`missing` and `different` objects make a database not intact; `extra` objects are reported without doing so, " +
+            "since they mean a migration may have been missed. When the file itself cannot be read (format, journal or " +
+            "pages did not pass) the schema is not compared: `isIntact` is false and `differences` is empty, and the failing " +
+            "layer says why. `200` means the check ran, whatever it found. Writes nothing and never changes the health " +
+            "status; answers while the database is degraded, when it is most useful. CHECK constraints are not compared.");
 
         publicGroup.MapGet("/audit", async (
             string? table,
@@ -530,13 +546,32 @@ internal static class AdminEndpoints
         IsDeleted       = entity.IsDeleted,
     };
 
-    private static DatabaseIntegrityDto ToDto(string database, SchemaIntegrityResult result) => new()
+    /// <summary>
+    /// Whether the file itself could be read, so its schema can be compared (#490): Storage reached it, and Format,
+    /// Journal and Pages passed. Indexes, References and Schema failing leave it readable.
+    /// </summary>
+    private static bool FileCanBeRead(DatabaseCheckResult check) =>
+        check.Layers.Where(l => l.Layer is DatabaseCheckLayer.Format or DatabaseCheckLayer.Journal or DatabaseCheckLayer.Pages)
+            .All(l => l.Status == DatabaseCheckLayerStatus.Passed);
+
+    private static DatabaseIntegrityDto ToDto(string database, DatabaseCheckResult check, SchemaIntegrityResult? integrity) => new()
     {
         Database    = database,
-        IsIntact    = result.IsIntact,
+        IsSound     = check.IsSound,
+        Layers      =
+        [
+            .. check.Layers.Select(l => new DatabaseCheckLayerDto
+            {
+                Layer               = l.Layer.ToString().ToLowerInvariant(),
+                Status              = l.Status.ToString().ToLowerInvariant(),
+                Finding             = l.Finding,
+                ElapsedMilliseconds = l.Elapsed?.TotalMilliseconds,
+            }),
+        ],
+        IsIntact    = integrity?.IsIntact ?? false,
         Differences =
         [
-            .. result.Differences.Select(d => new SchemaDifferenceDto
+            .. (integrity?.Differences ?? []).Select(d => new SchemaDifferenceDto
             {
                 Kind       = d.Kind.ToString().ToLowerInvariant(),
                 ObjectKind = d.ObjectKind.ToString().ToLowerInvariant(),

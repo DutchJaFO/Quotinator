@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 11)
+**Status:** In progress (step 12)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492.
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 11.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute from step 12.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. Step 6 left one deviation from the verification table for the developer to confirm; it
 is listed under step 6. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
@@ -734,10 +734,27 @@ check is inconclusive, is set aside. If only References or Schema failed, the fi
 
 ### 11. Report every layer from the integrity endpoint
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 - Add the `layers` and `isSound` fields per decision B.
 - Update the endpoint's `[Description]` and `docs/api-endpoints.md` in the same commit.
+
+**Done 2026-11-15.**
+
+- **Fields added, none renamed:** `DatabaseIntegrityDto` gains `isSound` and `layers`, a list of the new
+  `DatabaseCheckLayerDto` (`layer`, `status`, `finding`, `elapsedMilliseconds`, the enum values lower case as
+  the endpoint's other values are). The route and `isIntact`/`differences` are unchanged.
+- **The endpoint** runs each database's registered check (the main one, and the changelog's by its key) at
+  `Full`, then #305's comparison only when Format, Journal and Pages passed, since that comparison opens the
+  file. When they did not, `isIntact` is `false` and `differences` empty, and the failing layer is the answer:
+  a main file that is not a database used to make the endpoint answer `500`.
+- **`isIntact` keeps its #305 meaning** (decision B): an index that disagrees with its table makes a database
+  not sound and leaves it intact.
+- **Tests,** each red first: `IntactDatabases_ReportEveryLayerPassed` (the positive control),
+  `Integrity_CorruptDatabase_ReportsTheFailingLayerInsteadOfThrowing` (answered `500` before),
+  `Integrity_FastSetting_StillReportsEveryLayer` and `Integrity_IndexDisagreesWithItsTable_ReportsTheLayerAndStaysIntact`.
+  The six existing tests of the endpoint still pass.
+- **Documentation:** the endpoint's description and `docs/api-endpoints.md` say the same.
 
 ### 12. T2 documents
 
@@ -813,8 +830,8 @@ says that the database is checked thoroughly at every start, and that the faster
 | 15 | ✅ | Choosing the startup reason is one mapping: this issue's cases are added, and the #348, #350 and #305 cases keep their order and text | Unit test | `StartupDegradationReasonsTests` (one test per case, plus the first-wins order); the existing #348, #350 and #305 `StartupResilienceTests` stay green |
 | 16 | ✅ | *(decision A)* No type the Api layer sees from the check comes from the SQLite library | Unit test | `RepositoryStructureTests.TheDatabaseCheckContract_NamesNoEngineType` |
 | 17 | ✅ | Startup detects an unwritable data directory before the database is opened, degrades on a broken index naming the layer in the startup check it keeps (generic reason until #457), and treats a dangling reference as decision E decides, reporting it in the same check | Unit test | `StartupResilienceTests.Startup_DataDirectoryNotWritable_DetectedBeforeTheDatabaseIsOpened`, `…Startup_IndexDisagreesWithItsTable_DegradesNamingTheLayer`, `…Startup_DanglingReference_StaysHealthyAndReportsTheLayer`; `DatabaseHealthStateTests.RecordStartupCheck_KeepsTheCheckWithoutChangingHealth`, `…MarkHealthy_KeepsTheStartupCheck` |
-| 18 | ❌ | The integrity endpoint reports every layer, with a failing layer instead of throwing, at `Full` whatever the setting | Unit test | `AdminDatabaseIntegrityEndpointTests.Integrity_CorruptDatabase_ReportsTheFailingLayerInsteadOfThrowing`, `…Integrity_FastSetting_StillReportsEveryLayer` |
-| 19 | ❌ | The new strings, the add-on option and the endpoint documentation are complete | Unit test | Existing `TranslationCompletenessTests` and `OpenApiSpecEndpointTests`, plus the add-on option translation tests |
+| 18 | ✅ | The integrity endpoint reports every layer, with a failing layer instead of throwing, at `Full` whatever the setting | Unit test | `AdminDatabaseIntegrityEndpointTests.Integrity_CorruptDatabase_ReportsTheFailingLayerInsteadOfThrowing`, `…Integrity_FastSetting_StillReportsEveryLayer`, `…Integrity_IndexDisagreesWithItsTable_ReportsTheLayerAndStaysIntact`, `…IntactDatabases_ReportEveryLayerPassed` |
+| 19 | ✅ | The new strings, the add-on option and the endpoint documentation are complete | Unit test | Existing `TranslationCompletenessTests` and `OpenApiSpecEndpointTests`, plus `RepositoryStructureTests.EveryAddOnOption_IsTranslatedInEveryLanguage` and `…AddOnDatabaseStartupCheckDefault_MatchesTheApplicationDefault` (built in step 10) |
 | 20 | ❌ | Live: a broken index degrades at startup and recovers through a Reset | Live (T2) | New `startup-and-degradation/NN`; passes on this build, red on `quotinator:canary-490` |
 | 21 | ❌ | Live: with `Fast`, the same database starts healthy, and the endpoint still reports the broken index | Live (T2) | New `startup-and-degradation/NN`; same canary |
 | 22 | ❌ | The full build and test suite are clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all passed |
