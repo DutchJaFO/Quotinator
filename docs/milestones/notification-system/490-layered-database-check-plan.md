@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 4)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492.
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 3.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute from step 4.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
 
@@ -376,9 +376,25 @@ threshold.
 
 ### 3. Add the touched files to the IDE0008/IDE0090 scoped lists
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Every file created or edited goes into `.editorconfig`'s scoped sections the moment it is first touched.
+
+**Done 2026-11-15.**
+
+- **Already in both lists:** every existing file the plan edits except one:
+  - `DatabaseInitializer.cs`, `ChangelogDatabaseInitializer.cs`, `DatabaseOperationResult.cs`, `DatabaseOptions.cs`, `DirectoryWriteProbe.cs`;
+  - `Program.cs`, `AdminEndpoints.cs`, `SchemaIntegrityGuidance.cs`, `KnowledgebaseLinks.cs`;
+  - `DatabaseIntegrityDto.cs`, `DatabaseIntegrityResponse.cs`, `TempDatabase.cs`;
+  - and the tests `DatabaseInitializerTests`, `StartupResilienceTests`, `AdminDatabaseIntegrityEndpointTests`, `StartupSummaryLoggerTests` and `RepositoryStructureTests`.
+- **Added to both lists, before they exist:** the files the plan names.
+  - The contract and the implementation go in a new `Quotinator.Data/Database/Checks/` folder, namespace `Quotinator.Data.Database.Checks`: `IDatabaseCheck.cs`, `DatabaseCheckResult.cs`, `DatabaseCheckLayerResult.cs`, `SqliteDatabaseCheck.cs`.
+  - The three enums go in `Quotinator.Data/Enums/`.
+  - Also `Quotinator.Api/Startup/StartupDegradationReasons.cs`.
+  - The tests: `Quotinator.Data.Tests/Database/Checks/SqliteDatabaseCheckTests.cs`, `Quotinator.Api.Tests/Startup/StartupDegradationReasonsTests.cs` and `Quotinator.Api.Tests/Solution/RepositoryStructureTests.DatabaseCheck.cs`.
+- **Added when first touched, by the step that touches them:**
+  - `StartupSummaryLogger.cs`, which holds seven `var` declarations, at step 10;
+  - each internal layer class, the fixture helper in `Quotinator.Data.Testing` and any new `*Guidance` class, under names their steps choose.
 
 ### 4. Write the ADR before the code
 
