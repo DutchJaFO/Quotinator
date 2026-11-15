@@ -34,6 +34,10 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Quotinator.Data.Tests</_Parameter1>
     </AssemblyAttribute>
+    <!-- #490: the documented-format fixtures read a root page number through Sql, where every query lives. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Quotinator.Data.Testing</_Parameter1>
+    </AssemblyAttribute>
     <!-- #348: Data's log templates are rendered through Serilog in the Api tests, where the capture sink lives. -->
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Quotinator.Api.Tests</_Parameter1>

@@ -64,12 +64,14 @@ public sealed class DatabaseOperationResult
     public bool SchemaNotIntact { get; init; }
 
     /// <summary>
-    /// The database check that stopped the operation before it opened the database for writing (#490,
-    /// ADR 028), when that is what stopped it. Its <see cref="DatabaseCheckResult.FirstFailure"/> names the
-    /// layer; a caller maps that to what an operator reads. <see langword="null"/> when the check passed or
-    /// did not stop the operation.
+    /// The database check that ran before the operation opened the database for writing (#490, ADR 028),
+    /// whatever it found, or <see langword="null"/> when none ran. When it stopped the operation,
+    /// <see cref="Succeeded"/> is <see langword="false"/>. A finding that does not stop it, a References
+    /// failure under decision E, is carried on a successful result, so a caller can report it without
+    /// reading a log. Its <see cref="DatabaseCheckResult.FirstFailure"/> names the layer; a caller maps that
+    /// to what an operator reads.
     /// </summary>
-    public DatabaseCheckResult? StoppingCheck { get; init; }
+    public DatabaseCheckResult? Check { get; init; }
 
     /// <summary>
     /// An operation stopped by the database check (#490): the check failed or was inconclusive, so nothing
@@ -78,7 +80,7 @@ public sealed class DatabaseOperationResult
     /// <param name="check">The check that stopped it.</param>
     public static DatabaseOperationResult StoppedByCheck(DatabaseCheckResult check) =>
         new()
-        { Succeeded = false, StoppingCheck = check };
+        { Succeeded = false, Check = check };
 
     /// <summary>
     /// An operation that stopped because the schema does not match its migration path (#305): nothing was
@@ -90,9 +92,10 @@ public sealed class DatabaseOperationResult
 
     /// <summary>A successful operation.</summary>
     /// <param name="restorePoint">What it left behind to restore from, when it replaced the database.</param>
-    public static DatabaseOperationResult Success(RestorePointResult? restorePoint = null) =>
+    /// <param name="check">The database check that ran first, when one did (#490).</param>
+    public static DatabaseOperationResult Success(RestorePointResult? restorePoint = null, DatabaseCheckResult? check = null) =>
         new()
-        { Succeeded = true, RestorePoint = restorePoint };
+        { Succeeded = true, RestorePoint = restorePoint, Check = check };
 
     /// <summary>An operation refused because no backup could be taken.</summary>
     /// <param name="obstacle">Which obstacle stopped it.</param>

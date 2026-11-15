@@ -819,5 +819,12 @@ internal static class Sql
         /// <summary>Every view or trigger, by <c>@type</c>, with the table it belongs to.</summary>
         internal const string SelectObjectsOfType =
             "SELECT name, tbl_name FROM sqlite_master WHERE type = @type ORDER BY name;";
+
+        /// <summary>
+        /// The page number of one table's or index's root b-tree page, by <c>@name</c> (fileformat.html §2.6).
+        /// Read by the database check's test fixtures (#490), which locate a page to damage through it.
+        /// </summary>
+        internal static readonly string SelectRootPage =
+            $"SELECT rootpage FROM sqlite_master WHERE {TextClauses.Equals("name", "name")};";
     }
 }

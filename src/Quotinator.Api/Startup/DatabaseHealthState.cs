@@ -1,3 +1,5 @@
+using Quotinator.Data.Database.Checks;
+
 namespace Quotinator.Api.Startup;
 
 /// <summary>
@@ -18,6 +20,14 @@ internal sealed class DatabaseHealthState
     public string? FailureReason { get; private set; }
 
     /// <summary>
+    /// The check startup ran on the main database (#490, ADR 028), whatever it found, or
+    /// <see langword="null"/> when none ran. It names the layer a degraded start failed at, and a finding
+    /// that leaves startup healthy, a References failure under decision E, so either is a result a caller
+    /// reads rather than a line in a log. A Reset does not replace it: it is what startup found.
+    /// </summary>
+    public DatabaseCheckResult? StartupCheck { get; private set; }
+
+    /// <summary>
     /// Raised when <see cref="IsHealthy"/> actually changes, so a rendered component can react to a
     /// repair instead of being reloaded into the new state (#350).
     /// </summary>
@@ -34,6 +44,13 @@ internal sealed class DatabaseHealthState
     /// </para>
     /// </remarks>
     public event Action? Changed;
+
+    /// <summary>
+    /// Records the check startup ran on the main database (#490). It changes no health: whether the check
+    /// degrades startup is decided by the caller, through <see cref="MarkFailed"/>.
+    /// </summary>
+    /// <param name="check">What the check found.</param>
+    public void RecordStartupCheck(DatabaseCheckResult check) => StartupCheck = check;
 
     /// <summary>
     /// Records that startup database initialisation failed. Idempotent: a second call is a no-op,

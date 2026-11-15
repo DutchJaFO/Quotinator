@@ -744,6 +744,78 @@ public class StartupResilienceTests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
 
+    /// <summary>
+    /// #490, row 17's positive control: a restart over an intact database is healthy, and keeps the check it
+    /// ran with every layer passed.
+    /// </summary>
+    [TestMethod]
+    public void Startup_RestartOverAnIntactDatabase_KeepsAPassedStartupCheck()
+    {
+        using WebApplicationFactory<Program> factory = FactoryOverAnIntactDatabase();
+
+        using HttpClient client = factory.CreateClient();
+        DatabaseHealthState health = factory.Services.GetRequiredService<DatabaseHealthState>();
+
+        Assert.IsTrue(health.IsHealthy, health.FailureReason);
+        Assert.IsNotNull(health.StartupCheck, "Startup kept no check.");
+        Assert.IsTrue(health.StartupCheck.IsSound, $"First failure: {health.StartupCheck.FirstFailure?.Layer}");
+        Assert.AreEqual(DatabaseCheckDepth.Full, health.StartupCheck.Depth);
+    }
+
+    /// <summary>
+    /// #490, row 17: the Storage layer finds an unwritable data directory before the database is opened, not
+    /// by opening it. The database and both its sidecars already exist and are writable, so SQLite itself
+    /// would open the database without complaint and nothing else would notice; only the check's directory
+    /// probe can. A Reset would then fail to write, which is why #326's reason says it cannot help.
+    /// </summary>
+    [TestMethod]
+    public void Startup_DataDirectoryNotWritable_DetectedBeforeTheDatabaseIsOpened()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithExistingSidecarsInAnUnwritableDataDirectory();
+
+        using HttpClient client = factory.CreateClient();
+        DatabaseHealthState health = factory.Services.GetRequiredService<DatabaseHealthState>();
+
+        Assert.IsFalse(health.IsHealthy, "Startup was healthy in a data directory nothing can be created in.");
+        Assert.AreEqual(StartupDegradationReasons.DataDirectoryNotWritable, health.FailureReason);
+    }
+
+    /// <summary>
+    /// #490, row 17: an index that disagrees with its table, which <c>quick_check</c> does not detect, degrades
+    /// startup, and the check startup kept names the layer. The operator's reason is the generic one until
+    /// #457 gives each layer its own (step 8).
+    /// </summary>
+    [TestMethod]
+    public void Startup_IndexDisagreesWithItsTable_DegradesNamingTheLayer()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithAnIndexThatDisagreesWithItsTable();
+
+        using HttpClient client = factory.CreateClient();
+        DatabaseHealthState health = factory.Services.GetRequiredService<DatabaseHealthState>();
+
+        Assert.IsFalse(health.IsHealthy, "Startup was healthy over an index that disagrees with its table.");
+        Assert.AreEqual(StartupDegradationReasons.InitialisationFailed, health.FailureReason);
+        Assert.AreEqual(DatabaseCheckLayer.Indexes, health.StartupCheck?.FirstFailure?.Layer, "The startup check does not name the failing layer.");
+    }
+
+    /// <summary>
+    /// #490, row 17, decision E: until #493 makes enforcement explicit, a dangling reference may be the
+    /// application's own, so it does not degrade startup. The check startup kept still reports it, as a result
+    /// rather than only a log line.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_DanglingReference_StaysHealthyAndReportsTheLayer()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithADanglingReference();
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+        DatabaseHealthState health = factory.Services.GetRequiredService<DatabaseHealthState>();
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, health.FailureReason);
+        Assert.AreEqual(DatabaseCheckLayer.References, health.StartupCheck?.FirstFailure?.Layer, "The startup check does not report the dangling reference.");
+    }
+
     private const string HealthRoute = "/api/v1/health";
     private const string VersionRoute = "/api/v1/version";
     private const string RandomQuoteRoute = "/api/v1/quotes/random";
@@ -817,6 +889,77 @@ public class StartupResilienceTests
         File.Delete(database + "-shm");
         using (FileStream file = new(database, FileMode.Open, FileAccess.Write))
             file.SetLength(file.Length / 2);
+
+        return FactoryFor(dataDirectory);
+    }
+
+    /// <summary>
+    /// #490: a migrated database whose <c>-wal</c> holds data and whose <c>-shm</c> exists, in a data directory
+    /// no file can be created in. Every file SQLite needs is already there and writable, so opening the
+    /// database succeeds; only a probe of the directory shows it cannot be written. Denied per platform, as
+    /// <see cref="FactoryWithKeysDirectoryNotWritable"/> does, and lifted in <see cref="RemoveTemporaryDirectories"/>.
+    /// </summary>
+    private WebApplicationFactory<Program> FactoryWithExistingSidecarsInAnUnwritableDataDirectory()
+    {
+        string dataDirectory = DataDirectoryWithAMigratedDatabase();
+        string database = Path.Combine(dataDirectory, DataPaths.DatabaseFile);
+        File.Delete(database + "-wal");
+        File.Delete(database + "-shm");
+
+        DocumentedFormatFixtures.AddWalHoldingData(database, "CREATE TABLE AddedInTheWal (Id INTEGER PRIMARY KEY);");
+        File.WriteAllBytes(database + "-shm", []);
+
+        if (OperatingSystem.IsWindows())
+        {
+            DirectoryInfo directory = new(dataDirectory);
+            System.Security.AccessControl.DirectorySecurity security = directory.GetAccessControl();
+            security.AddAccessRule(WriteDenial());
+            directory.SetAccessControl(security);
+        }
+        else
+        {
+            File.SetUnixFileMode(dataDirectory, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+
+        _deniedDirectories.Add(dataDirectory);
+        Assert.IsFalse(DirectoryWriteProbe.CanCreateFileIn(dataDirectory), "Precondition: the data directory can still be written.");
+
+        return FactoryFor(dataDirectory);
+    }
+
+    /// <summary>
+    /// #490: a migrated database with an extra table whose index entry was rewritten in place, through the
+    /// documented record format, so the index no longer agrees with its table. Extra objects leave the schema
+    /// intact (#305), so this is the database's only fault.
+    /// </summary>
+    private WebApplicationFactory<Program> FactoryWithAnIndexThatDisagreesWithItsTable()
+    {
+        string dataDirectory = DataDirectoryWithAMigratedDatabase();
+        string database = Path.Combine(dataDirectory, DataPaths.DatabaseFile);
+        File.Delete(database + "-wal");
+        File.Delete(database + "-shm");
+
+        DocumentedFormatFixtures.Execute(database,
+            "CREATE TABLE CheckFixture (Id INTEGER PRIMARY KEY, Rank INTEGER NOT NULL);",
+            "CREATE INDEX IX_CheckFixture_Rank ON CheckFixture (Rank);",
+            "INSERT INTO CheckFixture (Id, Rank) VALUES (1, 10), (2, 20), (3, 30), (4, 40), (5, 50);");
+        DocumentedFormatFixtures.RewriteLastIndexKey(database, "IX_CheckFixture_Rank", 100);
+
+        return FactoryFor(dataDirectory);
+    }
+
+    /// <summary>#490: a migrated database with an extra row that references one that does not exist.</summary>
+    private WebApplicationFactory<Program> FactoryWithADanglingReference()
+    {
+        string dataDirectory = DataDirectoryWithAMigratedDatabase();
+        string database = Path.Combine(dataDirectory, DataPaths.DatabaseFile);
+        File.Delete(database + "-wal");
+        File.Delete(database + "-shm");
+
+        DocumentedFormatFixtures.Execute(database,
+            "CREATE TABLE CheckParent (Id INTEGER PRIMARY KEY);",
+            "CREATE TABLE CheckChild (Id INTEGER PRIMARY KEY, ParentId INTEGER NOT NULL REFERENCES CheckParent (Id));");
+        DocumentedFormatFixtures.WriteWithoutForeignKeyEnforcement(database, "INSERT INTO CheckChild (Id, ParentId) VALUES (1, 999);");
 
         return FactoryFor(dataDirectory);
     }

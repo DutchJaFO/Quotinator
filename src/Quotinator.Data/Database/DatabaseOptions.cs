@@ -1,3 +1,5 @@
+using Quotinator.Data.Enums;
+
 namespace Quotinator.Data.Database;
 
 /// <summary>Runtime paths and settings passed to <see cref="DatabaseInitializer"/> at startup.</summary>
@@ -36,4 +38,11 @@ public sealed record DatabaseOptions
 
     /// <summary>The default operating quota, as a percentage of <see cref="MaxBackupStorageGb"/>.</summary>
     public const int DefaultBackupQuotaPercent = 90;
+
+    /// <summary>
+    /// How thoroughly the database is checked at startup (#490, ADR 028). <see cref="DatabaseCheckDepth.Full"/>
+    /// by default. A Reset and the integrity endpoint always check at <see cref="DatabaseCheckDepth.Full"/>,
+    /// whatever this says.
+    /// </summary>
+    public DatabaseCheckDepth StartupCheckDepth { get; init; } = DatabaseCheckDepth.Full;
 }

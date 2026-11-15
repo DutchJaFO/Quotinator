@@ -66,10 +66,10 @@ public partial class DatabaseInitializerTests
         IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null,
         ISourceCacheUpdater? sourceCacheUpdater = null, bool autoUpdateSources = false,
         IAppVersionTracker? appVersionTracker = null, ILogger<DatabaseInitializer>? logger = null,
-        IChangeWriter? changeWriter = null)
+        IChangeWriter? changeWriter = null, DatabaseCheckDepth startupCheckDepth = DatabaseCheckDepth.Full)
         => CreateInitializer(batches, QuotinatorMigrations.All, useBaseline, ruleFileOverridePathResolver, sourceFileOverrideRegistry,
             autoPurgeBundledImportActions, autoPurgeUserImportActions, auditWriter, diskSpaceProvider, maxBackupStorageGb,
-            sourceCacheUpdater, autoUpdateSources, appVersionTracker, logger, changeWriter);
+            sourceCacheUpdater, autoUpdateSources, appVersionTracker, logger, changeWriter, startupCheckDepth);
 
     private QuotinatorDatabaseInitializer CreateInitializer(
         IReadOnlyList<SeedBatch> batches, IReadOnlyList<SchemaMigration> migrations, bool useBaseline,
@@ -79,10 +79,13 @@ public partial class DatabaseInitializerTests
         IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null,
         ISourceCacheUpdater? sourceCacheUpdater = null, bool autoUpdateSources = false,
         IAppVersionTracker? appVersionTracker = null, ILogger<DatabaseInitializer>? logger = null,
-        IChangeWriter? changeWriter = null)
+        IChangeWriter? changeWriter = null, DatabaseCheckDepth startupCheckDepth = DatabaseCheckDepth.Full)
     {
         SqliteConnectionFactory factory       = new(_dbPath);
-        DatabaseOptions options       = new() { DbPath = _dbPath, BackupsPath = _backups, MaxBackupStorageGb = maxBackupStorageGb ?? 1 };
+        DatabaseOptions options       = new()
+        {
+            DbPath = _dbPath, BackupsPath = _backups, MaxBackupStorageGb = maxBackupStorageGb ?? 1, StartupCheckDepth = startupCheckDepth,
+        };
         SqliteImportBatchRepository importBatches = new(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         ILogger<DatabaseInitializer> resolvedLogger = logger ?? NullLogger<DatabaseInitializer>.Instance;
         ImportActionReader actionReader   = new(factory);

@@ -1,11 +1,45 @@
 using Quotinator.Api.Enums;
 using Quotinator.Api.Startup;
+using Quotinator.Data.Database.Checks;
+using Quotinator.Data.Enums;
 
 namespace Quotinator.Api.Tests.Startup;
 
 [TestClass]
 public class DatabaseHealthStateTests
 {
+    /// <summary>#490: the startup check is kept as a result, and recording it decides nothing about health.</summary>
+    [TestMethod]
+    public void RecordStartupCheck_KeepsTheCheckWithoutChangingHealth()
+    {
+        DatabaseHealthState state = new();
+        DatabaseCheckResult check = new()
+        {
+            DatabaseName = "main",
+            Depth        = DatabaseCheckDepth.Full,
+            Layers       = [new DatabaseCheckLayerResult { Layer = DatabaseCheckLayer.References, Status = DatabaseCheckLayerStatus.Failed }],
+        };
+
+        state.RecordStartupCheck(check);
+
+        Assert.AreSame(check, state.StartupCheck);
+        Assert.IsTrue(state.IsHealthy, "Recording a check changed health; only MarkFailed may.");
+    }
+
+    /// <summary>#490: the startup check is what startup found, so a repair that restores health does not clear it.</summary>
+    [TestMethod]
+    public void MarkHealthy_KeepsTheStartupCheck()
+    {
+        DatabaseHealthState state = new();
+        DatabaseCheckResult check = new() { DatabaseName = "main", Depth = DatabaseCheckDepth.Full, Layers = [] };
+        state.RecordStartupCheck(check);
+        state.MarkFailed("broken index");
+
+        state.MarkHealthy();
+
+        Assert.AreSame(check, state.StartupCheck);
+    }
+
     [TestMethod]
     public void NewInstance_IsHealthyByDefault()
     {

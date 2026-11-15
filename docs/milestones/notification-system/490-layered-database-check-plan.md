@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 6)
+**Status:** In progress (step 7)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492.
@@ -9,8 +9,9 @@
 
 ## Next action
 
-**Execute from step 6.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
-follow-up is #493. The plan is built against the code at `342e0cfa` and the sqlite.org
+**Execute from step 7.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+follow-up is #493. Step 6 left one deviation from the verification table for the developer to confirm; it
+is listed under step 6. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
 
 ---
@@ -308,7 +309,8 @@ Each was raised per `process.md`, Planning step 3. **All five were accepted as r
   option, is turned off during migrations and Rebuild, and ADR 014 keeps dangling references on purpose.
   A healthy installation would then degrade on upgrade.
   - *Recommended:* the References layer runs, and its failure:
-    - is logged at Warning and reported by the endpoint and #491;
+    - is logged at Warning, kept in the startup check on `DatabaseHealthState`, and reported by the
+      endpoint and #491;
     - makes a Reset back the file up;
     - does **not** degrade startup.
 
@@ -460,7 +462,7 @@ fail on their assertions.
 
 ### 6. Write the failing tests and confirm them red
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Every unit test in *Verification* rows 1 to 17 is written and run against the code before step 7. Each
 must fail for the reason it names.
@@ -479,6 +481,78 @@ must fail for the reason it names.
 
 Each fixture asserts its own precondition (for example, that the in-header size is valid) before the test
 uses it.
+
+**Done 2026-11-15.**
+
+- **The fixture helper** is `Quotinator.Data.Testing/Database/DocumentedFormatFixtures`. Each method cites
+  the `fileformat.html` section whose bytes it writes, and throws if its precondition does not hold:
+  - `WriteNotADatabase`, `TruncateToHalf`, `DamageRootPageType`, `RewriteLastIndexKey`;
+  - `CorruptWalMagic`, `CorruptWalHeaderChecksum`;
+  - `WriteWithoutForeignKeyEnforcement`. It turns enforcement off explicitly, because the bundled library
+    turns it on by default;
+  - `Create`, `Execute`, `CreateWithWalHoldingData` and `AddWalHoldingData`, which build the healthy and
+    `-wal`-holding databases the damage starts from. A `-wal` holding data is made by copying the files
+    while a connection is still open, because closing the last connection checkpoints and deletes it.
+- **The signatures, with no behaviour:**
+  - `SqliteDatabaseCheck(databaseName, databasePath, workFolder, expectedSchemaScripts, canCreateFileIn)`.
+    `canCreateFileIn` defaults to `DirectoryWriteProbe.CanCreateFileIn`, and a test supplies its own,
+    because not every platform lets a test make a directory unwritable. `WorkFolderName` is
+    `.database-check`. `CheckAsync` reports every layer `NotRun`, a default no test expects, until step 7.
+  - `StartupDegradationReasons.For(initialisation, overshootDetected, dataVersion, appVersion, integrity)`
+    throws `NotImplementedException` until step 8. Its first draft returned `null`, which is the outcome
+    two of its tests expect, so they were green without ever being red; throwing makes every one red. It
+    holds the texts `DataDirectoryNotWritable` and `InitialisationFailed`, copied from `Program.cs`, which
+    keeps its own until step 8 moves the cases, and the new `CheckInconclusive` text.
+  - `DatabaseOptions.StartupCheckDepth`, defaulting to `Full`, which step 10 binds to the setting.
+- **The tests:**
+  - `SqliteDatabaseCheckTests` covers rows 1 to 12;
+  - `DatabaseInitializerTests.DatabaseCheck.cs` covers rows 13 and 14, against real migrated databases
+    with extra objects added and damaged;
+  - `StartupDegradationReasonsTests` covers row 15;
+  - `RepositoryStructureTests.DatabaseCheck.cs` covers row 16;
+  - `StartupResilienceTests` covers row 17.
+- **Positive controls**, per the testing policy's *Every test proves the positive result as well as the
+  negative*: `SqliteDatabaseCheckTests.Check_HealthyDatabase_PassesEveryLayer`,
+  `DatabaseInitializerTests.InitialiseAsync_HealthyDatabase_SucceedsCarryingAPassedCheck`,
+  `StartupResilienceTests.Startup_RestartOverAnIntactDatabase_KeepsAPassedStartupCheck` and
+  `StartupDegradationReasonsTests.For_Success_IsNoReason`. For the set-aside Resets,
+  `ResetAsync_DanglingReference_BacksTheFileUp` is the control: a sound copy is still backed up.
+- **Confirmed red:** every fixture built without tripping its precondition, and every test fails where it
+  names, on its assertion or on the `NotImplementedException` of a signature. Two tests describe behaviour
+  that already holds before this issue, so no run against the code before the issue can make them red. Each
+  was proven by mutation, per *Red first means signatures first*, then reverted with `git checkout`:
+  - `RepositoryStructureTests.TheDatabaseCheckContract_NamesNoEngineType`: a `SqliteConnection` property
+    added to `DatabaseCheckResult` made it fail, naming `DatabaseCheckResult.Leak`.
+  - `DatabaseInitializerTests.ResetAsync_DanglingReference_BacksTheFileUp`: `IsDatabaseFileReadable`
+    returning `false` for every existing file made it fail on the backup count.
+- **`DatabaseHealthState.RecordStartupCheck` is implemented here**, because row 17 needs its result.
+  Its first draft was written together with its signature, so its two tests were never red: the trap *Red
+  first means signatures first* names. It was put back to `throw new NotImplementedException()`, both
+  tests ran red, and then it was implemented and both ran green.
+- **Added beyond the plan:** `Check_NoDatabaseFileYet_PassesWithNothingToCheck`. A first start has no
+  database file, and a Reset creates one, so neither may fail the check. Storage passes, and each later layer
+  passes with a finding saying there was nothing to check, so the report keeps its shape. This follows the
+  contract's rule for a layer that does not apply.
+- **A test is never validated through a log (developer, 2026-11-15).** Where a test needs a result, the
+  result is built now. Row 17 needs the failing layer of a degraded start, and a References failure that
+  leaves startup healthy, so both are now results:
+  - `DatabaseOperationResult.Check` replaces step 5's `StoppingCheck`. It carries the check that ran,
+    whatever it found, so a References failure travels on a successful result (`Success(check: …)`).
+  - `DatabaseHealthState.StartupCheck`, set through `RecordStartupCheck`, keeps the main database's
+    startup check. Recording it changes no health, and a Reset does not clear it. Its tests are in
+    `DatabaseHealthStateTests`; step 8 makes `Program.cs` record it.
+  - Row 17's tests read the failing layer from `StartupCheck`, so they keep the plan's intent under the
+    names `Startup_IndexDisagreesWithItsTable_DegradesNamingTheLayer` and
+    `Startup_DanglingReference_StaysHealthyAndReportsTheLayer`. The operator's reason for a broken index is
+    still the generic one until #457 (step 8).
+- **Deviation for the developer to confirm:** row 13 uses an index that disagrees with its table, not a file
+  that is not a database. Today a file that is not a database makes `InitialiseAsync` throw, so the test
+  would fail on an exception rather than on its assertion. A broken index is opened and written to today,
+  which the test observes as a `-wal` and `-shm` appearing beside the file.
+- **How row 17's unwritable directory is observed:** the database's `-wal` and `-shm` already exist and are
+  writable, so SQLite opens the database without complaint, and today startup is healthy. Only the check's
+  directory probe can detect it. Denied with a Windows deny ACE, or owner read and execute elsewhere, as
+  the existing keys-directory test does.
 
 ### 7. Implement the SQLite layers
 
@@ -600,7 +674,7 @@ says that the database is checked thoroughly at every start, and that the faster
 | 14 | ❌ | A Reset sets aside a file with a broken index or an inconclusive check, backs up one with a dangling reference, and always checks at `Full` | Unit test | `DatabaseInitializerTests.ResetAsync_IndexDisagreesWithItsTable_SetsTheFileAside`, `…ResetAsync_CheckInconclusive_SetsTheFileAside`, `…ResetAsync_DanglingReference_BacksTheFileUp`, `…ResetAsync_FastSetting_StillRunsEveryLayer` |
 | 15 | ❌ | Choosing the startup reason is one mapping: this issue's cases are added, and the #348, #350 and #305 cases keep their order and text | Unit test | `StartupDegradationReasonsTests` (one test per case, plus the first-wins order); the existing #348, #350 and #305 `StartupResilienceTests` stay green |
 | 16 | ❌ | *(decision A)* No type the Api layer sees from the check comes from the SQLite library | Unit test | `RepositoryStructureTests.TheDatabaseCheckContract_NamesNoEngineType` |
-| 17 | ❌ | Startup detects an unwritable data directory before the database is opened, degrades on a broken index naming the layer, and treats a dangling reference as decision E decides | Unit test | `StartupResilienceTests.Startup_DataDirectoryNotWritable_DetectedBeforeTheDatabaseIsOpened`, `…Startup_IndexDisagreesWithItsTable_DegradesNamingTheLayer`, `…Startup_DanglingReference_StaysHealthyAndLogsAWarning` (or `…_DegradesNamingTheLayer` under E's alternative) |
+| 17 | ❌ | Startup detects an unwritable data directory before the database is opened, degrades on a broken index naming the layer in the startup check it keeps (generic reason until #457), and treats a dangling reference as decision E decides, reporting it in the same check | Unit test | `StartupResilienceTests.Startup_DataDirectoryNotWritable_DetectedBeforeTheDatabaseIsOpened`, `…Startup_IndexDisagreesWithItsTable_DegradesNamingTheLayer`, `…Startup_DanglingReference_StaysHealthyAndReportsTheLayer`; `DatabaseHealthStateTests.RecordStartupCheck_KeepsTheCheckWithoutChangingHealth`, `…MarkHealthy_KeepsTheStartupCheck` |
 | 18 | ❌ | The integrity endpoint reports every layer, with a failing layer instead of throwing, at `Full` whatever the setting | Unit test | `AdminDatabaseIntegrityEndpointTests.Integrity_CorruptDatabase_ReportsTheFailingLayerInsteadOfThrowing`, `…Integrity_FastSetting_StillReportsEveryLayer` |
 | 19 | ❌ | The new strings, the add-on option and the endpoint documentation are complete | Unit test | Existing `TranslationCompletenessTests` and `OpenApiSpecEndpointTests`, plus the add-on option translation tests |
 | 20 | ❌ | Live: a broken index degrades at startup and recovers through a Reset | Live (T2) | New `startup-and-degradation/NN`; passes on this build, red on `quotinator:canary-490` |
