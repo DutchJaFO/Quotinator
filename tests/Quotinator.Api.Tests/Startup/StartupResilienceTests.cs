@@ -745,6 +745,26 @@ public class StartupResilienceTests
     }
 
     /// <summary>
+    /// #490, step 10: with <c>Quotinator:DatabaseStartupCheck</c> at <c>Fast</c>, startup skips Indexes and
+    /// References, so a database whose only fault is an index that disagrees with its table starts healthy. The
+    /// check it kept says it ran at <c>Fast</c> and skipped those layers, rather than claiming they passed.
+    /// </summary>
+    [TestMethod]
+    public void Startup_FastSetting_SkipsIndexesAndStaysHealthyOverABrokenIndex()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithAnIndexThatDisagreesWithItsTable(("Quotinator:DatabaseStartupCheck", "fast"));
+
+        using HttpClient client = factory.CreateClient();
+        DatabaseHealthState health = factory.Services.GetRequiredService<DatabaseHealthState>();
+
+        Assert.IsTrue(health.IsHealthy, health.FailureReason);
+        Assert.IsNotNull(health.StartupCheck, "Startup kept no check.");
+        Assert.AreEqual(DatabaseCheckDepth.Fast, health.StartupCheck.Depth, "Startup did not check at the configured depth.");
+        Assert.AreEqual(DatabaseCheckLayerStatus.Skipped, health.StartupCheck.Layers.Single(l => l.Layer == DatabaseCheckLayer.Indexes).Status);
+        Assert.AreEqual(DatabaseCheckLayerStatus.Skipped, health.StartupCheck.Layers.Single(l => l.Layer == DatabaseCheckLayer.References).Status);
+    }
+
+    /// <summary>
     /// #490, row 17's positive control: a restart over an intact database is healthy, and keeps the check it
     /// ran with every layer passed.
     /// </summary>
@@ -932,7 +952,7 @@ public class StartupResilienceTests
     /// documented record format, so the index no longer agrees with its table. Extra objects leave the schema
     /// intact (#305), so this is the database's only fault.
     /// </summary>
-    private WebApplicationFactory<Program> FactoryWithAnIndexThatDisagreesWithItsTable()
+    private WebApplicationFactory<Program> FactoryWithAnIndexThatDisagreesWithItsTable(params (string Key, string Value)[] settings)
     {
         string dataDirectory = DataDirectoryWithAMigratedDatabase();
         string database = Path.Combine(dataDirectory, DataPaths.DatabaseFile);
@@ -945,7 +965,7 @@ public class StartupResilienceTests
             "INSERT INTO CheckFixture (Id, Rank) VALUES (1, 10), (2, 20), (3, 30), (4, 40), (5, 50);");
         DocumentedFormatFixtures.RewriteLastIndexKey(database, "IX_CheckFixture_Rank", 100);
 
-        return FactoryFor(dataDirectory);
+        return FactoryFor(dataDirectory, settings);
     }
 
     /// <summary>#490: a migrated database with an extra row that references one that does not exist.</summary>
@@ -1137,10 +1157,12 @@ public class StartupResilienceTests
         return FactoryFor(dataDirectory);
     }
 
-    private static WebApplicationFactory<Program> FactoryFor(string dataDirectory) =>
+    private static WebApplicationFactory<Program> FactoryFor(string dataDirectory, params (string Key, string Value)[] settings) =>
         new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
             builder.UseSetting("Quotinator:DataDir", dataDirectory);
+            foreach ((string key, string value) in settings)
+                builder.UseSetting(key, value);
         });
 
     private string NewDataDirectory()

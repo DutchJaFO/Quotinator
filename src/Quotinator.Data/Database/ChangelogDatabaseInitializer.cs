@@ -49,7 +49,7 @@ public sealed class ChangelogDatabaseInitializer(
     // a second migration exists, matching DatabaseInitializer's own baseline/incremental separation.
     private const string BaselineSql = ChangelogContentMigrations.CreateChangelogTables;
 
-    /// <summary>The current schema version, available after <see cref="InitialiseAsync()"/> completes.</summary>
+    /// <summary>The current schema version, available after <see cref="InitialiseAsync(DatabaseCheckDepth)"/> completes.</summary>
     public int SchemaVersion { get; private set; }
 
     /// <inheritdoc/>
@@ -84,25 +84,28 @@ public sealed class ChangelogDatabaseInitializer(
     /// Checks the database (#490), then applies the baseline (genuinely empty database) or any pending
     /// migrations. A result that did not succeed is never thrown: the caller falls back to the JSON files.
     /// </summary>
-    public Task<DatabaseOperationResult> InitialiseAsync() => InitialiseAsync(forceIncremental: false);
+    /// <param name="depth">How thoroughly to check: the startup setting, <c>Full</c> when omitted.</param>
+    public Task<DatabaseOperationResult> InitialiseAsync(DatabaseCheckDepth depth = DatabaseCheckDepth.Full) =>
+        InitialiseAsync(forceIncremental: false, depth);
 
     /// <summary>
     /// Test-only entry point that forces the incremental path even on an empty database, bypassing
     /// the baseline short-circuit — used by the schema-drift parity test to produce a "pure
     /// incremental" comparison database, mirroring <see cref="DatabaseInitializer.InitialiseForTestingAsync"/>.
     /// </summary>
-    internal Task<DatabaseOperationResult> InitialiseForTestingAsync(bool forceIncremental) => InitialiseAsync(forceIncremental);
+    internal Task<DatabaseOperationResult> InitialiseForTestingAsync(bool forceIncremental) =>
+        InitialiseAsync(forceIncremental, DatabaseCheckDepth.Full);
 
-    private async Task<DatabaseOperationResult> InitialiseAsync(bool forceIncremental)
+    private async Task<DatabaseOperationResult> InitialiseAsync(bool forceIncremental, DatabaseCheckDepth depth)
     {
         // #490, decision F: judged in the state it starts in, and again once it has been created or migrated.
-        DatabaseCheckResult check = await CheckAsync();
+        DatabaseCheckResult check = await CheckAsync(depth);
         if (StartupDatabaseCheck.Stops(check))
             return DatabaseOperationResult.StoppedByCheck(check);
 
         if (await ApplySchemaAsync(forceIncremental))
         {
-            check = await CheckAsync();
+            check = await CheckAsync(depth);
             if (StartupDatabaseCheck.Stops(check))
                 return DatabaseOperationResult.StoppedByCheck(check);
         }
@@ -113,9 +116,9 @@ public sealed class ChangelogDatabaseInitializer(
             : DatabaseOperationResult.Success(check: check);
     }
 
-    private async Task<DatabaseCheckResult> CheckAsync()
+    private async Task<DatabaseCheckResult> CheckAsync(DatabaseCheckDepth depth)
     {
-        DatabaseCheckResult check = await databaseCheck.CheckAsync(DatabaseCheckDepth.Full);
+        DatabaseCheckResult check = await databaseCheck.CheckAsync(depth);
         StartupDatabaseCheck.Log(logger, check);
         return check;
     }

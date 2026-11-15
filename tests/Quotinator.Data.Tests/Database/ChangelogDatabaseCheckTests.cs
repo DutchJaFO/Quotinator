@@ -71,6 +71,21 @@ public class ChangelogDatabaseCheckTests
         Assert.IsTrue(result.Check.IsSound, $"First failure: {result.Check.FirstFailure?.Layer} ({result.Check.FirstFailure?.Finding})");
     }
 
+    /// <summary>The startup setting reaches the changelog database too: at <c>Fast</c>, Indexes and References are skipped.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_Fast_SkipsIndexesAndReferences()
+    {
+        await CreateInitializer().InitialiseAsync();
+        SqliteConnection.ClearAllPools();
+
+        DatabaseOperationResult result = await CreateInitializer().InitialiseAsync(DatabaseCheckDepth.Fast);
+
+        Assert.IsNotNull(result.Check, "The result does not carry a check.");
+        Assert.AreEqual(DatabaseCheckDepth.Fast, result.Check.Depth);
+        Assert.AreEqual(DatabaseCheckLayerStatus.Skipped, result.Check.Layers.Single(l => l.Layer == DatabaseCheckLayer.Indexes).Status);
+        Assert.AreEqual(DatabaseCheckLayerStatus.Skipped, result.Check.Layers.Single(l => l.Layer == DatabaseCheckLayer.References).Status);
+    }
+
     private ChangelogDatabaseInitializer CreateInitializer() =>
         new(
             new SqliteConnectionFactory(_dbPath),

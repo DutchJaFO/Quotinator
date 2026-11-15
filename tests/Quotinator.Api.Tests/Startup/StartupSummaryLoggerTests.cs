@@ -31,7 +31,8 @@ public class StartupSummaryLoggerTests
         bool     adminKeyConfigured  = false,
         bool     sslEnabled          = false,
         bool     logRequests         = false,
-        bool     isHa                = false)
+        bool     isHa                = false,
+        DatabaseCheckDepth startupCheckDepth = DatabaseCheckDepth.Full)
     {
         CaptureSink sink    = new();
         Serilog.Core.Logger serilog = new LoggerConfiguration()
@@ -53,7 +54,8 @@ public class StartupSummaryLoggerTests
             logRequests:        logRequests,
             sslEnabled:         sslEnabled,
             adminKeyConfigured: adminKeyConfigured,
-            isHa:               isHa);
+            isHa:               isHa,
+            startupCheckDepth:  startupCheckDepth);
         return (startupLogger, sink);
     }
 
@@ -99,6 +101,29 @@ public class StartupSummaryLoggerTests
 
     private static string AllMessages(CaptureSink sink)
         => string.Join("\n", sink.Lines);
+
+    #endregion
+
+    // -------------------------------------------------------------------------
+    #region Database startup check (#490)
+
+    /// <summary>
+    /// The closing banner states how thoroughly the databases were checked, so an operator who chose
+    /// <c>Fast</c> can see it took effect. The banner's text is this test's subject.
+    /// </summary>
+    /// <param name="depth">The configured depth.</param>
+    /// <param name="shown">How the banner names it.</param>
+    [TestMethod]
+    [DataRow(DatabaseCheckDepth.Full, "Database check: Full")]
+    [DataRow(DatabaseCheckDepth.Fast, "Database check: Fast")]
+    public void LogReady_BannerNamesTheStartupCheckDepth(DatabaseCheckDepth depth, string shown)
+    {
+        (StartupSummaryLogger logger, CaptureSink sink) = Build(startupCheckDepth: depth);
+
+        logger.LogReady(["http://0.0.0.0:8080"]);
+
+        Assert.Contains(shown, AllMessages(sink));
+    }
 
     #endregion
 

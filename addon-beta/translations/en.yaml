@@ -66,5 +66,14 @@ configuration:
       Once a user-imports seed file's conflict-resolution history has done its job (zero
       pending decisions left), delete it automatically. Disable temporarily while debugging
       your own import so its resolution history is retained.
+  database_startup_check:
+    name: Database startup check
+    description: >-
+      How thoroughly the databases are checked each time the add-on starts. full (the default)
+      also confirms that every index agrees with its table and every declared reference points at
+      a row that exists. fast skips those two: a broken index or a dangling reference is then not
+      found at startup, though a database Reset and the integrity check still find them. A full
+      check of the bundled content took about 25 milliseconds when measured on a desktop computer,
+      and takes longer on slower hardware and on a larger database.
 network:
   8080/tcp: Direct web access, HTTP (ssl disabled) or HTTPS (ssl enabled)

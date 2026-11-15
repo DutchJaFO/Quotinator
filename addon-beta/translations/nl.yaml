@@ -67,5 +67,15 @@ configuration:
       Verwijdert de conflictoplossingsgeschiedenis van een eigen-imports-seedbestand automatisch
       zodra deze haar werk heeft gedaan (geen openstaande beslissingen meer). Schakel tijdelijk
       uit tijdens het debuggen van je eigen import om die geschiedenis te bewaren.
+  database_startup_check:
+    name: Databasecontrole bij opstarten
+    description: >-
+      Hoe grondig de databases worden gecontroleerd telkens wanneer de add-on start. full (de
+      standaard) controleert ook dat elke index overeenkomt met zijn tabel en dat elke
+      gedeclareerde verwijzing naar een bestaande rij wijst. fast slaat die twee over: een kapotte
+      index of een verwijzing naar een ontbrekende rij wordt dan niet gevonden bij het opstarten,
+      al vinden een database-Reset en de integriteitscontrole ze nog wel. Een volledige controle
+      van de meegeleverde inhoud duurde ongeveer 25 milliseconden, gemeten op een desktopcomputer,
+      en duurt langer op tragere hardware en bij een grotere database.
 network:
   8080/tcp: Directe webtoegang, HTTP (SSL uitgeschakeld) of HTTPS (SSL ingeschakeld)

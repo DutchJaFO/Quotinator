@@ -126,6 +126,15 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Information, Message = "[Server] listening on {Address:l}")]
     public static partial void LogListeningOn(this ILogger logger, string address);
 
+    /// <summary>
+    /// Logs that <c>Quotinator:DatabaseStartupCheck</c> names no depth (#490), so the databases are checked at
+    /// <c>Full</c>, the thorough and safe answer.
+    /// </summary>
+    /// <param name="logger">The logger to write to.</param>
+    /// <param name="value">The configured value.</param>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Config] Quotinator:DatabaseStartupCheck is '{Value:l}', which names no depth: the databases are checked at Full. Valid values: Full, Fast")]
+    public static partial void LogDatabaseStartupCheckNotRecognised(this ILogger logger, string value);
+
     /// <summary>Logs the full closing startup banner as a single entry.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = """
 
@@ -149,6 +158,7 @@ internal static partial class LogMessages
                         {ConversationCount} conversations
         Backups:        {BackupsDir:l}
         DataProtection: {KeysDir:l}
+        Database check: {DatabaseCheck:l}
         ------------------------------
         Log level:      {ConfiguredLogLevel:l}
         Log requests:   {LogRequests:l}
@@ -166,6 +176,6 @@ internal static partial class LogMessages
         string version, string dataDir, string dbPath, int schemaVersion, int dataSchemaVersion, string migLine,
         int quoteCount, int sourceCount, int characterCount, int peopleCount, int seriesCount,
         int seasonCount, int universeCount, int stageDirectionCount, int soundCueCount, int conversationCount,
-        string backupsDir, string keysDir, string configuredLogLevel, string logRequests, string ssl,
+        string backupsDir, string keysDir, string databaseCheck, string configuredLogLevel, string logRequests, string ssl,
         string adminApiKey, string restApi, string openApiUi, string openApiSpec);
 }

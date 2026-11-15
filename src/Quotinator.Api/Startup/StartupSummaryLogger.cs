@@ -1,6 +1,7 @@
 using Quotinator.Api.Logging;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
+using Quotinator.Data.Enums;
 
 namespace Quotinator.Api.Startup;
 
@@ -18,6 +19,7 @@ namespace Quotinator.Api.Startup;
 /// <param name="sslEnabled">Whether Kestrel HTTPS is enabled, shown in the closing banner and used to resolve the displayed URLs' scheme.</param>
 /// <param name="adminKeyConfigured">Whether an admin API key is configured, shown in the closing banner.</param>
 /// <param name="isHa">Whether the app is running as a Home Assistant add-on, used to resolve the displayed URLs.</param>
+/// <param name="startupCheckDepth">How thoroughly the databases were checked at startup (#490), shown in the closing banner.</param>
 internal sealed class StartupSummaryLogger(
     ILogger<StartupSummaryLogger> logger,
     IDatabaseInitializer db,
@@ -30,8 +32,11 @@ internal sealed class StartupSummaryLogger(
     bool logRequests,
     bool sslEnabled,
     bool adminKeyConfigured,
-    bool isHa)
+    bool isHa,
+    DatabaseCheckDepth startupCheckDepth)
 {
+    private readonly string _startupCheckDepth = startupCheckDepth.ToString();
+
     private readonly ILogger<StartupSummaryLogger> _logger = logger;
     private readonly IDatabaseInitializer _db = db;
     private readonly IVersionService _version = version;
@@ -61,13 +66,13 @@ internal sealed class StartupSummaryLogger(
     /// </summary>
     public void LogReady(IReadOnlyCollection<string> boundAddresses)
     {
-        var (restApi, openApiUi, openApiSpec) =
+        (string restApi, string openApiUi, string openApiSpec) =
             ResolveUrls(boundAddresses, _isHa, _sslEnabled, GetLocalIp());
 
-        foreach (var addr in boundAddresses)
+        foreach (string addr in boundAddresses)
             _logger.LogListeningOn(addr);
 
-        var migLine = _db.MigrationApplied is { } mig
+        string migLine = _db.MigrationApplied is { } mig
             ? $"\n                migration applied: {mig}"
             : string.Empty;
 
@@ -75,7 +80,7 @@ internal sealed class StartupSummaryLogger(
             _version.Version, _dataDir, _dbPath, _db.SchemaVersion, _db.DataSchemaVersion, migLine,
             _db.QuoteCount, _db.SourceCount, _db.CharacterCount, _db.PeopleCount, _db.SeriesCount,
             _db.SeasonCount, _db.UniverseCount, _db.StageDirectionCount, _db.SoundCueCount, _db.ConversationCount,
-            _backupsDir, _keysDir, _logLevel, _logRequests ? "on" : "off", _sslEnabled ? "on" : "off",
+            _backupsDir, _keysDir, _startupCheckDepth, _logLevel, _logRequests ? "on" : "off", _sslEnabled ? "on" : "off",
             _adminKeyConfigured ? "set" : "not set", restApi, openApiUi, openApiSpec);
     }
 
@@ -90,15 +95,15 @@ internal sealed class StartupSummaryLogger(
         const string ha = "(HA ingress - URL determined at runtime)";
         if (isHa) return (ha, ha, ha);
 
-        var primary = addresses.FirstOrDefault(a => !a.Contains(":8099"));
+        string? primary = addresses.FirstOrDefault(a => !a.Contains(":8099"));
         if (primary is null)
         {
             const string na = "(address not available)";
             return (na, na, na);
         }
 
-        var scheme  = sslEnabled ? "https" : "http";
-        var baseUrl = primary
+        string scheme  = sslEnabled ? "https" : "http";
+        string baseUrl = primary
             .Replace("http://0.0.0.0",  $"{scheme}://{localIp}")
             .Replace("http://[::]",     $"{scheme}://{localIp}")
             .Replace("https://0.0.0.0", $"{scheme}://{localIp}")
@@ -112,7 +117,7 @@ internal sealed class StartupSummaryLogger(
     {
         try
         {
-            using var socket = new System.Net.Sockets.Socket(
+            using System.Net.Sockets.Socket socket = new(
                 System.Net.Sockets.AddressFamily.InterNetwork,
                 System.Net.Sockets.SocketType.Dgram, 0);
             socket.Connect("8.8.8.8", 65530);

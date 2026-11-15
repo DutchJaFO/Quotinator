@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 10)
+**Status:** In progress (step 11)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492.
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 10.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute from step 11.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. Step 6 left one deviation from the verification table for the developer to confirm; it
 is listed under step 6. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
@@ -701,13 +701,36 @@ check is inconclusive, is set aside. If only References or Schema failed, the fi
 
 ### 10. The setting and the add-on option
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 - Add `Quotinator:DatabaseStartupCheck` (`Full`/`Fast`) on `DatabaseOptions`, read once at startup and
   shown in the startup banner.
 - Add `database_startup_check` to `addon/config.yaml` and `addon-beta/config.yaml`, with translations in
   en, nl and de in both (the `CLAUDE.md` add-on option checklist). Its description names what `Fast` no
   longer detects, and the cost measured in step 2.
+
+**Done 2026-11-15.**
+
+- **`DatabaseStartupCheckSetting`** (`Quotinator.Api/Startup/`) holds the key and parses it case-insensitively,
+  since the add-on writes `full` and `fast`. An absent or empty value is the default, `Full`. A value that names
+  no depth checks at `Full`, the thorough and safe answer, and `Program.cs` logs a Warning naming it.
+  `Program.cs` sets `DatabaseOptions.StartupCheckDepth` from it, and passes it to the changelog initializer,
+  whose `InitialiseAsync` now takes the depth.
+- **The closing banner** shows `Database check: Full` or `Fast`.
+- **Add-on:** `database_startup_check: full`, schema `list(full|fast)`, mapped to
+  `Quotinator__DatabaseStartupCheck`, in both channels, with en, nl and de translations in both. The
+  description names what `fast` gives up, that a Reset and the integrity check still find it, and the cost:
+  about 25 ms on the bundled content, the sum of step 2's layer timings.
+- **Two guards built here**, because row 19 names add-on option translation tests that did not exist:
+  `EveryAddOnOption_IsTranslatedInEveryLanguage` and `AddOnDatabaseStartupCheckDefault_MatchesTheApplicationDefault`.
+  The translation guard was red with the option in the schema and no translations, naming all six files.
+- **Tests:** `DatabaseStartupCheckSettingTests`, `StartupSummaryLoggerTests.LogReady_BannerNamesTheStartupCheckDepth`
+  (the banner's text is its subject), `StartupResilienceTests.Startup_FastSetting_SkipsIndexesAndStaysHealthyOverABrokenIndex`
+  and `ChangelogDatabaseCheckTests.InitialiseAsync_Fast_SkipsIndexesAndReferences`, each red first.
+  `Default_IsTheDatabaseOptionsDefault` held before any change, so it was proven by mutation: the options
+  default set to `Fast` failed it, and was reverted.
+- **Boyscout:** `StartupSummaryLogger.cs` is in the IDE0008/IDE0090 lists, and its seven `var` declarations are
+  explicit types.
 
 ### 11. Report every layer from the integrity endpoint
 

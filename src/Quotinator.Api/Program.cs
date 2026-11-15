@@ -371,7 +371,16 @@ string backupsDir = builder.Configuration["Quotinator:BackupPath"] is { Length: 
     : Path.Combine(dataDir, DataPaths.BackupsFolder);
 int             maxBackupStorageGb = builder.Configuration.GetValue("Quotinator:MaxBackupStorageGb", 1);
 int             backupQuotaPercent = builder.Configuration.GetValue("Quotinator:BackupQuotaPercent", DatabaseOptions.DefaultBackupQuotaPercent);
-DatabaseOptions dbOptions          = new() { DbPath = dbPath, BackupsPath = backupsDir, MaxBackupStorageGb = maxBackupStorageGb, BackupQuotaPercent = backupQuotaPercent };
+// #490: how thoroughly both databases are checked at startup. A value that names no depth checks at Full, and
+// is reported once the logger exists, below.
+string? databaseStartupCheckValue = builder.Configuration[Quotinator.Api.Startup.DatabaseStartupCheckSetting.Key];
+(DatabaseCheckDepth databaseStartupCheck, bool databaseStartupCheckRecognised) =
+    Quotinator.Api.Startup.DatabaseStartupCheckSetting.Parse(databaseStartupCheckValue);
+DatabaseOptions dbOptions          = new()
+{
+    DbPath = dbPath, BackupsPath = backupsDir, MaxBackupStorageGb = maxBackupStorageGb, BackupQuotaPercent = backupQuotaPercent,
+    StartupCheckDepth = databaseStartupCheck,
+};
 // useMemoryTempStore: true; see SqliteConnectionFactory.cs's own comment for the #294 incident this
 // opts into working around. Safe here because Quotinator's own dataset (hundreds to low-thousands of
 // quotes) makes the resulting RAM cost negligible; Quotinator.Data itself stays unopinionated and
@@ -774,7 +783,7 @@ Quotinator.Api.Startup.StartupSummaryLogger startupLog = new(
     app.Services.GetRequiredService<ILogger<Quotinator.Api.Startup.StartupSummaryLogger>>(),
     dbInitializer, versionService,
     dataDir, dbPath, backupsDir, keysDir,
-    haLogLevel, logRequests, sslEnabled, adminKeyConfigured, isHa);
+    haLogLevel, logRequests, sslEnabled, adminKeyConfigured, isHa, dbOptions.StartupCheckDepth);
 
 startupLog.LogStarting();
 
@@ -794,6 +803,9 @@ if (dataDirectoryFailure is not null)
         .LogWarning("[Config] {Reason:l}", dataDirectoryFailure);
     dbHealth.MarkFailed(dataDirectoryFailure);
 }
+
+if (!databaseStartupCheckRecognised)
+    app.Services.GetRequiredService<ILogger<Program>>().LogDatabaseStartupCheckNotRecognised(databaseStartupCheckValue ?? string.Empty);
 
 IHostApplicationLifetime lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
 ILogger<Program> logger   = app.Services.GetRequiredService<ILogger<Program>>();
@@ -979,7 +991,7 @@ try
     // #490: a check that stops the changelog database falls back to the JSON files exactly as a schema
     // difference does, and never degrades the main database (ADR 018).
     ChangelogDatabaseInitializer changelogInitializer = app.Services.GetRequiredService<ChangelogDatabaseInitializer>();
-    DatabaseOperationResult changelogInitialisation = await changelogInitializer.InitialiseAsync();
+    DatabaseOperationResult changelogInitialisation = await changelogInitializer.InitialiseAsync(dbOptions.StartupCheckDepth);
     changelogSchemaIntact = changelogInitialisation.Succeeded;
 }
 catch (Exception ex)

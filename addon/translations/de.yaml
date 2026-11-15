@@ -67,5 +67,15 @@ configuration:
       Löscht den Konfliktlösungsverlauf einer eigenen Import-Seed-Datei automatisch, sobald er
       seinen Zweck erfüllt hat (keine offenen Entscheidungen mehr). Vorübergehend deaktivieren,
       während der eigene Import debuggt wird, um dessen Verlauf zu behalten.
+  database_startup_check:
+    name: Datenbankprüfung beim Start
+    description: >-
+      Wie gründlich die Datenbanken bei jedem Start des Add-ons geprüft werden. full (Standard)
+      prüft zusätzlich, dass jeder Index mit seiner Tabelle übereinstimmt und jeder deklarierte
+      Verweis auf eine vorhandene Zeile zeigt. fast überspringt diese beiden Prüfungen: Ein
+      beschädigter Index oder ein Verweis auf eine fehlende Zeile wird dann beim Start nicht
+      gefunden, ein Datenbank-Reset und die Integritätsprüfung finden sie aber weiterhin. Eine
+      vollständige Prüfung der mitgelieferten Inhalte dauerte auf einem Desktop-Computer gemessen
+      etwa 25 Millisekunden und dauert auf langsamerer Hardware und bei einer größeren Datenbank länger.
 network:
   8080/tcp: Direkter Webzugriff, HTTP (SSL deaktiviert) oder HTTPS (SSL aktiviert)

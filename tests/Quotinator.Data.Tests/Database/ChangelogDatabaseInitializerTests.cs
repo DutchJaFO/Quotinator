@@ -70,7 +70,7 @@ public class ChangelogDatabaseInitializerTests
     }
 
     /// <summary>
-    /// <see cref="ChangelogDatabaseInitializer.InitialiseAsync()"/>'s baseline path (a genuinely
+    /// <see cref="ChangelogDatabaseInitializer.InitialiseAsync(DatabaseCheckDepth)"/>'s baseline path (a genuinely
     /// empty database) and <see cref="ChangelogDatabaseInitializer.InitialiseForTestingAsync"/>'s
     /// forced incremental path must produce byte-for-byte identical <c>Changelog_Entry</c>/<c>Changelog_Line</c>
     /// schemas — otherwise <c>BaselineSql</c> has drifted from <c>Migrations</c>' final result.

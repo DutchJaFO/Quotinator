@@ -29,6 +29,7 @@ options:
   unicode_aware_search: false
   auto_purge_bundled_import_actions: true
   auto_purge_user_import_actions: true
+  database_startup_check: full
 schema:
   log_level: list(trace|debug|info|notice|warning|error|fatal)
   log_requests: bool
@@ -42,6 +43,7 @@ schema:
   unicode_aware_search: bool
   auto_purge_bundled_import_actions: bool
   auto_purge_user_import_actions: bool
+  database_startup_check: list(full|fast)
 
 # Map add-on options and HA paths to environment variables consumed by ASP.NET Core.
 # Quotinator__DataPath points to the supervisor-mounted persistent volume (/data), not the
@@ -74,6 +76,8 @@ env_vars:
     value: "{{ auto_purge_bundled_import_actions }}"
   - name: Quotinator__AutoPurgeUserImportActions
     value: "{{ auto_purge_user_import_actions }}"
+  - name: Quotinator__DatabaseStartupCheck
+    value: "{{ database_startup_check }}"
 
 # Direct access port: disabled by default; enable for MagicMirror, curl, or other
 # tools that need to reach the API outside of HA ingress.
