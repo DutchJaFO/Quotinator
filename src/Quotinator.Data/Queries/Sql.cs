@@ -1,4 +1,5 @@
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 
 namespace Quotinator.Data.Queries;
 
@@ -853,5 +854,32 @@ internal static class Sql
         /// </summary>
         internal static readonly string SelectRootPage =
             $"SELECT rootpage FROM sqlite_master WHERE {TextClauses.Equals("name", "name")};";
+
+        /// <summary>Whether a table named <c>@name</c> exists: 1 or 0.</summary>
+        internal static readonly string TableExists =
+            $"SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND {TextClauses.Equals("name", "name")};";
+
+        /// <summary>The name of a version table (#490), for <see cref="TableExists"/> and for a finding to name.</summary>
+        /// <param name="table">The version table.</param>
+        internal static string VersionTableName(SchemaVersionTable table) => table switch
+        {
+            SchemaVersionTable.Data      => "System_SchemaVersion",
+            SchemaVersionTable.Consumer  => "System_ConsumerSchemaVersion",
+            SchemaVersionTable.Changelog => "Changelog_SchemaVersion",
+            _ => throw new ArgumentOutOfRangeException(nameof(table), table, "no such version table"),
+        };
+
+        /// <summary>
+        /// The highest version a version table records (#490), the same query its own initializer uses. Run only
+        /// once <see cref="TableExists"/> has found the table.
+        /// </summary>
+        /// <param name="table">The version table.</param>
+        internal static string SelectRecordedVersion(SchemaVersionTable table) => table switch
+        {
+            SchemaVersionTable.Data      => Schema.GetDataCurrentVersion,
+            SchemaVersionTable.Consumer  => Schema.GetConsumerCurrentVersion,
+            SchemaVersionTable.Changelog => ChangelogSchema.GetCurrentVersion,
+            _ => throw new ArgumentOutOfRangeException(nameof(table), table, "no such version table"),
+        };
     }
 }

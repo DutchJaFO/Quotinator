@@ -24,6 +24,10 @@ internal static class LayerResults
     internal static DatabaseCheckLayerResult Inconclusive(DatabaseCheckLayer layer, string finding) =>
         new() { Layer = layer, Status = DatabaseCheckLayerStatus.Inconclusive, Finding = finding };
 
+    /// <summary>The layer did not run, for the reason <paramref name="finding"/> gives. Never a failure.</summary>
+    internal static DatabaseCheckLayerResult Skipped(DatabaseCheckLayer layer, string finding) =>
+        new() { Layer = layer, Status = DatabaseCheckLayerStatus.Skipped, Finding = finding };
+
     /// <summary>The layer passed because there is no file to check yet.</summary>
     internal static DatabaseCheckLayerResult NothingToCheck(DatabaseCheckLayer layer) => Passed(layer, NoFileYet);
 

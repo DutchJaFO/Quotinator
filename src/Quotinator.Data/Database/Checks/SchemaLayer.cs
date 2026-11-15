@@ -1,5 +1,7 @@
+using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Queries;
 using Quotinator.Data.Schema;
 
 namespace Quotinator.Data.Database.Checks;
@@ -20,6 +22,12 @@ internal sealed class SchemaLayer : QueryLayer
     /// <inheritdoc/>
     protected override async Task<DatabaseCheckLayerResult> CheckAsync(SqliteConnection connection, SqliteCheckSubject subject)
     {
+        // #490, found in T1: before its migrations run, an old database's schema differs from this build's by
+        // design, so a comparison then says nothing. It is compared only once every version table records what
+        // this build expects; a database ahead of this build has a schema it does not know (#350).
+        if (await WhyNotYetComparableAsync(connection, subject) is string whyNot)
+            return LayerResults.Skipped(Layer, whyNot);
+
         SchemaSnapshot expected = await SqliteSchemaSnapshotReader.Instance.ReadScriptsAsync(subject.ExpectedSchemaScripts);
         SchemaSnapshot actual = await SqliteSchemaSnapshotReader.Instance.ReadAsync(connection);
         SchemaIntegrityResult result = SchemaIntegrityComparer.Compare(expected, actual);
@@ -35,5 +43,25 @@ internal sealed class SchemaLayer : QueryLayer
                     ? $"{d.Kind} {d.ObjectKind} {d.ObjectName}"
                     : $"{d.Kind} {d.ObjectKind} {d.ObjectName} ({d.Aspect}: expected '{d.Expected}', actual '{d.Actual}')"),
         ]));
+    }
+
+    /// <summary>
+    /// Why the schema cannot be compared yet: the first version table that does not record what this build
+    /// expects, or <see langword="null"/> when every one does.
+    /// </summary>
+    private static async Task<string?> WhyNotYetComparableAsync(SqliteConnection connection, SqliteCheckSubject subject)
+    {
+        foreach ((SchemaVersionTable table, int expected) in subject.ExpectedSchemaVersions)
+        {
+            string name = Sql.SchemaMetadata.VersionTableName(table);
+            if (await connection.ExecuteScalarAsync<int>(Sql.SchemaMetadata.TableExists, new { name }) == 0)
+                return $"{name} does not exist, so the database records no migration: its schema is compared once its migrations have run.";
+
+            int recorded = await connection.ExecuteScalarAsync<int>(Sql.SchemaMetadata.SelectRecordedVersion(table));
+            if (recorded != expected)
+                return $"{name} records version {recorded}, and this build's is {expected}: the schema is compared only once they match.";
+        }
+
+        return null;
     }
 }

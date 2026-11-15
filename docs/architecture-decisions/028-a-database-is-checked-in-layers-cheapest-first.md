@@ -42,7 +42,7 @@ The layers name *what* is checked, never how an engine checks it:
 | Pages | Can every page be read, and is every record well-formed? | Yes |
 | Indexes | Does every index agree with its table, and does every unique constraint hold? | No |
 | References | Does every declared reference point at a row that exists? | No |
-| Schema | Does the schema match what its recorded version defines? | Yes |
+| Schema | Does the schema match this build's, once the database records this build's version? | Yes |
 
 A layer an engine has no counterpart for reports that it passed, with a finding saying it does not apply.
 It is never left out.
@@ -68,7 +68,8 @@ Each layer reports one of five statuses:
 - **Failed.**
 - **Inconclusive:** the layer could not be run soundly. An inconclusive layer is **never** a pass.
 - **Not run:** an earlier layer failed or was inconclusive.
-- **Skipped:** the depth excluded it.
+- **Skipped:** the depth excluded it, or, for Schema, the comparison cannot mean anything yet (below). A
+  skip for a reason states it as the finding.
 
 **One exception to "the first failure stops the check": a directory that cannot be written.** Every later
 layer only reads, so Storage reports that failure and the reading layers still run. That way the report
@@ -105,9 +106,18 @@ paths, and the check follows each:
 - **No database:** there is no file to check, so the check before writing establishes only that the data
   directory can be written. The database is created, then checked, then seeded.
 - **An old database:** the check before writing stops startup on a failure in Storage to Indexes, the
-  layers that judge the file itself. A Schema difference is expected, since the migrations have not run,
-  and does not stop it. After migrating, the check runs again, and that result is startup's.
-- **An up-to-date database:** the check before writing is startup's result.
+  layers that judge the file itself. Schema is skipped, not compared: until the migrations run, the schema
+  differs from this build's by design, so a comparison could only say so. After migrating, the check runs
+  again, compares the schema, and that result is startup's.
+- **An up-to-date database:** the check before writing compares the schema, and is startup's result.
+
+**Schema is compared only when every version table records this build's version (developer, 2026-11-15).**
+The layer reads the version tables first, through the check's own read-only connection. A table that is
+missing, behind this build or ahead of it means the comparison cannot mean anything yet, so the layer
+reports itself skipped and names the table, the recorded version and this build's. Ahead of this build, the
+schema is one the build does not know, the case #350 degrades on. A database with no version tables is always
+compared. T1 found why this matters: comparing before migrating, then disregarding the result, logged a
+certain and harmless difference as an error.
 
 **`Fast` gives up Indexes and References.** An index that disagrees with its table, a broken unique
 constraint or a dangling reference is then not detected at startup. A Reset and the endpoint still detect
@@ -148,7 +158,7 @@ documents it (read 2026-11-14), and every case that page leaves open, with the w
 | Pages | `PRAGMA quick_check`. A sound result is the single row `ok`. | [pragma.html](https://www.sqlite.org/pragma.html#pragma_quick_check) |
 | Indexes | `PRAGMA integrity_check`. Unlike `quick_check`, it verifies UNIQUE constraints and that index content matches table content. | [pragma.html](https://www.sqlite.org/pragma.html#pragma_integrity_check) |
 | References | `PRAGMA foreign_key_check`. `integrity_check` does not find foreign key errors. This pragma is documented without any condition on the `foreign_keys` setting, so the check never sets that. | [pragma.html](https://www.sqlite.org/pragma.html#pragma_foreign_key_check) |
-| Schema | The comparison of the schema against its recorded version (#305) | (project-defined) |
+| Schema | The comparison of the schema against this build's (#305), once every version table records this build's version | (project-defined) |
 
 ### Where the query layers run
 

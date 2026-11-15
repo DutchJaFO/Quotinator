@@ -670,6 +670,19 @@ public class DatabaseInitializer(
             : [Sql.Schema.CreateDataVersionTable, Sql.Schema.CreateConsumerVersionTable,
                 .. DataOwnedMigrations.Concat(consumerMigrations).Select(m => m.Sql)];
 
+    /// <summary>
+    /// The version each of the main database's version tables records once every migration this build knows
+    /// has run (#490). The database check compares the schema only when the database records exactly these:
+    /// before its migrations run, an old database's schema differs from this build's by design.
+    /// </summary>
+    /// <param name="consumerMigrations">The consuming project's own migrations.</param>
+    public static IReadOnlyDictionary<SchemaVersionTable, int> ExpectedSchemaVersions(IReadOnlyList<SchemaMigration> consumerMigrations) =>
+        new Dictionary<SchemaVersionTable, int>
+        {
+            [SchemaVersionTable.Data]     = DataOwnedMigrations.Count,
+            [SchemaVersionTable.Consumer] = consumerMigrations.Count,
+        };
+
     // Stateless, and needed by an instance and a static caller alike, so it is not injected: there is
     // exactly one implementation (ADR 003), and this is the only place in the check that names it.
     private static readonly ISchemaSnapshotReader SnapshotReader = SqliteSchemaSnapshotReader.Instance;

@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using Quotinator.Data.Enums;
 using Quotinator.Logging;
 
 namespace Quotinator.Data.Database.Checks;
@@ -20,12 +21,14 @@ namespace Quotinator.Data.Database.Checks;
 /// <param name="databasePath">The database file being checked.</param>
 /// <param name="workFolder">The reserved folder a copy is made in.</param>
 /// <param name="expectedSchemaScripts">The DDL that defines the expected schema.</param>
+/// <param name="expectedSchemaVersions">The version each version table records once every known migration has run.</param>
 /// <param name="canCreateFileIn">Answers whether a file can be created in a directory.</param>
 /// <param name="logger">Logs each handled exception (ADR 022).</param>
 internal sealed class SqliteCheckSubject(
     string databasePath,
     string workFolder,
     IReadOnlyList<string> expectedSchemaScripts,
+    IReadOnlyDictionary<SchemaVersionTable, int> expectedSchemaVersions,
     Func<string, bool> canCreateFileIn,
     ILogger logger) : IDisposable
 {
@@ -45,6 +48,9 @@ internal sealed class SqliteCheckSubject(
 
     /// <summary>The DDL that defines the expected schema.</summary>
     public IReadOnlyList<string> ExpectedSchemaScripts { get; } = expectedSchemaScripts;
+
+    /// <summary>The version each version table records once every migration this build knows has run.</summary>
+    public IReadOnlyDictionary<SchemaVersionTable, int> ExpectedSchemaVersions { get; } = expectedSchemaVersions;
 
     /// <summary>Answers whether a file can be created in a directory.</summary>
     public Func<string, bool> CanCreateFileIn { get; } = canCreateFileIn;

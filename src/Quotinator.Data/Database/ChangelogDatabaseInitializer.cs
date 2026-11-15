@@ -76,6 +76,13 @@ public sealed class ChangelogDatabaseInitializer(
     /// </summary>
     public static IReadOnlyList<string> ExpectedSchemaScripts() => [Sql.ChangelogSchema.CreateVersionTable, BaselineSql];
 
+    /// <summary>
+    /// The version the changelog database records once every migration this build knows has run (#490): the
+    /// database check compares the schema only when the database records exactly this.
+    /// </summary>
+    public static IReadOnlyDictionary<SchemaVersionTable, int> ExpectedSchemaVersions() =>
+        new Dictionary<SchemaVersionTable, int> { [SchemaVersionTable.Changelog] = Migrations.Count };
+
     // Stateless, and needed by an instance and a static caller alike, so it is not injected: there is
     // exactly one implementation (ADR 003), and this is the only place in the check that names it.
     private static readonly ISchemaSnapshotReader SnapshotReader = SqliteSchemaSnapshotReader.Instance;

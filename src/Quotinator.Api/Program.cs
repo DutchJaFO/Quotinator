@@ -405,6 +405,7 @@ string databaseCheckWorkFolder = Path.Combine(dataDir, SqliteDatabaseCheck.WorkF
 builder.Services.AddSingleton<IDatabaseCheck>(sp => new SqliteDatabaseCheck(
     DatabaseNames.Main, dbPath, databaseCheckWorkFolder,
     DatabaseInitializer.ExpectedSchemaScripts(QuotinatorMigrations.All, QuotinatorMigrations.Baseline),
+    DatabaseInitializer.ExpectedSchemaVersions(QuotinatorMigrations.All),
     logger: sp.GetRequiredService<ILogger<SqliteDatabaseCheck>>()));
 
 // #309: separate database for changelog content (ADR 018): no relational or transactional coupling
@@ -423,6 +424,7 @@ builder.Services.AddKeyedSingleton<IDbConnectionFactory>(
 builder.Services.AddKeyedSingleton<IDatabaseCheck>(DatabaseConnectionKeys.Changelog, (sp, _) => new SqliteDatabaseCheck(
     DatabaseNames.Changelog, changelogDbPath, databaseCheckWorkFolder,
     ChangelogDatabaseInitializer.ExpectedSchemaScripts(),
+    ChangelogDatabaseInitializer.ExpectedSchemaVersions(),
     logger: sp.GetRequiredService<ILogger<SqliteDatabaseCheck>>()));
 builder.Services.AddSingleton<ChangelogDatabaseInitializer>();
 builder.Services.AddSingleton<ChangelogRepository>();

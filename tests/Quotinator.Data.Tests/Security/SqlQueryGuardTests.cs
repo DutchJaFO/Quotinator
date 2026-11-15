@@ -1,6 +1,7 @@
 using System.Reflection;
 using Quotinator.Data.Diagnostics;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 
@@ -160,6 +161,7 @@ public class SqlQueryGuardTests
             "ChangelogSchema.GetCurrentVersion",  // COALESCE(MAX(...)) — separate changelog database's own version bookkeeping (#309)
             "ChangelogSchema.AnyTableExists",     // COUNT(*) — fresh-database detection for the changelog database's own baseline path (#309)
             "AppVersion.SelectNextSequenceNumber",// COALESCE(MAX(...)) — next recording-order counter for the app-version history (#312)
+            "SchemaMetadata.TableExists",         // COUNT(*) — whether a version table exists, read by the database check's Schema layer (#490)
         ];
 
         HashSet<string> actual =
@@ -193,6 +195,13 @@ public class SqlQueryGuardTests
     {
         // Queries.WidgetWithOwner() is 0-arg — #214's widened EnumerateSqlConstants now discovers and
         // guard-checks it automatically via AllNamedSqlConstants, so no manual case is needed here.
+
+        // SchemaMetadata.SelectRecordedVersion/VersionTableName (#490) — one case per version table.
+        foreach (SchemaVersionTable table in Enum.GetValues<SchemaVersionTable>())
+        {
+            yield return [$"SchemaMetadata.SelectRecordedVersion({table})", Sql.SchemaMetadata.SelectRecordedVersion(table)];
+            yield return [$"SchemaMetadata.VersionTableName({table})", Sql.SchemaMetadata.VersionTableName(table)];
+        }
 
         // SystemAudit.SelectPaged/CountPaged — one case per filter-flag combination.
         foreach ((bool filterTable, bool filterRecordId) in new[] { (false, false), (true, false), (false, true), (true, true) })
@@ -422,6 +431,8 @@ public class SqlQueryGuardTests
             "FileResources.SelectPage",
             "FileResources.CountPage",
             "FileResources.BuildWhere",
+            "SchemaMetadata.SelectRecordedVersion",
+            "SchemaMetadata.VersionTableName",
         ];
 
         HashSet<string> actual = [.. EnumerateParameterizedSqlFactoryMethodNames()];

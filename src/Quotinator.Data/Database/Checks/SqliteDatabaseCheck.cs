@@ -28,6 +28,12 @@ namespace Quotinator.Data.Database.Checks;
 /// permission there, and SQLite locks the files it opens.
 /// </param>
 /// <param name="expectedSchemaScripts">The DDL that defines the schema the Schema layer compares against (#305).</param>
+/// <param name="expectedSchemaVersions">
+/// The version each version table records once every migration this build knows has run. The Schema layer
+/// compares only when the database records exactly these, and reports itself skipped otherwise: before its
+/// migrations run, an old database's schema differs from <paramref name="expectedSchemaScripts"/> by design.
+/// Empty for a database with no version tables, which is always compared.
+/// </param>
 /// <param name="canCreateFileIn">
 /// Answers whether a file can be created in a directory, for the Storage layer. <see langword="null"/> uses
 /// <see cref="DirectoryWriteProbe.CanCreateFileIn"/>; a test supplies its own, since a directory that cannot
@@ -39,6 +45,7 @@ public sealed class SqliteDatabaseCheck(
     string databasePath,
     string workFolder,
     IReadOnlyList<string> expectedSchemaScripts,
+    IReadOnlyDictionary<SchemaVersionTable, int> expectedSchemaVersions,
     Func<string, bool>? canCreateFileIn = null,
     ILogger? logger = null) : IDatabaseCheck
 {
@@ -68,7 +75,7 @@ public sealed class SqliteDatabaseCheck(
     public async Task<DatabaseCheckResult> CheckAsync(DatabaseCheckDepth depth)
     {
         using SqliteCheckSubject subject = new(
-            databasePath, workFolder, expectedSchemaScripts,
+            databasePath, workFolder, expectedSchemaScripts, expectedSchemaVersions,
             canCreateFileIn ?? DirectoryWriteProbe.CanCreateFileIn,
             logger ?? NullLogger.Instance);
 

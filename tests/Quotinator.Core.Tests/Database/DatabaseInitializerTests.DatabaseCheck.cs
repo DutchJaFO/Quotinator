@@ -5,6 +5,7 @@ using Quotinator.Data.Database;
 using Quotinator.Data.Database.Checks;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Testing.Database;
+using Quotinator.Data.Testing.Fakes;
 
 namespace Quotinator.Core.Tests.Database;
 
@@ -116,6 +117,30 @@ public partial class DatabaseInitializerTests
         Assert.IsTrue(result.Succeeded, $"Startup failed on an old database: {result.Check?.FirstFailure?.Layer} ({result.Check?.FirstFailure?.Finding})");
         Assert.IsNotNull(result.Check, "The result does not carry a check.");
         Assert.IsTrue(result.Check.IsSound, $"The kept check is not the one taken after migrating: {result.Check.FirstFailure?.Layer} ({result.Check.FirstFailure?.Finding})");
+    }
+
+    /// <summary>
+    /// T1 found it: startup over an old database logged the schema comparison taken before migrating as an
+    /// error, though a difference there is certain and does not stop startup. The log is the subject: it is
+    /// what an operator without a UI reads to confirm the server is sound. Before migrating, the Schema layer
+    /// is skipped and says so; nothing is logged as a failure.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_OldDatabase_LogsTheSchemaSkippedRatherThanFailedBeforeMigrating()
+    {
+        IReadOnlyList<SchemaMigration> allButTheLast = [.. QuotinatorMigrations.All.Take(QuotinatorMigrations.All.Count - 1)];
+        await CreateInitializer([], allButTheLast, useBaseline: false).InitialiseAsync();
+        SqliteConnection.ClearAllPools();
+        CapturingLogger<DatabaseInitializer> logger = new();
+
+        QuotinatorDatabaseInitializer upgrade = CreateInitializer([], logger: logger);
+        await upgrade.InitialiseAsync();
+
+        Assert.IsNotEmpty(upgrade.MigrationsApplied, "Precondition: the database needed no migration.");
+        Assert.DoesNotContain(m => m.Contains("the Schema layer failed", StringComparison.Ordinal), logger.Messages,
+            "The schema comparison taken before migrating was logged as a failure.");
+        Assert.Contains(m => m.Contains("the Schema layer was skipped", StringComparison.Ordinal), logger.Messages,
+            "The check taken before migrating does not say it skipped the Schema layer.");
     }
 
     /// <summary>

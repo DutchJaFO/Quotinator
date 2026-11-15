@@ -18,6 +18,20 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Information, Message = "[Database - Check] {Database:l}: every layer passed ({Depth:l}, {Milliseconds} ms)")]
     public static partial void LogDatabaseCheckPassed(this ILogger logger, string database, string depth, long milliseconds);
 
+    /// <summary>
+    /// Logs a database check that passed with layers it did not run (#490): at <c>Fast</c>, or Schema before an
+    /// old database's migrations. Never "every layer passed", which would claim a layer that was not checked.
+    /// </summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "[Database - Check] {Database:l}: every layer that ran passed ({Depth:l}, {Milliseconds} ms; skipped: {Skipped:l})")]
+    public static partial void LogDatabaseCheckPassedWithSkips(this ILogger logger, string database, string depth, long milliseconds, string skipped);
+
+    /// <summary>
+    /// Logs a layer the database check did not run, and why (#490): the Schema layer before an old database's
+    /// migrations have run. Information, not a warning: nothing is wrong, and the check after migrating compares it.
+    /// </summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "[Database - Check] {Database:l}: the {Layer:l} layer was skipped: {Finding:l}")]
+    public static partial void LogDatabaseCheckLayerSkipped(this ILogger logger, string database, string layer, string finding);
+
     /// <summary>Logs the layer at which a database check failed (#490), with the engine's own finding.</summary>
     [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Check] {Database:l}: the {Layer:l} layer failed: {Finding:l}")]
     public static partial void LogDatabaseCheckFailed(this ILogger logger, string database, string layer, string finding);

@@ -304,6 +304,95 @@ public class SqliteDatabaseCheckTests
             Assert.AreEqual(expected, layer.Status, $"Layer {layer.Layer}: {layer.Finding}");
     }
 
+    /// <summary>The fixture's schema records no migrations, so it is always compared.</summary>
+    private static readonly IReadOnlyDictionary<SchemaVersionTable, int> NoVersionTables = new Dictionary<SchemaVersionTable, int>();
+
+    // ── Schema is compared only once the recorded version is this build's (#490, T1) ─────────────────────
+
+    private const string VersionTable = "System_SchemaVersion";
+
+    /// <summary>
+    /// What the check expects: the database's own schema plus a table it lacks, so a comparison that runs
+    /// fails, and a Schema layer that reports anything but a failure did not compare.
+    /// </summary>
+    private static readonly string[] ExpectedWithAMissingTable =
+    [
+        .. Schema,
+        $"CREATE TABLE {VersionTable} (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);",
+        "CREATE TABLE AddedByAPendingMigration (Id INTEGER PRIMARY KEY);",
+    ];
+
+    /// <summary>
+    /// T1 found it: before an old database's migrations run, its schema differs from this build's by design,
+    /// so comparing it says nothing, and startup logged that certainty as an error. The layer reports itself
+    /// skipped, naming the version table, rather than failed.
+    /// </summary>
+    [TestMethod]
+    public async Task Check_RecordedVersionBehindThisBuild_SkipsSchemaNamingTheVersionTable()
+    {
+        using TempDirectory directory = new("quotinator_check_");
+        string path = CreateWithRecordedVersion(directory, recorded: 1);
+
+        DatabaseCheckResult result = await VersionedCheck(directory, path, expected: 2).CheckAsync(DatabaseCheckDepth.Full);
+
+        DatabaseCheckLayerResult schema = result.Layers.Single(l => l.Layer == DatabaseCheckLayer.Schema);
+        Assert.AreEqual(DatabaseCheckLayerStatus.Skipped, schema.Status, $"Schema: {schema.Finding}");
+        Assert.Contains(VersionTable, schema.Finding ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    /// <summary>A database ahead of this build has a schema it does not know, so there is nothing to compare either (#350).</summary>
+    [TestMethod]
+    public async Task Check_RecordedVersionAheadOfThisBuild_SkipsSchema()
+    {
+        using TempDirectory directory = new("quotinator_check_");
+        string path = CreateWithRecordedVersion(directory, recorded: 3);
+
+        DatabaseCheckResult result = await VersionedCheck(directory, path, expected: 2).CheckAsync(DatabaseCheckDepth.Full);
+
+        Assert.AreEqual(DatabaseCheckLayerStatus.Skipped, result.Layers.Single(l => l.Layer == DatabaseCheckLayer.Schema).Status);
+    }
+
+    /// <summary>A database with no version table yet has recorded no migration, so its schema is not this build's either.</summary>
+    [TestMethod]
+    public async Task Check_NoVersionTable_SkipsSchema()
+    {
+        using TempDirectory directory = new("quotinator_check_");
+        string path = Path.Combine(directory.Path, "test.db");
+        DocumentedFormatFixtures.Create(path, [.. Schema, .. Rows]);
+
+        DatabaseCheckResult result = await VersionedCheck(directory, path, expected: 2).CheckAsync(DatabaseCheckDepth.Full);
+
+        Assert.AreEqual(DatabaseCheckLayerStatus.Skipped, result.Layers.Single(l => l.Layer == DatabaseCheckLayer.Schema).Status);
+    }
+
+    /// <summary>Control: once the recorded version is this build's, a schema that differs still fails.</summary>
+    [TestMethod]
+    public async Task Check_RecordedVersionIsThisBuilds_ComparesTheSchema()
+    {
+        using TempDirectory directory = new("quotinator_check_");
+        string path = CreateWithRecordedVersion(directory, recorded: 2);
+
+        DatabaseCheckResult result = await VersionedCheck(directory, path, expected: 2).CheckAsync(DatabaseCheckDepth.Full);
+
+        AssertFailsAt(result, DatabaseCheckLayer.Schema, DatabaseCheckLayerStatus.Failed);
+    }
+
+    private static string CreateWithRecordedVersion(TempDirectory directory, int recorded)
+    {
+        string path = Path.Combine(directory.Path, "test.db");
+        DocumentedFormatFixtures.Create(path,
+        [
+            .. Schema, .. Rows,
+            $"CREATE TABLE {VersionTable} (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);",
+            $"WITH RECURSIVE v(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM v WHERE i < {recorded}) INSERT INTO {VersionTable} (Version, AppliedAt) SELECT i, '2026-11-15' FROM v;",
+        ]);
+        return path;
+    }
+
+    private static SqliteDatabaseCheck VersionedCheck(TempDirectory directory, string path, int expected) =>
+        new(DatabaseName, path, Path.Combine(directory.Path, "check-work"), ExpectedWithAMissingTable,
+            new Dictionary<SchemaVersionTable, int> { [SchemaVersionTable.Data] = expected });
+
     /// <summary>The named layer is the first failure, every layer before it passed, and none after it ran.</summary>
     private static void AssertFailsAt(DatabaseCheckResult result, DatabaseCheckLayer failing, DatabaseCheckLayerStatus status)
     {
@@ -383,7 +472,7 @@ public class SqliteDatabaseCheckTests
         }
 
         public SqliteDatabaseCheck Check(Func<string, bool>? canCreateFileIn = null) =>
-            new(DatabaseName, DatabasePath, WorkFolder, _expectedSchema, canCreateFileIn);
+            new(DatabaseName, DatabasePath, WorkFolder, _expectedSchema, NoVersionTables, canCreateFileIn);
 
         /// <summary>The database and each of its sidecars that exists, as its name and a hash of its content.</summary>
         public string[] HashDatabaseFiles() =>

@@ -328,13 +328,19 @@ Each was raised per `process.md`, Planning step 3. **All five were accepted as r
   | Startup path | Before anything is written | After creating or migrating |
   |---|---|---|
   | No database | Storage alone: there is no file yet | The check runs on the new database, before seeding |
-  | Old database | The check runs; a failure in Storage to Indexes stops startup. A Schema difference is expected and does not | The check runs again; its result is startup's, and a Schema failure degrades startup as #305 does |
-  | Up-to-date database | The check runs, and its result is startup's | — |
+  | Old database | The check runs; a failure in Storage to Indexes stops startup. Schema is skipped, naming the version table, since a difference is certain until the migrations run | The check runs again; its result is startup's, and a Schema failure degrades startup as #305 does |
+  | Up-to-date database | The check runs, compares the schema, and its result is startup's | — |
 
   ADR 028's *Who calls it* section records the same. **Why it was open:** the plan stated where startup
   calls the check but never traced the three startup paths against each layer, and step 7 did not question
   what "the schema its version defines" means before migrations have run. Decisions A to E were the
   questions identified; this one was missed in planning.
+
+  **Corrected after T1 (developer, 2026-11-15).** As first built, the Schema layer compared an old database
+  before migrating and startup then disregarded the result: work whose answer was certain, which startup
+  logged at Error on every upgrade. The developer's question, *why compare when migrations are already
+  known to be needed*, settled it: the layer now reads the version tables first and compares only when each
+  records this build's version, reporting itself skipped otherwise. See step 15.
 
 ---
 
@@ -867,13 +873,43 @@ both 0 warnings and 0 errors.
 
 ### 15. T1
 
-**Status:** ⬜ Not started
+**Status:** 🔄 In progress
 
 This is the developer's step. In Visual Studio:
 
 1. Start over a healthy database and confirm the startup time is acceptable at `Full`.
 2. Start over a database with a broken index and confirm the degraded reason.
 3. Read `/api/v1/admin/database/integrity`.
+
+**First run, 2026-11-15** (the developer's log, over an existing database at data v3 and app v5):
+
+- **Item 1 held:** the database was backed up, migrated to data v30 and app v9, checked again (*every
+  layer passed, 34 ms*) and served; the changelog database's checks took 7 ms and 50 ms. A Reset that
+  followed backed up the sound copy rather than setting it aside, and the reseed ran normally.
+- **Found:** the check taken before migrating logged *the Schema layer failed* at Error, listing 16 missing
+  objects, on an upgrade that then succeeded. The comparison could only ever say "different" there, and
+  startup disregarded it. Fixed as decision F's correction (above):
+  - `SqliteDatabaseCheck` takes `expectedSchemaVersions`, from `DatabaseInitializer.ExpectedSchemaVersions`
+    and `ChangelogDatabaseInitializer.ExpectedSchemaVersions`, keyed by the new `SchemaVersionTable`;
+  - the Schema layer reads each version table through the check's own connection and reports itself
+    `Skipped` with a finding when one is missing, behind or ahead; a database with no version tables is
+    always compared;
+  - startup logs a skipped layer that states a reason, at Information.
+  - **Red first:** `SqliteDatabaseCheckTests.Check_RecordedVersionBehindThisBuild_SkipsSchemaNamingTheVersionTable`,
+    `…Check_RecordedVersionAheadOfThisBuild_SkipsSchema` and `…Check_NoVersionTable_SkipsSchema` failed on
+    `Skipped`, and `DatabaseInitializerTests.InitialiseAsync_OldDatabase_LogsTheSchemaSkippedRatherThanFailedBeforeMigrating`
+    on the failure line; the log is that test's subject, being what the operator read. The control,
+    `…Check_RecordedVersionIsThisBuilds_ComparesTheSchema`, passed throughout. Verification row 26.
+- **Second run, same database:** confirmed the fix. Before migrating, startup logged *the Schema layer was
+  skipped: System_SchemaVersion records version 3, and this build's is 30*, at Information, with no Error
+  line; after migrating, *every layer passed (Full, 36 ms)*.
+- **Found in the second run:** the line after the skip still read *every layer passed (Full, 40 ms)*, a
+  claim about a layer that did not run. The same wording had always stood beside the two layers `Fast`
+  skips. A check that skipped a layer now logs *every layer that ran passed (…; skipped: Schema)*; with
+  nothing skipped the line is unchanged. **Red first:** `StartupDatabaseCheckTests.Log_PassedWithASkippedLayer_DoesNotClaimEveryLayerAndNamesTheSkip`
+  and `…Log_PassedAtFast_NamesBothSkippedLayers` failed on their claims; the control,
+  `…Log_PassedWithNothingSkipped_SaysEveryLayerPassed`, passed throughout. Verification row 26.
+- **Not yet run:** items 2 and 3. Neither run started over a broken index. Row 23 stays open until they are.
 
 ### 16. T2
 
@@ -920,3 +956,4 @@ says that the database is checked thoroughly at every start, and that the faster
 | 23 | ❌ | T1: startup time at `Full` is acceptable, and a broken index degrades with its reason | Live (T1) | Step 15, confirmed by the developer |
 | 24 | ✅ | *(developer, 2026-11-15)* A Reset's restore point and both set-aside notifications say why the file was set aside: the check layer, its status and finding, or the backup's own error when the check passed | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabase_RestorePointNamesTheLayerThatShowedIt`, `…ResetAsync_CorruptDatabase_NotificationRecordsTheLayerThatShowedIt`, `…ResetAsync_FileOnlyTheBackupFindsUnreadable_RestorePointCarriesTheBackupError`, `…ResetAsync_FileOnlyTheBackupFindsUnreadable_NotificationRecordsTheBackupError`; `DatabaseActionResultRecorderTests.RecordAsync_SetAsideByTheCheck_RecordsTheLayerThatShowedIt`, `…RecordAsync_SetAsideByTheBackup_RecordsTheBackupError`, the `ResetSetAsideByBackup` rows; `StartupResilienceTests.Startup_DatabaseFileCorrupt_RepairActionNotificationsSayWhichLayerShowedIt` |
 | 25 | ✅ | *(developer, 2026-11-15)* Every other surface reporting a Reset says why the file was set aside, or had to be: the response, the refusal, the repair control, the Notifications page and the refused Reset's notification | Unit test | `RestorePointDtoTests` (3); `DatabaseInitializerTests.ResetAsync_CorruptDatabaseThatCannotBeSetAside_RefusalSaysWhichLayerShowedIt`, `…ResetAsync_FileOnlyTheBackupFindsUnreadableThatCannotBeSetAside_RefusalCarriesTheBackupError`; `StartupResilienceTests.Startup_DatabaseFileCorrupt_ResetResponseSaysWhichLayerShowedIt`, `…ResetRefusalSaysWhichLayerShowedIt`; `DatabaseRepairActionsTests.RefusedForAFileThatNeededSettingAside_SaysWhichLayerShowedIt`, `…RefusedForAFileTheBackupFoundUnreadable_GivesTheBackupError`; `NotificationsPageTests.ResetThatSetTheFileAside_SaysWhyAndWhere`, `…ResetThatSetAsideAFileTheBackupFoundUnreadable_GivesTheBackupError`; `DatabaseActionResultRecorderTests.RecordAsync_RefusedForAFileThatNeededSettingAside_RecordsTheLayerThatShowedIt`, `…RecordAsync_RefusedForAFileTheBackupFoundUnreadable_RecordsTheBackupError`, the `ResetNotMovable` rows |
+| 26 | ✅ | *(T1, decision F corrected)* The Schema layer compares only when every version table records this build's version, and is skipped, naming the table, otherwise; startup over an old database logs no Schema failure; a passed check that skipped a layer says so rather than claiming every layer | Unit test | `SqliteDatabaseCheckTests.Check_RecordedVersionBehindThisBuild_SkipsSchemaNamingTheVersionTable`, `…Check_RecordedVersionAheadOfThisBuild_SkipsSchema`, `…Check_NoVersionTable_SkipsSchema`, `…Check_RecordedVersionIsThisBuilds_ComparesTheSchema`; `DatabaseInitializerTests.InitialiseAsync_OldDatabase_LogsTheSchemaSkippedRatherThanFailedBeforeMigrating`; `StartupDatabaseCheckTests` (3) |
