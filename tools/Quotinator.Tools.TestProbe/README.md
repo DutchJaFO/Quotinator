@@ -158,6 +158,19 @@ Reads a saved `/import/actions?pageSize=0` response. A `ResolvedToExisting` acti
 differs, an absent field, a `null` and an empty array all counting as empty. Fails on any other, and on there being none
 at all.
 
+### `damage`: damage a database file through its documented format
+
+```bash
+dotnet run --project tools/Quotinator.Tools.TestProbe -- damage --rewrite-last-index-key C:\repos\Quotinator\.claude\temp\qt-startup-15-data\quotinatordata.db IX_CheckFixture_Rank 100
+```
+
+Builds a document's damaged database with the same helper the database check's unit tests use,
+`DocumentedFormatFixtures` in `Quotinator.Data.Testing` (#490), rather than a second copy of the byte layout.
+`--rewrite-last-index-key <db> <index> <value>` rewrites the last entry of an index in place, so the index no longer
+agrees with its table: `PRAGMA integrity_check` finds it, and `PRAGMA quick_check` does not. The index must fit on its
+root page and its first column must hold 8-bit integers, and the new value must be larger than the old, so key order
+holds. Fails, writing nothing, when any of that does not hold. Run it only against a database no container has open.
+
 ## Design notes
 
 - Each command is its own class with one job (`Commands/`); `CommandDispatcher` only selects the command

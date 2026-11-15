@@ -27,7 +27,7 @@ job, recorded in its plan doc; the smoke set is the floor underneath it, never a
 
 ## The designated smoke set
 
-Nineteen tests. The question this set answers is *does this container fundamentally work*, and a test
+Twenty tests. The question this set answers is *does this container fundamentally work*, and a test
 is in it for one of two reasons.
 
 **Its failure would invalidate most other results.** That is the reason for the nine outside
@@ -39,7 +39,8 @@ however rare the problem. Every degraded startup path the application has gets a
 of those documents is in this set: a broken schema, an unwritable data directory, a file that is not a
 database, a truncated one, a data directory or `keys/` directory that cannot be created, a `keys/`
 directory that exists but cannot be written, a migration refused for want of a backup, a schema
-version ahead of the build, and a schema that does not match its version. Each asserts the same contract:
+version ahead of the build, a schema that does not match its version, and an index that disagrees with its
+table. Each asserts the same contract:
 the process stays up, `/health` reports `unhealthy` with a reason, the OpenAPI surface answers and the
 database reads are gated, and each ends by removing its own sabotage and reading `200`. Whether the
 reason names the right cause, how the pages render and whether a recovery route succeeds are recorded,
@@ -64,6 +65,7 @@ not asserted: the contract is that the application says it is degraded instead o
 | [A migration refused for want of a backup degrades instead of crashing](startup-and-degradation/12-a-migration-refused-for-want-of-a-backup-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
 | [A keys directory that cannot be written degrades instead of crashing](startup-and-degradation/13-a-keys-directory-that-cannot-be-written-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
 | [A schema that does not match its version degrades and names what is wrong](startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md) | `startup-and-degradation/` |
+| [A database whose index disagrees with its table degrades, and a Reset recovers](startup-and-degradation/15-a-database-with-a-broken-index-degrades-and-a-reset-recovers.md) | `startup-and-degradation/` |
 | [Startup notification system](notifications-and-changelog/01-notification-system.md) | `notifications-and-changelog/` |
 | [Changelog lives in its own on-disk database and survives a restart](notifications-and-changelog/07-changelog-served-from-its-own-database.md) | `notifications-and-changelog/` |
 
@@ -1202,7 +1204,7 @@ The tools this suite runs on:
 | [`http.csx`](../../scripts/testing/http.csx) | One HTTP call: upload a file, expect a status, wait for one, write the body (`--body-out`) or the headers (`--headers-out`) to a file |
 | [`startup-window.csx`](../../scripts/testing/startup-window.csx) | Sends [`startup-and-degradation/03`](startup-and-degradation/03-startup-wait-page.md)'s requests together during the startup window, which separate commands cannot reach, and saves what each answered |
 | [`capture-page.csx`](../../scripts/testing/capture-page.csx) | Load a page headless, run a committed page script (`--script-file`), write its result (`--result-out`) and a PNG |
-| [`TestProbe`](../../tools/Quotinator.Tools.TestProbe/README.md) | Every assertion and set-up step between commands: wait for a field, assert on JSON from a file, set up and check files, count a container's log |
+| [`TestProbe`](../../tools/Quotinator.Tools.TestProbe/README.md) | Every assertion and set-up step between commands: wait for a field, assert on JSON from a file, set up and check files, count a container's log, damage a database file through its documented format |
 | [`execute-sql.csx`](../../scripts/testing/execute-sql.csx) | Run SQL against a database file, to break or repair it from the host side |
 | [`sqlite-storage-probe.csx`](../../scripts/testing/sqlite-storage-probe.csx) | Measure what SQLite reports about a file's storage |
 | [`corrupt-csv-cell.csx`](../../scripts/testing/corrupt-csv-cell.csx) | Damage one cell of an exported CSV, so a re-import has something to reject |
@@ -1259,6 +1261,8 @@ The tools this suite runs on:
 | 12 | [A migration refused for want of a backup degrades instead of crashing](startup-and-degradation/12-a-migration-refused-for-want-of-a-backup-degrades-instead-of-crashing.md) | yes |
 | 13 | [A keys directory that cannot be written degrades instead of crashing](startup-and-degradation/13-a-keys-directory-that-cannot-be-written-degrades-instead-of-crashing.md) | yes |
 | 14 | [A schema that does not match its version degrades and names what is wrong](startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md) | yes |
+| 15 | [A database whose index disagrees with its table degrades, and a Reset recovers](startup-and-degradation/15-a-database-with-a-broken-index-degrades-and-a-reset-recovers.md) | yes |
+| 16 | [With a fast startup check, a broken index starts healthy and is still reported](startup-and-degradation/16-with-a-fast-startup-check-a-broken-index-starts-healthy-and-is-still-reported.md) | no |
 
 ### `backup/`
 

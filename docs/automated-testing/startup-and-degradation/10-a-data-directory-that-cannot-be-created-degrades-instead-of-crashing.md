@@ -138,6 +138,14 @@ access* first. **Not workable**: a Reset writes. The refusal's second remedy, *R
 write the `500` in as the contract. Remounting `/data` writable and restarting returns the container to
 `200`, which is step 3's positive control.
 
+**Re-measured 2026-11-15** against `quotinator:local` built from `6cb7a4b9`, after #490 added the database
+check, whose Storage layer also detects a data directory that cannot be written. Steps 1 to 3 held as before:
+`unhealthy` with the data-directory reason, the container running, the bind directory empty, the spec `200`,
+the seven reads `503`, and every one of them `200` once the mount was writable. The configuration-time guard
+still records the failure first, before the database check runs, so this run cannot show the Storage layer
+reporting it; `StartupResilienceTests.Startup_DataDirectoryNotWritable_DetectedBeforeTheDatabaseIsOpened`
+proves that layer in-process.
+
 ## Canary
 
 A build from the commit before [#326](https://github.com/DutchJaFO/Quotinator/issues/326)'s first code

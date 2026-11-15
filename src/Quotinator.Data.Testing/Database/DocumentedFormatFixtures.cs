@@ -350,6 +350,7 @@ public static class DocumentedFormatFixtures
     /// <param name="path">The database to read.</param>
     public static byte[] ReadHeader(string path)
     {
+        RequireFile(path);
         byte[] header = new byte[HeaderLength];
         using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         stream.ReadExactly(header);
@@ -370,6 +371,7 @@ public static class DocumentedFormatFixtures
     // cannot remove when it closes, which would leave the fixture with sidecars no test asked for.
     private static long RootPage(string path, string name)
     {
+        RequireFile(path);
         using SqliteConnection connection = new(new SqliteConnectionStringBuilder
         {
             DataSource = new Uri(Path.GetFullPath(path)).AbsoluteUri + "?immutable=1",
@@ -382,6 +384,14 @@ public static class DocumentedFormatFixtures
         return rootPage is > 1
             ? rootPage.Value
             : throw new InvalidOperationException($"Fixture precondition: {name} has no root page of its own.");
+    }
+
+    // Every damage starts from an existing database: opening a missing one would create it, or fail on SQLite's
+    // own error rather than the fixture's.
+    private static void RequireFile(string path)
+    {
+        if (!File.Exists(path))
+            throw new InvalidOperationException($"Fixture precondition: {path} does not exist.");
     }
 
     // The page size is 2 bytes big-endian at offset 16; the value 1 means 65536 (§1.3.2).

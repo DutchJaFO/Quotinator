@@ -14,6 +14,7 @@ internal static class CommandDispatcher
         ["url"] = new UrlCommand(),
         ["seed-sources"] = new SeedSourcesCommand(),
         ["seed-noops"] = new SeedNoOpsCommand(),
+        ["damage"] = new DamageCommand(),
     };
 
     /// <summary>

@@ -9,6 +9,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- #490: the damage command builds a document's fixture with the same documented-format helper the unit
+         tests use, rather than a second copy of the byte layout. -->
+    <ProjectReference Include="..\..\src\Quotinator.Data.Testing\Quotinator.Data.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Quotinator.Tools.TestProbe.Tests</_Parameter1>
     </AssemblyAttribute>

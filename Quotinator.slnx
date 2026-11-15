@@ -442,6 +442,8 @@
     <File Path="docs/automated-testing/startup-and-degradation/12-a-migration-refused-for-want-of-a-backup-degrades-instead-of-crashing.md" />
     <File Path="docs/automated-testing/startup-and-degradation/13-a-keys-directory-that-cannot-be-written-degrades-instead-of-crashing.md" />
     <File Path="docs/automated-testing/startup-and-degradation/14-a-schema-that-does-not-match-its-version-degrades-and-names-it.md" />
+    <File Path="docs/automated-testing/startup-and-degradation/15-a-database-with-a-broken-index-degrades-and-a-reset-recovers.md" />
+    <File Path="docs/automated-testing/startup-and-degradation/16-with-a-fast-startup-check-a-broken-index-starts-healthy-and-is-still-reported.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/database-lifecycle/fixtures/">
     <File Path="docs/automated-testing/database-lifecycle/fixtures/audit-purge-kept.json" />

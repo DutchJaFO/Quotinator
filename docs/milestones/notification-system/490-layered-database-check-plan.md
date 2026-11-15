@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 12)
+**Status:** In progress (step 13)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492.
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 12.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute from step 13.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. Step 6 left one deviation from the verification table for the developer to confirm; it
 is listed under step 6. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
@@ -758,7 +758,7 @@ check is inconclusive, is set aside. If only References or Schema failed, the fi
 
 ### 12. T2 documents
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 - **Two new documents in `startup-and-degradation/`:**
   - a database with a broken index degrades at startup and recovers through a Reset;
@@ -768,6 +768,29 @@ check is inconclusive, is set aside. If only References or Schema failed, the fi
 - **Fixtures:** each document's fixture is built with the same documented-format helper as step 6.
 - **Canary:** each new document is confirmed red against `quotinator:canary-490`, built from `342e0cfa`.
   Then the container, image and worktree are removed.
+
+**Done 2026-11-15.**
+
+- **The documents** are `startup-and-degradation/15` (a broken index degrades, and a Reset recovers, setting
+  the file aside) and `/16` (with `fast`, the same database starts healthy and the endpoint still reports it).
+  `15` is in the smoke set, since it is a degraded startup path; `16` is not. Both are indexed, in the solution,
+  and each ends by proving the Reset remedy works.
+- **The fixture tool:** a new `TestProbe damage --rewrite-last-index-key` command, which calls
+  `DocumentedFormatFixtures.RewriteLastIndexKey`. TestProbe now references `Quotinator.Data.Testing` for it,
+  rather than a script repeating the byte layout. Its tests in `DamageCommandTests` were red first. Running the
+  canary with a mangled path found that a missing database file made the command crash on SQLite's own error;
+  `RewriteLastIndexKey_MissingFile_FailsNamingIt` was written red, and the helper now requires the file to exist
+  before every damage.
+- **Canary**, `342e0cfa` as `quotinator:canary-490`: `15` read `healthy` over the broken index, and both
+  documents failed on the absent `isSound` and `layers`. Container, image and worktree removed.
+- **On `quotinator:local` built from `6cb7a4b9`:** `15`, `16` and `10` passed in full. Their *Observed effect*
+  sections record the readings. `10`'s reason is still set by the configuration-time guard, before the check
+  runs, so the live run cannot show the Storage layer reporting it; the in-process startup test does.
+- **Found, recorded in `15` rather than fixed here:**
+  - In the container on a Windows bind mount, Pages and Indexes took hundreds of milliseconds on the main
+    database, against step 2's 7.6 ms and 14.4 ms read directly. The add-on description's "about 25
+    milliseconds" is the direct figure.
+  - A file set aside because it is not a sound copy is still named `…_unreadable_…`, #482's name.
 
 ### 13. Leave no contradiction in the documentation
 
@@ -832,7 +855,7 @@ says that the database is checked thoroughly at every start, and that the faster
 | 17 | ✅ | Startup detects an unwritable data directory before the database is opened, degrades on a broken index naming the layer in the startup check it keeps (generic reason until #457), and treats a dangling reference as decision E decides, reporting it in the same check | Unit test | `StartupResilienceTests.Startup_DataDirectoryNotWritable_DetectedBeforeTheDatabaseIsOpened`, `…Startup_IndexDisagreesWithItsTable_DegradesNamingTheLayer`, `…Startup_DanglingReference_StaysHealthyAndReportsTheLayer`; `DatabaseHealthStateTests.RecordStartupCheck_KeepsTheCheckWithoutChangingHealth`, `…MarkHealthy_KeepsTheStartupCheck` |
 | 18 | ✅ | The integrity endpoint reports every layer, with a failing layer instead of throwing, at `Full` whatever the setting | Unit test | `AdminDatabaseIntegrityEndpointTests.Integrity_CorruptDatabase_ReportsTheFailingLayerInsteadOfThrowing`, `…Integrity_FastSetting_StillReportsEveryLayer`, `…Integrity_IndexDisagreesWithItsTable_ReportsTheLayerAndStaysIntact`, `…IntactDatabases_ReportEveryLayerPassed` |
 | 19 | ✅ | The new strings, the add-on option and the endpoint documentation are complete | Unit test | Existing `TranslationCompletenessTests` and `OpenApiSpecEndpointTests`, plus `RepositoryStructureTests.EveryAddOnOption_IsTranslatedInEveryLanguage` and `…AddOnDatabaseStartupCheckDefault_MatchesTheApplicationDefault` (built in step 10) |
-| 20 | ❌ | Live: a broken index degrades at startup and recovers through a Reset | Live (T2) | New `startup-and-degradation/NN`; passes on this build, red on `quotinator:canary-490` |
-| 21 | ❌ | Live: with `Fast`, the same database starts healthy, and the endpoint still reports the broken index | Live (T2) | New `startup-and-degradation/NN`; same canary |
+| 20 | ✅ | Live: a broken index degrades at startup and recovers through a Reset | Live (T2) | `startup-and-degradation/15`; passes on this build, red on `quotinator:canary-490` |
+| 21 | ✅ | Live: with `Fast`, the same database starts healthy, and the endpoint still reports the broken index | Live (T2) | `startup-and-degradation/16`; same canary |
 | 22 | ❌ | The full build and test suite are clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all passed |
 | 23 | ❌ | T1: startup time at `Full` is acceptable, and a broken index degrades with its reason | Live (T1) | Step 15, confirmed by the developer |
