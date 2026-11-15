@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Quotinator.Data.Database;
 using Quotinator.Data.Database.Checks;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Testing.Database;
@@ -195,6 +196,7 @@ public class SqliteDatabaseCheckTests
 
         Assert.AreEqual(DatabaseCheckLayerStatus.Failed, StatusOf(result, DatabaseCheckLayer.Storage));
         Assert.AreEqual(DatabaseCheckLayer.Storage, result.FirstFailure?.Layer);
+        Assert.AreEqual(DatabaseStorageFault.DirectoryNotWritable, result.FirstFailure?.StorageFault);
         foreach (DatabaseCheckLayer layer in LayersAfter(DatabaseCheckLayer.Storage))
             Assert.AreEqual(DatabaseCheckLayerStatus.Passed, StatusOf(result, layer), $"Layer {layer} did not run on a readable file.");
     }
@@ -219,23 +221,67 @@ public class SqliteDatabaseCheckTests
     }
 
     /// <summary>
-    /// Row 12, decision D: when the <c>-wal</c> holds data and no copy can be made, the main file alone cannot
-    /// be checked soundly, so every query layer is <c>Inconclusive</c>, which is never a pass.
+    /// Row 12, as corrected (developer, 2026-11-15): when the <c>-wal</c> holds data and the copy cannot be
+    /// written, that is what Storage found, never an inconclusive layer. Storage fails, saying the folder cannot
+    /// be written, and no reading layer runs, since the main file alone cannot be checked soundly.
     /// </summary>
     [TestMethod]
-    public async Task Check_CopyCannotBeMade_ReportsInconclusive()
+    public async Task Check_CopyCannotBeWritten_FailsStorageAndRunsNoReadingLayer()
     {
         using Scenario scenario = Scenario.Build(Damage.WalHoldsData);
         File.WriteAllText(scenario.WorkFolder, "A file where the work folder should be, so no copy can be made in it.");
 
         DatabaseCheckResult result = await scenario.Check().CheckAsync(DatabaseCheckDepth.Full);
 
-        foreach (DatabaseCheckLayer layer in new[] { DatabaseCheckLayer.Storage, DatabaseCheckLayer.Format, DatabaseCheckLayer.Journal })
-            Assert.AreEqual(DatabaseCheckLayerStatus.Passed, StatusOf(result, layer), $"Layer {layer}.");
-        foreach (DatabaseCheckLayer layer in QueryLayers)
-            Assert.AreEqual(DatabaseCheckLayerStatus.Inconclusive, StatusOf(result, layer), $"Layer {layer}.");
-        Assert.IsFalse(result.IsSound, "An inconclusive check was reported as sound.");
-        Assert.IsFalse(string.IsNullOrWhiteSpace(result.FirstFailure?.Finding), "An inconclusive layer must say why.");
+        AssertFailsAt(result, DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed);
+        Assert.AreEqual(DatabaseStorageFault.DirectoryNotWritable, result.FirstFailure?.StorageFault);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(result.FirstFailure?.Finding), "Storage does not say why.");
+    }
+
+    /// <summary>
+    /// #490 (developer, 2026-11-15): the room the copy needs is measured before it is attempted. Too little is
+    /// what Storage found: it fails naming the space, no copy is attempted, and no reading layer runs.
+    /// </summary>
+    [TestMethod]
+    public async Task Check_NoRoomForTheCopy_FailsStorageWithoutAttemptingIt()
+    {
+        using Scenario scenario = Scenario.Build(Damage.WalHoldsData);
+        string[] before = scenario.HashDatabaseFiles();
+
+        DatabaseCheckResult result = await scenario.Check(diskSpace: new FixedDiskSpace(0)).CheckAsync(DatabaseCheckDepth.Full);
+
+        AssertFailsAt(result, DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed);
+        Assert.AreEqual(DatabaseStorageFault.InsufficientSpace, result.FirstFailure?.StorageFault);
+        Assert.IsEmpty(scenario.FilesInWorkFolder(), "A copy was attempted although the room was measured as too little.");
+        Assert.AreSequenceEqual(before, scenario.HashDatabaseFiles(), "The check changed the original database or its sidecars.");
+    }
+
+    /// <summary>Control: with room for the copy, the same database is checked through it and passes every layer.</summary>
+    [TestMethod]
+    public async Task Check_RoomForTheCopy_ChecksThroughIt()
+    {
+        using Scenario scenario = Scenario.Build(Damage.WalHoldsData);
+
+        DatabaseCheckResult result = await scenario.Check(diskSpace: new FixedDiskSpace(long.MaxValue)).CheckAsync(DatabaseCheckDepth.Full);
+
+        AssertEveryLayer(result, DatabaseCheckLayerStatus.Passed);
+    }
+
+    /// <summary>Control: a database whose <c>-wal</c> holds nothing needs no copy, so no room is asked of the volume.</summary>
+    [TestMethod]
+    public async Task Check_NoCopyNeeded_NeedsNoRoom()
+    {
+        using Scenario scenario = Scenario.Build(Damage.None);
+
+        DatabaseCheckResult result = await scenario.Check(diskSpace: new FixedDiskSpace(0)).CheckAsync(DatabaseCheckDepth.Full);
+
+        AssertEveryLayer(result, DatabaseCheckLayerStatus.Passed);
+    }
+
+    /// <summary>A volume reporting a fixed amount of free space.</summary>
+    private sealed class FixedDiskSpace(long bytes) : IDiskSpaceProvider
+    {
+        public long GetAvailableFreeSpaceBytes(string path) => bytes;
     }
 
     /// <summary>
@@ -471,8 +517,8 @@ public class SqliteDatabaseCheckTests
             return scenario;
         }
 
-        public SqliteDatabaseCheck Check(Func<string, bool>? canCreateFileIn = null) =>
-            new(DatabaseName, DatabasePath, WorkFolder, _expectedSchema, NoVersionTables, canCreateFileIn);
+        public SqliteDatabaseCheck Check(Func<string, bool>? canCreateFileIn = null, IDiskSpaceProvider? diskSpace = null) =>
+            new(DatabaseName, DatabasePath, WorkFolder, _expectedSchema, NoVersionTables, canCreateFileIn, diskSpace);
 
         /// <summary>The database and each of its sidecars that exists, as its name and a hash of its content.</summary>
         public string[] HashDatabaseFiles() =>

@@ -903,6 +903,15 @@ public class DatabaseInitializer(
         _setAsideReason = null;
         _resetBackupPath = null;
 
+        // #490 (developer, 2026-11-15): no room for the check's copy is no room for a backup either, so the
+        // Reset refuses as for any backup obstacle. With the operator's allowNoBackup it goes on, and the file,
+        // which nothing showed sound, is set aside below, which needs no room.
+        if (ResetDatabaseCheck.NoRoomToCheck(check) is not null && !allowNoBackup)
+        {
+            Logger.LogResetRefusedNoBackup(BackupOutcome.InsufficientDiskSpace.ToString());
+            return DatabaseOperationResult.RefusedForBackup(BackupOutcome.InsufficientDiskSpace, BackupGuardedStep.Reset);
+        }
+
         BackupOutcome readiness = BackupOutcome.Succeeded;
         if (_resetSourceIsSoundCopy)
         {

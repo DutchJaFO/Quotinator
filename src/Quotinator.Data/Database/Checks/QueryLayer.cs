@@ -6,8 +6,8 @@ namespace Quotinator.Data.Database.Checks;
 
 /// <summary>
 /// A layer of the database check that reads the database through SQLite (#490, ADR 028). What the four have
-/// in common is here: there is nothing to check without a file, a connection that cannot be opened soundly
-/// makes the layer inconclusive (decision D), and SQLite rejecting the file is the layer's failure.
+/// in common is here: there is nothing to check without a file, the connection is the one the Storage layer
+/// prepared for (on its copy when one was needed), and SQLite rejecting the file is the layer's failure.
 /// </summary>
 internal abstract class QueryLayer : IDatabaseCheckLayer
 {
@@ -25,10 +25,8 @@ internal abstract class QueryLayer : IDatabaseCheckLayer
 
         try
         {
-            (SqliteConnection? connection, string? whyNot) = await subject.OpenAsync();
-            return connection is null
-                ? LayerResults.Inconclusive(Layer, whyNot!)
-                : await CheckAsync(connection, subject);
+            SqliteConnection connection = await subject.OpenAsync();
+            return await CheckAsync(connection, subject);
         }
         // ADR 022: nothing lets the code ask whether SQLite can read a file without reading it, so SQLite's own
         // rejection is the answer, handled here, at the first point an outcome can be formed.

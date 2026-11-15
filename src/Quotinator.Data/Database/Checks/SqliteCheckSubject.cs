@@ -23,6 +23,7 @@ namespace Quotinator.Data.Database.Checks;
 /// <param name="expectedSchemaScripts">The DDL that defines the expected schema.</param>
 /// <param name="expectedSchemaVersions">The version each version table records once every known migration has run.</param>
 /// <param name="canCreateFileIn">Answers whether a file can be created in a directory.</param>
+/// <param name="diskSpace">Measures the room on the data directory's volume.</param>
 /// <param name="logger">Logs each handled exception (ADR 022).</param>
 internal sealed class SqliteCheckSubject(
     string databasePath,
@@ -30,12 +31,12 @@ internal sealed class SqliteCheckSubject(
     IReadOnlyList<string> expectedSchemaScripts,
     IReadOnlyDictionary<SchemaVersionTable, int> expectedSchemaVersions,
     Func<string, bool> canCreateFileIn,
+    IDiskSpaceProvider diskSpace,
     ILogger logger) : IDisposable
 {
     private SqliteConnection? _connection;
     private string? _copyFolder;
-    private string? _whyNoConnection;
-    private bool _connectionAttempted;
+    private string? _copySource;
 
     /// <summary>The database file being checked.</summary>
     public string DatabasePath { get; } = Path.GetFullPath(databasePath);
@@ -55,6 +56,9 @@ internal sealed class SqliteCheckSubject(
     /// <summary>Answers whether a file can be created in a directory.</summary>
     public Func<string, bool> CanCreateFileIn { get; } = canCreateFileIn;
 
+    /// <summary>Measures the room on the data directory's volume.</summary>
+    public IDiskSpaceProvider DiskSpace { get; } = diskSpace;
+
     /// <summary>Logs each handled exception.</summary>
     public ILogger Logger { get; } = logger;
 
@@ -67,51 +71,57 @@ internal sealed class SqliteCheckSubject(
     /// <summary>The database's page size, read from its header by the Format layer.</summary>
     public int PageSize { get; set; }
 
-    /// <summary>Whether the <c>-wal</c> holds at least one frame, as the Journal layer found.</summary>
-    public bool WalHoldsData { get; set; }
+    /// <summary>
+    /// Whether the reading layers can run only on a copy: the <c>-wal</c> holds at least one frame beyond its
+    /// header, so it is part of the database's state and an <c>immutable</c> open of the main file could miss it.
+    /// </summary>
+    public bool CopyNeeded => File.Exists(WalPath) && new FileInfo(WalPath).Length > JournalLayer.WalHeaderLength;
+
+    /// <summary>The room a copy needs: the database and its <c>-wal</c> together.</summary>
+    public long CopyBytes => new FileInfo(DatabasePath).Length + (File.Exists(WalPath) ? new FileInfo(WalPath).Length : 0L);
+
+    /// <summary>Whether the copy the reading layers run on was made.</summary>
+    public bool CopyMade => _copySource is not null;
+
+    /// <summary>Whether the reading layers can run: the file can be read, and on the copy when one is needed.</summary>
+    public bool ReadingLayersCanRun => FileReadable && (!CopyNeeded || CopyMade);
 
     /// <summary>
-    /// The connection the query layers share, opened on first use, or the reason none could be opened soundly.
-    /// A reason makes every query layer inconclusive (decision D): it is never a fault in the file. Opening a
-    /// damaged file throws <see cref="SqliteException"/>, which the calling layer reports as its finding.
+    /// Makes the copy the reading layers run on, in a folder of its own inside the work folder, or says why it
+    /// could not be made. Called by the Storage layer once the room is measured. <see langword="null"/> when
+    /// the copy was made.
     /// </summary>
-    public async Task<(SqliteConnection? Connection, string? WhyNot)> OpenAsync()
+    public string? TryMakeCopy()
     {
-        (SqliteConnection? connection, string? whyNot) = Connection();
-        if (connection is not null && connection.State != System.Data.ConnectionState.Open)
-            await connection.OpenAsync();
-        return (connection, whyNot);
+        try
+        {
+            _copyFolder = Path.Combine(workFolder, Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_copyFolder);
+            string source = Path.Combine(_copyFolder, Path.GetFileName(DatabasePath));
+            CopyShared(DatabasePath, source);
+            CopyShared(WalPath, source + "-wal");
+            _copySource = source;
+            return null;
+        }
+        // ADR 022: whether the copy can be made is only known by making it, so the exception is the answer.
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Logger.LogExceptionHandled(ex, "no copy of a database whose -wal holds data could be made to check it");
+            return $"The -wal holds data, so the database can only be checked through a copy, and none could be made in {workFolder}: {ex.Message}";
+        }
     }
 
-    private (SqliteConnection? Connection, string? WhyNot) Connection()
+    /// <summary>
+    /// The connection the query layers share, opened on first use: on the copy when the Storage layer made one,
+    /// otherwise an <c>immutable</c> open of the main file. Opening a damaged file throws
+    /// <see cref="SqliteException"/>, which the calling layer reports as its finding.
+    /// </summary>
+    public async Task<SqliteConnection> OpenAsync()
     {
-        if (_connectionAttempted)
-            return (_connection, _whyNoConnection);
-        _connectionAttempted = true;
-
-        string source = DatabasePath;
-        if (WalHoldsData)
-        {
-            try
-            {
-                _copyFolder = Path.Combine(workFolder, Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(_copyFolder);
-                source = Path.Combine(_copyFolder, Path.GetFileName(DatabasePath));
-                CopyShared(DatabasePath, source);
-                CopyShared(WalPath, source + "-wal");
-            }
-            // ADR 022: whether the copy can be made is only known by making it, so the exception is the answer.
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                Logger.LogExceptionHandled(ex, "no copy of a database whose -wal holds data could be made to check it");
-                _whyNoConnection =
-                    $"The -wal holds data, so the database can only be checked through a copy, and none could be made in {workFolder}: {ex.Message}";
-                return (null, _whyNoConnection);
-            }
-        }
-
-        _connection = new SqliteConnection(WalHoldsData ? CopyConnectionString(source) : ImmutableConnectionString(source));
-        return (_connection, null);
+        _connection ??= new SqliteConnection(_copySource is { } copy ? CopyConnectionString(copy) : ImmutableConnectionString(DatabasePath));
+        if (_connection.State != System.Data.ConnectionState.Open)
+            await _connection.OpenAsync();
+        return _connection;
     }
 
     /// <summary>Closes the connection and removes the copy, if one was made.</summary>

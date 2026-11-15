@@ -26,6 +26,12 @@ public sealed class DatabaseCheckLayerResult
     public string? Finding { get; init; }
 
     /// <summary>
+    /// What the Storage layer found wrong, when it failed (#490); <see langword="null"/> for every other layer
+    /// and for a Storage layer that passed. Typed, so no caller reads meaning into <see cref="Finding"/>.
+    /// </summary>
+    public DatabaseStorageFault? StorageFault { get; init; }
+
+    /// <summary>
     /// How long the layer took, or <see langword="null"/> when it did not run. An indicator for locating a
     /// slow layer and for reporting progress, never a threshold anything is tested against.
     /// </summary>

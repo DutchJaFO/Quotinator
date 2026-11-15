@@ -406,6 +406,7 @@ builder.Services.AddSingleton<IDatabaseCheck>(sp => new SqliteDatabaseCheck(
     DatabaseNames.Main, dbPath, databaseCheckWorkFolder,
     DatabaseInitializer.ExpectedSchemaScripts(QuotinatorMigrations.All, QuotinatorMigrations.Baseline),
     DatabaseInitializer.ExpectedSchemaVersions(QuotinatorMigrations.All),
+    diskSpace: sp.GetRequiredService<IDiskSpaceProvider>(),
     logger: sp.GetRequiredService<ILogger<SqliteDatabaseCheck>>()));
 
 // #309: separate database for changelog content (ADR 018): no relational or transactional coupling
@@ -425,6 +426,7 @@ builder.Services.AddKeyedSingleton<IDatabaseCheck>(DatabaseConnectionKeys.Change
     DatabaseNames.Changelog, changelogDbPath, databaseCheckWorkFolder,
     ChangelogDatabaseInitializer.ExpectedSchemaScripts(),
     ChangelogDatabaseInitializer.ExpectedSchemaVersions(),
+    diskSpace: sp.GetRequiredService<IDiskSpaceProvider>(),
     logger: sp.GetRequiredService<ILogger<SqliteDatabaseCheck>>()));
 builder.Services.AddSingleton<ChangelogDatabaseInitializer>();
 builder.Services.AddSingleton<ChangelogRepository>();

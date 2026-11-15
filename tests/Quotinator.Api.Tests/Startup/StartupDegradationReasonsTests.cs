@@ -62,12 +62,36 @@ public class StartupDegradationReasonsTests
     [TestMethod]
     public void For_StorageFailed_IsTheDataDirectoryReason()
     {
-        string? reason = For(DatabaseOperationResult.StoppedByCheck(CheckFailingAt(DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed)));
+        string? reason = For(DatabaseOperationResult.StoppedByCheck(CheckFailingAt(DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed, DatabaseStorageFault.DirectoryNotWritable)));
 
         Assert.AreEqual(StartupDegradationReasons.DataDirectoryNotWritable, reason);
     }
 
-    /// <summary>Decision D: a check that could not run soundly degrades with its own reason, never as a pass.</summary>
+    /// <summary>
+    /// #490 (developer, 2026-11-15): too little room for the check's copy is what Storage found, and startup
+    /// degrades telling the operator to free space, not that the directory cannot be written.
+    /// </summary>
+    [TestMethod]
+    public void For_StorageFoundNoRoom_IsTheSpaceReason()
+    {
+        string? reason = For(DatabaseOperationResult.StoppedByCheck(CheckFailingAt(DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed, DatabaseStorageFault.InsufficientSpace)));
+
+        Assert.AreEqual(StartupDegradationReasons.NotEnoughSpace, reason);
+    }
+
+    /// <summary>
+    /// #490: a file that cannot be read is no fault of the directory, so it does not get the data directory's
+    /// reason; it keeps the generic one until #457 gives each its own.
+    /// </summary>
+    [TestMethod]
+    public void For_StorageFoundTheFileUnreadable_IsTheGenericReason()
+    {
+        string? reason = For(DatabaseOperationResult.StoppedByCheck(CheckFailingAt(DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed, DatabaseStorageFault.FileUnreadable)));
+
+        Assert.AreEqual(StartupDegradationReasons.InitialisationFailed, reason);
+    }
+
+    /// <summary>A layer whose test ran and gave neither a pass nor a fail degrades with its own reason, never as a pass.</summary>
     [TestMethod]
     public void For_CheckInconclusive_IsTheInconclusiveReason()
     {
@@ -111,7 +135,7 @@ public class StartupDegradationReasonsTests
     [TestMethod]
     public void For_EveryNewReason_IsDistinct()
     {
-        string[] reasons = [StartupDegradationReasons.DataDirectoryNotWritable, StartupDegradationReasons.InitialisationFailed, StartupDegradationReasons.CheckInconclusive];
+        string[] reasons = [StartupDegradationReasons.DataDirectoryNotWritable, StartupDegradationReasons.InitialisationFailed, StartupDegradationReasons.CheckInconclusive, StartupDegradationReasons.NotEnoughSpace];
 
         Assert.HasCount(reasons.Length, reasons.Distinct());
         Assert.IsNotNull(For(DatabaseOperationResult.StoppedByCheck(CheckFailingAt(DatabaseCheckLayer.Format, DatabaseCheckLayerStatus.Failed))),
@@ -147,7 +171,7 @@ public class StartupDegradationReasonsTests
     public void For_CheckStoppedAndOvershoot_CheckWins()
     {
         string? reason = For(
-            DatabaseOperationResult.StoppedByCheck(CheckFailingAt(DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed)),
+            DatabaseOperationResult.StoppedByCheck(CheckFailingAt(DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed, DatabaseStorageFault.DirectoryNotWritable)),
             overshoot: true, integrity: NotIntact);
 
         Assert.AreEqual(StartupDegradationReasons.DataDirectoryNotWritable, reason);
@@ -157,7 +181,7 @@ public class StartupDegradationReasonsTests
         StartupDegradationReasons.For(initialisation, overshoot, DataVersion, AppVersion, integrity);
 
     /// <summary>A check whose layers before <paramref name="failing"/> passed, and none after it ran.</summary>
-    private static DatabaseCheckResult CheckFailingAt(DatabaseCheckLayer failing, DatabaseCheckLayerStatus status) =>
+    private static DatabaseCheckResult CheckFailingAt(DatabaseCheckLayer failing, DatabaseCheckLayerStatus status, DatabaseStorageFault? fault = null) =>
         new()
         {
             DatabaseName = "main",
@@ -166,8 +190,9 @@ public class StartupDegradationReasonsTests
             [
                 .. Enum.GetValues<DatabaseCheckLayer>().Select(layer => new DatabaseCheckLayerResult
                 {
-                    Layer  = layer,
-                    Status = layer < failing ? DatabaseCheckLayerStatus.Passed : layer == failing ? status : DatabaseCheckLayerStatus.NotRun,
+                    Layer        = layer,
+                    Status       = layer < failing ? DatabaseCheckLayerStatus.Passed : layer == failing ? status : DatabaseCheckLayerStatus.NotRun,
+                    StorageFault = layer == failing ? fault : null,
                 }),
             ],
         };

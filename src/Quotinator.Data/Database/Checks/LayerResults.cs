@@ -20,7 +20,11 @@ internal static class LayerResults
     internal static DatabaseCheckLayerResult Failed(DatabaseCheckLayer layer, string finding) =>
         new() { Layer = layer, Status = DatabaseCheckLayerStatus.Failed, Finding = finding };
 
-    /// <summary>The layer could not run soundly, for the reason <paramref name="finding"/> gives. Never a pass.</summary>
+    /// <summary>Storage failed for <paramref name="fault"/>, which <paramref name="finding"/> says in words.</summary>
+    internal static DatabaseCheckLayerResult StorageFailed(DatabaseStorageFault fault, string finding) =>
+        new() { Layer = DatabaseCheckLayer.Storage, Status = DatabaseCheckLayerStatus.Failed, Finding = finding, StorageFault = fault };
+
+    /// <summary>The layer's test ran and gave neither a pass nor a fail, for the reason <paramref name="finding"/> gives. Never a pass.</summary>
     internal static DatabaseCheckLayerResult Inconclusive(DatabaseCheckLayer layer, string finding) =>
         new() { Layer = layer, Status = DatabaseCheckLayerStatus.Inconclusive, Finding = finding };
 

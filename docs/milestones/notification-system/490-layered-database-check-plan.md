@@ -976,6 +976,38 @@ set, though all four are in it, and recorded no relevant set at all.
   throughout. Verification row 27.
 - **T2 restarts from the first test** on a build with the fix, after the review.
 
+**The review, 2026-11-15, before any further run.** Every document in scope was read against this issue's
+changes, the evidence rule and the README's three rules; the record is kept per document. It converted
+`startup-and-degradation/08` and `16` and `notifications-and-changelog/01` and `03`, and measured one
+behaviour rather than predict it: `backup/03`'s full volume.
+
+- **Found, a defect in decision D:** with the volume full and the `-wal` holding data, a Reset's check could
+  not make its copy, reported every query layer `Inconclusive`, and the Reset then set a healthy database
+  aside, answering `200`, where `backup/03` expects a refusal. The developer's correction (2026-11-15): **a copy
+  that cannot be made is a result, what Storage found, never an inconclusive one; `Inconclusive` means only a
+  test that ran and answered neither way; and no room for the check's copy is no room for a backup, so a Reset
+  refuses as for any backup obstacle, and with `allowNoBackup` proceeds and sets the file aside.**
+- **Fixed:** the Storage layer measures the room the copy needs, the database and its `-wal`, before making it,
+  and makes it; a copy that cannot be made fails Storage with a typed `DatabaseStorageFault`
+  (`InsufficientSpace` or `DirectoryNotWritable`), and the reading layers then do not run. A Reset refuses on
+  `InsufficientSpace` with `InsufficientDiskSpace`; with the override it sets the file aside, naming Storage as
+  the reason. Startup degrades with a new reason, `NotEnoughSpace`, and a file Storage could not read now gets
+  the generic reason rather than the data directory's. ADR 028, the knowledgebase entry the reason links to,
+  the Reset's descriptions and `api-endpoints.md` follow. **Red first:**
+  `SqliteDatabaseCheckTests.Check_CopyCannotBeWritten_FailsStorageAndRunsNoReadingLayer` (row 12's test,
+  rewritten), `…Check_NoRoomForTheCopy_FailsStorageWithoutAttemptingIt` and the fault assertion added to
+  `…Check_DirectoryNotWritable_FailsStorageAndStillChecksTheFile`;
+  `DatabaseInitializerTests.ResetAsync_NoRoomToCheck_RefusesForWantOfABackup` and
+  `…ResetAsync_NoRoomToCheck_WithOverride_SetsTheFileAside`; `StartupDegradationReasonsTests.For_StorageFoundNoRoom_IsTheSpaceReason`
+  and `…For_StorageFoundTheFileUnreadable_IsTheGenericReason`, each failing on its claim. The controls
+  `…Check_RoomForTheCopy_ChecksThroughIt`, `…Check_NoCopyNeeded_NeedsNoRoom` and
+  `…ResetAsync_CopyCannotBeWritten_SetsTheFileAside` (row 14's test, renamed) passed throughout. Verification
+  row 28.
+- **Still open from the review, for the developer:** whether to convert `notifications-and-changelog/09`,
+  which breaks rule 1 throughout, or drop it from this scope; whether `import-and-staged-actions/19` step 8,
+  which reads the `[Database - Stats]` line as the surface it tests, is a dedicated log test; and the review of
+  `notifications-and-changelog/14`. `backup/03` is converted once this fix is built.
+
 ### 17. Changelog
 
 **Status:** ⬜ Not started
@@ -1000,9 +1032,9 @@ says that the database is checked thoroughly at every start, and that the faster
 | 9 | ✅ | Every outcome leaves the file and its sidecars byte-for-byte as they were | Unit test | `SqliteDatabaseCheckTests.Check_AnyOutcome_LeavesTheFileAndSidecarsUntouched` (data-driven over rows 1 to 7 and 11) |
 | 10 | ✅ | *(decision C)* An unwritable directory fails Storage, but the reading layers still run | Unit test | `SqliteDatabaseCheckTests.Check_DirectoryNotWritable_FailsStorageAndStillChecksTheFile` |
 | 11 | ✅ | A `-wal` holding data is checked through a temporary copy, never through an `immutable` open of the main file | Unit test | `SqliteDatabaseCheckTests.Check_WalHoldsData_ChecksACopyAndLeavesTheOriginalsUntouched` |
-| 12 | ✅ | *(decision D)* When the copy cannot be made, the query layers are `Inconclusive`, which is never a pass | Unit test | `SqliteDatabaseCheckTests.Check_CopyCannotBeMade_ReportsInconclusive` |
+| 12 | ✅ | *(decision D, as corrected 2026-11-15, row 28)* When the copy cannot be made, Storage fails, and no reading layer runs or is reported a pass | Unit test | `SqliteDatabaseCheckTests.Check_CopyCannotBeWritten_FailsStorageAndRunsNoReadingLayer` |
 | 13 | ✅ | Startup returns a failed or inconclusive check as an outcome, without opening the database for writing | Unit test | `DatabaseInitializerTests.InitialiseAsync_LayerFails_ReturnsThatLayersOutcomeWithoutOpeningForWrite` |
-| 14 | ✅ | A Reset sets aside a file with a broken index or an inconclusive check, backs up one with a dangling reference, and always checks at `Full` | Unit test | `DatabaseInitializerTests.ResetAsync_IndexDisagreesWithItsTable_SetsTheFileAside`, `…ResetAsync_CheckInconclusive_SetsTheFileAside`, `…ResetAsync_DanglingReference_BacksTheFileUp`, `…ResetAsync_FastSetting_StillRunsEveryLayer` |
+| 14 | ✅ | A Reset sets aside a file with a broken index or one whose copy could not be written, backs up one with a dangling reference, and always checks at `Full` | Unit test | `DatabaseInitializerTests.ResetAsync_IndexDisagreesWithItsTable_SetsTheFileAside`, `…ResetAsync_CopyCannotBeWritten_SetsTheFileAside`, `…ResetAsync_DanglingReference_BacksTheFileUp`, `…ResetAsync_FastSetting_StillRunsEveryLayer` |
 | 15 | ✅ | Choosing the startup reason is one mapping: this issue's cases are added, and the #348, #350 and #305 cases keep their order and text | Unit test | `StartupDegradationReasonsTests` (one test per case, plus the first-wins order); the existing #348, #350 and #305 `StartupResilienceTests` stay green |
 | 16 | ✅ | *(decision A)* No type the Api layer sees from the check comes from the SQLite library | Unit test | `RepositoryStructureTests.TheDatabaseCheckContract_NamesNoEngineType` |
 | 17 | ✅ | Startup detects an unwritable data directory before the database is opened, degrades on a broken index naming the layer in the startup check it keeps (generic reason until #457), and treats a dangling reference as decision E decides, reporting it in the same check | Unit test | `StartupResilienceTests.Startup_DataDirectoryNotWritable_DetectedBeforeTheDatabaseIsOpened`, `…Startup_IndexDisagreesWithItsTable_DegradesNamingTheLayer`, `…Startup_DanglingReference_StaysHealthyAndReportsTheLayer`; `DatabaseHealthStateTests.RecordStartupCheck_KeepsTheCheckWithoutChangingHealth`, `…MarkHealthy_KeepsTheStartupCheck` |
@@ -1016,3 +1048,4 @@ says that the database is checked thoroughly at every start, and that the faster
 | 25 | ✅ | *(developer, 2026-11-15)* Every other surface reporting a Reset says why the file was set aside, or had to be: the response, the refusal, the repair control, the Notifications page and the refused Reset's notification | Unit test | `RestorePointDtoTests` (3); `DatabaseInitializerTests.ResetAsync_CorruptDatabaseThatCannotBeSetAside_RefusalSaysWhichLayerShowedIt`, `…ResetAsync_FileOnlyTheBackupFindsUnreadableThatCannotBeSetAside_RefusalCarriesTheBackupError`; `StartupResilienceTests.Startup_DatabaseFileCorrupt_ResetResponseSaysWhichLayerShowedIt`, `…ResetRefusalSaysWhichLayerShowedIt`; `DatabaseRepairActionsTests.RefusedForAFileThatNeededSettingAside_SaysWhichLayerShowedIt`, `…RefusedForAFileTheBackupFoundUnreadable_GivesTheBackupError`; `NotificationsPageTests.ResetThatSetTheFileAside_SaysWhyAndWhere`, `…ResetThatSetAsideAFileTheBackupFoundUnreadable_GivesTheBackupError`; `DatabaseActionResultRecorderTests.RecordAsync_RefusedForAFileThatNeededSettingAside_RecordsTheLayerThatShowedIt`, `…RecordAsync_RefusedForAFileTheBackupFoundUnreadable_RecordsTheBackupError`, the `ResetNotMovable` rows |
 | 26 | ✅ | *(T1, decision F corrected)* The Schema layer compares only when every version table records this build's version, and is skipped, naming the table, otherwise; startup over an old database logs no Schema failure; a passed check that skipped a layer says so rather than claiming every layer | Unit test | `SqliteDatabaseCheckTests.Check_RecordedVersionBehindThisBuild_SkipsSchemaNamingTheVersionTable`, `…Check_RecordedVersionAheadOfThisBuild_SkipsSchema`, `…Check_NoVersionTable_SkipsSchema`, `…Check_RecordedVersionIsThisBuilds_ComparesTheSchema`; `DatabaseInitializerTests.InitialiseAsync_OldDatabase_LogsTheSchemaSkippedRatherThanFailedBeforeMigrating`; `StartupDatabaseCheckTests` (3) |
 | 27 | ✅ | *(T2, developer, 2026-11-15)* The integrity endpoint never throws, comparing the schema only when Storage passed, and a check that finds the main database failing degrades the application at any point; a dangling reference alone, or the changelog database, does not | Unit test | `AdminDatabaseIntegrityEndpointTests.Check_LayerFailsAfterStartup_DegradesTheApplication`, `…Check_StorageFails_ReportsWithoutComparingAndDegrades`, `…Check_SchemaBrokenAfterStartup_DegradesTheApplication`, `…Check_ReferencesFailOnly_LeavesTheApplicationHealthy`, `…Check_ChangelogFails_LeavesTheApplicationHealthy`, `…Check_ThatPasses_LeavesHealthAsItWas` |
+| 28 | ✅ | *(T2, developer, 2026-11-15)* A copy the check cannot make is a Storage failure, its room measured first and its fault typed; a Reset with no room for it refuses for want of a backup, and with `allowNoBackup` sets the file aside; startup gives the free-space reason | Unit test | `SqliteDatabaseCheckTests.Check_CopyCannotBeWritten_FailsStorageAndRunsNoReadingLayer`, `…Check_NoRoomForTheCopy_FailsStorageWithoutAttemptingIt`, `…Check_RoomForTheCopy_ChecksThroughIt`, `…Check_NoCopyNeeded_NeedsNoRoom`, `…Check_DirectoryNotWritable_FailsStorageAndStillChecksTheFile`; `DatabaseInitializerTests.ResetAsync_NoRoomToCheck_RefusesForWantOfABackup`, `…ResetAsync_NoRoomToCheck_WithOverride_SetsTheFileAside`, `…ResetAsync_CopyCannotBeWritten_SetsTheFileAside`; `StartupDegradationReasonsTests.For_StorageFoundNoRoom_IsTheSpaceReason`, `…For_StorageFoundTheFileUnreadable_IsTheGenericReason` |

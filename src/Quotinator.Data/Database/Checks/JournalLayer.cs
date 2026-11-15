@@ -12,7 +12,8 @@ namespace Quotinator.Data.Database.Checks;
 /// </summary>
 internal sealed class JournalLayer : IDatabaseCheckLayer
 {
-    private const int WalHeaderLength = 32;
+    /// <summary>The length of a <c>-wal</c>'s header (fileformat.html §4.1): anything beyond it is a frame.</summary>
+    internal const int WalHeaderLength = 32;
     private const uint MagicLittleEndianChecksum = 0x377f0682;
     private const uint MagicBigEndianChecksum = 0x377f0683;
     private const uint FileFormatVersion = 3007000;
@@ -56,7 +57,6 @@ internal sealed class JournalLayer : IDatabaseCheckLayer
         if (first != Word(header, 24) || second != Word(header, 28))
             return LayerResults.Failed(Layer, "The -wal's header checksum does not match its header.");
 
-        subject.WalHoldsData = wal.Length > WalHeaderLength;
         return LayerResults.Passed(Layer);
     }
 

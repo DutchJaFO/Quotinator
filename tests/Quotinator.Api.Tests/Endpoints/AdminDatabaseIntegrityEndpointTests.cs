@@ -168,7 +168,7 @@ public class AdminDatabaseIntegrityEndpointTests
         using HttpClient client = factory.CreateClient();
         Assert.AreEqual(HttpStatusCode.OK, (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode, "precondition: healthy at startup");
 
-        main.FailAt(DatabaseCheckLayer.Storage, "The data directory cannot be written.");
+        main.FailAt(DatabaseCheckLayer.Storage, "The data directory cannot be written.", DatabaseStorageFault.DirectoryNotWritable);
         JsonElement mainDatabase = Database(await GetDatabasesAsync(client), "main");
 
         Assert.IsFalse(mainDatabase.GetProperty("isIntact").GetBoolean(), "the schema was compared through a directory that cannot be written");

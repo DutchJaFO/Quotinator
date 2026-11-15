@@ -38,14 +38,24 @@ internal static class StartupDegradationReasons
         "stopping the app, deleting the database file, and restarting.";
 
     /// <summary>
-    /// The reason for a check that could not run soundly (decision D): the database holds committed changes
-    /// beside it that only a copy can check, and no copy could be made. An inconclusive check is never a pass.
+    /// The reason for a Storage layer that found too little room for the copy the check needs (#490, ADR 028):
+    /// the database holds committed changes beside it that only a copy can check.
+    /// </summary>
+    internal const string NotEnoughSpace =
+        "There is not enough free space in the data directory to check the database. It holds changes that " +
+        "were not yet written into the main file, and checking them safely needs a working copy of the " +
+        "database beside it. Free disk space in the data directory and restart: the database is then checked " +
+        "again. See " + KnowledgebaseLinks.TheDatabaseCouldNotBeChecked;
+
+    /// <summary>
+    /// The reason for a layer whose test ran and gave neither a pass nor a fail (ADR 028). An inconclusive
+    /// layer is never a pass.
     /// </summary>
     internal const string CheckInconclusive =
-        "The database could not be checked. It holds changes that were not yet written into the main " +
-        "file, which happens after an unclean stop, and checking them safely needs a working copy in the " +
-        "data directory that could not be made. Free disk space in the data directory, or restore write " +
-        "access to it, and restart: the database is then checked again. See " + KnowledgebaseLinks.TheDatabaseCouldNotBeChecked;
+        "The database check ran, but one of its tests gave no answer either way, so the database could not be " +
+        "shown to be sound and is not used. GET " + ApiRoutes.DatabaseIntegrity + " names the test. Restart to " +
+        "check it again; if the answer is the same, restore a backup or run a database Reset (POST " +
+        ApiRoutes.DatabaseReset + ").";
 
     /// <summary>
     /// The reason startup degrades with, or <see langword="null"/> when it does not.
@@ -102,8 +112,13 @@ internal static class StartupDegradationReasons
     /// <param name="failure">The layer that failed or was inconclusive.</param>
     private static string ForLayer(DatabaseCheckLayerResult failure) =>
         failure.Status == DatabaseCheckLayerStatus.Inconclusive ? CheckInconclusive
-            : failure.Layer == DatabaseCheckLayer.Storage ? DataDirectoryNotWritable
-            : InitialisationFailed;
+            : failure.Layer != DatabaseCheckLayer.Storage ? InitialisationFailed
+            : failure.StorageFault switch
+            {
+                DatabaseStorageFault.InsufficientSpace => NotEnoughSpace,
+                DatabaseStorageFault.FileUnreadable    => InitialisationFailed,
+                _                                      => DataDirectoryNotWritable,
+            };
 
     /// <summary>
     /// The layer the database check stopped the initialisation at, or <see langword="null"/> when the check did

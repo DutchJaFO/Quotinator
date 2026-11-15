@@ -36,7 +36,7 @@ The layers name *what* is checked, never how an engine checks it:
 
 | Layer | What it answers | Run at `Fast` |
 |---|---|---|
-| Storage | Is the file there, can it be read, and can its directory be written? | Yes |
+| Storage | Is the file there, can it be read, can its directory be written, and is there room for what checking it needs? | Yes |
 | Format | Is it a database of this engine, by its documented file format? | Yes |
 | Journal | Is the engine's write-ahead file, if there is one, valid by its documented format? | Yes |
 | Pages | Can every page be read, and is every record well-formed? | Yes |
@@ -66,14 +66,21 @@ ADR for that engine. Nothing above `Quotinator.Data` changes.
 Each layer reports one of five statuses:
 - **Passed.**
 - **Failed.**
-- **Inconclusive:** the layer could not be run soundly. An inconclusive layer is **never** a pass.
+- **Inconclusive:** the layer's test ran and gave neither a pass nor a fail. An inconclusive layer is
+  **never** a pass.
 - **Not run:** an earlier layer failed or was inconclusive.
 - **Skipped:** the depth excluded it, or, for Schema, the comparison cannot mean anything yet (below). A
   skip for a reason states it as the finding.
 
-**One exception to "the first failure stops the check": a directory that cannot be written.** Every later
-layer only reads, so Storage reports that failure and the reading layers still run. That way the report
-can say whether the file itself is sound. A file that cannot be read stops the check as usual.
+**Something the check could not do is a result, never an inconclusive one (developer, 2026-11-15).** A copy
+that could not be made, or a directory without room for one, is what Storage found: it fails, with the reason
+as its finding. Inconclusive is kept for a test that ran and answered neither way.
+
+**One exception to "the first failure stops the check": a directory that cannot be written or has no room,
+when the reading layers need nothing written.** Every later layer only reads, so Storage reports that failure
+and the reading layers still run, and the report can say whether the file itself is sound. When the reading
+layers can run only on a copy, and the copy cannot be made, they do not run. A file that cannot be read stops
+the check as usual.
 
 ### Only documented behaviour is relied on
 
@@ -89,8 +96,9 @@ reliance on how the engine reacts to misuse.
 
 **A check leaves the database file and every file beside it exactly as it found them.** It writes nothing,
 starts no recovery on the original, and holds no lock afterwards. Where a layer can only be run soundly by
-letting the engine recover something, it runs on a copy. If no sound copy can be made, the layer is
-inconclusive.
+letting the engine recover something, it runs on a copy. Making that copy is Storage's: the room it needs is
+measured before it is attempted, and a copy that cannot be made, for want of room or a writable folder, or
+because the operating system refused it, is a Storage failure.
 
 ### Who calls it, and at what depth
 
@@ -140,13 +148,21 @@ startup like the other layers.
 
 ### Which way a failure sends a Reset
 
-A Reset backs up a sound copy and sets aside anything else (ADR 025, ADR 027).
+A Reset backs up a sound copy and sets aside a file that is not one (ADR 025, ADR 027).
 
-- **Not a sound copy, so set aside:** Storage could not read the file; Format, Journal, Pages or Indexes
-  failed; or the check was inconclusive. An inconclusive check is not proof of a sound copy. Setting a file
-  aside moves it, so it needs no free space.
+- **Not a sound copy, so set aside:** Storage could not read the file, or Format, Journal, Pages or Indexes
+  failed or was inconclusive. An inconclusive layer is not proof of a sound copy. Setting a file aside moves
+  it, so it needs no free space.
 - **A sound copy, so backed up:** only References or Schema failed. Their data can still be read and
   restored, even though the database cannot be used as it is.
+- **Storage found no room, so the backup cannot be taken either (developer, 2026-11-15).** Room for the
+  check's copy is room a backup needs too, so a Reset refuses as it does for any backup obstacle (ADR 025):
+  the operator frees space, or retries with `allowNoBackup` and proceeds without a restore point, with a
+  warning. With the override, a file whose reading layers ran and passed is replaced as a sound copy is
+  without a backup; one whose reading layers could not run is set aside, since nothing showed it sound, and
+  moving it needs no room. The refusal is the expected path, since the room is measured first; an operating
+  system that refuses the copy anyway, because something else took the space or the need was underestimated,
+  is answered the same way.
 
 ## The SQLite implementation
 
@@ -157,7 +173,7 @@ documents it (read 2026-11-14), and every case that page leaves open, with the w
 
 | Layer | How SQLite checks it | Documented in |
 |---|---|---|
-| Storage | File system calls, and a write probe in the directory | (not an engine fact) |
+| Storage | File system calls, a write probe in the directory, and the volume's free space measured against the copy the query layers need when the `-wal` holds data (below) | (not an engine fact) |
 | Format | The 100-byte header begins with the 16 bytes `SQLite format 3\0`. The page size (2 bytes, big-endian, at offset 16) is a power of two from 512 to 32768, or 1 for 65536. | [fileformat.html §1.3](https://www.sqlite.org/fileformat.html#the_database_header) |
 | Journal | When a `-wal` of non-zero length exists, its 32-byte header holds: the magic `0x377f0682` or `0x377f0683`, version 3007000, a page size equal to the database's, and valid checksums over its first 24 bytes, in the byte order the magic selects | [fileformat.html §4.1](https://www.sqlite.org/fileformat.html#wal_file_format), [§4.2](https://www.sqlite.org/fileformat.html#checksum_algorithm) |
 | Pages | `PRAGMA quick_check`. A sound result is the single row `ok`. | [pragma.html](https://www.sqlite.org/pragma.html#pragma_quick_check) |
@@ -180,8 +196,10 @@ documents it (read 2026-11-14), and every case that page leaves open, with the w
   The originals are never opened.
 - **The copy goes in a reserved folder inside the data directory,** never the system temporary folder.
   SQLite locks the files it opens, and the Home Assistant add-on's AppArmor profile grants the system
-  temporary folder read and write but not file locking. If the copy cannot be made, for example because
-  there is no space or the folder cannot be written, the query layers are inconclusive.
+  temporary folder read and write but not file locking. The room it needs, the database and its `-wal`
+  together, is measured against the volume's free space before the copy is made. Too little room, a folder
+  that cannot be written, or a copy the operating system refuses fails Storage, with what refused it as the
+  finding, and the query layers do not run.
 
 ### Not documented, and the worst case assumed
 
@@ -222,8 +240,9 @@ documents it (read 2026-11-14), and every case that page leaves open, with the w
   slower storage cost more, which is what `Fast` is for. Its cost is that some damage goes undetected until
   a Reset or the endpoint looks.
 - **The check may need disk space.** A copy is needed only when a `-wal` still holds data, which happens
-  after an unclean stop. With no space, the check is inconclusive and the database is not opened, rather
-  than being opened unchecked.
+  after an unclean stop or while the application runs. With too little room, Storage fails: startup degrades
+  rather than opening the database unchecked, the endpoint reports it and degrades the application, and a
+  Reset refuses unless the operator accepts going without a backup.
 - **The engine's documentation is pinned.** A newer engine release that documents more may allow a layer
   to be narrowed or a worst case to be dropped. That is a change to this ADR's engine section, made only
   once the new behaviour is documented.

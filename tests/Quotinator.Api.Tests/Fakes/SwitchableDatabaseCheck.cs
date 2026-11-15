@@ -23,7 +23,8 @@ internal sealed class SwitchableDatabaseCheck(IDatabaseCheck inner) : IDatabaseC
     /// <summary>From now on, every check finds <paramref name="layer"/> failed, and every other layer passed.</summary>
     /// <param name="layer">The layer that fails.</param>
     /// <param name="finding">What it reports.</param>
-    public void FailAt(DatabaseCheckLayer layer, string finding) =>
+    /// <param name="fault">What Storage found wrong, when <paramref name="layer"/> is Storage.</param>
+    public void FailAt(DatabaseCheckLayer layer, string finding, DatabaseStorageFault? fault = null) =>
         _override = new DatabaseCheckResult
         {
             DatabaseName = inner.DatabaseName,
@@ -35,6 +36,7 @@ internal sealed class SwitchableDatabaseCheck(IDatabaseCheck inner) : IDatabaseC
                     Layer   = l,
                     Status  = l == layer ? DatabaseCheckLayerStatus.Failed : DatabaseCheckLayerStatus.Passed,
                     Finding = l == layer ? finding : null,
+                    StorageFault = l == layer ? fault : null,
                 }),
             ],
         };

@@ -41,7 +41,7 @@ database's only fault.
 
 ## Explicitly not covered here
 
-- **Every other layer's failure** (format, journal, pages, references, an inconclusive check): proven by
+- **Every other layer's failure** (storage, its copy among them, format, journal, pages, references): proven by
   `SqliteDatabaseCheckTests`, one test per layer, against files built by the same helper.
 - **The same database with the startup check at `fast`**, which starts healthy: [`16`](16-with-a-fast-startup-check-a-broken-index-starts-healthy-and-is-still-reported.md).
 
