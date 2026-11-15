@@ -23,10 +23,39 @@ public sealed class RestorePointDto
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public BackupOutcome? Obstacle { get; init; }
 
+    /// <summary>
+    /// The database check layer that showed a set-aside file was not a sound copy (#490); present only when
+    /// the check set it aside.
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public DatabaseCheckLayer? CheckLayer { get; init; }
+
+    /// <summary>That layer's status, failed or inconclusive (#490); present only with <see cref="CheckLayer"/>.</summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public DatabaseCheckLayerStatus? CheckStatus { get; init; }
+
+    /// <summary>That layer's finding, verbatim (#490); present only with <see cref="CheckLayer"/>.</summary>
+    public string? CheckFinding { get; init; }
+
+    /// <summary>
+    /// The backup's own error, verbatim, when the check passed but the backup copy found the file
+    /// unreadable and it was set aside (#490); absent otherwise.
+    /// </summary>
+    public string? BackupError { get; init; }
+
     /// <summary>The caller's view of an operation's restore point, or <see langword="null"/> when it reported none.</summary>
     /// <param name="restorePoint">What the operation left behind to restore from.</param>
     public static RestorePointDto? From(RestorePointResult? restorePoint) =>
         restorePoint is null
             ? null
-            : new RestorePointDto { Outcome = restorePoint.Outcome, Name = restorePoint.FileName, Obstacle = restorePoint.Obstacle };
+            : new RestorePointDto
+            {
+                Outcome      = restorePoint.Outcome,
+                Name         = restorePoint.FileName,
+                Obstacle     = restorePoint.Obstacle,
+                CheckLayer   = restorePoint.SetAsideReason?.CheckLayer?.Layer,
+                CheckStatus  = restorePoint.SetAsideReason?.CheckLayer?.Status,
+                CheckFinding = restorePoint.SetAsideReason?.CheckLayer?.Finding,
+                BackupError  = restorePoint.SetAsideReason?.BackupError,
+            };
 }

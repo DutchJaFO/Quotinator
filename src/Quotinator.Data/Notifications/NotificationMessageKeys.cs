@@ -132,15 +132,26 @@ public static class NotificationMessageKeys
     /// </summary>
     public const string BackupRefusedContentLoadBody = "NotificationBackupRefusedContentLoadBody";
 
-    /// <summary>Title for the notice that a Reset set aside a database file it could not read (#482).</summary>
+    /// <summary>
+    /// Title for the notice that a Reset set aside a database file that was not a sound copy (#482, #490): it
+    /// could not be read, was damaged, or could not be checked.
+    /// </summary>
     public const string UnreadableDatabaseSetAsideTitle = "NotificationUnreadableDatabaseSetAsideTitle";
 
     /// <summary>
-    /// Body for the same notice. Receives the set-aside file's name as <c>{0}</c> and the reserved folder's
-    /// name as <c>{1}</c>. Static text per ADR 026: every sentence records what happened, so it stays
-    /// true after the file is removed.
+    /// Body for the same notice. Receives the set-aside file's name as <c>{0}</c>, the reserved folder's
+    /// name as <c>{1}</c>, and the check layer that showed the file was not a sound copy as <c>{2}</c>, with
+    /// its status as <c>{3}</c> and its finding as <c>{4}</c> (#490). Static text per ADR 026: every sentence
+    /// records what happened, so it stays true after the file is removed.
     /// </summary>
     public const string UnreadableDatabaseSetAsideBody = "NotificationUnreadableDatabaseSetAsideBody";
+
+    /// <summary>
+    /// Body for the same notice when the check passed but the backup copy then found the file unreadable
+    /// (#490). Receives the set-aside file's name as <c>{0}</c>, the reserved folder's name as <c>{1}</c>
+    /// and the backup's own error as <c>{2}</c>.
+    /// </summary>
+    public const string UnreadableDatabaseSetAsideByBackupBody = "NotificationUnreadableDatabaseSetAsideByBackupBody";
 
     // #348: the result of a Reset or a reseed run from within the application. Static text per ADR 026:
     // each records what the user was told when the action ended, so it stays true afterwards. A title per
@@ -152,7 +163,7 @@ public static class NotificationMessageKeys
     /// <summary>Title: a Reset completed without a backup, by the user's permission.</summary>
     public const string DatabaseResetWithoutBackupTitle = "NotificationDatabaseResetWithoutBackupTitle";
 
-    /// <summary>Title: a Reset completed and set aside a database file it could not read (#482).</summary>
+    /// <summary>Title: a Reset completed and set aside a database file that was not a sound copy (#482, #490).</summary>
     public const string DatabaseResetSetAsideTitle = "NotificationDatabaseResetSetAsideTitle";
 
     /// <summary>Title: a Reset was refused and changed nothing.</summary>
@@ -179,8 +190,31 @@ public static class NotificationMessageKeys
     /// <summary>Body: a reseed ran without a backup. Receives the obstacle's name as <c>{0}</c>.</summary>
     public const string DatabaseReseedWithoutBackupBody = "NotificationDatabaseReseedWithoutBackupBody";
 
-    /// <summary>Body: a Reset set aside an unreadable file. Receives the file's name as <c>{0}</c>.</summary>
+    /// <summary>
+    /// Body: a Reset set aside a file the check showed was not a sound copy. Receives the file's name as
+    /// <c>{0}</c>, and the check layer that showed it as <c>{1}</c>, with its status as <c>{2}</c> and its
+    /// finding as <c>{3}</c> (#490).
+    /// </summary>
     public const string DatabaseResetSetAsideBody = "NotificationDatabaseResetSetAsideBody";
+
+    /// <summary>
+    /// Body: a Reset set aside a file the check passed but the backup copy found unreadable (#490). Receives
+    /// the file's name as <c>{0}</c> and the backup's own error as <c>{1}</c>.
+    /// </summary>
+    public const string DatabaseResetSetAsideByBackupBody = "NotificationDatabaseResetSetAsideByBackupBody";
+
+    /// <summary>
+    /// Body: a Reset was refused because a file the check showed was not a sound copy could not be set aside
+    /// (#490). Receives the obstacle's name as <c>{0}</c>, and the check layer as <c>{1}</c>, with its status
+    /// as <c>{2}</c> and its finding as <c>{3}</c>.
+    /// </summary>
+    public const string DatabaseResetRefusedForResetNotSoundBody = "NotificationDatabaseResetRefusedForResetNotSoundBody";
+
+    /// <summary>
+    /// Body: a Reset was refused because a file the backup copy found unreadable could not be set aside
+    /// (#490). Receives the obstacle's name as <c>{0}</c> and the backup's own error as <c>{1}</c>.
+    /// </summary>
+    public const string DatabaseResetRefusedForResetByBackupBody = "NotificationDatabaseResetRefusedForResetByBackupBody";
 
     /// <summary>Body: the action was refused because no backup could be taken. Receives the obstacle's name as <c>{0}</c>.</summary>
     public const string DatabaseActionRefusedForBackupBody = "NotificationDatabaseActionRefusedForBackupBody";

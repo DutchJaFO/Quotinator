@@ -4,6 +4,7 @@ using Quotinator.Api.Components.Controls;
 using Quotinator.Api.Enums;
 using Quotinator.Api.Services;
 using Quotinator.Api.Startup;
+using Quotinator.Core.Services;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
@@ -52,9 +53,16 @@ public partial class Notifications
                     + text.NotificationsReseedNothingChanged;
         }
 
-        return result.RestorePoint is { Outcome: RestorePointOutcome.Skipped } skipped
-            ? WithObstacle(text.NotificationsActionRanWithoutBackup, skipped.Obstacle ?? BackupOutcome.Unclassified)
-            : null;
+        return result.RestorePoint switch
+        {
+            { Outcome: RestorePointOutcome.Skipped } skipped =>
+                WithObstacle(text.NotificationsActionRanWithoutBackup, skipped.Obstacle ?? BackupOutcome.Unclassified),
+            // #490: a file set aside is no backup either, so the page says so, and why it was set aside.
+            { Outcome: RestorePointOutcome.SetAside, SetAsideReason: { } reason } setAside =>
+                ApiLocalizerFormatting.Substitute(text.NotificationsResetSetAside, setAside.FileName ?? string.Empty) + " "
+                + DatabaseRepairActions.SetAsideReasonText(reason, text),
+            _ => null,
+        };
     }
 
     #endregion

@@ -43,22 +43,31 @@ internal sealed class DatabaseActionResultRecorder(
     }
 
     /// <summary>What the record carries: the facts of how this run ended, identified by the run.</summary>
-    private static DatabaseActionResultMetadataDto Payload(DatabaseAction action, NotificationActionResult result) => new()
+    private static DatabaseActionResultMetadataDto Payload(DatabaseAction action, NotificationActionResult result)
     {
-        RunId          = Guid.NewGuid(),
-        Action         = action,
-        Outcome        = result switch
+        // #490: a Reset that ran carries the reason on its restore point; a refused one, on the result.
+        SetAsideReasonResult? reason = result.RestorePoint?.SetAsideReason ?? result.SetAsideReason;
+        return new()
         {
-            { Succeeded: true }            => DatabaseActionOutcome.Completed,
-            { FailureReason: not null }    => DatabaseActionOutcome.NotIntact,
-            _                              => DatabaseActionOutcome.Refused,
-        },
-        RestorePoint   = result.RestorePoint?.Outcome,
-        FileName       = result.RestorePoint?.FileName,
-        BackupObstacle = result.RestorePoint?.Obstacle ?? result.BackupObstacle,
-        ResetObstacle  = result.ResetObstacle,
-        ReleaseState   = NotificationReleaseState.NotApplicable,
-    };
+            RunId          = Guid.NewGuid(),
+            Action         = action,
+            Outcome        = result switch
+            {
+                { Succeeded: true }            => DatabaseActionOutcome.Completed,
+                { FailureReason: not null }    => DatabaseActionOutcome.NotIntact,
+                _                              => DatabaseActionOutcome.Refused,
+            },
+            RestorePoint   = result.RestorePoint?.Outcome,
+            FileName       = result.RestorePoint?.FileName,
+            BackupObstacle = result.RestorePoint?.Obstacle ?? result.BackupObstacle,
+            ResetObstacle  = result.ResetObstacle,
+            CheckLayer     = reason?.CheckLayer?.Layer,
+            CheckStatus    = reason?.CheckLayer?.Status,
+            CheckFinding   = reason?.CheckLayer?.Finding,
+            BackupError    = reason?.BackupError,
+            ReleaseState   = NotificationReleaseState.NotApplicable,
+        };
+    }
 
     /// <summary>
     /// The type, title, body and body arguments for how the run ended. A backup taken is a success; one
@@ -74,6 +83,16 @@ internal sealed class DatabaseActionResultRecorder(
             { Outcome: DatabaseActionOutcome.NotIntact } =>
                 (NotificationType.Error, NotificationMessageKeys.DatabaseResetNotIntactTitle,
                  NotificationMessageKeys.DatabaseResetNotIntactBody, []),
+
+            // #490: a refusal for a file that had to be set aside says why it had to be, as well as the obstacle.
+            { Outcome: DatabaseActionOutcome.Refused, ResetObstacle: ResetObstacle resetObstacle, BackupError: string backupError } =>
+                (NotificationType.Error, NotificationMessageKeys.DatabaseResetRefusedTitle,
+                 NotificationMessageKeys.DatabaseResetRefusedForResetByBackupBody, [resetObstacle.ToString(), backupError]),
+
+            { Outcome: DatabaseActionOutcome.Refused, ResetObstacle: ResetObstacle resetObstacle, CheckLayer: DatabaseCheckLayer layer } =>
+                (NotificationType.Error, NotificationMessageKeys.DatabaseResetRefusedTitle,
+                 NotificationMessageKeys.DatabaseResetRefusedForResetNotSoundBody,
+                 [resetObstacle.ToString(), layer.ToString(), result.CheckStatus?.ToString() ?? string.Empty, result.CheckFinding ?? string.Empty]),
 
             { Outcome: DatabaseActionOutcome.Refused, ResetObstacle: ResetObstacle resetObstacle } =>
                 (NotificationType.Error, NotificationMessageKeys.DatabaseResetRefusedTitle,
@@ -91,9 +110,17 @@ internal sealed class DatabaseActionResultRecorder(
                  reset ? NotificationMessageKeys.DatabaseResetWithoutBackupBody : NotificationMessageKeys.DatabaseReseedWithoutBackupBody,
                  [(result.BackupObstacle ?? BackupOutcome.Unclassified).ToString()]),
 
+            // #490: the reason it was set aside is the backup's own error when the check passed, and the
+            // check layer that showed it otherwise.
+            { RestorePoint: RestorePointOutcome.SetAside, BackupError: string backupError } =>
+                (NotificationType.Warning, NotificationMessageKeys.DatabaseResetSetAsideTitle,
+                 NotificationMessageKeys.DatabaseResetSetAsideByBackupBody, [result.FileName ?? string.Empty, backupError]),
+
             { RestorePoint: RestorePointOutcome.SetAside } =>
                 (NotificationType.Warning, NotificationMessageKeys.DatabaseResetSetAsideTitle,
-                 NotificationMessageKeys.DatabaseResetSetAsideBody, [result.FileName ?? string.Empty]),
+                 NotificationMessageKeys.DatabaseResetSetAsideBody,
+                 [result.FileName ?? string.Empty, result.CheckLayer?.ToString() ?? string.Empty,
+                  result.CheckStatus?.ToString() ?? string.Empty, result.CheckFinding ?? string.Empty]),
 
             _ =>
                 (NotificationType.Success,

@@ -47,6 +47,27 @@ public sealed class DatabaseActionResultMetadataDto()
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public ResetObstacle? ResetObstacle { get; init; }
 
+    /// <summary>The database check layer that showed a set-aside file was not a sound copy (#490); absent otherwise.</summary>
+    [JsonPropertyName("checkLayer")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public DatabaseCheckLayer? CheckLayer { get; init; }
+
+    /// <summary>That layer's status, failed or inconclusive (#490); absent otherwise.</summary>
+    [JsonPropertyName("checkStatus")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public DatabaseCheckLayerStatus? CheckStatus { get; init; }
+
+    /// <summary>That layer's finding, verbatim (#490); absent otherwise.</summary>
+    [JsonPropertyName("checkFinding")]
+    public string? CheckFinding { get; init; }
+
+    /// <summary>
+    /// The backup's own error, verbatim, when the check passed but the backup copy found the file unreadable
+    /// (#490); absent otherwise.
+    /// </summary>
+    [JsonPropertyName("backupError")]
+    public string? BackupError { get; init; }
+
     /// <summary>
     /// The run alone: each one is a separate event the user was told about, and two runs ending the same
     /// way are still two things that happened.

@@ -2,8 +2,12 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Core.Database;
 using Quotinator.Data.Database;
+using Quotinator.Data.Database.Checks;
+using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
+using Quotinator.Data.Notifications;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Testing.NoOps;
 
@@ -89,6 +93,136 @@ public partial class DatabaseInitializerTests
 
         string setAside = Assert.ContainsSingle(MainSetAsideFiles(), "precondition: the file was set aside");
         Assert.AreEqual(Path.GetFileName(setAside), result.RestorePoint?.FileName);
+    }
+
+    /// <summary>
+    /// #490: the restore point says why the file was set aside: the check layer that showed it was not a
+    /// sound copy, exactly as the check reported it, and no backup error.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetAsync_CorruptDatabase_RestorePointNamesTheLayerThatShowedIt()
+    {
+        WriteNotADatabase();
+
+        DatabaseOperationResult result = await CreateInitializer([]).ResetAsync();
+
+        DatabaseCheckLayerResult expected = FirstLayerThatDidNotPass(result);
+        Assert.AreSame(expected, result.RestorePoint?.SetAsideReason?.CheckLayer);
+        Assert.IsNull(result.RestorePoint?.SetAsideReason?.BackupError, "a file the check set aside carries a backup error");
+    }
+
+    /// <summary>
+    /// #490: the notification records the same layer, status and finding, so an operator reading it later
+    /// can see why the file was set aside without the log.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetAsync_CorruptDatabase_NotificationRecordsTheLayerThatShowedIt()
+    {
+        WriteNotADatabase();
+
+        DatabaseOperationResult result = await CreateInitializer([]).ResetAsync();
+
+        DatabaseCheckLayerResult expected = FirstLayerThatDidNotPass(result);
+        UnreadableDatabaseSetAsideMetadataDto payload = await SetAsidePayloadAsync();
+        Assert.AreEqual(expected.Layer, payload.CheckLayer);
+        Assert.AreEqual(expected.Status, payload.CheckStatus);
+        Assert.AreEqual(expected.Finding, payload.CheckFinding);
+        Assert.IsNull(payload.BackupError, "a file the check set aside was recorded with a backup error");
+    }
+
+    /// <summary>
+    /// #490: a file the check passes but the backup copy cannot read is set aside for the backup's reason,
+    /// and the restore point carries that error rather than a layer. A check that passes everything stands
+    /// in for damage the check cannot see.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetAsync_FileOnlyTheBackupFindsUnreadable_RestorePointCarriesTheBackupError()
+    {
+        WriteNotADatabase();
+
+        DatabaseOperationResult result = await CreateInitializer([], databaseCheck: new NoOpDatabaseCheck("main")).ResetAsync();
+
+        Assert.AreEqual(RestorePointOutcome.SetAside, result.RestorePoint?.Outcome, "precondition: the backup set the file aside");
+        Assert.IsFalse(string.IsNullOrWhiteSpace(result.RestorePoint?.SetAsideReason?.BackupError), "the restore point carries no backup error");
+        Assert.IsNull(result.RestorePoint?.SetAsideReason?.CheckLayer, "a file the backup set aside carries a check layer");
+    }
+
+    /// <summary>#490: the notification records the backup's error, and no layer, for a file only the backup found unreadable.</summary>
+    [TestMethod]
+    public async Task ResetAsync_FileOnlyTheBackupFindsUnreadable_NotificationRecordsTheBackupError()
+    {
+        WriteNotADatabase();
+
+        DatabaseOperationResult result = await CreateInitializer([], databaseCheck: new NoOpDatabaseCheck("main")).ResetAsync();
+
+        UnreadableDatabaseSetAsideMetadataDto payload = await SetAsidePayloadAsync();
+        Assert.IsFalse(string.IsNullOrWhiteSpace(payload.BackupError), "the notification records no backup error");
+        Assert.AreEqual(result.RestorePoint?.SetAsideReason?.BackupError, payload.BackupError);
+        Assert.IsNull(payload.CheckLayer, "a file the backup set aside was recorded with a check layer");
+    }
+
+    /// <summary>
+    /// #490: a Reset refused because the file could not be set aside says why the file needed setting aside
+    /// as well as what stopped the move: the check layer that showed it was not a sound copy.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetAsync_CorruptDatabaseThatCannotBeSetAside_RefusalSaysWhichLayerShowedIt()
+    {
+        WriteNotADatabase();
+        BlockTheSetAsideFolder();
+        // A refusal carries no check of its own, so the expected layer comes from checking the file first.
+        DatabaseCheckResult before = await TestDatabaseChecks.ForMain(_dbPath, QuotinatorMigrations.All, QuotinatorMigrations.Baseline)
+            .CheckAsync(DatabaseCheckDepth.Full);
+        DatabaseCheckLayerResult expected = before.Layers.First(l => l.Status is DatabaseCheckLayerStatus.Failed or DatabaseCheckLayerStatus.Inconclusive);
+
+        DatabaseOperationResult result = await CreateInitializer([]).ResetAsync();
+
+        Assert.AreEqual(ResetObstacle.SetAsideFolderNotWritable, result.ResetObstacle, "precondition: the Reset refused for the set-aside folder");
+        Assert.IsNotNull(result.SetAsideReason?.CheckLayer, "the refusal does not say which layer showed the file was not a sound copy");
+        Assert.AreEqual(expected.Layer, result.SetAsideReason.CheckLayer.Layer);
+        Assert.AreEqual(expected.Status, result.SetAsideReason.CheckLayer.Status);
+        Assert.AreEqual(expected.Finding, result.SetAsideReason.CheckLayer.Finding);
+    }
+
+    /// <summary>#490: the same refusal for a file only the backup copy found unreadable carries the backup's error.</summary>
+    [TestMethod]
+    public async Task ResetAsync_FileOnlyTheBackupFindsUnreadableThatCannotBeSetAside_RefusalCarriesTheBackupError()
+    {
+        WriteNotADatabase();
+        BlockTheSetAsideFolder();
+
+        DatabaseOperationResult result = await CreateInitializer([], databaseCheck: new NoOpDatabaseCheck("main")).ResetAsync();
+
+        Assert.AreEqual(ResetObstacle.SetAsideFolderNotWritable, result.ResetObstacle, "precondition: the Reset refused for the set-aside folder");
+        Assert.IsFalse(string.IsNullOrWhiteSpace(result.SetAsideReason?.BackupError), "the refusal carries no backup error");
+        Assert.IsNull(result.SetAsideReason?.CheckLayer, "a file the backup found unreadable carries a check layer");
+    }
+
+    /// <summary>
+    /// A file where the reserved folder belongs, so creating it throws, deterministically on every platform:
+    /// the technique the Api tests' corrupt-database factory uses.
+    /// </summary>
+    private void BlockTheSetAsideFolder()
+    {
+        Directory.CreateDirectory(_backups);
+        File.WriteAllText(SetAsideFolder, "not a directory");
+    }
+
+    /// <summary>The first layer of a Reset's own check that did not pass: the one that sent the file aside.</summary>
+    private static DatabaseCheckLayerResult FirstLayerThatDidNotPass(DatabaseOperationResult result)
+    {
+        Assert.IsNotNull(result.Check, "the Reset returned no check");
+        return result.Check.Layers.First(l => l.Status is DatabaseCheckLayerStatus.Failed or DatabaseCheckLayerStatus.Inconclusive);
+    }
+
+    /// <summary>The single set-aside notification's payload.</summary>
+    private async Task<UnreadableDatabaseSetAsideMetadataDto> SetAsidePayloadAsync()
+    {
+        NotificationEntity notification = Assert.ContainsSingle(
+            (await NotificationsAsync()).Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.UnreadableDatabaseSetAside),
+            "no set-aside notification was written");
+        return (UnreadableDatabaseSetAsideMetadataDto)NotificationMetadataKinds.TryDeserialize(
+            NotificationMetadataKind.UnreadableDatabaseSetAside, notification.Metadata)!;
     }
 
     /// <summary>The same Reset is not reported as a backup taken: the set-aside file was never one.</summary>

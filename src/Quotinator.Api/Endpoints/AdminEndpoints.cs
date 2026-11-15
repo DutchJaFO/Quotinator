@@ -285,15 +285,26 @@ internal static class AdminEndpoints
             // the operator to the wrong folder.
             if (reset.ResetObstacle is ResetObstacle resetObstacle)
             {
+                Dictionary<string, object?> extensions = new()
+                {
+                    ["resetObstacle"] = resetObstacle.ToString(),
+                    ["remedies"]      = ResetObstacleGuidance.Remedies(resetObstacle),
+                };
+                // #490: when the file had to be set aside, why it had to be, as well as what stopped the move.
+                if (reset.SetAsideReason?.CheckLayer is { } layer)
+                {
+                    extensions["checkLayer"]   = layer.Layer.ToString();
+                    extensions["checkStatus"]  = layer.Status.ToString();
+                    extensions["checkFinding"] = layer.Finding;
+                }
+                if (reset.SetAsideReason?.BackupError is string backupError)
+                    extensions["backupError"] = backupError;
+
                 return Results.Problem(
                     title: "Reset refused: the database could not be replaced",
                     detail: ResetObstacleGuidance.Cause(resetObstacle),
                     statusCode: StatusCodes.Status409Conflict,
-                    extensions: new Dictionary<string, object?>
-                    {
-                        ["resetObstacle"] = resetObstacle.ToString(),
-                        ["remedies"]      = ResetObstacleGuidance.Remedies(resetObstacle),
-                    });
+                    extensions: extensions);
             }
 
             // #348: a reset that could not take a backup did not run. 200 means the endpoint did what
@@ -415,12 +426,17 @@ internal static class AdminEndpoints
             "quote content afterward (issue #156). Nothing survives, including the audit log: no table " +
             "is protected from this reset; export the audit trail first via `GET /api/v1/admin/audit/export` " +
             "if you need to keep it (issue #249). " +
-            "It works whatever state the old file is in (issue #482). A database file that cannot be read is never " +
-            "backed up: it is moved, with its `-wal` and `-shm`, into the `unreadable` folder inside the backups folder, " +
-            "where it counts towards backup storage, and a notification names it. If that move cannot be made, or the data " +
+            "It works whatever state the old file is in (issue #482). The old file is checked at full depth first (issue #490): " +
+            "a file that is not a sound copy, because its format, journal, pages or indexes did not pass or the check was " +
+            "inconclusive, is never backed up: it is moved, with its `-wal` and `-shm`, into the `unreadable` folder inside the backups folder, " +
+            "where it counts towards backup storage, and a notification names it and says why it was set aside: the check layer " +
+            "that failed, with its status and finding, or the backup's own error when the check passed and the backup copy " +
+            "could not read the file. If that move cannot be made, or the data " +
             "directory cannot be written, the call answers `409 Conflict` naming a `resetObstacle` (`DataDirectoryNotWritable`, " +
             "`SetAsideFolderNotWritable` or `SetAsideMoveFailed`) and its `remedies`, and nothing is moved or changed; " +
-            "`DataDirectoryNotWritable` also stops a Reset of a readable database run with `allowNoBackup=true`. Moving the file needs no free " +
+            "when the file had to be set aside, the body also says why: `checkLayer`, `checkStatus` and `checkFinding`, or " +
+            "`backupError` when the check passed and the backup copy could not read the file (issue #490); " +
+            "`DataDirectoryNotWritable` also stops a Reset of a sound copy run with `allowNoBackup=true`. Moving the file needs no free " +
             "space when the backups folder is on the same volume as the data directory; one configured elsewhere needs " +
             "room for a copy of it. " +
             "By default, schema migration history is also cleared and rebuilt to the latest version; pass `preserveSchemaVersion=true` to keep the existing migration history's per-version rows instead. " +
@@ -432,13 +448,14 @@ internal static class AdminEndpoints
             "Because no content is reimported, a successful reset writes an `ActionRequired` notification " +
             "recommending a reseed (issue #304), runnable from the notifications page; it recommends rather " +
             "than reseeds, since the caller reset in order to decide what goes back in. " +
-            "A reset of a readable database takes a safety backup first, and **refuses with `409 Conflict` if one cannot be taken** (issue #348): " +
+            "A reset of a sound copy takes a safety backup first, and **refuses with `409 Conflict` if one cannot be taken** (issue #348): " +
             "the response names which obstacle stopped it (`backupObstacle`) and what can be done about it (`remedies`). " +
             "Pass `allowNoBackup=true` to proceed anyway: this both accepts responsibility for there being no restore point " +
             "and asserts the reset can complete without one. A backup inside the reserve above the normal quota is still taken; " +
             "only one that would pass the ceiling is refused. " +
             "Every successful reset says what it left to restore from in `backup` (issue #348): `outcome` is `Succeeded` with the " +
-            "backup's file `name`, `SetAside` with the unreadable file's `name`, or `Skipped` with the `obstacle` that stopped the " +
+            "backup's file `name`, `SetAside` with the set-aside file's `name` and why it was set aside (`checkLayer`, " +
+            "`checkStatus` and `checkFinding`, or `backupError`), or `Skipped` with the `obstacle` that stopped the " +
             "backup when `allowNoBackup=true` was used. A skipped backup is also recorded in the audit trail. " +
             "The rebuilt schema is then checked against the one its migration path defines (issue #305); if it does not match, " +
             "the call answers `500` naming every missing or different object, and the application stays degraded on that reason. " +

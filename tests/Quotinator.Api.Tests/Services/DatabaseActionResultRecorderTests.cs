@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Api.Services;
+using Quotinator.Api.Tests.Components;
 using Quotinator.Api.Tests.Fakes;
 using Quotinator.Data.Database;
+using Quotinator.Data.Database.Checks;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Notifications;
@@ -23,9 +25,12 @@ public class DatabaseActionResultRecorderTests
     {
         "ResetBackedUp"     => (DatabaseAction.Reset, NotificationActionResult.Success(RestorePointResult.BackedUp(BackupName))),
         "ResetSkipped"      => (DatabaseAction.Reset, NotificationActionResult.Success(RestorePointResult.Skipped(BackupOutcome.BudgetExceeded))),
-        "ResetSetAside"     => (DatabaseAction.Reset, NotificationActionResult.Success(RestorePointResult.SetAside(SetAsideName))),
+        "ResetSetAside"     => (DatabaseAction.Reset, NotificationActionResult.Success(RestorePointResult.SetAside(SetAsideName, SetAsideReasonResult.FromCheck(BrokenIndex)))),
+        "ResetSetAsideByBackup" => (DatabaseAction.Reset, NotificationActionResult.Success(RestorePointResult.SetAside(SetAsideName, SetAsideReasonResult.FromBackup(BackupError)))),
         "ResetRefused"      => (DatabaseAction.Reset, NotificationActionResult.RefusedForBackup(BackupOutcome.BudgetExceeded)),
-        "ResetNotReplaced"  => (DatabaseAction.Reset, NotificationActionResult.RefusedForReset(ResetObstacle.DataDirectoryNotWritable)),
+        "ResetNotReplaced"  => (DatabaseAction.Reset, NotificationActionResult.RefusedForReset(ResetObstacle.DataDirectoryNotWritable, null)),
+        "ResetNotMovable"   => (DatabaseAction.Reset, NotificationActionResult.RefusedForReset(ResetObstacle.SetAsideMoveFailed, SetAsideReasonResult.FromCheck(BrokenIndex))),
+        "ResetNotMovableByBackup" => (DatabaseAction.Reset, NotificationActionResult.RefusedForReset(ResetObstacle.SetAsideMoveFailed, SetAsideReasonResult.FromBackup(BackupError))),
         "ResetNotIntact"    => (DatabaseAction.Reset, NotificationActionResult.ResetNotIntact("reason")),
         "ReseedBackedUp"    => (DatabaseAction.Reseed, NotificationActionResult.Success(RestorePointResult.BackedUp(BackupName))),
         "ReseedSkipped"     => (DatabaseAction.Reseed, NotificationActionResult.Success(RestorePointResult.Skipped(BackupOutcome.BudgetExceeded))),
@@ -35,14 +40,19 @@ public class DatabaseActionResultRecorderTests
 
     private const string BackupName = "quotinatordata_backup.db";
     private const string SetAsideName = "quotinatordata_unreadable.db";
+    private const string BackupError = ReasonFixtures.BackupError;
+    private static readonly DatabaseCheckLayerResult BrokenIndex = ReasonFixtures.BrokenIndex;
 
     /// <summary>A backup taken is a success; one skipped or a file set aside is a warning; a refusal or a mismatched schema is an error.</summary>
     [TestMethod]
     [DataRow("ResetBackedUp", NotificationType.Success)]
     [DataRow("ResetSkipped", NotificationType.Warning)]
     [DataRow("ResetSetAside", NotificationType.Warning)]
+    [DataRow("ResetSetAsideByBackup", NotificationType.Warning)]
     [DataRow("ResetRefused", NotificationType.Error)]
     [DataRow("ResetNotReplaced", NotificationType.Error)]
+    [DataRow("ResetNotMovable", NotificationType.Error)]
+    [DataRow("ResetNotMovableByBackup", NotificationType.Error)]
     [DataRow("ResetNotIntact", NotificationType.Error)]
     [DataRow("ReseedBackedUp", NotificationType.Success)]
     [DataRow("ReseedSkipped", NotificationType.Warning)]
@@ -58,8 +68,11 @@ public class DatabaseActionResultRecorderTests
     [DataRow("ResetBackedUp", NotificationMessageKeys.DatabaseResetCompletedTitle)]
     [DataRow("ResetSkipped", NotificationMessageKeys.DatabaseResetWithoutBackupTitle)]
     [DataRow("ResetSetAside", NotificationMessageKeys.DatabaseResetSetAsideTitle)]
+    [DataRow("ResetSetAsideByBackup", NotificationMessageKeys.DatabaseResetSetAsideTitle)]
     [DataRow("ResetRefused", NotificationMessageKeys.DatabaseResetRefusedTitle)]
     [DataRow("ResetNotReplaced", NotificationMessageKeys.DatabaseResetRefusedTitle)]
+    [DataRow("ResetNotMovable", NotificationMessageKeys.DatabaseResetRefusedTitle)]
+    [DataRow("ResetNotMovableByBackup", NotificationMessageKeys.DatabaseResetRefusedTitle)]
     [DataRow("ResetNotIntact", NotificationMessageKeys.DatabaseResetNotIntactTitle)]
     [DataRow("ReseedBackedUp", NotificationMessageKeys.DatabaseReseedCompletedTitle)]
     [DataRow("ReseedSkipped", NotificationMessageKeys.DatabaseReseedWithoutBackupTitle)]
@@ -76,8 +89,11 @@ public class DatabaseActionResultRecorderTests
     [DataRow("ResetBackedUp", NotificationMessageKeys.DatabaseActionBackupTakenBody)]
     [DataRow("ResetSkipped", NotificationMessageKeys.DatabaseResetWithoutBackupBody)]
     [DataRow("ResetSetAside", NotificationMessageKeys.DatabaseResetSetAsideBody)]
+    [DataRow("ResetSetAsideByBackup", NotificationMessageKeys.DatabaseResetSetAsideByBackupBody)]
     [DataRow("ResetRefused", NotificationMessageKeys.DatabaseActionRefusedForBackupBody)]
     [DataRow("ResetNotReplaced", NotificationMessageKeys.DatabaseResetRefusedForResetBody)]
+    [DataRow("ResetNotMovable", NotificationMessageKeys.DatabaseResetRefusedForResetNotSoundBody)]
+    [DataRow("ResetNotMovableByBackup", NotificationMessageKeys.DatabaseResetRefusedForResetByBackupBody)]
     [DataRow("ResetNotIntact", NotificationMessageKeys.DatabaseResetNotIntactBody)]
     [DataRow("ReseedBackedUp", NotificationMessageKeys.DatabaseActionBackupTakenBody)]
     [DataRow("ReseedSkipped", NotificationMessageKeys.DatabaseReseedWithoutBackupBody)]
@@ -121,6 +137,49 @@ public class DatabaseActionResultRecorderTests
         DatabaseActionResultMetadataDto payload = Payload(await RecordAsync("ResetNotReplaced"));
 
         Assert.AreEqual(ResetObstacle.DataDirectoryNotWritable, payload.ResetObstacle);
+    }
+
+    /// <summary>#490: a file set aside by the check is recorded with the layer, status and finding that showed it was not a sound copy.</summary>
+    [TestMethod]
+    public async Task RecordAsync_SetAsideByTheCheck_RecordsTheLayerThatShowedIt()
+    {
+        DatabaseActionResultMetadataDto payload = Payload(await RecordAsync("ResetSetAside"));
+
+        Assert.AreEqual(BrokenIndex.Layer, payload.CheckLayer);
+        Assert.AreEqual(BrokenIndex.Status, payload.CheckStatus);
+        Assert.AreEqual(BrokenIndex.Finding, payload.CheckFinding);
+        Assert.IsNull(payload.BackupError, "a file the check set aside was recorded with a backup error");
+    }
+
+    /// <summary>#490: a file the backup copy found unreadable is recorded with the backup's own error, and no layer.</summary>
+    [TestMethod]
+    public async Task RecordAsync_SetAsideByTheBackup_RecordsTheBackupError()
+    {
+        DatabaseActionResultMetadataDto payload = Payload(await RecordAsync("ResetSetAsideByBackup"));
+
+        Assert.AreEqual(BackupError, payload.BackupError);
+        Assert.IsNull(payload.CheckLayer, "a file the backup set aside was recorded with a check layer");
+    }
+
+    /// <summary>#490: a Reset refused because the file could not be set aside records why it needed setting aside.</summary>
+    [TestMethod]
+    public async Task RecordAsync_RefusedForAFileThatNeededSettingAside_RecordsTheLayerThatShowedIt()
+    {
+        DatabaseActionResultMetadataDto payload = Payload(await RecordAsync("ResetNotMovable"));
+
+        Assert.AreEqual(ResetObstacle.SetAsideMoveFailed, payload.ResetObstacle, "precondition: the refusal is recorded");
+        Assert.AreEqual(BrokenIndex.Layer, payload.CheckLayer);
+        Assert.AreEqual(BrokenIndex.Status, payload.CheckStatus);
+        Assert.AreEqual(BrokenIndex.Finding, payload.CheckFinding);
+    }
+
+    /// <summary>#490: the same refusal for a file only the backup found unreadable records the backup's error.</summary>
+    [TestMethod]
+    public async Task RecordAsync_RefusedForAFileTheBackupFoundUnreadable_RecordsTheBackupError()
+    {
+        DatabaseActionResultMetadataDto payload = Payload(await RecordAsync("ResetNotMovableByBackup"));
+
+        Assert.AreEqual(BackupError, payload.BackupError);
     }
 
     /// <summary>Two runs ending the same way are two things that happened, so each is identified by its own run.</summary>

@@ -23,6 +23,30 @@ public sealed class UnreadableDatabaseSetAsideMetadataDto()
     public required string Folder { get; init; }
 
     /// <summary>
+    /// The database check layer that showed the file was not a sound copy (#490). Absent on a notification
+    /// written before #490.
+    /// </summary>
+    [JsonPropertyName("checkLayer")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public DatabaseCheckLayer? CheckLayer { get; init; }
+
+    /// <summary>That layer's status, failed or inconclusive (#490). Absent on a notification written before #490.</summary>
+    [JsonPropertyName("checkStatus")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public DatabaseCheckLayerStatus? CheckStatus { get; init; }
+
+    /// <summary>That layer's finding, verbatim (#490). Absent on a notification written before #490.</summary>
+    [JsonPropertyName("checkFinding")]
+    public string? CheckFinding { get; init; }
+
+    /// <summary>
+    /// The backup's own error, verbatim, when the check passed but the backup copy found the file unreadable
+    /// (#490); absent otherwise.
+    /// </summary>
+    [JsonPropertyName("backupError")]
+    public string? BackupError { get; init; }
+
+    /// <summary>
     /// The file name: every Reset that sets a file aside gives it a name no other set-aside file has, so
     /// two such notifications are never the same one.
     /// </summary>

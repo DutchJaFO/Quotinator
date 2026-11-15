@@ -35,8 +35,12 @@ public sealed class RestorePointResult
     public static RestorePointResult Skipped(BackupOutcome obstacle) =>
         new() { Outcome = RestorePointOutcome.Skipped, Obstacle = obstacle };
 
-    /// <summary>The unreadable database file was moved aside unchanged (#482).</summary>
+    /// <summary>Why the file was set aside rather than backed up (#490); <see langword="null"/> unless it was.</summary>
+    public SetAsideReasonResult? SetAsideReason { get; init; }
+
+    /// <summary>The database file was not a sound copy, and was moved aside unchanged (#482, #490).</summary>
     /// <param name="fileName">The set-aside file's name.</param>
-    public static RestorePointResult SetAside(string fileName) =>
-        new() { Outcome = RestorePointOutcome.SetAside, FileName = fileName };
+    /// <param name="reason">Why it was set aside.</param>
+    public static RestorePointResult SetAside(string fileName, SetAsideReasonResult reason) =>
+        new() { Outcome = RestorePointOutcome.SetAside, FileName = fileName, SetAsideReason = reason };
 }

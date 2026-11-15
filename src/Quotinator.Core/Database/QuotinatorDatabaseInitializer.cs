@@ -166,25 +166,40 @@ public sealed class QuotinatorDatabaseInitializer(
     }
 
     /// <summary>
-    /// #482: a Reset set aside a database file it could not read. Written into the new database once it is
+    /// #482: a Reset set aside a database file that was not a sound copy, saying why (#490): the check layer
+    /// that showed it, or the backup's own error when the check passed. Written into the new database once it is
     /// in place, which is the only database there is to write it to, and carrying no dismiss trigger: it
     /// reports an event, and every caller fires the <c>DatabaseReset</c> trigger right after a Reset.
     /// </summary>
-    /// <param name="setAsideFileName">The set-aside file's name inside the reserved folder.</param>
-    protected override async Task OnUnreadableDatabaseSetAsideAsync(string setAsideFileName)
+    /// <param name="setAside">The set-aside file's name inside the reserved folder, and why it was set aside.</param>
+    protected override async Task OnUnreadableDatabaseSetAsideAsync(RestorePointResult setAside)
     {
+        string setAsideFileName = setAside.FileName!;
+        DatabaseCheckLayerResult? because = setAside.SetAsideReason?.CheckLayer;
+        string? backupError = setAside.SetAsideReason?.BackupError;
         UnreadableDatabaseSetAsideMetadataDto metadata = new()
         {
             FileName = setAsideFileName,
             Folder = BackupFileNames.UnreadableFolderName,
+            CheckLayer = because?.Layer,
+            CheckStatus = because?.Status,
+            CheckFinding = because?.Finding,
+            BackupError = backupError,
             ReleaseState = NotificationReleaseState.NotApplicable,
         };
 
-        object[] bodyArgs = [setAsideFileName, BackupFileNames.UnreadableFolderName];
+        // #490: the reason it was set aside is the backup's own error when the check passed, and the check
+        // layer that showed it otherwise.
+        (string bodyKey, object[] bodyArgs) = backupError is not null
+            ? (NotificationMessageKeys.UnreadableDatabaseSetAsideByBackupBody,
+               (object[])[setAsideFileName, BackupFileNames.UnreadableFolderName, backupError])
+            : (NotificationMessageKeys.UnreadableDatabaseSetAsideBody,
+               [setAsideFileName, BackupFileNames.UnreadableFolderName,
+                because?.Layer.ToString() ?? string.Empty, because?.Status.ToString() ?? string.Empty, because?.Finding ?? string.Empty]);
 
         await NotificationSeeding.SeedWhileUnresolvedAsync(
             _notificationReader, _notificationWriter, NotificationType.Warning, metadata,
-            body: NotificationTranslations.Original(_notificationTextSource, NotificationMessageKeys.UnreadableDatabaseSetAsideBody, bodyArgs),
+            body: NotificationTranslations.Original(_notificationTextSource, bodyKey, bodyArgs),
             // Left unstated for the reason the backup refusal above gives: the version row a Reset empties
             // is recorded again only after this returns.
             appVersionId: null,
@@ -193,7 +208,7 @@ public sealed class QuotinatorDatabaseInitializer(
             translations: NotificationTranslations.Build(
                 _notificationTextSource,
                 NotificationMessageKeys.UnreadableDatabaseSetAsideTitle,
-                NotificationMessageKeys.UnreadableDatabaseSetAsideBody,
+                bodyKey,
                 bodyArgs: bodyArgs));
     }
 

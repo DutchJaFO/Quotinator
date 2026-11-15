@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Components;
 using Quotinator.Api.Services;
 using Quotinator.Api.Startup;
+using Quotinator.Core.Services;
+using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
@@ -51,6 +53,7 @@ public partial class DatabaseRepairActions
             { Succeeded: true }                       => null,
             { ResetObstacle: ResetObstacle obstacle } =>
                 WithObstacle(text.DatabaseRepairRefusedForReset, obstacle.ToString()) + " "
+                + (result.SetAsideReason is { } reason ? SetAsideReasonText(reason, text) + " " : string.Empty)
                 + ResetObstacleGuidance.Cause(obstacle) + " "
                 + string.Join(" ", ResetObstacleGuidance.Remedies(obstacle)),
             { BackupObstacle: BackupOutcome obstacle } =>
@@ -61,6 +64,19 @@ public partial class DatabaseRepairActions
                 text.DatabaseRepairResetNotIntact + " " + reason,
             _                                         => text.DatabaseRepairNoReasonReported,
         };
+
+    /// <summary>
+    /// #490: why a Reset set a file aside, or had to: the check layer that showed it was not a sound copy,
+    /// with its status and finding, or the backup's own error when the check passed. Shared with the
+    /// Notifications page, so the two surfaces word it alike.
+    /// </summary>
+    /// <param name="reason">Why the file was set aside.</param>
+    /// <param name="text">The translated strings for the current culture.</param>
+    internal static string SetAsideReasonText(SetAsideReasonResult reason, Quotinator.Api.I18nText.UI text) =>
+        reason.CheckLayer is { } layer
+            ? ApiLocalizerFormatting.Substitute(text.DatabaseSetAsideReasonCheck,
+                layer.Layer.ToString(), layer.Status.ToString(), layer.Finding ?? string.Empty)
+            : ApiLocalizerFormatting.Substitute(text.DatabaseSetAsideReasonBackup, reason.BackupError ?? string.Empty);
 
     #endregion
 

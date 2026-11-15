@@ -887,6 +887,7 @@ public class DatabaseInitializer(
         DatabaseCheckResult check = await _check.CheckAsync(DatabaseCheckDepth.Full);
         _resetSourceIsSoundCopy = ResetDatabaseCheck.IsSoundCopy(check);
         _setAsidePath = null;
+        _setAsideReason = null;
         _resetBackupPath = null;
 
         BackupOutcome readiness = BackupOutcome.Succeeded;
@@ -908,11 +909,12 @@ public class DatabaseInitializer(
         else
         {
             DatabaseCheckLayerResult why = ResetDatabaseCheck.WhyNotASoundCopy(check)!;
+            _setAsideReason = SetAsideReasonResult.FromCheck(why);
             Logger.LogResetSourceNotASoundCopy(why.Layer.ToString(), why.Status.ToString(), why.Finding ?? string.Empty);
             if (CheckSetAsideReadiness() is ResetObstacle obstacle)
             {
                 Logger.LogResetRefusedCannotReplace(obstacle.ToString());
-                return DatabaseOperationResult.RefusedForReset(obstacle);
+                return DatabaseOperationResult.RefusedForReset(obstacle, _setAsideReason);
             }
         }
 
@@ -942,7 +944,8 @@ public class DatabaseInitializer(
         {
             Logger.LogExceptionHandled(ex, "the Reset was refused: the database could not be replaced");
             Logger.LogResetRefusedCannotReplace(ex.Obstacle.ToString());
-            return DatabaseOperationResult.RefusedForReset(ex.Obstacle);
+            // #490: why the file had to be set aside, when that is what failed: null for a sound copy.
+            return DatabaseOperationResult.RefusedForReset(ex.Obstacle, _setAsideReason);
         }
 
         // #305 (R3): the check that runs before starting is what shows a rebuilt database is in a good
@@ -952,11 +955,12 @@ public class DatabaseInitializer(
             return DatabaseOperationResult.NotIntact(check);
 
         // #482: after the new database is in place, never before, since the notification is a row in it.
-        if (_setAsidePath is not null)
-            await OnUnreadableDatabaseSetAsideAsync(Path.GetFileName(_setAsidePath));
+        RestorePointResult? restorePoint = ResetRestorePoint(readiness);
+        if (restorePoint is { Outcome: RestorePointOutcome.SetAside })
+            await OnUnreadableDatabaseSetAsideAsync(restorePoint);
 
         await OnResetCompletedAsync();
-        return DatabaseOperationResult.Success(ResetRestorePoint(readiness), check);
+        return DatabaseOperationResult.Success(restorePoint, check);
     }
 
     // #482: per-Reset state the subclass's OnResetAsync cannot carry, since its signature is not ours to
@@ -964,6 +968,7 @@ public class DatabaseInitializer(
     private bool _resetSourceIsSoundCopy = true;
     private bool _resetBackupSkipped;
     private string? _setAsidePath;
+    private SetAsideReasonResult? _setAsideReason;
     private string? _resetBackupPath;
 
     /// <summary>
@@ -975,7 +980,7 @@ public class DatabaseInitializer(
     private RestorePointResult? ResetRestorePoint(BackupOutcome skippedFor)
     {
         if (_setAsidePath is not null)
-            return RestorePointResult.SetAside(Path.GetFileName(_setAsidePath));
+            return RestorePointResult.SetAside(Path.GetFileName(_setAsidePath), _setAsideReason!);
         if (_resetBackupSkipped)
             return RestorePointResult.Skipped(skippedFor);
         return _resetBackupPath is null ? null : RestorePointResult.BackedUp(Path.GetFileName(_resetBackupPath));
@@ -1006,11 +1011,11 @@ public class DatabaseInitializer(
     private string SetAsideFolder => Path.Combine(_options.BackupsPath, BackupFileNames.UnreadableFolderName);
 
     /// <summary>
-    /// Called once a Reset has set aside a database file it could not read and the new database is in
-    /// place and intact (#482). Override to tell the operator; the base implementation does nothing.
+    /// Called once a Reset has set aside a database file that was not a sound copy and the new database is
+    /// in place and intact (#482, #490). Override to tell the operator; the base implementation does nothing.
     /// </summary>
-    /// <param name="setAsideFileName">The set-aside file's name inside the reserved folder.</param>
-    protected virtual Task OnUnreadableDatabaseSetAsideAsync(string setAsideFileName) => Task.CompletedTask;
+    /// <param name="setAside">The set-aside file's name inside the reserved folder, and why it was set aside.</param>
+    protected virtual Task OnUnreadableDatabaseSetAsideAsync(RestorePointResult setAside) => Task.CompletedTask;
 
     /// <inheritdoc/>
     public async Task<DatabaseBackupResult> CreateBackupAsync()
@@ -1169,6 +1174,7 @@ public class DatabaseInitializer(
                 // is what found it. It is treated as the unreadable file it is; the copy left nothing.
                 readable = false;
                 _resetSourceIsSoundCopy = false;
+                _setAsideReason = SetAsideReasonResult.FromBackup(resetBackup.Error?.Message ?? resetBackup.Outcome.ToString());
                 savedDataVersions = [];
                 savedConsumerVersions = [];
                 Logger.LogResetSourceUnreadable();

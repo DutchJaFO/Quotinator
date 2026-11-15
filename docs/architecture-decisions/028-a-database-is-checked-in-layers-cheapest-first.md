@@ -198,16 +198,6 @@ documents it (read 2026-11-14), and every case that page leaves open, with the w
   default ([dbpage.html](https://www.sqlite.org/dbpage.html)). So test fixtures write bytes the file format
   defines.
 
-## Known non-compliance
-
-#490 tracks the code catching up with this ADR. Until it is done:
-- startup runs no check before opening the database, and judges it by what breaks while it is opened;
-- a Reset decides between backing up and setting aside by `PRAGMA quick_check` alone, so it backs up a
-  file whose index disagrees with its table;
-- the integrity endpoint reports only the Schema layer.
-
-Do not add a new check of a database file on the strength of this code. Build it as a layer.
-
 ## Consequences
 
 - **One judgement everywhere.** Startup, a Reset and the endpoint can no longer disagree about a file. A

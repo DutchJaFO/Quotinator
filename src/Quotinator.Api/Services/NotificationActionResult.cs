@@ -49,8 +49,15 @@ public sealed class NotificationActionResult
     public static NotificationActionResult ResetNotIntact(string reason) =>
         new() { Succeeded = false, FailureReason = reason };
 
+    /// <summary>
+    /// Why a refused Reset had to set the file aside (#490), reported alongside <see cref="ResetObstacle"/>;
+    /// <see langword="null"/> for a sound copy. On a Reset that ran, it is on <see cref="RestorePoint"/> instead.
+    /// </summary>
+    public SetAsideReasonResult? SetAsideReason { get; init; }
+
     /// <summary>A Reset that did not run because the database could not be replaced (#482).</summary>
     /// <param name="obstacle">What stopped it.</param>
-    public static NotificationActionResult RefusedForReset(ResetObstacle obstacle) =>
-        new() { Succeeded = false, ResetObstacle = obstacle };
+    /// <param name="setAsideReason">Why the file had to be set aside, when it did (#490).</param>
+    public static NotificationActionResult RefusedForReset(ResetObstacle obstacle, SetAsideReasonResult? setAsideReason) =>
+        new() { Succeeded = false, ResetObstacle = obstacle, SetAsideReason = setAsideReason };
 }

@@ -32,6 +32,39 @@ public class NotificationsPageTests
             outcome);
     }
 
+    /// <summary>
+    /// #490: a Reset that set the file aside took no backup either, so the page says so, as it does for a
+    /// skipped one, and says why: the file's name and the check layer that showed it was not a sound copy.
+    /// </summary>
+    [TestMethod]
+    public void ResetThatSetTheFileAside_SaysWhyAndWhere()
+    {
+        string? outcome = Notifications.ActionOutcomeText(
+            NotificationDismissTrigger.DatabaseReset,
+            NotificationActionResult.Success(RestorePointResult.SetAside(SetAsideName, SetAsideReasonResult.FromCheck(ReasonFixtures.BrokenIndex))), Text);
+
+        Assert.IsNotNull(outcome, "the page said nothing about a Reset that took no backup");
+        Assert.Contains(SetAsideName, outcome, StringComparison.Ordinal);
+        Assert.Contains(nameof(DatabaseCheckLayer.Indexes), outcome, StringComparison.Ordinal);
+        Assert.Contains(nameof(DatabaseCheckLayerStatus.Failed), outcome, StringComparison.Ordinal);
+        Assert.Contains(ReasonFixtures.BrokenIndex.Finding!, outcome, StringComparison.Ordinal);
+    }
+
+    /// <summary>#490: the same for a file only the backup found unreadable gives the backup's error.</summary>
+    [TestMethod]
+    public void ResetThatSetAsideAFileTheBackupFoundUnreadable_GivesTheBackupError()
+    {
+        string? outcome = Notifications.ActionOutcomeText(
+            NotificationDismissTrigger.DatabaseReset,
+            NotificationActionResult.Success(RestorePointResult.SetAside(SetAsideName, SetAsideReasonResult.FromBackup(ReasonFixtures.BackupError))), Text);
+
+        Assert.IsNotNull(outcome, "the page said nothing about a Reset that took no backup");
+        Assert.Contains(SetAsideName, outcome, StringComparison.Ordinal);
+        Assert.Contains(ReasonFixtures.BackupError, outcome, StringComparison.Ordinal);
+    }
+
+    private const string SetAsideName = "quotinatordata_unreadable.db";
+
     /// <summary>An action that took its backup has nothing to warn about; the reloaded list is the answer.</summary>
     [TestMethod]
     public void ActionThatTookItsBackup_SaysNothing()

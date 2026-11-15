@@ -174,7 +174,7 @@ internal sealed class NotificationActionExecutor(
                 }
 
                 if (reset.ResetObstacle is ResetObstacle resetObstacle)
-                    return NotificationActionResult.RefusedForReset(resetObstacle);
+                    return NotificationActionResult.RefusedForReset(resetObstacle, reset.SetAsideReason);
 
                 if (!reset.Succeeded)
                     return NotificationActionResult.RefusedForBackup(reset.BackupObstacle ?? BackupOutcome.Unclassified);

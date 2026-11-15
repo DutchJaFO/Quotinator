@@ -129,8 +129,8 @@ when a backup is actually attempted, never by the check made beforehand.
 
 - **Blocked:** every option. No backup of an unreadable file is possible by any means, and loading
   content into it cannot succeed either.
-- **Resolve:** run a Reset, `POST /api/v1/admin/database/reset`. It needs no backup of a file it cannot
-  read: it moves the file into the `unreadable` folder inside the backups folder and puts a new, empty
+- **Resolve:** run a Reset, `POST /api/v1/admin/database/reset`. It needs no backup of a file that is not a
+  sound copy: it moves the file into the `unreadable` folder inside the backups folder and puts a new, empty
   database in its place. See [the database file cannot be read](the-database-file-cannot-be-read.md).
   Or restore an older backup in its place, then restart.
 

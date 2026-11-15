@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 13)
+**Status:** In progress (step 14)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492.
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 13.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute from step 14.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. Step 6 left one deviation from the verification table for the developer to confirm; it
 is listed under step 6. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
@@ -794,10 +794,55 @@ check is inconclusive, is set aside. If only References or Schema failed, the fi
 
 ### 13. Leave no contradiction in the documentation
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Search `docs/`, `CLAUDE.md`, the add-on `DOCS.md` files, the Knowledgebase and the endpoint descriptions
 for `quick_check`, *reads every page*, and #326's error-code description, and correct each one.
+
+**Done 2026-11-15.** The search also covered *cannot be read*, *readable* and *unreadable*, since a Reset now
+sets aside a file that reads but is not a sound copy.
+
+- **ADR 028's *Known non-compliance* section is removed.** Its three items no longer hold: startup checks
+  before opening the database, a Reset routes by `ResetDatabaseCheck.IsSoundCopy`, and the endpoint reports
+  every layer.
+- **The Reset's description**, in `AdminEndpoints.cs` and `docs/api-endpoints.md`, says the old file is
+  checked at full depth first, and that a file that is not a sound copy is set aside. *Readable database*
+  became *sound copy*. `docs/data-import.md` says the same and links ADR 028.
+- **Knowledgebase:** `the-database-file-cannot-be-read.md` lists the third cause behind the generic reason (a
+  file that reads but is damaged inside), says `fast` does not check an index at startup, and points to the
+  integrity endpoint's `layers`. `no-backup-could-be-taken.md`'s `SourceUnreadable` remedy says *not a sound
+  copy*.
+- **The two set-aside notifications** (developer decisions, 2026-11-15) no longer say the file *could not be
+  read*, which was false for a broken index, and now say why the file was set aside. In en, nl and de the
+  title says the file could not be confirmed sound, and the body names the check layer that failed, its
+  status and the engine's finding. A file the check passed but the backup copy could not read is the one
+  case with no failed layer; its notifications give the backup's own error instead, through a second body
+  key for each (`…SetAsideByBackupBody`). Both payloads record the reason as `checkLayer`, `checkStatus`,
+  `checkFinding` or `backupError`, per ADR 026 rule 6. Verification row 24.
+- **Every surface that reports a Reset says why it set the file aside, or had to** (developer, 2026-11-15:
+  any error or reason that prevents something is reported to the user, as backup obstacles already are).
+  The reason is one `SetAsideReasonResult`: the check layer, or the backup's error. It is on the restore
+  point when the Reset ran, and on `DatabaseOperationResult` and `NotificationActionResult` when it was
+  refused. It reaches:
+  - the Reset endpoint's `200` (`backup.checkLayer`, `checkStatus`, `checkFinding` or `backupError`) and its
+    `409` for a file that could not be moved (the same fields beside `resetObstacle`);
+  - the repair control's refusal text, and the Notifications page, which now also says inline that a Reset
+    set the file aside, as it already did for a skipped backup;
+  - the recorded result notification of a refused Reset, through two more body keys
+    (`…RefusedForResetNotSoundBody`, `…RefusedForResetByBackupBody`).
+  Verification row 25.
+  - **Red first:** every new test failed on its own assertion against a skeleton whose consumers ignored the
+    reason. One Core refusal test first stopped on its helper, since a refusal carries no check; it was
+    rewritten to take the expected layer from checking the file beforehand, and was red on its claim. The two
+    restore-point tests passed on the first skeleton, which already stored the reason; each was proven by
+    mutation, dropping the stored value turning it red on its own assertion.
+- **Unchanged, and why:** no hits for #326's error codes, or in `CLAUDE.md` or the add-on `DOCS.md` files.
+  ADR 025 and ADR 027 already said *sound copy*. `backup/02`'s *a check that reads every page* is still true
+  of the Pages layer. The integrity endpoint's *cannot be read (format, journal or pages)* matches `15`, where
+  only Indexes failed and the schema was still compared. `backup/01`'s quoted notification title is a dated
+  measurement and stays as observed.
+- **Still recorded rather than fixed:** the `…_unreadable_…` file and folder names, internal comments that
+  say *unreadable*, and the add-on description's direct-read timing.
 
 ### 14. Boyscout pass and full build
 
@@ -859,3 +904,5 @@ says that the database is checked thoroughly at every start, and that the faster
 | 21 | ✅ | Live: with `Fast`, the same database starts healthy, and the endpoint still reports the broken index | Live (T2) | `startup-and-degradation/16`; same canary |
 | 22 | ❌ | The full build and test suite are clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all passed |
 | 23 | ❌ | T1: startup time at `Full` is acceptable, and a broken index degrades with its reason | Live (T1) | Step 15, confirmed by the developer |
+| 24 | ✅ | *(developer, 2026-11-15)* A Reset's restore point and both set-aside notifications say why the file was set aside: the check layer, its status and finding, or the backup's own error when the check passed | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabase_RestorePointNamesTheLayerThatShowedIt`, `…ResetAsync_CorruptDatabase_NotificationRecordsTheLayerThatShowedIt`, `…ResetAsync_FileOnlyTheBackupFindsUnreadable_RestorePointCarriesTheBackupError`, `…ResetAsync_FileOnlyTheBackupFindsUnreadable_NotificationRecordsTheBackupError`; `DatabaseActionResultRecorderTests.RecordAsync_SetAsideByTheCheck_RecordsTheLayerThatShowedIt`, `…RecordAsync_SetAsideByTheBackup_RecordsTheBackupError`, the `ResetSetAsideByBackup` rows; `StartupResilienceTests.Startup_DatabaseFileCorrupt_RepairActionNotificationsSayWhichLayerShowedIt` |
+| 25 | ✅ | *(developer, 2026-11-15)* Every other surface reporting a Reset says why the file was set aside, or had to be: the response, the refusal, the repair control, the Notifications page and the refused Reset's notification | Unit test | `RestorePointDtoTests` (3); `DatabaseInitializerTests.ResetAsync_CorruptDatabaseThatCannotBeSetAside_RefusalSaysWhichLayerShowedIt`, `…ResetAsync_FileOnlyTheBackupFindsUnreadableThatCannotBeSetAside_RefusalCarriesTheBackupError`; `StartupResilienceTests.Startup_DatabaseFileCorrupt_ResetResponseSaysWhichLayerShowedIt`, `…ResetRefusalSaysWhichLayerShowedIt`; `DatabaseRepairActionsTests.RefusedForAFileThatNeededSettingAside_SaysWhichLayerShowedIt`, `…RefusedForAFileTheBackupFoundUnreadable_GivesTheBackupError`; `NotificationsPageTests.ResetThatSetTheFileAside_SaysWhyAndWhere`, `…ResetThatSetAsideAFileTheBackupFoundUnreadable_GivesTheBackupError`; `DatabaseActionResultRecorderTests.RecordAsync_RefusedForAFileThatNeededSettingAside_RecordsTheLayerThatShowedIt`, `…RecordAsync_RefusedForAFileTheBackupFoundUnreadable_RecordsTheBackupError`, the `ResetNotMovable` rows |

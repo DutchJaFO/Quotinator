@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Services;
 using Quotinator.Api.Startup;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Database.Checks;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
@@ -671,6 +672,97 @@ public class StartupResilienceTests
         string setAside = Path.GetFileName(Assert.ContainsSingle(SetAsideMainFiles(factory), "the notification exists, but no file was set aside"));
         Assert.Contains(setAside, notification.GetProperty("body").GetString()!, StringComparison.Ordinal);
         Assert.IsTrue(notification.GetProperty("isTranslated").GetBoolean(), "the notification's text exists only in English");
+    }
+
+    /// <summary>
+    /// #490: the repair action sets the file aside, and both notifications it leaves, the set-aside notice and
+    /// the Reset's own result, say why in their text: the layer of the database check that showed the file
+    /// was not a sound copy, its status and its finding, as the check itself reports them.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_DatabaseFileCorrupt_RepairActionNotificationsSayWhichLayerShowedIt()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase(AdminKey);
+        using HttpClient client = factory.CreateClient();
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable,
+            (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode, "precondition: the application degraded");
+
+        using IServiceScope scope = factory.Services.CreateScope();
+        DatabaseCheckResult check = await scope.ServiceProvider.GetRequiredService<IDatabaseCheck>().CheckAsync(DatabaseCheckDepth.Full);
+        DatabaseCheckLayerResult expected = check.Layers.First(l => l.Status is DatabaseCheckLayerStatus.Failed or DatabaseCheckLayerStatus.Inconclusive);
+        await scope.ServiceProvider.GetRequiredService<INotificationActionExecutor>()
+            .ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, "/api/v1/notifications");
+        request.Headers.Add("Accept-Language", "nl");
+        using HttpResponseMessage listing = await client.SendAsync(request, TestContext.CancellationToken);
+        using JsonDocument doc = JsonDocument.Parse(await listing.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        IEnumerable<JsonElement> items = doc.RootElement.TryGetProperty("items", out JsonElement list) ? list.EnumerateArray() : [];
+
+        foreach (string kind in (string[])["UnreadableDatabaseSetAside", "DatabaseActionResult"])
+        {
+            string body = Assert.ContainsSingle(
+                items.Where(n => string.Equals(n.GetProperty("metadataKind").GetString(), kind, StringComparison.OrdinalIgnoreCase)),
+                $"no {kind} notification was written (GET /api/v1/notifications answered {(int)listing.StatusCode})")
+                .GetProperty("body").GetString()!;
+            Assert.Contains(expected.Layer.ToString(), body, StringComparison.Ordinal, $"the {kind} notification does not name the layer");
+            Assert.Contains(expected.Status.ToString(), body, StringComparison.Ordinal, $"the {kind} notification does not name the status");
+            Assert.Contains(expected.Finding!, body, StringComparison.Ordinal, $"the {kind} notification does not give the finding");
+        }
+    }
+
+    /// <summary>
+    /// #490: the Reset's own response says why it set the file aside, as its notifications do: the check
+    /// layer that showed the file was not a sound copy, its status and its finding, as the check reports them.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_DatabaseFileCorrupt_ResetResponseSaysWhichLayerShowedIt()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase(AdminKey);
+        using HttpClient client = factory.CreateClient();
+        DatabaseCheckLayerResult expected = await FirstLayerThatDidNotPassAsync(factory);
+
+        HttpResponseMessage reset = await PostResetAsync(client);
+
+        using JsonDocument body = JsonDocument.Parse(await reset.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        Assert.AreEqual(HttpStatusCode.OK, reset.StatusCode, "precondition: the Reset ran: " + body.RootElement);
+        JsonElement backup = body.RootElement.GetProperty("backup");
+        Assert.AreEqual("SetAside", backup.GetProperty("outcome").GetString(), "precondition: the file was set aside");
+        AssertNamesTheLayer(backup, expected);
+    }
+
+    /// <summary>
+    /// #490: a Reset refused because the file could not be set aside says why the file needed setting aside,
+    /// as well as the obstacle that stopped the move.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_DatabaseFileCorrupt_ResetRefusalSaysWhichLayerShowedIt()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase(AdminKey, blockTheSetAsideFolder: true);
+        using HttpClient client = factory.CreateClient();
+        DatabaseCheckLayerResult expected = await FirstLayerThatDidNotPassAsync(factory);
+
+        HttpResponseMessage reset = await PostResetAsync(client);
+
+        using JsonDocument body = JsonDocument.Parse(await reset.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        Assert.AreEqual(HttpStatusCode.Conflict, reset.StatusCode, "precondition: the Reset refused: " + body.RootElement);
+        AssertNamesTheLayer(body.RootElement, expected);
+    }
+
+    /// <summary>The first layer of a full check of the main database that did not pass: the one a Reset sets the file aside for.</summary>
+    private static async Task<DatabaseCheckLayerResult> FirstLayerThatDidNotPassAsync(WebApplicationFactory<Program> factory)
+    {
+        using IServiceScope scope = factory.Services.CreateScope();
+        DatabaseCheckResult check = await scope.ServiceProvider.GetRequiredService<IDatabaseCheck>().CheckAsync(DatabaseCheckDepth.Full);
+        return check.Layers.First(l => l.Status is DatabaseCheckLayerStatus.Failed or DatabaseCheckLayerStatus.Inconclusive);
+    }
+
+    private static void AssertNamesTheLayer(JsonElement element, DatabaseCheckLayerResult expected)
+    {
+        Assert.IsTrue(element.TryGetProperty("checkLayer", out JsonElement layer), "no checkLayer was reported: " + element);
+        Assert.AreEqual(expected.Layer.ToString(), layer.GetString());
+        Assert.AreEqual(expected.Status.ToString(), element.GetProperty("checkStatus").GetString());
+        Assert.AreEqual(expected.Finding, element.GetProperty("checkFinding").GetString());
     }
 
     /// <summary>

@@ -57,6 +57,12 @@ public sealed class DatabaseOperationResult
     public RestorePointResult? RestorePoint { get; init; }
 
     /// <summary>
+    /// Why a refused Reset had to set the file aside (#490), so the refusal says why the file needed moving
+    /// as well as what stopped the move. On a Reset that ran, it is on <see cref="RestorePoint"/> instead.
+    /// </summary>
+    public SetAsideReasonResult? SetAsideReason { get; init; }
+
+    /// <summary>
     /// Whether the operation stopped because the database's schema does not match the one its migration
     /// path defines (#305). The differences are in <see cref="Schema.IIntegrityCheckedDatabase.LastIntegrityResult"/>;
     /// a caller maps them to what an operator reads.
@@ -110,7 +116,11 @@ public sealed class DatabaseOperationResult
     /// set aside, or the data directory cannot be written. Nothing was moved or written.
     /// </summary>
     /// <param name="obstacle">What stopped it.</param>
-    public static DatabaseOperationResult RefusedForReset(ResetObstacle obstacle) =>
+    /// <param name="setAsideReason">
+    /// Why the file had to be set aside, when that is what the obstacle stopped (#490); <see langword="null"/>
+    /// for a sound copy, which is never set aside.
+    /// </param>
+    public static DatabaseOperationResult RefusedForReset(ResetObstacle obstacle, SetAsideReasonResult? setAsideReason) =>
         new()
-        { Succeeded = false, ResetObstacle = obstacle, RefusedStep = BackupGuardedStep.Reset };
+        { Succeeded = false, ResetObstacle = obstacle, SetAsideReason = setAsideReason, RefusedStep = BackupGuardedStep.Reset };
 }

@@ -17,6 +17,7 @@ using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 using Quotinator.Data.Notifications;
 using Quotinator.Data.Paths;
+using Quotinator.Data.Database.Checks;
 using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.Database;
@@ -66,10 +67,11 @@ public partial class DatabaseInitializerTests
         IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null,
         ISourceCacheUpdater? sourceCacheUpdater = null, bool autoUpdateSources = false,
         IAppVersionTracker? appVersionTracker = null, ILogger<DatabaseInitializer>? logger = null,
-        IChangeWriter? changeWriter = null, DatabaseCheckDepth startupCheckDepth = DatabaseCheckDepth.Full)
+        IChangeWriter? changeWriter = null, DatabaseCheckDepth startupCheckDepth = DatabaseCheckDepth.Full,
+        IDatabaseCheck? databaseCheck = null)
         => CreateInitializer(batches, QuotinatorMigrations.All, useBaseline, ruleFileOverridePathResolver, sourceFileOverrideRegistry,
             autoPurgeBundledImportActions, autoPurgeUserImportActions, auditWriter, diskSpaceProvider, maxBackupStorageGb,
-            sourceCacheUpdater, autoUpdateSources, appVersionTracker, logger, changeWriter, startupCheckDepth);
+            sourceCacheUpdater, autoUpdateSources, appVersionTracker, logger, changeWriter, startupCheckDepth, databaseCheck);
 
     private QuotinatorDatabaseInitializer CreateInitializer(
         IReadOnlyList<SeedBatch> batches, IReadOnlyList<SchemaMigration> migrations, bool useBaseline,
@@ -79,7 +81,8 @@ public partial class DatabaseInitializerTests
         IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null,
         ISourceCacheUpdater? sourceCacheUpdater = null, bool autoUpdateSources = false,
         IAppVersionTracker? appVersionTracker = null, ILogger<DatabaseInitializer>? logger = null,
-        IChangeWriter? changeWriter = null, DatabaseCheckDepth startupCheckDepth = DatabaseCheckDepth.Full)
+        IChangeWriter? changeWriter = null, DatabaseCheckDepth startupCheckDepth = DatabaseCheckDepth.Full,
+        IDatabaseCheck? databaseCheck = null)
     {
         SqliteConnectionFactory factory       = new(_dbPath);
         DatabaseOptions options       = new()
@@ -120,7 +123,7 @@ public partial class DatabaseInitializerTests
             appVersionTracker ?? new AppVersionTracker(factory),
             new VersionService(),
             diskSpaceProvider ?? NoOpDiskSpaceProvider.Instance,
-            TestDatabaseChecks.ForMain(_dbPath, migrations, useBaseline ? QuotinatorMigrations.Baseline : null),
+            databaseCheck ?? TestDatabaseChecks.ForMain(_dbPath, migrations, useBaseline ? QuotinatorMigrations.Baseline : null),
             useBaseline ? QuotinatorMigrations.Baseline : null);
     }
 

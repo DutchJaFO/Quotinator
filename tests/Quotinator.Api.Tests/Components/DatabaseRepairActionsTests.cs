@@ -1,6 +1,7 @@
 using Quotinator.Api.Components.Controls;
 using Quotinator.Api.Services;
 using Quotinator.Api.Startup;
+using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
 
 namespace Quotinator.Api.Tests.Components;
@@ -29,7 +30,7 @@ public class DatabaseRepairActionsTests
     {
         string?[] outcomes =
         [
-            DatabaseRepairActions.RepairOutcomeText(NotificationActionResult.RefusedForReset(ResetObstacle.SetAsideMoveFailed), Text),
+            DatabaseRepairActions.RepairOutcomeText(NotificationActionResult.RefusedForReset(ResetObstacle.SetAsideMoveFailed, null), Text),
             DatabaseRepairActions.RepairOutcomeText(NotificationActionResult.RefusedForBackup(BackupOutcome.BudgetExceeded), Text),
             DatabaseRepairActions.RepairOutcomeText(NotificationActionResult.ResetNotIntact("reason"), Text),
             DatabaseRepairActions.RepairOutcomeText(new NotificationActionResult { Succeeded = false }, Text),
@@ -90,12 +91,40 @@ public class DatabaseRepairActionsTests
     public void RefusedForReset_NamesTheResetObstacleAndItsRemedy()
     {
         string? outcome = DatabaseRepairActions.RepairOutcomeText(
-            NotificationActionResult.RefusedForReset(ResetObstacle.DataDirectoryNotWritable), Text);
+            NotificationActionResult.RefusedForReset(ResetObstacle.DataDirectoryNotWritable, null), Text);
 
         Assert.IsNotNull(outcome);
         Assert.Contains(ResetObstacleGuidance.Cause(ResetObstacle.DataDirectoryNotWritable), outcome, StringComparison.Ordinal);
         Assert.Contains(ResetObstacleGuidance.Remedies(ResetObstacle.DataDirectoryNotWritable)[0], outcome, StringComparison.Ordinal);
         Assert.DoesNotContain("no backup could be taken", outcome, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #490: a repair refused because the file could not be set aside says why it needed setting aside: the
+    /// check layer that showed it was not a sound copy, its status and its finding.
+    /// </summary>
+    [TestMethod]
+    public void RefusedForAFileThatNeededSettingAside_SaysWhichLayerShowedIt()
+    {
+        string? outcome = DatabaseRepairActions.RepairOutcomeText(
+            NotificationActionResult.RefusedForReset(ResetObstacle.SetAsideMoveFailed, SetAsideReasonResult.FromCheck(ReasonFixtures.BrokenIndex)), Text);
+
+        Assert.IsNotNull(outcome);
+        Assert.Contains(ResetObstacleGuidance.Cause(ResetObstacle.SetAsideMoveFailed), outcome, StringComparison.Ordinal);
+        Assert.Contains(nameof(DatabaseCheckLayer.Indexes), outcome, StringComparison.Ordinal);
+        Assert.Contains(nameof(DatabaseCheckLayerStatus.Failed), outcome, StringComparison.Ordinal);
+        Assert.Contains(ReasonFixtures.BrokenIndex.Finding!, outcome, StringComparison.Ordinal);
+    }
+
+    /// <summary>#490: the same refusal for a file only the backup found unreadable gives the backup's error.</summary>
+    [TestMethod]
+    public void RefusedForAFileTheBackupFoundUnreadable_GivesTheBackupError()
+    {
+        string? outcome = DatabaseRepairActions.RepairOutcomeText(
+            NotificationActionResult.RefusedForReset(ResetObstacle.SetAsideMoveFailed, SetAsideReasonResult.FromBackup(ReasonFixtures.BackupError)), Text);
+
+        Assert.IsNotNull(outcome);
+        Assert.Contains(ReasonFixtures.BackupError, outcome, StringComparison.Ordinal);
     }
 
     /// <summary>A repair that ran leaves nothing to report: the application is healthy and reloads.</summary>
