@@ -98,7 +98,12 @@ inconclusive.
 |---|---|---|
 | Startup, before anything opens the database for writing, and again after creating or migrating it | Set by `Quotinator:DatabaseStartupCheck` (`Full` by default) | It is returned as an outcome (ADR 022) and degrades startup with a reason |
 | A Reset | Always `Full` | It decides whether the old file is backed up or set aside (below) |
-| The integrity endpoint | Always `Full` | It is reported layer by layer and never thrown |
+| The integrity endpoint | Always `Full` | It is reported layer by layer and never thrown, and it degrades the application as startup would |
+
+**A failed check degrades the application at any point, not only at startup (developer, 2026-11-15).** When
+the integrity endpoint's check of the main database finds a failure that would have stopped startup, or a
+schema that is not intact, the application is degraded with the reason startup gives for the same failure. A
+check that passes changes nothing, and the changelog database never degrades the application (ADR 018).
 
 **A database is validated in the state it starts in (developer, 2026-11-15).** Startup takes one of three
 paths, and the check follows each:

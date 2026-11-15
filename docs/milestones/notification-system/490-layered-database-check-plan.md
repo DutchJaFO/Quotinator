@@ -949,6 +949,33 @@ set, though all four are in it, and recorded no relevant set at all.
   changes; `notifications-and-changelog/10` and `12` cover the reseed recommendation and an action's running
   state over a healthy database, whose Reset `database-lifecycle/03` in the smoke set already exercises.
 
+**First run, 2026-11-15, on `9b59f414`: stopped at the ninth smoke test.**
+
+- **Passed:** `api-surface/01` and `02`, `import-and-staged-actions/01`, `14` and `19`,
+  `startup-and-degradation/03`, `database-lifecycle/03` (step 8 failing as the known #468 it records), and
+  `startup-and-degradation/01`, once its pre-#305 prose about a seeding backup and a handled `SqliteException`,
+  which contradicted its own commands, was removed.
+- **`startup-and-degradation/05` had not been converted for this issue,** though its fault, an unwritable
+  data directory, is the Storage layer's. Startup now stops there before any migration, so its log count of a
+  `SqliteException` read `0`. Converting it was reactive, after a run, which step 12 should have done and this
+  step's rule forbids. The developer's direction that followed: **every document in scope is reviewed against
+  this issue's changes before any more run, since each may break for a different reason; only responses and
+  application state are evidence, and the log is read only for exceptions nobody knew about.**
+- **Found, a defect:** with `/data` read-only, `GET /admin/database/integrity` answered `500`. It ran #305's
+  comparison whenever the file could be read, through the application's own connection, which cannot open a
+  write-ahead-log database in a directory it cannot write; the exception went unhandled. **Fixed:** the
+  comparison runs only when Storage passed as well. **And, per the developer's direction (2026-11-15), a failed
+  check degrades the application at any point, not only at startup:** `DatabaseCheckResult.DegradingFailure` is
+  the one rule of which failures degrade, read by startup and the endpoint alike, and
+  `StartupDegradationReasons.ForCheck` maps a failure to the reason startup gives for it. ADR 028, the endpoint
+  description and `api-endpoints.md` say so. **Red first:**
+  `AdminDatabaseIntegrityEndpointTests.Check_LayerFailsAfterStartup_DegradesTheApplication`,
+  `…Check_StorageFails_ReportsWithoutComparingAndDegrades` and `…Check_SchemaBrokenAfterStartup_DegradesTheApplication`
+  failed on their claims; the controls `…Check_ReferencesFailOnly_LeavesTheApplicationHealthy`,
+  `…Check_ChangelogFails_LeavesTheApplicationHealthy` and `…Check_ThatPasses_LeavesHealthAsItWas` passed
+  throughout. Verification row 27.
+- **T2 restarts from the first test** on a build with the fix, after the review.
+
 ### 17. Changelog
 
 **Status:** ⬜ Not started
@@ -988,3 +1015,4 @@ says that the database is checked thoroughly at every start, and that the faster
 | 24 | ✅ | *(developer, 2026-11-15)* A Reset's restore point and both set-aside notifications say why the file was set aside: the check layer, its status and finding, or the backup's own error when the check passed | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabase_RestorePointNamesTheLayerThatShowedIt`, `…ResetAsync_CorruptDatabase_NotificationRecordsTheLayerThatShowedIt`, `…ResetAsync_FileOnlyTheBackupFindsUnreadable_RestorePointCarriesTheBackupError`, `…ResetAsync_FileOnlyTheBackupFindsUnreadable_NotificationRecordsTheBackupError`; `DatabaseActionResultRecorderTests.RecordAsync_SetAsideByTheCheck_RecordsTheLayerThatShowedIt`, `…RecordAsync_SetAsideByTheBackup_RecordsTheBackupError`, the `ResetSetAsideByBackup` rows; `StartupResilienceTests.Startup_DatabaseFileCorrupt_RepairActionNotificationsSayWhichLayerShowedIt` |
 | 25 | ✅ | *(developer, 2026-11-15)* Every other surface reporting a Reset says why the file was set aside, or had to be: the response, the refusal, the repair control, the Notifications page and the refused Reset's notification | Unit test | `RestorePointDtoTests` (3); `DatabaseInitializerTests.ResetAsync_CorruptDatabaseThatCannotBeSetAside_RefusalSaysWhichLayerShowedIt`, `…ResetAsync_FileOnlyTheBackupFindsUnreadableThatCannotBeSetAside_RefusalCarriesTheBackupError`; `StartupResilienceTests.Startup_DatabaseFileCorrupt_ResetResponseSaysWhichLayerShowedIt`, `…ResetRefusalSaysWhichLayerShowedIt`; `DatabaseRepairActionsTests.RefusedForAFileThatNeededSettingAside_SaysWhichLayerShowedIt`, `…RefusedForAFileTheBackupFoundUnreadable_GivesTheBackupError`; `NotificationsPageTests.ResetThatSetTheFileAside_SaysWhyAndWhere`, `…ResetThatSetAsideAFileTheBackupFoundUnreadable_GivesTheBackupError`; `DatabaseActionResultRecorderTests.RecordAsync_RefusedForAFileThatNeededSettingAside_RecordsTheLayerThatShowedIt`, `…RecordAsync_RefusedForAFileTheBackupFoundUnreadable_RecordsTheBackupError`, the `ResetNotMovable` rows |
 | 26 | ✅ | *(T1, decision F corrected)* The Schema layer compares only when every version table records this build's version, and is skipped, naming the table, otherwise; startup over an old database logs no Schema failure; a passed check that skipped a layer says so rather than claiming every layer | Unit test | `SqliteDatabaseCheckTests.Check_RecordedVersionBehindThisBuild_SkipsSchemaNamingTheVersionTable`, `…Check_RecordedVersionAheadOfThisBuild_SkipsSchema`, `…Check_NoVersionTable_SkipsSchema`, `…Check_RecordedVersionIsThisBuilds_ComparesTheSchema`; `DatabaseInitializerTests.InitialiseAsync_OldDatabase_LogsTheSchemaSkippedRatherThanFailedBeforeMigrating`; `StartupDatabaseCheckTests` (3) |
+| 27 | ✅ | *(T2, developer, 2026-11-15)* The integrity endpoint never throws, comparing the schema only when Storage passed, and a check that finds the main database failing degrades the application at any point; a dangling reference alone, or the changelog database, does not | Unit test | `AdminDatabaseIntegrityEndpointTests.Check_LayerFailsAfterStartup_DegradesTheApplication`, `…Check_StorageFails_ReportsWithoutComparingAndDegrades`, `…Check_SchemaBrokenAfterStartup_DegradesTheApplication`, `…Check_ReferencesFailOnly_LeavesTheApplicationHealthy`, `…Check_ChangelogFails_LeavesTheApplicationHealthy`, `…Check_ThatPasses_LeavesHealthAsItWas` |

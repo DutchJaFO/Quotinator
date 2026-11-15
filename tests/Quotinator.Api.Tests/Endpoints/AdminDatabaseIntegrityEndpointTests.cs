@@ -4,8 +4,15 @@ using System.Text.Json;
 using Dapper;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
+using Quotinator.Api.Startup;
+using Quotinator.Api.Tests.Fakes;
+using Quotinator.Core.Database;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Database.Checks;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Testing.Database;
 
@@ -14,8 +21,8 @@ namespace Quotinator.Api.Tests.Endpoints;
 /// <summary>
 /// #305: <c>GET /api/v1/admin/database/integrity</c> runs the integrity check on every database when asked
 /// and reports what it found. It is read-only, so it sits with the other read-only admin endpoints and
-/// needs no key; it answers while the application is degraded, which is when it is most useful; and it
-/// never changes health.
+/// needs no key; it answers while the application is degraded, which is when it is most useful; and a check
+/// that finds the main database failing degrades the application (#490).
 /// <para>
 /// Real databases in a real data directory, as <c>StartupResilienceTests</c> uses: the endpoint's value is
 /// what it finds in an actual schema, which a fake initializer cannot show.
@@ -109,11 +116,11 @@ public class AdminDatabaseIntegrityEndpointTests
     }
 
     /// <summary>
-    /// Reporting is the endpoint's one job: it never marks health either way. A degraded application stays
-    /// degraded after a check, and a healthy one stays healthy.
+    /// Control for the tests below: a check that finds nothing wrong leaves health as it was. A degraded
+    /// application stays degraded after a check, and a healthy one stays healthy.
     /// </summary>
     [TestMethod]
-    public async Task Check_DoesNotChangeHealth()
+    public async Task Check_ThatPasses_LeavesHealthAsItWas()
     {
         using WebApplicationFactory<Program> degraded = FactoryWithSabotage("DROP TABLE System_Notification;");
         using HttpClient degradedClient = degraded.CreateClient();
@@ -126,6 +133,95 @@ public class AdminDatabaseIntegrityEndpointTests
         await GetDatabasesAsync(healthyClient);
         Assert.AreEqual(HttpStatusCode.OK,
             (await healthyClient.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode);
+    }
+
+    /// <summary>
+    /// #490 (developer, 2026-11-15): a failed check degrades the application at any point, not only at startup.
+    /// A healthy application whose check later fails a layer startup would have stopped at is degraded by the
+    /// endpoint, with the reason startup gives for the same failure.
+    /// </summary>
+    [TestMethod]
+    public async Task Check_LayerFailsAfterStartup_DegradesTheApplication()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithSwitchableChecks(NewDataDirectory(), out SwitchableDatabaseCheck main, out _);
+        using HttpClient client = factory.CreateClient();
+        Assert.AreEqual(HttpStatusCode.OK, (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode, "precondition: healthy at startup");
+
+        main.FailAt(DatabaseCheckLayer.Indexes, "row 5 missing from index IX_CheckFixture_Rank");
+        await GetDatabasesAsync(client);
+
+        HttpResponseMessage health = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, health.StatusCode, "a failed check left the application healthy");
+        Assert.Contains(StartupDegradationReasons.InitialisationFailed, await health.Content.ReadAsStringAsync(TestContext.CancellationToken));
+    }
+
+    /// <summary>
+    /// #490: a data directory that stops being writable after startup degrades the application with the
+    /// reason startup gives for it, and the endpoint reports the layers rather than opening a connection that
+    /// cannot work there. Found in T2: on a read-only <c>/data</c> the endpoint ran #305's comparison through
+    /// the application's own connection, which threw, and answered <c>500</c>.
+    /// </summary>
+    [TestMethod]
+    public async Task Check_StorageFails_ReportsWithoutComparingAndDegrades()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithSwitchableChecks(NewDataDirectory(), out SwitchableDatabaseCheck main, out _);
+        using HttpClient client = factory.CreateClient();
+        Assert.AreEqual(HttpStatusCode.OK, (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode, "precondition: healthy at startup");
+
+        main.FailAt(DatabaseCheckLayer.Storage, "The data directory cannot be written.");
+        JsonElement mainDatabase = Database(await GetDatabasesAsync(client), "main");
+
+        Assert.IsFalse(mainDatabase.GetProperty("isIntact").GetBoolean(), "the schema was compared through a directory that cannot be written");
+        Assert.AreEqual(0, mainDatabase.GetProperty("differences").GetArrayLength());
+        HttpResponseMessage health = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, health.StatusCode, "a failed Storage layer left the application healthy");
+        Assert.Contains("data directory cannot be written", await health.Content.ReadAsStringAsync(TestContext.CancellationToken));
+    }
+
+    /// <summary>
+    /// #490: a schema that stops matching after startup degrades the application with #305's reason. The
+    /// table is dropped from the running application's own database, outside any migration.
+    /// </summary>
+    [TestMethod]
+    public async Task Check_SchemaBrokenAfterStartup_DegradesTheApplication()
+    {
+        string dataDirectory = NewDataDirectory();
+        using WebApplicationFactory<Program> factory = FactoryFor(dataDirectory);
+        using HttpClient client = factory.CreateClient();
+        Assert.AreEqual(HttpStatusCode.OK, (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode, "precondition: healthy at startup");
+
+        Execute(dataDirectory, "DROP TABLE System_Notification;");
+        await GetDatabasesAsync(client);
+
+        HttpResponseMessage health = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, health.StatusCode, "a schema that no longer matches left the application healthy");
+        Assert.Contains("System_Notification", await health.Content.ReadAsStringAsync(TestContext.CancellationToken));
+    }
+
+    /// <summary>Control, decision E: a dangling reference alone does not degrade the application, on demand as at startup.</summary>
+    [TestMethod]
+    public async Task Check_ReferencesFailOnly_LeavesTheApplicationHealthy()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithSwitchableChecks(NewDataDirectory(), out SwitchableDatabaseCheck main, out _);
+        using HttpClient client = factory.CreateClient();
+
+        main.FailAt(DatabaseCheckLayer.References, "Child row 6 references Parent 999.");
+        await GetDatabasesAsync(client);
+
+        Assert.AreEqual(HttpStatusCode.OK, (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode);
+    }
+
+    /// <summary>Control, ADR 018: a failed check of the changelog database never degrades the application.</summary>
+    [TestMethod]
+    public async Task Check_ChangelogFails_LeavesTheApplicationHealthy()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithSwitchableChecks(NewDataDirectory(), out _, out SwitchableDatabaseCheck changelog);
+        using HttpClient client = factory.CreateClient();
+
+        changelog.FailAt(DatabaseCheckLayer.Pages, "Page 3 is damaged.");
+        await GetDatabasesAsync(client);
+
+        Assert.AreEqual(HttpStatusCode.OK, (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode);
     }
 
     [TestMethod]
@@ -284,6 +380,27 @@ public class AdminDatabaseIntegrityEndpointTests
             foreach ((string key, string value) in settings)
                 builder.UseSetting(key, value);
         });
+
+    /// <summary>
+    /// The application over <paramref name="dataDirectory"/>, with each database's real check wrapped so a test
+    /// can make a later check fail.
+    /// </summary>
+    private static WebApplicationFactory<Program> FactoryWithSwitchableChecks(
+        string dataDirectory, out SwitchableDatabaseCheck main, out SwitchableDatabaseCheck changelog)
+    {
+        SwitchableDatabaseCheck mainCheck = new(TestDatabaseChecks.ForMain(
+            Path.Combine(dataDirectory, DataPaths.DatabaseFile), QuotinatorMigrations.All, QuotinatorMigrations.Baseline));
+        SwitchableDatabaseCheck changelogCheck = new(TestDatabaseChecks.ForChangelog(
+            Path.Combine(dataDirectory, DataPaths.ChangelogDatabaseFile)));
+        main = mainCheck;
+        changelog = changelogCheck;
+
+        return FactoryFor(dataDirectory).WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.AddSingleton<IDatabaseCheck>(mainCheck);
+            services.AddKeyedSingleton<IDatabaseCheck>(DatabaseConnectionKeys.Changelog, changelogCheck);
+        }));
+    }
 
     private string NewDataDirectory()
     {

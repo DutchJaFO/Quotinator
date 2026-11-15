@@ -64,11 +64,7 @@ internal static class StartupDegradationReasons
     {
         // #490: a check that stopped the initialisation stopped it before anything else ran, so it wins.
         if (StoppingLayer(initialisation) is { } stopping)
-        {
-            return stopping.Status == DatabaseCheckLayerStatus.Inconclusive ? CheckInconclusive
-                : stopping.Layer == DatabaseCheckLayer.Storage ? DataDirectoryNotWritable
-                : InitialisationFailed;
-        }
+            return ForLayer(stopping);
 
         // #348: a refused migration leaves the schema behind this build, the stricter fault, so it wins over
         // an overshoot reported in the same initialisation.
@@ -85,6 +81,29 @@ internal static class StartupDegradationReasons
 
         return null;
     }
+
+    /// <summary>
+    /// The reason an on-demand check degrades the application with (#490, developer, 2026-11-15: a failed
+    /// integrity or storage check degrades the application at any point, not only at startup), or
+    /// <see langword="null"/> when it does not. The same judgement as startup's: a failure that would stop
+    /// startup, then a schema that is not intact.
+    /// </summary>
+    /// <param name="check">What the check found.</param>
+    /// <param name="integrity">The schema comparison, when it could run.</param>
+    internal static string? ForCheck(DatabaseCheckResult check, SchemaIntegrityResult? integrity)
+    {
+        if (check.DegradingFailure is { } failure)
+            return ForLayer(failure);
+
+        return integrity is { IsIntact: false } ? SchemaIntegrityGuidance.Reason(integrity) : null;
+    }
+
+    /// <summary>The reason for a layer that degrades, at startup and on demand alike.</summary>
+    /// <param name="failure">The layer that failed or was inconclusive.</param>
+    private static string ForLayer(DatabaseCheckLayerResult failure) =>
+        failure.Status == DatabaseCheckLayerStatus.Inconclusive ? CheckInconclusive
+            : failure.Layer == DatabaseCheckLayer.Storage ? DataDirectoryNotWritable
+            : InitialisationFailed;
 
     /// <summary>
     /// The layer the database check stopped the initialisation at, or <see langword="null"/> when the check did

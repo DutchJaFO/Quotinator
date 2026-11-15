@@ -17,8 +17,7 @@ internal static class StartupDatabaseCheck
     /// itself, since an old database's schema differs from this build's by design.
     /// </summary>
     /// <param name="check">What the check found.</param>
-    internal static bool Stops(DatabaseCheckResult check) =>
-        check.FirstFailure is { } failure && failure.Layer is not (DatabaseCheckLayer.References or DatabaseCheckLayer.Schema);
+    internal static bool Stops(DatabaseCheckResult check) => check.DegradingFailure is not null;
 
     /// <summary>
     /// Logs what the check found: that it passed, or the layer it stopped at and why, and each layer it skipped

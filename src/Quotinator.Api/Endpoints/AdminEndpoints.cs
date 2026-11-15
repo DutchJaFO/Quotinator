@@ -87,17 +87,24 @@ internal static class AdminEndpoints
 
         publicGroup.MapGet("/database/integrity", async (
             IDatabaseInitializer db, ChangelogDatabaseInitializer changelog,
-            IDatabaseCheck mainCheck, [FromKeyedServices(DatabaseConnectionKeys.Changelog)] IDatabaseCheck changelogCheck) =>
+            IDatabaseCheck mainCheck, [FromKeyedServices(DatabaseConnectionKeys.Changelog)] IDatabaseCheck changelogCheck,
+            Quotinator.Api.Startup.DatabaseHealthState dbHealth) =>
         {
             List<DatabaseIntegrityDto> databases = [];
             foreach ((IIntegrityCheckedDatabase database, IDatabaseCheck check) in
                 new (IIntegrityCheckedDatabase, IDatabaseCheck)[] { (db, mainCheck), (changelog, changelogCheck) })
             {
-                // #490: always Full, whatever the startup setting (ADR 028). #305's comparison runs only when the
-                // file itself can be read; otherwise the failing layer is the answer, rather than an exception.
+                // #490: always Full, whatever the startup setting (ADR 028). #305's comparison runs only when it can;
+                // otherwise the failing layer is the answer, rather than an exception.
                 DatabaseCheckResult result = await check.CheckAsync(DatabaseCheckDepth.Full);
-                SchemaIntegrityResult? integrity = FileCanBeRead(result) ? await database.CheckIntegrityAsync() : null;
+                SchemaIntegrityResult? integrity = SchemaCanBeCompared(result) ? await database.CheckIntegrityAsync() : null;
                 databases.Add(ToDto(database.DatabaseName, result, integrity));
+
+                // #490 (developer, 2026-11-15): a failed check degrades the application at any point, not only at
+                // startup. The changelog database never does: it falls back to the JSON files (ADR 018).
+                if (database.DatabaseName == DatabaseNames.Main
+                    && Quotinator.Api.Startup.StartupDegradationReasons.ForCheck(result, integrity) is string reason)
+                    dbHealth.MarkFailed(reason);
             }
 
             return Results.Ok(new DatabaseIntegrityResponse { Databases = databases });
@@ -114,9 +121,12 @@ internal static class AdminEndpoints
             "columns, foreign keys, indexes, views and triggers against the schema its own migration path defines. " +
             "`missing` and `different` objects make a database not intact; `extra` objects are reported without doing so, " +
             "since they mean a migration may have been missed. When the file itself cannot be read (format, journal or " +
-            "pages did not pass) the schema is not compared: `isIntact` is false and `differences` is empty, and the failing " +
-            "layer says why. `200` means the check ran, whatever it found. Writes nothing and never changes the health " +
-            "status; answers while the database is degraded, when it is most useful. CHECK constraints are not compared.");
+            "pages did not pass), or its directory cannot be written (storage did not pass), the schema is not compared: " +
+            "`isIntact` is false and `differences` is empty, and the failing layer says why. `200` means the check ran, " +
+            "whatever it found. Writes nothing to the database. A check that finds the main database failing degrades the " +
+            "application, as a failure found at startup does (issue #490): a layer from storage to indexes failing or " +
+            "inconclusive, or a schema that is not intact. A dangling reference alone does not, and the changelog database " +
+            "never does. Answers while the database is degraded, when it is most useful. CHECK constraints are not compared.");
 
         publicGroup.MapGet("/audit", async (
             string? table,
@@ -564,11 +574,14 @@ internal static class AdminEndpoints
     };
 
     /// <summary>
-    /// Whether the file itself could be read, so its schema can be compared (#490): Storage reached it, and Format,
-    /// Journal and Pages passed. Indexes, References and Schema failing leave it readable.
+    /// Whether #305's comparison can run (#490): Storage passed, and Format, Journal and Pages passed. Indexes,
+    /// References and Schema failing leave the file readable. Storage must pass as well because the comparison
+    /// opens the database through the application's own connection, which needs a writable directory for the
+    /// write-ahead log; found in T2, where a read-only <c>/data</c> made it throw and the endpoint answer <c>500</c>.
+    /// The check itself reads through a connection of its own, so its layers are reported either way.
     /// </summary>
-    private static bool FileCanBeRead(DatabaseCheckResult check) =>
-        check.Layers.Where(l => l.Layer is DatabaseCheckLayer.Format or DatabaseCheckLayer.Journal or DatabaseCheckLayer.Pages)
+    private static bool SchemaCanBeCompared(DatabaseCheckResult check) =>
+        check.Layers.Where(l => l.Layer is DatabaseCheckLayer.Storage or DatabaseCheckLayer.Format or DatabaseCheckLayer.Journal or DatabaseCheckLayer.Pages)
             .All(l => l.Status == DatabaseCheckLayerStatus.Passed);
 
     private static DatabaseIntegrityDto ToDto(string database, DatabaseCheckResult check, SchemaIntegrityResult? integrity) => new()

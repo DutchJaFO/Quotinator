@@ -33,6 +33,17 @@ public sealed class DatabaseCheckResult
         Layers.FirstOrDefault(l => l.Status is DatabaseCheckLayerStatus.Failed or DatabaseCheckLayerStatus.Inconclusive);
 
     /// <summary>
+    /// The first failure that degrades the application (ADR 028), or <see langword="null"/> when none does. Every
+    /// failing or inconclusive layer degrades, except two: References, until #493 makes enforcement explicit
+    /// (decision E), and Schema, which is judged by the schema comparison itself, after any migration
+    /// (decision F). Startup and the integrity endpoint both read it, so they cannot judge a result differently.
+    /// </summary>
+    public DatabaseCheckLayerResult? DegradingFailure =>
+        FirstFailure is { } failure && failure.Layer is not (DatabaseCheckLayer.References or DatabaseCheckLayer.Schema)
+            ? failure
+            : null;
+
+    /// <summary>
     /// Whether every layer that ran passed. At <see cref="DatabaseCheckDepth.Fast"/> this says nothing about
     /// the layers it skipped.
     /// </summary>
