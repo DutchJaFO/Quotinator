@@ -880,15 +880,17 @@ public class DatabaseInitializer(
     public async Task<DatabaseOperationResult> ResetAsync(
         bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false)
     {
-        // #482: read every page first, before any storage check. A Reset recreates the database whatever
-        // state the old file is in, and a file that cannot be read is never a backup, so it needs none:
-        // a full backup folder must not stop it, and that check would refuse first if it ran first.
-        _resetSourceReadable = IsDatabaseFileReadable();
+        // #482, #490: judge the file first, before any storage check, and always at Full whatever the startup
+        // setting (ADR 028). A Reset recreates the database whatever state the old file is in, and a file that
+        // is not a sound copy is never a backup, so it needs none: a full backup folder must not stop it, and
+        // that check would refuse first if it ran first.
+        DatabaseCheckResult check = await _check.CheckAsync(DatabaseCheckDepth.Full);
+        _resetSourceIsSoundCopy = ResetDatabaseCheck.IsSoundCopy(check);
         _setAsidePath = null;
         _resetBackupPath = null;
 
         BackupOutcome readiness = BackupOutcome.Succeeded;
-        if (_resetSourceReadable)
+        if (_resetSourceIsSoundCopy)
         {
             // #348: check before acting. A Reset replaces the whole database, so it is the last operation
             // that should run without a restore point, and a full backup folder or an unwritable
@@ -905,7 +907,8 @@ public class DatabaseInitializer(
         }
         else
         {
-            Logger.LogResetSourceUnreadable();
+            DatabaseCheckLayerResult why = ResetDatabaseCheck.WhyNotASoundCopy(check)!;
+            Logger.LogResetSourceNotASoundCopy(why.Layer.ToString(), why.Status.ToString(), why.Finding ?? string.Empty);
             if (CheckSetAsideReadiness() is ResetObstacle obstacle)
             {
                 Logger.LogResetRefusedCannotReplace(obstacle.ToString());
@@ -946,19 +949,19 @@ public class DatabaseInitializer(
         // state, so "Reset repaired it" is measured rather than assumed. Nothing is written into a
         // rebuilt schema that still differs.
         if (!await IsSchemaIntactAsync())
-            return DatabaseOperationResult.NotIntact();
+            return DatabaseOperationResult.NotIntact(check);
 
         // #482: after the new database is in place, never before, since the notification is a row in it.
         if (_setAsidePath is not null)
             await OnUnreadableDatabaseSetAsideAsync(Path.GetFileName(_setAsidePath));
 
         await OnResetCompletedAsync();
-        return DatabaseOperationResult.Success(ResetRestorePoint(readiness));
+        return DatabaseOperationResult.Success(ResetRestorePoint(readiness), check);
     }
 
     // #482: per-Reset state the subclass's OnResetAsync cannot carry, since its signature is not ours to
     // change. A Reset runs one at a time (the admin limiter and SharedSeedLock), so one field serves.
-    private bool _resetSourceReadable = true;
+    private bool _resetSourceIsSoundCopy = true;
     private bool _resetBackupSkipped;
     private string? _setAsidePath;
     private string? _resetBackupPath;
@@ -976,44 +979,6 @@ public class DatabaseInitializer(
         if (_resetBackupSkipped)
             return RestorePointResult.Skipped(skippedFor);
         return _resetBackupPath is null ? null : RestorePointResult.BackedUp(Path.GetFileName(_resetBackupPath));
-    }
-
-    /// <summary>
-    /// Whether SQLite can read every page of the database file (#482). <c>PRAGMA quick_check</c>, not an
-    /// open or a <c>sqlite_master</c> read: SQLite's page copy does not validate what it copies, so a file
-    /// whose first page reads and whose later pages do not would otherwise be backed up as if sound. A file
-    /// that does not exist is readable: a Reset creates it, as a first start would.
-    /// </summary>
-    private bool IsDatabaseFileReadable()
-    {
-        if (!File.Exists(_options.DbPath))
-            return true;
-
-        // Immutable and read-only, and both are load-bearing. The check must leave the file and its sidecars
-        // exactly as it found them, since they are what is set aside: a read-write open of a damaged file
-        // lets SQLite discard a -wal it cannot use, and even a read-only open rewrites the -shm. Immutable
-        // reads the main file alone, with no locking and no shared memory, which also means a WAL database
-        // on a read-only mount opens. Found by ResetAsync_CorruptDatabaseWithSidecars_MovesTheSidecarsWithIt.
-        string immutable = new SqliteConnectionStringBuilder
-        {
-            DataSource = new Uri(Path.GetFullPath(_options.DbPath)).AbsoluteUri + "?immutable=1",
-            Mode       = SqliteOpenMode.ReadOnly,
-            Pooling    = false,
-        }.ToString();
-
-        try
-        {
-            using SqliteConnection probe = new(immutable);
-            probe.Open();
-            return string.Equals(probe.ExecuteScalar<string>("PRAGMA quick_check;"), "ok", StringComparison.Ordinal);
-        }
-        // ADR 022: nothing lets the code ask whether a file is a database without reading it, so the
-        // exception is the answer, handled here, at the first point an outcome can be formed.
-        catch (SqliteException ex) when (ex.SqliteErrorCode is 26 or 11)
-        {
-            Logger.LogExceptionHandled(ex, "the database file was judged unreadable");
-            return false;
-        }
     }
 
     /// <summary>
@@ -1176,7 +1141,7 @@ public class DatabaseInitializer(
     /// <param name="preserveSchemaVersion">Whether to carry the version history into the new database.</param>
     protected async Task RebuildAsync(SqliteConnection connection, bool preserveSchemaVersion = false)
     {
-        bool readable = _resetSourceReadable;
+        bool readable = _resetSourceIsSoundCopy;
         List<SystemSchemaVersionRow> savedDataVersions = [];
         List<SystemSchemaVersionRow> savedConsumerVersions = [];
         string? backupPath = null;
@@ -1203,7 +1168,7 @@ public class DatabaseInitializer(
                 // The file changed after the check, or carries damage the check could not see: the copy
                 // is what found it. It is treated as the unreadable file it is; the copy left nothing.
                 readable = false;
-                _resetSourceReadable = false;
+                _resetSourceIsSoundCopy = false;
                 savedDataVersions = [];
                 savedConsumerVersions = [];
                 Logger.LogResetSourceUnreadable();

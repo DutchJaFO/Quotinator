@@ -133,6 +133,13 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Init] reset: the database file cannot be read: it is set aside rather than backed up, and a new database replaces it")]
     public static partial void LogResetSourceUnreadable(this ILogger logger);
 
+    /// <summary>
+    /// Logs that the check found the database file is not a sound copy (#490, ADR 028), naming the layer and
+    /// what it found, so a Reset sets it aside rather than backing it up.
+    /// </summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Init] reset: the database file is not a sound copy (the {Layer:l} layer was {Status:l}: {Finding:l}): it is set aside rather than backed up, and a new database replaces it")]
+    public static partial void LogResetSourceNotASoundCopy(this ILogger logger, string layer, string status, string finding);
+
     [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Init] reset refused: the database could not be replaced ({Obstacle:l}). Nothing was moved or written")]
     public static partial void LogResetRefusedCannotReplace(this ILogger logger, string obstacle);
 

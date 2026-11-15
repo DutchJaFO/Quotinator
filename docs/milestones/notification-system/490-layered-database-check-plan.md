@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 9)
+**Status:** In progress (step 10)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492.
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 9.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute from step 10.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. Step 6 left one deviation from the verification table for the developer to confirm; it
 is listed under step 6. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
@@ -672,10 +672,32 @@ and E. Register it in DI per database through the keyed connection factories tha
 
 ### 9. Use the check in a Reset
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Replace `IsDatabaseFileReadable()`. A Reset always runs at `Full`. A file that is not a sound copy, or whose
 check is inconclusive, is set aside. If only References or Schema failed, the file is backed up.
+
+**Done 2026-11-15.**
+
+- `ResetAsync` runs the check at `Full` first, before any storage check, as #482's probe did. The probe,
+  `IsDatabaseFileReadable()`, is deleted.
+- **`ResetDatabaseCheck.IsSoundCopy`** (`Quotinator.Data/Database/Checks/`) holds the routing: a sound copy is
+  one where every layer from Format to Indexes passed. One that failed, was inconclusive, or did not run because
+  Storage could not read the file means it is set aside. A References or Schema failure leaves it a sound copy,
+  so it is backed up (ADR 025). A directory that cannot be written is left to the backup's own readiness check,
+  which already refuses with its own obstacle. A missing file passes every layer, and the Reset creates it.
+- **Logged** through a new `LogResetSourceNotASoundCopy`, which names the layer, its status and the engine's
+  finding. `LogResetSourceUnreadable` stays for the case the backup copy itself finds, after the check passed.
+- **The result carries the check** (`Success(restorePoint, check)`, `NotIntact(check)`), for the endpoint and
+  #491 to read.
+- **Result:** row 14's three tests that were red pass, and every existing Reset test of an unreadable file,
+  #482's, still passes.
+- **A limit carried over from #482, not introduced here:** a Reset runs while the application is serving, and
+  nothing stops another request writing to the database during the check. The check of a database whose
+  `-wal` is empty reads it `immutable`, and `uri.html` says a file that changes under an `immutable` open may
+  give incorrect results or `SQLITE_CORRUPT`. The worst case is a sound file judged not sound, which is set
+  aside rather than backed up: the file is kept either way, so nothing is lost, but it goes to the
+  `unreadable` folder rather than the backup list.
 
 ### 10. The setting and the add-on option
 
