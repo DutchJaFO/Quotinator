@@ -7,6 +7,18 @@ Apply these standards whenever you touch a file that emits log lines — boyscou
 
 ## Observability overview
 
+**What the log is for (developer, 2026-11-15).** The log serves three purposes, and being a test's
+evidence is not one of them (see `testing-policy.md`'s *A test reads a result, never a log*):
+
+1. **Confirming the application is operational.** Information, Warning and Error lines let a user confirm
+   the server is running where there is no UI for them to use.
+2. **Finding a problem whose location is unknown, then watching for its return.** A line stating what
+   actually ran helps find where a problem occurs. Once it is fixed, the line stays, so a user can confirm
+   whether the problem occurs again despite the fix. See *Verification log lines, and demoting them once
+   verified* below.
+3. **Reporting an unhandled exception.** Each one is an exception that should have been caught at its
+   source, so its log line marks a catch that was missed.
+
 Quotinator has two distinct observability tracks. They serve different purposes and must not be confused:
 
 | Track | Output | Covers | Purpose |
@@ -463,11 +475,11 @@ project-wide.
 
 ## Verification log lines, and demoting them once verified
 
-**Some behaviour is only verifiable if the log states it outright.** Where two code paths produce
+**A problem whose location is unknown is found by logging what actually ran.** Where two code paths produce
 identical observable output — a fallback that renders the same page as the real thing, a cache hit that
-looks like a cache miss — nothing in the system reveals which one ran. Verification then has nothing to
-stand on except the *absence* of an error message, and absence proves nothing: it is equally consistent
-with "the healthy path ran" and "a silent path ran that nobody thought to log".
+looks like a cache miss — nothing in the system reveals which one ran, and the *absence* of an error
+message proves nothing: it is equally consistent with "the healthy path ran" and "a silent path ran that
+nobody thought to log".
 
 Found repeatedly in #309 (steps 16–18): the changelog's JSON fallback was serving reads on every boot,
 then a partially-rebuilt table was served as though complete, then a previous run's content was served
@@ -476,8 +488,13 @@ declared the feature complete, and all three became visible the moment one line 
 answered*.
 
 **The rule.** When a path's correctness cannot be observed from its output, add a log line that states
-what actually happened — positively, not by implication. Assert on that line in tests and smoke tests,
-never on the absence of a failure message.
+what actually happened — positively, not by implication. It serves two purposes, one after the other:
+while the problem is open, it shows where the problem occurs; once the problem is fixed, it stays, so a
+user can confirm whether it occurs again despite the fix.
+
+**The line is never what a test asserts** (`testing-policy.md`'s *A test reads a result, never a log*).
+That two paths are indistinguishable from the output is itself the finding: the fix makes the path that
+ran observable as a result, an API field or a state a test can read, and the tests assert on that.
 
 **Demote it once it has been verified.** A verification line earns Information level while the behaviour
 is being established and confirmed live. Once it is confirmed and covered by a test that will catch a
@@ -487,12 +504,10 @@ is actively investigating.
 
 Three things that make a demotion safe rather than a silent loss of coverage:
 
-- **A test must already cover the behaviour**, not just the log line. If the only thing proving the
-  behaviour is a human reading a log, demoting it deletes the coverage.
-- **Any smoke test grepping for that line must be updated in the same commit**, either to run the
-  container at `debug` level or to assert something else. A smoke test silently grepping for a line
-  that no longer appears at the default level is a guaranteed false failure — or worse, a false pass if
-  it asserts absence.
+- **A test must already cover the behaviour through a result.** If the only thing proving the behaviour
+  is a human reading a log, demoting it deletes the coverage.
+- **No test or smoke test reads the line**, so demoting it changes no test. A document found reading one
+  is a defect in that document, fixed by asserting the result instead.
 - **Warnings are never demoted.** A line reporting a fallback, a degraded state, or a failure stays at
   Warning regardless of how well verified it is. Demotion applies only to the positive "this is what
   ran" statement, never to "this went wrong".

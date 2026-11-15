@@ -126,6 +126,24 @@ empty set, and one thin test per guard applies the same logic to the real tree.
 *Narrower consequences of this rule appear below: see* Tests do not depend on external factors *and*
 Tests must not depend on bundled data to stay green.
 
+## A test reads a result, never a log
+
+**A test establishes behaviour from a result the application produces, never from a log line**
+(developer, 2026-11-15). The log has three purposes, set out in `logging.md`'s *Observability overview*:
+confirming the application is operational where there is no UI, finding a problem whose location is
+unknown and then watching for its return, and reporting an unhandled exception as a catch that was
+missed. Being a test's evidence is not one of them.
+
+**The one exception is a test whose subject is the log itself**: that a line is written, at the level
+it should be, rendered the way it should be. `AdminBackupLoggingTests` is the worked example. It asserts
+what an operator reads, not what the application did.
+
+**When a test needs a result that does not exist, the result is built now.** Not deferred to a later
+step, not inferred from a log, not reached through some indirect output. It is built in the order the next
+section sets: the signature, then the test, red, then the implementation. Found live in #490 (step 6): two
+startup tests were first written to rely on a log line, because the failing layer of a degraded start and a
+finding that left startup healthy were visible nowhere else. Both became results the tests read.
+
 ## Every test proves the positive result as well as the negative
 
 A test that only asserts a failure passes against a build that fails everything. Whatever a test
@@ -204,6 +222,18 @@ specific way the test exists to catch, confirm that test fails while its sibling
 That establishes the test is wired to the behaviour, which is most of what the red run would have shown,
 but it does not establish that the test was written against the requirement rather than against the code
 already in front of you, and only writing it first does that.
+
+**A signature's default must not be a value any test expects.** Step 1 allows returning a default, but a
+default that equals what a test asserts makes that test green on its first run, never red. Found in #490
+(step 6): a reason mapping's signature returned `null`, which is exactly what two of its tests expect for
+"no reason". Where any test expects the default, the signature throws `NotImplementedException` instead.
+
+**A test of behaviour that already holds before the issue is proven by mutation, and the plan records it.**
+A guard over code that already complies, or a decision that keeps today's behaviour, cannot be red against
+the code before the issue, so step 2 has nothing to run against. Here mutation is the required proof, not a
+recovery: break the code the way the test exists to catch, confirm the test fails, revert, and record the
+mutation and its result in the issue's plan doc. Found in #490 (step 6): an engine-type guard over a
+contract that already complied, and a Reset that keeps backing up a sound copy.
 
 ## Red first applies to automated tests, not only unit tests
 
