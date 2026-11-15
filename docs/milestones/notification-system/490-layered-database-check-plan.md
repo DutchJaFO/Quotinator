@@ -918,8 +918,36 @@ runs them. Folding them into T1 is what the T1 gate rules out.
 
 **Status:** ⬜ Not started
 
-Run the new documents, `08`, `09`, `10` and `14`, plus the smoke set, against `quotinator:local` built from
-this branch. Record each *Observed effect*.
+The *end of an issue* scope (`docs/automated-testing/README.md`, *When to run what*): the smoke set, every
+document this issue changed, and every test relevant to what it touched, each against `quotinator:local` built
+from this branch's final commit. **Every document is first read against the README's three rules** (one
+command per step, the test supplies its own data, no outdated result) and converted where it breaks one,
+before it runs; then it is executed exactly as written, and its *Observed effect* is replaced by this run's
+reading.
+
+**Corrected 2026-11-15 (developer).** This step first listed `08`, `09`, `10` and `14` beside the smoke
+set, though all four are in it, and recorded no relevant set at all.
+
+- **The smoke set**, all twenty. It includes `startup-and-degradation/08`, `09`, `10`, `14` and `15`, which
+  this issue's check now decides, and `15` and `10`, which it changed.
+- **Changed by this issue, outside the smoke set:** `startup-and-degradation/16`.
+- **Relevant: the check now gates the upgrade path, before migrating and after.** T1 found its one defect
+  there.
+  - `notifications-and-changelog/03` (upgrade from an intermediate schema version);
+  - `notifications-and-changelog/09` (upgrading translates a shipped notification);
+  - `startup-and-degradation/02` (startup backs up only when there is work);
+  - `database-lifecycle/04` (a database is complete for its schema version, fresh or upgraded), which reads
+    the integrity endpoint whose response this issue changed.
+- **Relevant: a Reset now routes by the check, and reports why it set a file aside.**
+  - `backup/01` (a file that is not a database), `backup/02` (a truncated one);
+  - `backup/03` (the disk fills during a Reset's backup), `backup/04` (the backup folder cannot be written);
+  - `backup/09` (setting a file aside refused for an unwritable data directory), `backup/10` (a Reset with
+    the override).
+- **Relevant: the set-aside notifications' text and payload changed.** `notifications-and-changelog/14`
+  (every notification kind renders what its layout promises).
+- **Not relevant, and why:** `backup/05` and `08` cover backup storage limits, which no Reset routing
+  changes; `notifications-and-changelog/10` and `12` cover the reseed recommendation and an action's running
+  state over a healthy database, whose Reset `database-lifecycle/03` in the smoke set already exercises.
 
 ### 17. Changelog
 
