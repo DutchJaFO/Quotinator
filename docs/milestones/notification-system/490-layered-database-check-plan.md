@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 2)
+**Status:** In progress (step 3)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492.
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 2.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute from step 3.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
 
@@ -330,12 +330,49 @@ All five were accepted (developer, 2026-11-14). Decision E's follow-up was filed
 
 ### 2. Measure the cost of each layer
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Measure the time each layer takes on `quotinatordata.db` seeded with the bundled content, and on
 `quotinatorchangelog.db`, together with each file's size and the time a temporary copy takes (issue
 requirement 10). Record the date and the commit here. This is the only measurement in the plan, and
 nothing in the design depends on it.
+
+**Measured 2026-11-14 at `1ab5fd1f`.** The code is unchanged since `5285a211`.
+
+**These figures are indicators, not limits, and they will vary (developer, 2026-11-14).** They exist for two
+reasons: to show where a problem may lie when a check is slow, and to help tell the user how far the
+startup sequence, or a running integrity check, has got. Nothing may test against them or treat them as a
+threshold.
+
+- **How the databases were made:** `quotinator:local` was built from that commit and run on an empty data
+  directory. It was stopped after the closing startup banner with a 60-second grace period (exit 0), which
+  left no `-wal` behind.
+- **How the timings were taken:** a scratch `dotnet-script` used the pinned Microsoft.Data.Sqlite 10.0.14
+  and SQLitePCLRaw.lib.e_sqlite3 3.53.3. Each run took a fresh copy of the database, opened it `immutable`
+  and read-only, and ran each `PRAGMA` to the end of its result. Medians of five runs on the developer's
+  Windows machine, in milliseconds:
+
+| | `quotinatordata.db` (4,665,344 bytes) | `quotinatorchangelog.db` (1,171,456 bytes) |
+|---|---|---|
+| Copy of the main file | 3.35 | 2.89 |
+| Header read (Format) | 0.32 | 0.33 |
+| Open, `immutable` | 0.38 | 0.37 |
+| `quick_check` (Pages) | 7.64 | 1.88 |
+| `integrity_check` (Indexes) | 14.42 | 1.31 |
+| `foreign_key_check` (References) | 2.08 | 0.19 |
+
+- **Results:** every check returned clean on both seeded databases: `quick_check` and `integrity_check`
+  reported `ok`, and `foreign_key_check` returned no rows.
+- **Not measured:**
+  - Storage and Journal, which are a few file-system calls and at most 32 bytes read.
+  - Schema, which is #305's existing comparison, already run at startup today.
+  - The add-on's arm64 hardware, where every figure will be slower. A full check at startup costs
+    milliseconds here, so the `Fast` depth exists for larger databases and slower storage, not for the
+    bundled content.
+- **What one run showed about shutdown, not the check:** stopping the container while the seed was still
+  importing hit Docker's 10-second grace period, and the process was killed (exit 137). That left a
+  4,136,512-byte `-wal` beside the database. So a stop at an awkward moment leaves a `-wal` holding data,
+  the case decision D covers. A copy then costs disk space for the database plus its `-wal`.
 
 ### 3. Add the touched files to the IDE0008/IDE0090 scoped lists
 
