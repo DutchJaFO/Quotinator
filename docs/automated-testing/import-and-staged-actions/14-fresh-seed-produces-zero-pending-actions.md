@@ -149,7 +149,7 @@ line that names it.
 
 ## Observed effect
 
-**Measured 2026-11-01** against `quotinator:local` built from `00a9dfe2`. These figures describe the bundled sources as
+**Measured 2026-11-15** against `quotinator:local` built from `9b59f414`. These figures describe the bundled sources as
 they stood, and only the checks above are asserted.
 
 | Reading | Value |

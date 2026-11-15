@@ -108,7 +108,7 @@ that depends on the bundled sources.
 
 ## Observed effect
 
-**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
+**Measured 2026-11-15** against `quotinator:local` built from `9b59f414`.
 
 | In the startup window | Answer |
 |---|---|

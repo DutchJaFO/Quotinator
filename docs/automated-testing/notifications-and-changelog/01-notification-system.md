@@ -4,7 +4,7 @@
 **Environment:** Fresh
 **Deterministic:** yes
 **Traces to:** #278
-**Fully green after:** [#472](https://github.com/DutchJaFO/Quotinator/issues/472): step 9 reads no notifications until then, because a Reset from a notification's action writes no reseed recommendation. See the [Knowledgebase entry](../../knowledgebase/a-reset-from-a-notification-leaves-no-reseed-recommendation.md)
+**Fully green after:** [#472](https://github.com/DutchJaFO/Quotinator/issues/472): step 9 finds no reseed recommendation until then, because a Reset from a notification's action writes none. See the [Knowledgebase entry](../../knowledgebase/a-reset-from-a-notification-leaves-no-reseed-recommendation.md)
 
 ## Preconditions
 
@@ -171,16 +171,20 @@ there, since Cancel called nothing.
 **Expected, Confirm:** the row leaves the page, no quote remains, and none of the four constructed rows survives, since Reset wipes
 `System_Notification` along with every other table.
 
-### 9. The Reset leaves its reseed recommendation
+### 9. The Reset leaves its reseed recommendation and its own result record
 
 ```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list-after-confirm.json --equals totalCount=1 --equals items.0.metadataKind=reseedrecommended --equals items.0.type=actionrequired --equals items.0.isDismissed=false
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list-after-confirm.json --contains items=databaseactionresult
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-01-out\list-after-confirm.json --contains items=reseedrecommended
 ```
 
-**Expected:** one active reseed recommendation, the same result `POST /admin/database/reset` leaves in
-[`database-lifecycle/03`](../database-lifecycle/03-reset-is-a-full-wipe.md).
+**Expected:** both commands exit `0`. The first finds the Reset's own result record: a Reset run from the
+application records how it ended (#348 step 31). The second finds the reseed recommendation, the same one
+`POST /admin/database/reset` leaves in [`database-lifecycle/03`](../database-lifecycle/03-reset-is-a-full-wipe.md).
+Until 2026-11-15 this step asserted exactly one notification, from before the result record existed; each is
+now read by its kind, so neither one's presence can stand in for the other's.
 
-**On failure:** `totalCount=0` is [#472](https://github.com/DutchJaFO/Quotinator/issues/472), a known issue described in the
+**On failure:** the second command failing, with the first passing, is [#472](https://github.com/DutchJaFO/Quotinator/issues/472), a known issue described in the
 [Knowledgebase](../../knowledgebase/a-reset-from-a-notification-leaves-no-reseed-recommendation.md). Record it and carry on, since
 nothing below reads this step. Any other reading is not #472 and is reported in its own right.
 

@@ -1,4 +1,4 @@
-# Degraded-state pages survive a genuine migration failure
+# Degraded-state pages survive an unwritable data directory with a migration pending
 
 **Smoke:** yes
 **Environment:** Upgraded + Constrained
@@ -17,6 +17,11 @@ while a migration is pending.
 cannot write, which is the state the original incident's pages crashed in. A writable `/data` under a
 read-only root filesystem is a different setup and stays healthy, which is
 [`04`](04-migration-replay-under-restricted-write.md)'s subject.
+
+**Since #490 the migration is never attempted.** The database check runs before anything opens the
+database for writing, and its Storage layer finds the data directory unwritable, so startup degrades
+there (ADR 028). Until #490 the migration ran and SQLite refused its write. Either way the pages must
+render the degraded state, which is this document's subject; what changed is only how far startup gets.
 
 ## Determinism
 
@@ -93,17 +98,21 @@ dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-05 --por
 dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18405/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\health.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\health.json --equals status=unhealthy --contains "reason=data directory cannot be written" --contains "reason=Restore write access"
 docker inspect -f '{{.State.Running}}' qt-startup-05
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-05 --pattern "thrown: SqliteException" --at-least 1
+dotnet script scripts/testing/http.csx -- --url http://localhost:18405/api/v1/admin/database/integrity --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-05-out\integrity.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-05-out\integrity.json --equals databases.0.database=main --equals databases.0.layers.0.layer=storage --equals databases.0.layers.0.status=failed --equals databases.0.layers.1.layer=format --equals databases.0.layers.1.status=passed
 ```
 
-**Expected:** the `json` command exits `0`: `status = unhealthy`, the reason naming the fault and the
-workable remedy. `docker inspect` prints `true`, and the `log` command exits `0`: the database itself
-refused the write.
+**Expected:** the first `json` command exits `0`: `status = unhealthy`, the reason naming the fault and
+the workable remedy. `docker inspect` prints `true`. The integrity endpoint answers `200` while degraded,
+and the second `json` command exits `0`: the main database's Storage layer failed and its Format layer
+passed.
 
-**The reason alone does not show the database failed.** A read-only `keys/` produces the same reason
-from the write probe, before the database is opened, so the `SqliteException` is what shows the failure
-state every step below depends on. It is counted by type, never by message or error code. That a
-migration was what could not run is shown in step 6, which finds it applied once writing is possible.
+**The reason alone does not show the data directory is what cannot be written.** A read-only `keys/`
+produces the same reason from the write probe, while the data directory stays writable. The Storage
+layer's own report is what shows the failure state every step below depends on: it failed on the
+directory, and Format passing shows the file itself is readable, so it is the directory and not the
+database that refuses. That a migration was pending is shown in step 6, which finds it applied once
+writing is possible.
 
 **`true` and `unhealthy` together are the never-crash contract.** The reason is the half that has to be
 checked rather than assumed: the *generic* initialisation-failure reason tells the operator to run a
@@ -111,10 +120,10 @@ database Reset, which writes and therefore cannot work on a read-only mount. #32
 reason for exactly this fault so the advice points somewhere that can succeed. `unhealthy` alone would
 pass just as happily with the misdirecting reason.
 
-**On failure:** a container that is not running means the migration failure killed the process.
-`status=healthy` means the mount did not take effect, so nothing was refused. No `SqliteException` means
-the reason came from the write probe alone and the database was never reached, so the steps below would
-not be reading a failed migration. `starting` or `down` means the wait gave up after 180 seconds.
+**On failure:** a container that is not running means the unwritable directory killed the process.
+`status=healthy` means the mount did not take effect, so nothing was refused. A Storage layer that passed
+means the reason came from the write probe alone, so the steps below would not be reading an unwritable
+data directory. `starting` or `down` means the wait gave up after 180 seconds.
 
 ### 3. Confirm the OpenAPI surface answers and every database read is gated
 
@@ -268,9 +277,9 @@ instead, since an unhandled error and a blank response are different defects.
 technique could not reach it.** `/health` must read `unhealthy` with the container running: a
 `--read-only` root leaves `/data` writable and the migration succeeds, so the failure state is reached by
 denying `/data` itself with a migration pending. A run reporting a healthy start has not reached the
-premise. On a canary this is the whole control: neither commit below has the exception channel, so
-step 2's `SqliteException` count reads `0` there and says nothing, and the commit before #293 also
-predates #326's reason.
+premise. On a canary this is the whole control: neither commit below has the database check, so step 2's
+integrity read finds no layers there and says nothing, and the commit before #293 also predates #326's
+reason.
 
 Step 6 is the positive control inside every run: it removes the sabotage and reads `200`, so a build
 that degraded unconditionally fails there.

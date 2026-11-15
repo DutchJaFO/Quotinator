@@ -103,7 +103,6 @@ migration adds. A second read that succeeds means the intermediate build is not 
 dotnet script scripts/testing/test-env.csx -- reenter --name qt-notif-03 --port 18503 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-notif-03-data --wait-listening
 dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18503/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-notif-03-out\health.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-03-out\health.json --equals status=healthy
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-03 --pattern "no such column" --exactly 0
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-03 --pattern "\[Runtime - Exception\]" --exactly 0
 dotnet script scripts/testing/http.csx -- --url http://localhost:18503/api/v1/admin/database/integrity --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-notif-03-out\integrity.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-notif-03-out\integrity.json --equals databases.0.isIntact=true --length-equals databases.0.differences=0 --equals databases.1.isIntact=true --length-equals databases.1.differences=0
@@ -113,8 +112,8 @@ dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:1
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-03 --pattern "thrown: JsonReaderException" --at-least 1
 ```
 
-**Expected:** every command exits `0`. `/health` reads `healthy`; the log holds no `no such column` and no
-exception; the integrity check reports both databases intact, with no difference and no extra object; the
+**Expected:** every command exits `0`. `/health` reads `healthy`; no exception has been logged; the
+integrity check reports both databases intact, with no difference and no extra object; the
 notifications list holds a `migrationapplied` notification, so the migrations ran; and the malformed upload
 answers `422` with its `JsonReaderException` logged, which is the positive control for the zero count.
 
@@ -122,8 +121,9 @@ answers `422` with its `JsonReaderException` logged, which is the positive contr
 that killed it; the second (#305) is the database it leaves matching the schema a fresh install has, so the
 upgrade from this state is not only survived but complete.
 
-**On failure:** `no such column` in the log is the defect itself, the version read moved before the
-migrations again. `unhealthy` with a reason naming a table or column is an intermediate state the migration
+**On failure:** a container that is not running, or `/health` not answering, is the defect itself: the
+version read moved before the migrations again, and an unknown `SqliteException` (*no such column*) is then
+what the exception count finds. `unhealthy` with a reason naming a table or column is an intermediate state the migration
 path does not finish correctly: the integrity endpoint lists what differs.
 
 ### 5. Read the version history

@@ -56,7 +56,7 @@ not asserted: the contract is that the application says it is degraded instead o
 | [Reset is a full wipe with no reseed](database-lifecycle/03-reset-is-a-full-wipe.md) | `database-lifecycle/` |
 | [Startup wait page during database initialisation](startup-and-degradation/03-startup-wait-page.md) | `startup-and-degradation/` |
 | [Only a risky start takes a backup, a broken schema degrades, and Reset recovers](startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md) | `startup-and-degradation/` |
-| [Degraded-state pages survive a genuine migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) | `startup-and-degradation/` |
+| [Degraded-state pages survive an unwritable data directory with a migration pending](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) | `startup-and-degradation/` |
 | [A recorded schema version ahead of the build degrades and says why](startup-and-degradation/06-schema-version-ahead-of-the-application.md) | `startup-and-degradation/` |
 | [A database that is not a database degrades instead of crashing](startup-and-degradation/08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
 | [A truncated database degrades instead of crashing](startup-and-degradation/09-a-truncated-database-degrades-instead-of-crashing.md) | `startup-and-degradation/` |
@@ -1251,7 +1251,7 @@ The tools this suite runs on:
 | 02 | [Startup backs up only when there is real work](startup-and-degradation/02-startup-backup-gating-and-storage-budget.md) | no |
 | 03 | [Kestrel serves a wait page during initialisation](startup-and-degradation/03-startup-wait-page.md) | yes |
 | 04 | [Migration replay under restricted write](startup-and-degradation/04-migration-replay-under-restricted-write.md) | no |
-| 05 | [Degraded pages survive a migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) | yes |
+| 05 | [Degraded pages survive an unwritable data directory with a migration pending](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) | yes |
 | 06 | [A recorded schema version ahead of the build degrades and says why](startup-and-degradation/06-schema-version-ahead-of-the-application.md) | yes |
 | 07 | [The source refresh is off unless it is turned on, and still works when it is](startup-and-degradation/07-the-source-refresh-is-off-unless-turned-on.md) | no |
 | 08 | [A database that is not a database degrades instead of crashing](startup-and-degradation/08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md) | yes |

@@ -15,9 +15,10 @@ degraded state is about.
 The container binds its data directory to a host path (`--bind`) rather than using a named volume, so
 the file can be replaced from the host.
 
-**The state this establishes.** SQLite is handed a file it cannot recognise, so
-the initializer fails before any schema version is read. The application records the failure and
-continues: Kestrel binds, `/health` answers `503`, and the Blazor pages render their degraded form.
+**The state this establishes.** The database check's Format layer finds the file is not a database
+before anything opens it (#490, ADR 028), so startup stops there, before any schema version is read. The
+application records the failure and continues: Kestrel binds, `/health` answers `503`, and the Blazor pages
+render their degraded form.
 
 ## Determinism
 

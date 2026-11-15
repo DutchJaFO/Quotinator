@@ -124,23 +124,17 @@ control) for the restore.
 **Nothing here reads a log line's wording.** The failure is shown by `/health` and the exception
 channel's count, the absent backup by the directory.
 
-Exactly one backup: the first this test has produced, because step 2 correctly took none. This is the
-case a backup exists for: seeding was about to run against a database it could not repair, and the
-backup is what let it restore rather than leave a broken one behind. One file per `CreateBackup` call;
-its `-shm`/`-wal` sidecars are not separate backups.
-
 `docker inspect` printing `true`: the app degrades, it does not crash.
 
 **Every exception this step logs is one it expects, counted since the mark taken before the stop.** No
-exception since the restart, before the stop. Then three kinds, and only these:
+exception since the restart, before the stop. Then one kind, and only this:
 
-- **`SqliteException`, at least one.** The degraded start's own fault: thrown, then handled by the
-  restore, which is this step's subject, not noise. Its count is not predicted, only its presence.
 - **`SocketException`, exactly two.** The stop's documented cost, one per listening port (index: *Read
   the log before the application stops*; Knowledgebase:
   `transport-connection-cancelled-during-a-request`).
-- **Any other type, zero.** An exception this document does not expect is an issue, and counting it
-  here is what makes it visible rather than absorbed into a total.
+- **Any other type, zero.** The broken schema is found before any query reaches it, so nothing throws. An
+  exception this document does not expect is an issue, and counting it here is what makes it visible
+  rather than absorbed into a total.
 
 The last mark records where the log stood once the degraded state settled, so the cleanup can prove
 nothing after it threw.
@@ -237,7 +231,7 @@ the database is genuinely empty after a Reset.
 
 ## Observed effect
 
-**Measured 2026-11-08** against `quotinator:local` built from `870a0502`.
+**Measured 2026-11-15** against `quotinator:local` built from `9b59f414`.
 
 The fresh seed created the database and no `backups` directory, and the restart left it that way, with no
 exception logged before either. After `Quotinator_Quote` was dropped, the restart logged 2

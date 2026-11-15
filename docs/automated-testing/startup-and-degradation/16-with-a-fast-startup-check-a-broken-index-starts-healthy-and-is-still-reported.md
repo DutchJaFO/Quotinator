@@ -15,7 +15,9 @@ added while the container is stopped, and one entry of the index is rewritten in
 
 **What `fast` gives up is the Indexes and References layers at startup.** ADR 028 states it, and the add-on
 option's description says so. The integrity endpoint and a Reset always check at full depth, whatever the
-setting, so the fault is still found where an operator looks for it.
+setting, so the fault is still found where an operator looks for it. **And once found, it degrades the
+application** (developer, 2026-11-15): a failed check degrades the application at any point, not only at
+startup, so the endpoint's finding is the moment the application stops serving from the broken index.
 
 ## Determinism
 
@@ -82,19 +84,25 @@ dotnet script scripts/testing/http.csx -- --url http://localhost:18416/api/v1/qu
 **On failure:** `unhealthy` means startup checked Indexes despite the setting: the option did not reach the
 application, or the startup check ignored it.
 
-### 4. Confirm the integrity endpoint still reports the broken index
+### 4. Confirm the integrity endpoint reports the broken index, and that the application degrades
 
 ```
 dotnet script scripts/testing/http.csx -- --url http://localhost:18416/api/v1/admin/database/integrity --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-16-out\integrity-broken.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-16-out\integrity-broken.json --equals databases.0.isSound=false --equals databases.0.layers.4.layer=indexes --equals databases.0.layers.4.status=failed
+dotnet script scripts/testing/http.csx -- --url http://localhost:18416/api/v1/health --expect 503 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-16-out\health-after-check.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-16-out\health-after-check.json --equals status=unhealthy --not-empty reason
+dotnet script scripts/testing/http.csx -- --url http://localhost:18416/api/v1/quotes/random --expect 503 --status
 ```
 
-**Expected:** the `json` command exits `0`: the main database is not sound, and its Indexes layer failed.
+**Expected:** the first `json` command exits `0`: the main database is not sound, and its Indexes layer
+failed. `/health` then answers `503`, `unhealthy` with a reason, and `/quotes/random` answers `503`.
 
 **This is what `fast` promises:** startup skips the check, and an operator who asks still finds the fault.
+The application then stops serving from it, as it would have at startup at `full`.
 
 **On failure:** Indexes `passed` means the damage did not take; Indexes `skipped` means the endpoint followed
-the startup setting. Either way the setting's description would be wrong.
+the startup setting. Either way the setting's description would be wrong. `/health` still `200` after the
+endpoint found the failure means the on-demand check reported it without acting on it.
 
 ### 5. Reset, and confirm the file was set aside and the database is sound again
 
@@ -103,9 +111,12 @@ dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:1
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-16-out\reset.json --equals backup.outcome=SetAside
 dotnet script scripts/testing/http.csx -- --url http://localhost:18416/api/v1/admin/database/integrity --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-16-out\integrity-after-reset.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-16-out\integrity-after-reset.json --equals databases.0.isSound=true
+dotnet script scripts/testing/http.csx -- --url http://localhost:18416/api/v1/health --expect 200 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18416/api/v1/quotes/random --expect 200 --status
 ```
 
-**Expected:** the Reset answers `200` with `backup.outcome = SetAside`, and the rebuilt database is sound.
+**Expected:** the Reset answers `200` with `backup.outcome = SetAside`, the rebuilt database is sound, and
+`/health` and `/quotes/random` answer `200`: the degraded state step 4 caused is cleared by the remedy.
 
 **A Reset checks at full depth whatever the setting:** with `fast`, it still finds the broken index, and so
 sets the file aside rather than backing it up. This is also the positive control for step 4.
