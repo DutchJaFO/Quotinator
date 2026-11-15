@@ -141,6 +141,7 @@
     <File Path="docs/architecture-decisions/025-a-backup-belongs-to-the-composer-not-the-operation.md" />
     <File Path="docs/architecture-decisions/026-notification-content-is-stored-only-when-it-is-static.md" />
     <File Path="docs/architecture-decisions/027-a-reset-recreates-the-database.md" />
+    <File Path="docs/architecture-decisions/028-a-database-is-checked-in-layers-cheapest-first.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />

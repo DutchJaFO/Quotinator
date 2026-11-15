@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-10-10
-**GitHub issues:** #348, #349, #423, #482
+**GitHub issues:** #348, #349, #423, #482, #490
 
 ---
 
@@ -53,12 +53,13 @@ going without. [ADR 027](027-a-reset-recreates-the-database.md) defines what a R
 **A function that performs one operation does not back up.** `ReseedAsync` is the canonical primitive:
 it reseeds, and that is all.
 
-**A file SQLite cannot read is never a backup.** Copying it would fill the backup folder with something
-offered as a restore point that cannot restore anything. A Reset of such a file therefore takes no
-backup, and no backup-storage condition can refuse it: it moves the file, with its `-wal` and `-shm`,
+**A file that is not a sound copy is never a backup.** Copying it would fill the backup folder with
+something offered as a restore point that cannot restore anything. A Reset of such a file therefore takes
+no backup, and no backup-storage condition can refuse it: it moves the file, with its `-wal` and `-shm`,
 into the reserved `unreadable` folder inside the backup folder under a unique name, and leaves a
-notification naming it. Readability is decided by reading every page (`PRAGMA quick_check`), since a
-file whose first page reads can still be damaged beyond it, and it is decided before any storage check.
+notification naming it. Whether a file is a sound copy is decided by the database check that
+[ADR 028](028-a-database-is-checked-in-layers-cheapest-first.md) defines, always at its full depth, before
+any storage check. That ADR also says which failures mean the file is not a sound copy.
 A file in the reserved folder is not listed as a backup and is never offered for restore, but it counts
 towards the backup storage ceiling from the moment it arrives, because it occupies the same disk.
 

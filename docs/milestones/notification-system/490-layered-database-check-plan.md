@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 4)
+**Status:** In progress (step 5)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492.
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 4.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute from step 5.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
 
@@ -398,7 +398,21 @@ Every file created or edited goes into `.editorconfig`'s scoped sections the mom
 
 ### 4. Write the ADR before the code
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+**Done 2026-11-15.**
+
+- **ADR 028** is written and Accepted (dated 2026-11-14, the day decisions A to E were accepted), and it is
+  in the ADR index and the solution.
+  - Its section on ADR 003 explains why one engine-neutral contract with a single implementation, and
+    nothing to choose between engines, stays inside design goal 3's ban on provider abstractions.
+  - A *Known non-compliance* section names what the code does until this issue lands.
+  - Its sqlite.org anchors were checked against the pages' own contents links.
+- **ADRs 003, 025 and 027** point to ADR 028 instead of naming `PRAGMA quick_check`. ADRs 025 and 027 now
+  speak of *a sound copy* rather than *a file SQLite cannot read*, and each lists #490 in its header.
+- **`CLAUDE.md`** points to ADR 028 at the end of *No exception-based migration recovery*. The guard
+  `ClaudeMdResetPassagesPointToTheirAdrs` and `EveryAdrIsIndexed` pass, as do all 60
+  `RepositoryStructureTests`.
 
 - **ADR 028, *A database is checked in layers, cheapest first*:**
   - the engine-neutral principle and the seven layers;

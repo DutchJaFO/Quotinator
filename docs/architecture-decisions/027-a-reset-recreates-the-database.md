@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-11-09
-**GitHub issues:** #156, #482
+**GitHub issues:** #156, #482, #490
 
 ---
 
@@ -42,12 +42,12 @@ table is protected, and the audit-trail tables go with the rest (ADR 014). Becau
 built from nothing, a Reset replays no migration history, so no rename collision or partially applied
 change in the old file can affect it, and no check against such states is needed.
 
-**A Reset works whatever state the old file is in.** A readable database is backed up first (ADR 025)
-and the new one is copied over it through SQLite's backup API, so connections already open see the new
-database. A file SQLite cannot read is never backed up: it is set aside in the backup folder's reserved
-`unreadable` folder (ADR 025) and the new file takes its place. Whether the file can be read is decided by
-reading every page before anything else; that integrity check is an engine-specific read ADR 003's design
-goal 5 permits, and it is never a substitute for catching an exception.
+**A Reset works whatever state the old file is in.** A sound copy is backed up first (ADR 025) and the
+new database is copied over it through SQLite's backup API, so connections already open see the new
+database. A file that is not a sound copy is never backed up: it is set aside in the backup folder's
+reserved `unreadable` folder (ADR 025) and the new file takes its place. Which it is, is decided before
+anything else by the database check [ADR 028](028-a-database-is-checked-in-layers-cheapest-first.md)
+defines. The check's result is an outcome, never a substitute for catching an exception.
 
 **A failed Reset leaves the previous state in place.** A failure while building touches nothing but the
 file being built, which is removed. A failure while copying the new database over a readable one restores
@@ -57,8 +57,8 @@ In every case the exception, or the refusal naming its obstacle, reaches the cal
 **`preserveSchemaVersion` keeps the version history, not the schema.** The baseline leaves one collapsed
 row in each version table, `System_SchemaVersion` and `System_ConsumerSchemaVersion`. With
 `preserveSchemaVersion=true`, a Reset of a readable database reads both tables' per-version rows first
-and writes them into the new database in place of that row. An unreadable file's rows cannot be read, so
-the baseline's own are kept.
+and writes them into the new database in place of that row. A file that is not a sound copy is not read
+from, so the baseline's own rows are kept.
 
 ## Consequences
 

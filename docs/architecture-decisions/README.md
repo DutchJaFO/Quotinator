@@ -67,3 +67,4 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 | 025 | [025-a-backup-belongs-to-the-composer-not-the-operation.md](025-a-backup-belongs-to-the-composer-not-the-operation.md) | A backup belongs to whoever composes the work, never to the operation itself |
 | 026 | [026-notification-content-is-stored-only-when-it-is-static.md](026-notification-content-is-stored-only-when-it-is-static.md) | A notification's text is stored only when it is static; anything that depends on current state is composed from its payload when read |
 | 027 | [027-a-reset-recreates-the-database.md](027-a-reset-recreates-the-database.md) | A Reset recreates the database; a failed migration is restored, never interpreted |
+| 028 | [028-a-database-is-checked-in-layers-cheapest-first.md](028-a-database-is-checked-in-layers-cheapest-first.md) | A database is checked in layers, cheapest first |

@@ -2,7 +2,7 @@
 
 **Status:** Accepted  
 **Date:** 2026-06-20  
-**GitHub issue:** #78
+**GitHub issues:** #78, #490
 
 ---
 
@@ -39,7 +39,7 @@ A secondary concern was raised during evaluation: `Quotinator.Data` uses Dapper 
 
 4. **Connection lifecycle is owned by the repository or the Unit of Work — never by the caller.** Callers must not open, close, or dispose connections themselves. If atomicity is needed, callers create a `IUnitOfWork` via DI and pass it to repository methods; the Unit of Work owns the connection for that scope.
 
-5. **Engine-specific features are kept to a minimum and confined to the implementations behind the interfaces.** Every engine-specific feature in use is one more thing to replace if the engine changes. Metadata reads (`sqlite_master`, `pragma_*`) are among the most engine-specific, so they are used only where nothing engine-neutral can answer the question (detecting an empty database, verifying a schema's integrity, deciding before a Reset whether every page of the old file can be read with `PRAGMA quick_check`), only inside `Quotinator.Data`'s implementations, and never in place of handling an exception.
+5. **Engine-specific features are kept to a minimum and confined to the implementations behind the interfaces.** Every engine-specific feature in use is one more thing to replace if the engine changes. Metadata reads (`sqlite_master`, `pragma_*`) are among the most engine-specific, so they are used only where nothing engine-neutral can answer the question (detecting an empty database, and judging whether a database is sound, which [ADR 028](028-a-database-is-checked-in-layers-cheapest-first.md) defines), only inside `Quotinator.Data`'s implementations, and never in place of handling an exception.
 
 ---
 
