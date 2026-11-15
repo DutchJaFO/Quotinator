@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 15)
+**Status:** In progress (step 16)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492.
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 15, T1, which is the developer's to perform and confirm.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute from step 16, T2.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. Step 6 left one deviation from the verification table for the developer to confirm; it
 is listed under step 6. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
@@ -873,13 +873,14 @@ both 0 warnings and 0 errors.
 
 ### 15. T1
 
-**Status:** 🔄 In progress
+**Status:** ✅ Done
 
-This is the developer's step. In Visual Studio:
+This is the developer's step: start the application in Visual Studio and confirm it starts without error.
+That is the whole gate (`docs/release-verification.md`, *T1*).
 
-1. Start over a healthy database and confirm the startup time is acceptable at `Full`.
-2. Start over a database with a broken index and confirm the degraded reason.
-3. Read `/api/v1/admin/database/integrity`.
+**Corrected 2026-11-15 (developer).** This step first listed a broken-index start and a read of the
+integrity endpoint as T1 items. Both are T2: `startup-and-degradation/15` and `16` cover them, and step 16
+runs them. Folding them into T1 is what the T1 gate rules out.
 
 **First run, 2026-11-15** (the developer's log, over an existing database at data v3 and app v5):
 
@@ -909,7 +910,9 @@ This is the developer's step. In Visual Studio:
   nothing skipped the line is unchanged. **Red first:** `StartupDatabaseCheckTests.Log_PassedWithASkippedLayer_DoesNotClaimEveryLayerAndNamesTheSkip`
   and `…Log_PassedAtFast_NamesBothSkippedLayers` failed on their claims; the control,
   `…Log_PassedWithNothingSkipped_SaysEveryLayerPassed`, passed throughout. Verification row 26.
-- **Not yet run:** items 2 and 3. Neither run started over a broken index. Row 23 stays open until they are.
+- **Third run, on `f431b7f4`:** before migrating, *the Schema layer was skipped* and *every layer that ran
+  passed (Full, 30 ms; skipped: Schema)*; after migrating, *every layer passed (Full, 38 ms)*.
+- **Result:** all three runs started without error and reached *Quotinator ready*. Verification row 23.
 
 ### 16. T2
 
@@ -953,7 +956,7 @@ says that the database is checked thoroughly at every start, and that the faster
 | 20 | ✅ | Live: a broken index degrades at startup and recovers through a Reset | Live (T2) | `startup-and-degradation/15`; passes on this build, red on `quotinator:canary-490` |
 | 21 | ✅ | Live: with `Fast`, the same database starts healthy, and the endpoint still reports the broken index | Live (T2) | `startup-and-degradation/16`; same canary |
 | 22 | ✅ | The full build and test suite are clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all passed |
-| 23 | ❌ | T1: startup time at `Full` is acceptable, and a broken index degrades with its reason | Live (T1) | Step 15, confirmed by the developer |
+| 23 | ✅ | T1: the application starts without error | Live (T1) | Step 15: the developer's three Visual Studio runs on 2026-11-15, the last on `f431b7f4`, each reaching *Quotinator ready* |
 | 24 | ✅ | *(developer, 2026-11-15)* A Reset's restore point and both set-aside notifications say why the file was set aside: the check layer, its status and finding, or the backup's own error when the check passed | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabase_RestorePointNamesTheLayerThatShowedIt`, `…ResetAsync_CorruptDatabase_NotificationRecordsTheLayerThatShowedIt`, `…ResetAsync_FileOnlyTheBackupFindsUnreadable_RestorePointCarriesTheBackupError`, `…ResetAsync_FileOnlyTheBackupFindsUnreadable_NotificationRecordsTheBackupError`; `DatabaseActionResultRecorderTests.RecordAsync_SetAsideByTheCheck_RecordsTheLayerThatShowedIt`, `…RecordAsync_SetAsideByTheBackup_RecordsTheBackupError`, the `ResetSetAsideByBackup` rows; `StartupResilienceTests.Startup_DatabaseFileCorrupt_RepairActionNotificationsSayWhichLayerShowedIt` |
 | 25 | ✅ | *(developer, 2026-11-15)* Every other surface reporting a Reset says why the file was set aside, or had to be: the response, the refusal, the repair control, the Notifications page and the refused Reset's notification | Unit test | `RestorePointDtoTests` (3); `DatabaseInitializerTests.ResetAsync_CorruptDatabaseThatCannotBeSetAside_RefusalSaysWhichLayerShowedIt`, `…ResetAsync_FileOnlyTheBackupFindsUnreadableThatCannotBeSetAside_RefusalCarriesTheBackupError`; `StartupResilienceTests.Startup_DatabaseFileCorrupt_ResetResponseSaysWhichLayerShowedIt`, `…ResetRefusalSaysWhichLayerShowedIt`; `DatabaseRepairActionsTests.RefusedForAFileThatNeededSettingAside_SaysWhichLayerShowedIt`, `…RefusedForAFileTheBackupFoundUnreadable_GivesTheBackupError`; `NotificationsPageTests.ResetThatSetTheFileAside_SaysWhyAndWhere`, `…ResetThatSetAsideAFileTheBackupFoundUnreadable_GivesTheBackupError`; `DatabaseActionResultRecorderTests.RecordAsync_RefusedForAFileThatNeededSettingAside_RecordsTheLayerThatShowedIt`, `…RecordAsync_RefusedForAFileTheBackupFoundUnreadable_RecordsTheBackupError`, the `ResetNotMovable` rows |
 | 26 | ✅ | *(T1, decision F corrected)* The Schema layer compares only when every version table records this build's version, and is skipped, naming the table, otherwise; startup over an old database logs no Schema failure; a passed check that skipped a layer says so rather than claiming every layer | Unit test | `SqliteDatabaseCheckTests.Check_RecordedVersionBehindThisBuild_SkipsSchemaNamingTheVersionTable`, `…Check_RecordedVersionAheadOfThisBuild_SkipsSchema`, `…Check_NoVersionTable_SkipsSchema`, `…Check_RecordedVersionIsThisBuilds_ComparesTheSchema`; `DatabaseInitializerTests.InitialiseAsync_OldDatabase_LogsTheSchemaSkippedRatherThanFailedBeforeMigrating`; `StartupDatabaseCheckTests` (3) |
