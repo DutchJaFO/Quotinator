@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 5)
+**Status:** In progress (step 6)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492.
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 5.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute from step 6.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
 
@@ -429,11 +429,33 @@ Every file created or edited goes into `.editorconfig`'s scoped sections the mom
 
 ### 5. Draft the contract with no behaviour
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `IDatabaseCheck`, `DatabaseCheckResult`, `DatabaseCheckLayerResult`, the three enums, and the new outcome
 on `DatabaseOperationResult`, all with XML docs. No behaviour yet, so that the tests in step 6 compile and
 fail on their assertions.
+
+**Done 2026-11-15.**
+
+- **Files:**
+  - `Quotinator.Data/Database/Checks/` holds `IDatabaseCheck`, `DatabaseCheckResult` and
+    `DatabaseCheckLayerResult`, following `Quotinator.Data/Schema/`'s pattern of a contract beside its
+    engine implementation.
+  - `Quotinator.Data/Enums/` holds `DatabaseCheckLayer`, `DatabaseCheckLayerStatus` and
+    `DatabaseCheckDepth`.
+- **The contract's shape:**
+  - `IDatabaseCheck` carries `DatabaseName` and `CheckAsync(DatabaseCheckDepth)`. It takes no cancellation
+    token, matching `IIntegrityCheckedDatabase.CheckIntegrityAsync`.
+  - `DatabaseCheckResult` carries `DatabaseName`, `Depth` and `Layers`. `FirstFailure` (the first layer
+    that failed or was inconclusive) and `IsSound` are one-line derivations, not layer behaviour.
+- **Added beyond the plan:** `DatabaseCheckLayerResult.Elapsed`, how long a layer took. It serves the
+  developer's note on step 2: the figures help locate a slow layer and report progress. It is documented
+  as an indicator, never a threshold.
+- **`DatabaseOperationResult`** gains `StoppingCheck` and the factory `StoppedByCheck(check)`, following
+  `NotIntact()`'s shape.
+- **Moved to step 6:** the `SqliteDatabaseCheck` skeleton. Its constructor is shaped by what the tests
+  construct, so it is written with them, and its `CheckAsync` stays unimplemented until step 7.
+- `dotnet build --configuration Release`: 0 warnings, 0 errors.
 
 ### 6. Write the failing tests and confirm them red
 

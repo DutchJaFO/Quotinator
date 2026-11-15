@@ -1,3 +1,4 @@
+using Quotinator.Data.Database.Checks;
 using Quotinator.Data.Enums;
 
 namespace Quotinator.Data.Database;
@@ -61,6 +62,23 @@ public sealed class DatabaseOperationResult
     /// a caller maps them to what an operator reads.
     /// </summary>
     public bool SchemaNotIntact { get; init; }
+
+    /// <summary>
+    /// The database check that stopped the operation before it opened the database for writing (#490,
+    /// ADR 028), when that is what stopped it. Its <see cref="DatabaseCheckResult.FirstFailure"/> names the
+    /// layer; a caller maps that to what an operator reads. <see langword="null"/> when the check passed or
+    /// did not stop the operation.
+    /// </summary>
+    public DatabaseCheckResult? StoppingCheck { get; init; }
+
+    /// <summary>
+    /// An operation stopped by the database check (#490): the check failed or was inconclusive, so nothing
+    /// was opened for writing, loaded or repaired.
+    /// </summary>
+    /// <param name="check">The check that stopped it.</param>
+    public static DatabaseOperationResult StoppedByCheck(DatabaseCheckResult check) =>
+        new()
+        { Succeeded = false, StoppingCheck = check };
 
     /// <summary>
     /// An operation that stopped because the schema does not match its migration path (#305): nothing was
