@@ -50,7 +50,7 @@ public sealed class ChangelogDatabaseInitializer(
     public int SchemaVersion { get; private set; }
 
     /// <inheritdoc/>
-    public string DatabaseName => "changelog";
+    public string DatabaseName => DatabaseNames.Changelog;
 
     /// <inheritdoc/>
     public SchemaIntegrityResult? LastIntegrityResult { get; private set; }

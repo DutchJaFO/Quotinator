@@ -608,7 +608,7 @@ public class DatabaseInitializer(
     public bool SchemaVersionOvershootDetected { get; protected set; }
 
     /// <inheritdoc/>
-    public string DatabaseName => "main";
+    public string DatabaseName => DatabaseNames.Main;
 
     /// <inheritdoc/>
     public SchemaIntegrityResult? LastIntegrityResult { get; protected set; }

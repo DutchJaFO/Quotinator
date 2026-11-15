@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 7)
+**Status:** In progress (step 8)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492.
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 7.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute from step 8.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. Step 6 left one deviation from the verification table for the developer to confirm; it
 is listed under step 6. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
@@ -556,10 +556,37 @@ uses it.
 
 ### 7. Implement the SQLite layers
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `SqliteDatabaseCheck` and one internal class per layer, in the order of the table, as decided in A, C, D
 and E. Register it in DI per database through the keyed connection factories that already exist.
+
+**Done 2026-11-15.**
+
+- **One class per layer**, behind the internal `IDatabaseCheckLayer`, in `Quotinator.Data/Database/Checks/`:
+  `StorageLayer`, `FormatLayer`, `JournalLayer`, and the four that read through SQLite, `PagesLayer`,
+  `IndexesLayer`, `ReferencesLayer` and `SchemaLayer`. Those four share `QueryLayer`: no file means nothing to
+  check, no sound connection means inconclusive, and SQLite rejecting the file is the layer's failure, its
+  `SqliteException` logged as handled (ADR 022). `LayerResults` words the shared cases.
+- **`SqliteCheckSubject`** carries what earlier layers found (whether the file is readable, its page size,
+  whether the `-wal` holds data) and owns the one connection the query layers share. Without a `-wal` holding
+  data it opens the main file `immutable` and read-only; with one it copies the database and its `-wal` into
+  a new folder under the work folder, opens the copy normally so SQLite recovers it, and removes the copy
+  when the check ends. A copy that cannot be made makes every query layer inconclusive.
+- **`SqliteDatabaseCheck`** holds the order and the rules connecting the layers: the first failure stops the
+  check, except a Storage failure on a readable file (decision C); an inconclusive layer never stops it; at
+  `Fast`, Indexes and References are reported skipped. Each layer's `Elapsed` is measured. It gained an
+  optional `ILogger<SqliteDatabaseCheck>` for the handled exceptions.
+- **The pragmas** live in `Sql.SchemaMetadata`: `QuickCheck`, `IntegrityCheck`, `ForeignKeyCheck`.
+- **A zero-length file fails Format** as shorter than the header. Nothing in `fileformat.html` documents a
+  file shorter than its 100-byte header as a database, so the worst case applies.
+- **Registered in DI** in `Program.cs`: the main database's check unkeyed, the changelog's keyed by
+  `DatabaseConnectionKeys.Changelog`, each with the expected schema its initializer's own migration path
+  defines and the work folder `{dataDir}/.database-check`. Nothing resolves them until step 8.
+- **`DatabaseNames`** holds `main` and `changelog`, which the two initializers, `NoOpDatabaseInitializer`
+  and the two registrations now share instead of each typing the literal.
+- **Result:** all 22 `SqliteDatabaseCheckTests` pass. The other tests step 6 wrote stay red, because they
+  belong to steps 8 and 9.
 
 ### 8. Run the check at startup
 

@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Paths;
 
@@ -5,11 +8,17 @@ namespace Quotinator.Data.Database.Checks;
 
 /// <summary>
 /// The SQLite implementation of <see cref="IDatabaseCheck"/> (#490, ADR 028): each layer mapped to what
-/// sqlite.org documents, and every undocumented case treated as its worst case.
-/// <para>
-/// <b>A signature only:</b> <see cref="CheckAsync"/> runs no layer and reports every one
-/// <see cref="DatabaseCheckLayerStatus.NotRun"/>, a default no test expects.
-/// </para>
+/// sqlite.org documents, and every undocumented case treated as its worst case. Each layer is its own class;
+/// this one holds their order and the rules that connect them.
+/// <list type="bullet">
+/// <item>The first layer that fails is the result, and no later layer runs.</item>
+/// <item>
+/// Except Storage, when the file can be read and only its directory cannot be written: that is no fault in
+/// the file, so the reading layers still run (decision C).
+/// </item>
+/// <item>An inconclusive layer never counts as a pass, and the query layers after it report the same (decision D).</item>
+/// <item>At <see cref="DatabaseCheckDepth.Fast"/>, Indexes and References are reported skipped, never left out.</item>
+/// </list>
 /// </summary>
 /// <param name="databaseName">The name the database is reported under.</param>
 /// <param name="databasePath">The database file to check. Neither it nor any file beside it is ever written.</param>
@@ -24,12 +33,14 @@ namespace Quotinator.Data.Database.Checks;
 /// <see cref="DirectoryWriteProbe.CanCreateFileIn"/>; a test supplies its own, since a directory that cannot
 /// be written is not something every platform lets a test create.
 /// </param>
+/// <param name="logger">Logs each exception a layer handles (ADR 022). <see langword="null"/> logs nothing.</param>
 public sealed class SqliteDatabaseCheck(
     string databaseName,
     string databasePath,
     string workFolder,
     IReadOnlyList<string> expectedSchemaScripts,
-    Func<string, bool>? canCreateFileIn = null) : IDatabaseCheck
+    Func<string, bool>? canCreateFileIn = null,
+    ILogger<SqliteDatabaseCheck>? logger = null) : IDatabaseCheck
 {
     /// <summary>
     /// The reserved folder's name inside the data directory, where a copy is checked when the <c>-wal</c> holds
@@ -39,38 +50,57 @@ public sealed class SqliteDatabaseCheck(
     public const string WorkFolderName = ".database-check";
 
     /// <summary>Every layer, in the order the check runs them.</summary>
-    private static readonly DatabaseCheckLayer[] LayerOrder =
+    private static readonly IDatabaseCheckLayer[] Layers =
     [
-        DatabaseCheckLayer.Storage,
-        DatabaseCheckLayer.Format,
-        DatabaseCheckLayer.Journal,
-        DatabaseCheckLayer.Pages,
-        DatabaseCheckLayer.Indexes,
-        DatabaseCheckLayer.References,
-        DatabaseCheckLayer.Schema,
+        new StorageLayer(),
+        new FormatLayer(),
+        new JournalLayer(),
+        new PagesLayer(),
+        new IndexesLayer(),
+        new ReferencesLayer(),
+        new SchemaLayer(),
     ];
 
     /// <inheritdoc/>
     public string DatabaseName { get; } = databaseName;
 
-    /// <summary>The database file this check reads.</summary>
-    public string DatabasePath { get; } = databasePath;
-
-    /// <summary>The reserved folder a copy is checked in when the <c>-wal</c> holds data.</summary>
-    public string WorkFolder { get; } = workFolder;
-
-    /// <summary>The DDL that defines the expected schema.</summary>
-    public IReadOnlyList<string> ExpectedSchemaScripts { get; } = expectedSchemaScripts;
-
-    /// <summary>Answers whether a file can be created in a directory.</summary>
-    public Func<string, bool> CanCreateFileIn { get; } = canCreateFileIn ?? DirectoryWriteProbe.CanCreateFileIn;
-
     /// <inheritdoc/>
-    public Task<DatabaseCheckResult> CheckAsync(DatabaseCheckDepth depth) =>
-        Task.FromResult(new DatabaseCheckResult
+    public async Task<DatabaseCheckResult> CheckAsync(DatabaseCheckDepth depth)
+    {
+        using SqliteCheckSubject subject = new(
+            databasePath, workFolder, expectedSchemaScripts,
+            canCreateFileIn ?? DirectoryWriteProbe.CanCreateFileIn,
+            (ILogger?)logger ?? NullLogger.Instance);
+
+        List<DatabaseCheckLayerResult> results = [];
+        bool stopped = false;
+        foreach (IDatabaseCheckLayer layer in Layers)
         {
-            DatabaseName = DatabaseName,
-            Depth        = depth,
-            Layers       = [.. LayerOrder.Select(layer => new DatabaseCheckLayerResult { Layer = layer, Status = DatabaseCheckLayerStatus.NotRun })],
-        });
+            if (stopped)
+            {
+                results.Add(new DatabaseCheckLayerResult { Layer = layer.Layer, Status = DatabaseCheckLayerStatus.NotRun });
+                continue;
+            }
+
+            if (depth == DatabaseCheckDepth.Fast && !layer.RunsAtFast)
+            {
+                results.Add(new DatabaseCheckLayerResult { Layer = layer.Layer, Status = DatabaseCheckLayerStatus.Skipped });
+                continue;
+            }
+
+            Stopwatch elapsed = Stopwatch.StartNew();
+            DatabaseCheckLayerResult result = await layer.RunAsync(subject);
+            elapsed.Stop();
+
+            results.Add(new DatabaseCheckLayerResult { Layer = result.Layer, Status = result.Status, Finding = result.Finding, Elapsed = elapsed.Elapsed });
+            stopped = StopsTheCheck(result, subject);
+        }
+
+        return new DatabaseCheckResult { DatabaseName = DatabaseName, Depth = depth, Layers = results };
+    }
+
+    // Decision C: an unwritable directory beside a readable file is reported, but the file is still checked.
+    private static bool StopsTheCheck(DatabaseCheckLayerResult result, SqliteCheckSubject subject) =>
+        result.Status == DatabaseCheckLayerStatus.Failed
+        && !(result.Layer == DatabaseCheckLayer.Storage && subject.FileReadable);
 }

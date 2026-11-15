@@ -18,6 +18,7 @@ using Quotinator.Constants.RateLimiting;
 using Quotinator.Constants.Routes;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
+using Quotinator.Data.Database.Checks;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Entities;
 using Quotinator.Core.Database;
@@ -391,6 +392,15 @@ builder.Services.AddSingleton<IDatabaseBackupReader>(sp =>
 builder.Services.AddSingleton<IDatabaseBackupWriter>(_ => new DatabaseBackupWriter(dbOptions));
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 
+// #490 (ADR 028): one check per database. Factory overloads, because the path, the work folder and the
+// expected schema are computed values the container cannot supply. The expected schema is the one this
+// initializer's own migration path defines, so the check and #305's comparison judge the same thing.
+string databaseCheckWorkFolder = Path.Combine(dataDir, SqliteDatabaseCheck.WorkFolderName);
+builder.Services.AddSingleton<IDatabaseCheck>(sp => new SqliteDatabaseCheck(
+    DatabaseNames.Main, dbPath, databaseCheckWorkFolder,
+    DatabaseInitializer.ExpectedSchemaScripts(QuotinatorMigrations.All, QuotinatorMigrations.Baseline),
+    logger: sp.GetRequiredService<ILogger<SqliteDatabaseCheck>>()));
+
 // #309: separate database for changelog content (ADR 018): no relational or transactional coupling
 // to domain data, so it lives outside quotinatordata.db entirely, as its own file beside it.
 //
@@ -404,6 +414,10 @@ string changelogDbPath = Path.Combine(dataDir, DataPaths.ChangelogDatabaseFile);
 SqliteConnectionFactory changelogConnectionFactory = new(changelogDbPath, useMemoryTempStore: true);
 builder.Services.AddKeyedSingleton<IDbConnectionFactory>(
     DatabaseConnectionKeys.Changelog, (_, _) => changelogConnectionFactory);
+builder.Services.AddKeyedSingleton<IDatabaseCheck>(DatabaseConnectionKeys.Changelog, (sp, _) => new SqliteDatabaseCheck(
+    DatabaseNames.Changelog, changelogDbPath, databaseCheckWorkFolder,
+    ChangelogDatabaseInitializer.ExpectedSchemaScripts(),
+    logger: sp.GetRequiredService<ILogger<SqliteDatabaseCheck>>()));
 builder.Services.AddSingleton<ChangelogDatabaseInitializer>();
 builder.Services.AddSingleton<ChangelogRepository>();
 builder.Services.AddSingleton<ChangelogSystemContentImporter>();

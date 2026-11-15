@@ -60,7 +60,7 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public bool SchemaVersionOvershootDetected => false;
 
     /// <inheritdoc/>
-    public string DatabaseName => "main";
+    public string DatabaseName => DatabaseNames.Main;
 
     /// <inheritdoc/>
     public SchemaIntegrityResult? LastIntegrityResult => null;

@@ -821,6 +821,26 @@ internal static class Sql
             "SELECT name, tbl_name FROM sqlite_master WHERE type = @type ORDER BY name;";
 
         /// <summary>
+        /// The Pages layer's check (#490, ADR 028): every page read and every record well-formed, without
+        /// comparing index content with table content. A healthy result is a single row, <c>ok</c>.
+        /// https://www.sqlite.org/pragma.html#pragma_quick_check
+        /// </summary>
+        internal const string QuickCheck = "PRAGMA quick_check;";
+
+        /// <summary>
+        /// The Indexes layer's check (#490, ADR 028): what <see cref="QuickCheck"/> checks, plus that indexes
+        /// agree with their tables and unique constraints hold. A healthy result is a single row, <c>ok</c>.
+        /// https://www.sqlite.org/pragma.html#pragma_integrity_check
+        /// </summary>
+        internal const string IntegrityCheck = "PRAGMA integrity_check;";
+
+        /// <summary>
+        /// The References layer's check (#490, ADR 028): one row per violated foreign key constraint, whatever
+        /// the connection's <c>foreign_keys</c> setting. https://www.sqlite.org/pragma.html#pragma_foreign_key_check
+        /// </summary>
+        internal const string ForeignKeyCheck = "PRAGMA foreign_key_check;";
+
+        /// <summary>
         /// The page number of one table's or index's root b-tree page, by <c>@name</c> (fileformat.html §2.6).
         /// Read by the database check's test fixtures (#490), which locate a page to damage through it.
         /// </summary>
