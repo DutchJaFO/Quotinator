@@ -174,8 +174,8 @@ once as a `<PackageVersion>`; a `<PackageReference>` must never carry a `Version
 [ADR 019](docs/architecture-decisions/019-central-package-version-management.md) for the full rule,
 the `NU1605` failure it removes, and why `VersionOverride` is not used.
 `RepositoryStructureTests.PackageReferences_DoNotCarryInlineVersions` enforces it mechanically.
-Security-driven pins (CVE-2025-6965, CVE-2026-49451) carry their rationale in that file — read the
-linked CVE doc before changing one.
+A security-driven pin carries its rationale in that file — read the linked CVE doc before changing one.
+There are none at present; the CVE-2025-6965 and CVE-2026-49451 pins were removed on 2026-11-15.
 
 ### Project structure
 ```

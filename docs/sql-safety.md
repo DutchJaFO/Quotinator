@@ -94,10 +94,9 @@ document the reasoning here and add it to the known-safe examples in `SqlAggrega
 
 ## When a patched NuGet version ships
 
-When `SQLitePCLRaw.lib.e_sqlite3` > 2.1.11 is released:
+This has happened. On 2026-07-30 a direct `SQLitePCLRaw.lib.e_sqlite3` 3.50.3 override brought in a
+patched SQLite (#72). Since 2026-11-15 no override is needed: Microsoft.Data.Sqlite 11 takes its native
+library from the `SQLite` package, 3.53.4, which is above the patched 3.50.2. The per-project CVE
+documents (`CVE/archived/CVE-2025-6965.md`) record each step.
 
-1. Dependabot will open a PR to bump the transitive dependency automatically.
-2. Merge the PR after CI passes.
-3. Dismiss Dependabot alerts #1 and #2 as fixed (or they auto-close on the version bump).
-4. The guardrail remains in place — it defends against query correctness bugs independently of
-   the SQLite version.
+The guardrail remains in place. It defends against query correctness bugs, whatever the SQLite version.

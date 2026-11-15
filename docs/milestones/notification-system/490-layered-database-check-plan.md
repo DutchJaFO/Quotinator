@@ -72,10 +72,11 @@ Two developer directions (2026-11-14) govern the whole design:
     *"Doesn't send `PRAGMA foreign_keys`. This is the default."* So the setting is SQLite's own default.
   - sqlite.org documents that default as off (*"disabled by default (for backwards compatibility)"*)
     unless the library is compiled with `SQLITE_DEFAULT_FOREIGN_KEYS`.
-  - The native library this solution ships, `SQLitePCLRaw.lib.e_sqlite3` 3.53.3 (pinned in
-    `Directory.Packages.props`), reports `DEFAULT_FOREIGN_KEYS` in `PRAGMA compile_options`. A fresh
-    connection built exactly as the factory builds it returns `PRAGMA foreign_keys` = `1`. This was read
-    on Windows only.
+  - The native library this solution ships reports `DEFAULT_FOREIGN_KEYS` in `PRAGMA compile_options`,
+    and a fresh connection built exactly as the factory builds it returns `PRAGMA foreign_keys` = `1`.
+    This was read on Windows only, first with `SQLitePCLRaw.lib.e_sqlite3` 3.53.3, then with the
+    `SQLite` 3.53.4 package that Microsoft.Data.Sqlite 11 takes its native library from. The 3.53.3 pin
+    was removed on 2026-11-15, once it no longer decided which library ships.
   - So enforcement rests on a compile option of a third-party native build, which no project document
     records or decides. The comments in `Sql.cs` (`ChangelogContent`, `DeleteByIds`) and in
     `SqliteFileResourceRepository` state that it is *"off by default per connection"*, which is wrong
