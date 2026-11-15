@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 8)
+**Status:** In progress (step 9)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492.
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 8.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute from step 9.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. Step 6 left one deviation from the verification table for the developer to confirm; it
 is listed under step 6. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
@@ -593,8 +593,9 @@ and E. Register it in DI per database through the keyed connection factories tha
   `Fast`, Indexes and References are reported skipped. Each layer's `Elapsed` is measured. It gained an
   optional `ILogger<SqliteDatabaseCheck>` for the handled exceptions.
 - **The pragmas** live in `Sql.SchemaMetadata`: `QuickCheck`, `IntegrityCheck`, `ForeignKeyCheck`.
-- **A zero-length file fails Format** as shorter than the header. Nothing in `fileformat.html` documents a
-  file shorter than its 100-byte header as a database, so the worst case applies.
+- **A zero-length file fails Format** as shorter than the header. Nothing in `fileformat.html` or
+  `c3ref/open.html` documents how SQLite treats a zero-byte file, and the developer confirmed at step 8 that it
+  is likely a broken file unless another process is accessing it.
 - **Registered in DI** in `Program.cs`: the main database's check unkeyed, the changelog's keyed by
   `DatabaseConnectionKeys.Changelog`, each with the expected schema its initializer's own migration path
   defines and the work folder `{dataDir}/.database-check`. Nothing resolves them until step 8.
@@ -605,7 +606,7 @@ and E. Register it in DI per database through the keyed connection factories tha
 
 ### 8. Run the check at startup
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 - `InitialiseAsync` runs the check right after `MigrateFilenameIfNeeded()`, before the database is opened
   for writing, and returns a failure as an outcome. Per decision F, a Schema failure there does not stop
@@ -623,6 +624,51 @@ and E. Register it in DI per database through the keyed connection factories tha
 
   Each new reason gets a Knowledgebase entry and a `KnowledgebaseLinks` constant (issue requirement 9).
 - Layers Format to Indexes keep the generic reason until #457.
+
+**Done 2026-11-15.**
+
+- **The main database** (`DatabaseInitializer.InitialiseAsync`): the check runs after
+  `MigrateFilenameIfNeeded()` at `DatabaseOptions.StartupCheckDepth`. `StartupDatabaseCheck.Stops` stops
+  startup on any failing or inconclusive layer except References (decision E) and Schema (decision F, judged
+  after any migration by #305's comparison). After a creation or a migration, the `-wal` is checkpointed
+  with `Sql.Schema.CheckpointTruncate`, so the check reads the main file directly, and the check runs again.
+  Every outcome carries the check that applies: `StoppedByCheck`, `NotIntact(check)` or
+  `Success(check: …)`.
+- **The check is a required constructor dependency** of `DatabaseInitializer`, `QuotinatorDatabaseInitializer`
+  and `ChangelogDatabaseInitializer` (keyed). A first draft made it optional, with a fallback built from the
+  options; the existing guard `InitializerConstructors_DoNotMakeAServiceDependencyOptional` (#302) failed on
+  it, which is the guard's purpose. The guard now covers the changelog initializer too, proven by mutation:
+  the changelog's check made optional failed it, naming the parameter, and was reverted.
+- **Tests pass a check explicitly.** A test on a real file passes the real check through
+  `TestDatabaseChecks.ForMain` or `.ForChangelog` (`Quotinator.Data.Testing`), built as `Program.cs` builds the
+  registered one. A test on a shared-cache in-memory database, which the SQLite check cannot read, passes
+  `NoOpDatabaseCheck`, whose every layer carries a finding saying it was not checked.
+- **A zero-byte file stays a Format failure** (developer, 2026-11-15): it is likely a broken file unless
+  another process is accessing it. Tests that meant "start with no database" had used `new TempDatabase([])`,
+  which leaves a zero-byte file. They now use `TempDatabase.WithoutFile()`, a path with no file, which SQLite
+  creates on first open as documented (`c3ref/open.html`). Not every such test needed it:
+  `AppVersionTrackerTests` never hands its database to an initializer.
+- **The changelog database** (`ChangelogDatabaseInitializer.InitialiseAsync`) now returns a
+  `DatabaseOperationResult` and follows decision F the same way, at `Full`. `Program.cs` falls back to the JSON
+  files whenever it does not succeed, a stopping check included.
+- **`StartupDatabaseCheck`** (`Quotinator.Data/Database/Checks/`) holds the stop rule and logs the result
+  for operators: Information when every layer passed, Error for a failing layer, Warning for an
+  inconclusive one and for a dangling reference (decision E).
+- **`StartupDegradationReasons.For`** is implemented: a check that stopped startup wins, then #348, #350
+  and #305 in their old order. `Program.cs` calls it once, records the check on `DatabaseHealthState`, and
+  logs the reason through one `LogStartupDegraded`, which replaces three log methods that rendered the same
+  `[Server] {Reason}` line. `Program.cs` no longer holds its own copies of the two reason texts.
+- **Knowledgebase:** `the-database-could-not-be-checked.md`, linked as
+  `KnowledgebaseLinks.TheDatabaseCouldNotBeChecked` from the end of `CheckInconclusive`. Storage reuses #326's
+  text and its existing entry.
+- **Fixture fix:** `DocumentedFormatFixtures`' root page lookup now opens `immutable`. Read-only alone
+  created a `-wal` beside a WAL database it could not remove, which row 13's test found.
+- **The changelog's check was implemented before its tests**, the trap *Red first means signatures first*
+  names: step 6 had no test for the changelog database. Its three tests in `ChangelogDatabaseCheckTests` were
+  then proven by mutation, the check made never to run: all three failed, the first on SQLite's own
+  `file is not a database`. Reverted, and all three pass.
+- **Result:** decision F's three tests, rows 13 and 15 to 17, and the changelog's three pass. The Reset
+  tests of row 14 remain red for step 9.
 
 ### 9. Use the check in a Reset
 

@@ -43,7 +43,8 @@ public static class CurrentSchema
             factory, options, migrations: [],
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
             NullLogger<DatabaseInitializer>.Instance,
-            NoOpDiskSpaceProvider.Instance);
+            NoOpDiskSpaceProvider.Instance,
+            TestDatabaseChecks.ForMain(dbPath, migrations: [], baseline: null));
 
         await initializer.InitialiseAsync();
     }

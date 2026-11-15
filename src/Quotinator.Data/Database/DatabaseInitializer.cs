@@ -3,6 +3,7 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Database.Checks;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Data.Logging;
@@ -29,6 +30,7 @@ namespace Quotinator.Data.Database;
 /// <param name="callerContext">Provides the agent identifier for audit entries.</param>
 /// <param name="logger">Logger for startup diagnostics.</param>
 /// <param name="diskSpaceProvider">Reports real available disk space for the backup pre-flight check (#277).</param>
+/// <param name="databaseCheck">The check this database is judged by, at startup and before a Reset (#490, ADR 028).</param>
 /// <param name="baseline">Optional consolidated DDL for the consuming project's own schema, used to create a genuinely fresh database in one step instead of replaying <paramref name="migrations"/>. When omitted, a fresh database always takes the full incremental path.</param>
 public class DatabaseInitializer(
     IDbConnectionFactory factory,
@@ -38,6 +40,7 @@ public class DatabaseInitializer(
     ICallerContext callerContext,
     ILogger<DatabaseInitializer> logger,
     IDiskSpaceProvider diskSpaceProvider,
+    IDatabaseCheck databaseCheck,
     SchemaBaseline? baseline = null) : IDatabaseInitializer
 {
     private readonly IDiskSpaceProvider _diskSpaceProvider = diskSpaceProvider;
@@ -550,6 +553,8 @@ public class DatabaseInitializer(
     private readonly IReadOnlyList<SchemaMigration> _consumerMigrations = migrations;
     private readonly SchemaBaseline? _consumerBaseline = baseline;
 
+    private readonly IDatabaseCheck _check = databaseCheck;
+
     /// <summary>Logger available to this class and subclasses.</summary>
     protected readonly ILogger Logger = logger;
 
@@ -685,6 +690,13 @@ public class DatabaseInitializer(
     {
         MigrateFilenameIfNeeded();
 
+        // #490, decision F: the database is judged in the state it starts in, before anything is written. A
+        // fault in the file stops startup here, as an outcome (ADR 022).
+        DatabaseCheckResult check = await _check.CheckAsync(_options.StartupCheckDepth);
+        StartupDatabaseCheck.Log(Logger, check);
+        if (StartupDatabaseCheck.Stops(check))
+            return DatabaseOperationResult.StoppedByCheck(check);
+
         using SqliteConnection connection = (SqliteConnection)_factory.CreateConnection();
         await connection.OpenAsync();
 
@@ -704,17 +716,29 @@ public class DatabaseInitializer(
         if (migrations.Obstacle is BackupOutcome migrationObstacle)
             return DatabaseOperationResult.RefusedForBackup(migrationObstacle, BackupGuardedStep.Migration);
 
+        // #490, decision F: a database that was just created or migrated is a different file from the one
+        // checked above, so it is checked again, and that is startup's result. The checkpoint moves what the
+        // migration wrote into the main file, so the check reads it directly rather than through a copy.
+        if (migrations.DatabaseWasCreated || migrations.Applied.Count > 0)
+        {
+            await connection.ExecuteAsync(Sql.Schema.CheckpointTruncate);
+            check = await _check.CheckAsync(_options.StartupCheckDepth);
+            StartupDatabaseCheck.Log(Logger, check);
+            if (StartupDatabaseCheck.Stops(check))
+                return DatabaseOperationResult.StoppedByCheck(check);
+        }
+
         // #305: a version recorded ahead of this build means the schema's shape is unknown to it, so there
         // is nothing meaningful to compare; that state already degrades on its own. Otherwise the schema
         // must match what its version defines before anything is loaded into it, and a difference is a
         // hard failure, returned rather than thrown (ADR 022) and never repaired.
         if (!SchemaVersionOvershootDetected && !await IsSchemaIntactAsync())
-            return DatabaseOperationResult.NotIntact();
+            return DatabaseOperationResult.NotIntact(check);
 
         BackupOutcome? obstacle = await RunInitialisedHookAsync(connection, migrations.TookBaselinePath, migrations.DatabaseWasCreated);
 
         return obstacle is null
-            ? DatabaseOperationResult.Success()
+            ? DatabaseOperationResult.Success(check: check)
             : DatabaseOperationResult.RefusedForBackup(obstacle.Value, BackupGuardedStep.ContentLoad);
     }
 

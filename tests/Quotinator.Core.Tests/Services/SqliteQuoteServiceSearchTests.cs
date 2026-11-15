@@ -111,7 +111,8 @@ public class SqliteQuoteServiceSearchTests
                               autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
                               NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance,
                               NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
-                              new AppVersionTracker(_factory), new VersionService(), NoOpDiskSpaceProvider.Instance);
+                              new AppVersionTracker(_factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
+                              TestDatabaseChecks.ForMain(options.DbPath, QuotinatorMigrations.All, baseline: null));
         await db.InitialiseAsync();
     }
 

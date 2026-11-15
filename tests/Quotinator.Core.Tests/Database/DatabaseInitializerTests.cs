@@ -120,6 +120,7 @@ public partial class DatabaseInitializerTests
             appVersionTracker ?? new AppVersionTracker(factory),
             new VersionService(),
             diskSpaceProvider ?? NoOpDiskSpaceProvider.Instance,
+            TestDatabaseChecks.ForMain(_dbPath, migrations, useBaseline ? QuotinatorMigrations.Baseline : null),
             useBaseline ? QuotinatorMigrations.Baseline : null);
     }
 

@@ -86,9 +86,10 @@ public sealed class DatabaseOperationResult
     /// An operation that stopped because the schema does not match its migration path (#305): nothing was
     /// loaded into it and nothing was repaired.
     /// </summary>
-    public static DatabaseOperationResult NotIntact() =>
+    /// <param name="check">The database check that ran before the comparison, when one did (#490).</param>
+    public static DatabaseOperationResult NotIntact(DatabaseCheckResult? check = null) =>
         new()
-        { Succeeded = false, SchemaNotIntact = true };
+        { Succeeded = false, SchemaNotIntact = true, Check = check };
 
     /// <summary>A successful operation.</summary>
     /// <param name="restorePoint">What it left behind to restore from, when it replaced the database.</param>

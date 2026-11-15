@@ -175,7 +175,7 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Read_RequestedLanguageHasTranslation_ReturnsTranslatedTitleAndBody()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         NotificationReader reader = await SeedTranslatedNotificationAsync(temp);
 
         PagedItems<NotificationEntity> page = await reader.GetPagedAsync(1, 10, "nl");
@@ -189,7 +189,7 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Read_RequestedLanguageHasNoTranslation_FallsBackToOriginalLanguage()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         NotificationReader reader = await SeedTranslatedNotificationAsync(temp);
 
         PagedItems<NotificationEntity> page = await reader.GetPagedAsync(1, 10, "fr");
@@ -205,7 +205,7 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Read_LegacyRowWithNoTranslations_ReturnsStoredEnglishText()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         await CurrentSchema.ApplyDataSchemaAsync(temp.DbPath);
         using SqliteConnection connection = await OpenAsync(temp);
         await InsertNotificationAsync(connection, "English headline", "English body.");
@@ -225,7 +225,7 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Read_TranslationHasBodyButNoTitle_FallsBackToOriginalTitleOnly()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         await CurrentSchema.ApplyDataSchemaAsync(temp.DbPath);
         using SqliteConnection connection = await OpenAsync(temp);
         Guid id = await InsertNotificationAsync(connection, "English headline", "English body.");
@@ -242,7 +242,7 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Read_RequestedLanguageDiffersInCase_StillResolvesTheTranslation()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         NotificationReader reader = await SeedTranslatedNotificationAsync(temp);
 
         NotificationEntity row = (await reader.GetPagedAsync(1, 10, "NL")).Items.Single();
@@ -258,7 +258,7 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Read_ActiveQuery_ResolvesTranslationsToo()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         NotificationReader reader = await SeedTranslatedNotificationAsync(temp);
 
         IReadOnlyList<NotificationEntity> active = await reader.GetActiveNotificationsAsync("nl");
@@ -273,7 +273,7 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Read_ByIdQueryViaDismiss_ResolvesTranslationsToo()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         await CurrentSchema.ApplyDataSchemaAsync(temp.DbPath);
         using SqliteConnection connection = await OpenAsync(temp);
         Guid id = await InsertNotificationAsync(connection, "English headline", "English body.");
@@ -302,7 +302,7 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Write_WithTranslations_PersistsOneRowPerLanguage()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         await CurrentSchema.ApplyDataSchemaAsync(temp.DbPath);
         using SqliteConnection connection = await OpenAsync(temp);
 
@@ -330,7 +330,7 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Write_WithoutTranslations_PersistsNoTranslationRows()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         await CurrentSchema.ApplyDataSchemaAsync(temp.DbPath);
         using SqliteConnection connection = await OpenAsync(temp);
 
@@ -350,7 +350,7 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Seed_SameNotificationWithDifferentTranslations_IsStillSuppressed()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         await CurrentSchema.ApplyDataSchemaAsync(temp.DbPath);
         using SqliteConnection connection = await OpenAsync(temp);
 

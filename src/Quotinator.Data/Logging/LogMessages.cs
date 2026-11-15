@@ -11,6 +11,32 @@ namespace Quotinator.Data.Logging;
 /// </summary>
 internal static partial class LogMessages
 {
+    /// <summary>
+    /// Logs a database check in which every layer that ran passed (#490), so an operator without a UI can see
+    /// the database was judged sound and how thoroughly.
+    /// </summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "[Database - Check] {Database:l}: every layer passed ({Depth:l}, {Milliseconds} ms)")]
+    public static partial void LogDatabaseCheckPassed(this ILogger logger, string database, string depth, long milliseconds);
+
+    /// <summary>Logs the layer at which a database check failed (#490), with the engine's own finding.</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Check] {Database:l}: the {Layer:l} layer failed: {Finding:l}")]
+    public static partial void LogDatabaseCheckFailed(this ILogger logger, string database, string layer, string finding);
+
+    /// <summary>
+    /// Logs a database check that could not run soundly (#490, decision D). Never a pass: the caller treats
+    /// it as a failure.
+    /// </summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Check] {Database:l}: the {Layer:l} layer could not be checked: {Finding:l}")]
+    public static partial void LogDatabaseCheckInconclusive(this ILogger logger, string database, string layer, string finding);
+
+    /// <summary>
+    /// Logs a dangling reference the check found (#490, decision E). A Warning, not an Error: until #493 makes
+    /// foreign key enforcement explicit, a database the application wrote itself may hold one, so it does not
+    /// degrade startup.
+    /// </summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Check] {Database:l}: a declared reference points at a row that does not exist: {Finding:l}")]
+    public static partial void LogDatabaseCheckDanglingReference(this ILogger logger, string database, string finding);
+
     /// <summary>Logs the legacy quotes.db filename migration starting.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "[Database - Init] migrating legacy filename quotes.db → {NewName}")]
     public static partial void LogLegacyFilenameMigrationStarting(this ILogger logger, string newName);

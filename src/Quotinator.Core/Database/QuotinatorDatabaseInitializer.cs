@@ -8,6 +8,7 @@ using Quotinator.Core.Logging;
 using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
+using Quotinator.Data.Database.Checks;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
@@ -52,6 +53,7 @@ namespace Quotinator.Core.Database;
 /// <param name="appVersionTracker">Supplies the <c>System_AppVersion</c> row every notification this initializer writes is attributed to, recording one when none exists yet (#302).</param>
 /// <param name="versionService">Names the running application and version, for the row <paramref name="appVersionTracker"/> records when none exists yet (#302).</param>
 /// <param name="diskSpaceProvider">Reports real available disk space for the backup pre-flight check (#277).</param>
+/// <param name="databaseCheck">The check this database is judged by, at startup and before a Reset (#490, ADR 028).</param>
 /// <param name="baseline">Optional consolidated DDL for Quotinator.Core's own schema, used to create a genuinely fresh database in one step instead of replaying <paramref name="migrations"/>. When omitted, a fresh database always takes the full incremental path.</param>
 public sealed class QuotinatorDatabaseInitializer(
     IDbConnectionFactory factory,
@@ -78,7 +80,8 @@ public sealed class QuotinatorDatabaseInitializer(
     IAppVersionTracker appVersionTracker,
     IVersionService versionService,
     IDiskSpaceProvider diskSpaceProvider,
-    SchemaBaseline? baseline = null) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, diskSpaceProvider, baseline)
+    IDatabaseCheck databaseCheck,
+    SchemaBaseline? baseline = null) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, diskSpaceProvider, databaseCheck, baseline)
 {
     private readonly IReadOnlyList<SeedBatch> _batches = batches;
     private readonly IImportBatchRepository _importBatches = importBatches;

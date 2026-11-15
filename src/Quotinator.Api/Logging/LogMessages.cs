@@ -100,23 +100,14 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Warning, Message = "[Notifications - Reseed] reseed proceeding WITHOUT a backup ({Obstacle:l}): the user gave permission. There is no restore point for this reseed; do not look for one later")]
     public static partial void LogReseedProceedingWithoutBackup(this ILogger logger, string obstacle);
 
-    /// <summary>Logs that startup degraded because its pending migration was refused for want of a backup (#348).</summary>
+    /// <summary>
+    /// Logs the reason startup degraded with (#490): a refused migration (#348), a schema version ahead of this
+    /// build (#350), a schema that does not match its version (#305), or a layer of the database check.
+    /// </summary>
     /// <param name="logger">The logger to write to.</param>
-    /// <param name="reason">The degraded reason: the obstacle, its cause, the remedies and the Knowledgebase entry.</param>
+    /// <param name="reason">The degraded reason, as <c>StartupDegradationReasons.For</c> chose it.</param>
     [LoggerMessage(Level = LogLevel.Critical, Message = "[Server] {Reason:l}")]
-    public static partial void LogStartupMigrationRefused(this ILogger logger, string reason);
-
-    /// <summary>Logs that startup degraded because the recorded schema version is ahead of this build (#350).</summary>
-    /// <param name="logger">The logger to write to.</param>
-    /// <param name="reason">The degraded reason: both recorded versions, why the schema's shape is unknown, and the two remedies.</param>
-    [LoggerMessage(Level = LogLevel.Critical, Message = "[Server] {Reason:l}")]
-    public static partial void LogStartupSchemaOvershoot(this ILogger logger, string reason);
-
-    /// <summary>Logs that startup degraded because the schema does not match its recorded version (#305).</summary>
-    /// <param name="logger">The logger to write to.</param>
-    /// <param name="reason">The degraded reason: every missing or different object and the two remedies.</param>
-    [LoggerMessage(Level = LogLevel.Critical, Message = "[Server] {Reason:l}")]
-    public static partial void LogStartupSchemaNotIntact(this ILogger logger, string reason);
+    public static partial void LogStartupDegraded(this ILogger logger, string reason);
 
     /// <summary>Logs the server stopping, with the running version.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "[Server] Quotinator v{Version} stopping")]

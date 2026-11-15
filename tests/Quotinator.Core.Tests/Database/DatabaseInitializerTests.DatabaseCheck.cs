@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
+using Quotinator.Core.Database;
 using Quotinator.Data.Database;
 using Quotinator.Data.Database.Checks;
 using Quotinator.Data.Enums;
@@ -76,6 +77,68 @@ public partial class DatabaseInitializerTests
         Assert.HasCount(Enum.GetValues<DatabaseCheckLayer>().Length, result.Check.Layers);
         Assert.IsTrue(result.Check.Layers.All(l => l.Status == DatabaseCheckLayerStatus.Passed),
             string.Join(", ", result.Check.Layers.Select(l => $"{l.Layer}: {l.Status}")));
+    }
+
+    /// <summary>
+    /// Decision F, no database: there is no file to check before anything is written, so the database is
+    /// checked once it has been created. The check startup keeps is of a real file: no layer says there was
+    /// nothing to check.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_NoDatabase_ChecksTheCreatedDatabase()
+    {
+        Assert.IsFalse(File.Exists(_dbPath), "Precondition: a database file already exists.");
+
+        DatabaseOperationResult result = await CreateInitializer([]).InitialiseAsync();
+
+        Assert.IsTrue(result.Succeeded, "Startup failed to create a database.");
+        Assert.IsNotNull(result.Check, "The result does not carry a check.");
+        Assert.IsTrue(result.Check.IsSound, $"First failure: {result.Check.FirstFailure?.Layer} ({result.Check.FirstFailure?.Finding})");
+        Assert.DoesNotContain(l => l.Finding == LayerResults.NoFileYet, result.Check.Layers,
+            "The kept check is the one taken before the database existed.");
+    }
+
+    /// <summary>
+    /// Decision F, an old database: its schema differs from this build's until its migrations run, which is
+    /// expected and does not stop startup. The check runs again after migrating, and that is the one kept.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_OldDatabase_KeepsTheCheckTakenAfterMigrating()
+    {
+        IReadOnlyList<SchemaMigration> allButTheLast = [.. QuotinatorMigrations.All.Take(QuotinatorMigrations.All.Count - 1)];
+        await CreateInitializer([], allButTheLast, useBaseline: false).InitialiseAsync();
+        SqliteConnection.ClearAllPools();
+
+        QuotinatorDatabaseInitializer upgrade = CreateInitializer([]);
+        DatabaseOperationResult result = await upgrade.InitialiseAsync();
+
+        Assert.IsNotEmpty(upgrade.MigrationsApplied, "Precondition: the database needed no migration.");
+        Assert.IsTrue(result.Succeeded, $"Startup failed on an old database: {result.Check?.FirstFailure?.Layer} ({result.Check?.FirstFailure?.Finding})");
+        Assert.IsNotNull(result.Check, "The result does not carry a check.");
+        Assert.IsTrue(result.Check.IsSound, $"The kept check is not the one taken after migrating: {result.Check.FirstFailure?.Layer} ({result.Check.FirstFailure?.Finding})");
+    }
+
+    /// <summary>
+    /// Decision F, an old database whose migrated schema still differs from what this build defines: the check
+    /// taken after migrating fails at Schema, and startup returns the schema outcome #305 returns.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_MigratedSchemaStillDiffers_ReturnsTheSchemaOutcome()
+    {
+        await CreateInitializer([]).InitialiseAsync();
+        SqliteConnection.ClearAllPools();
+        SchemaMigration dropsAColumn = new()
+        {
+            Version     = QuotinatorMigrations.All.Count + 1,
+            Sql         = "ALTER TABLE Quotinator_Universe DROP COLUMN NoValueKnown;",
+            Description = "A test migration that leaves the schema different from the baseline.",
+        };
+
+        DatabaseOperationResult result = await CreateInitializer([], [.. QuotinatorMigrations.All, dropsAColumn], useBaseline: true).InitialiseAsync();
+
+        Assert.IsFalse(result.Succeeded, "Startup succeeded over a schema that differs from this build's.");
+        Assert.IsTrue(result.SchemaNotIntact, "Startup did not return the schema outcome.");
+        Assert.AreEqual(DatabaseCheckLayer.Schema, result.Check?.FirstFailure?.Layer, "The kept check does not name the Schema layer.");
     }
 
     /// <summary>

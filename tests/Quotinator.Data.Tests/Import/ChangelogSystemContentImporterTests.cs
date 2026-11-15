@@ -35,7 +35,7 @@ public class ChangelogSystemContentImporterTests
     {
         SqliteConnectionFactory factory = new SqliteConnectionFactory(UniqueConnectionString());
         ChangelogConnectionKeepAlive keepAlive = new ChangelogConnectionKeepAlive(factory);
-        ChangelogDatabaseInitializer initializer = new ChangelogDatabaseInitializer(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        ChangelogDatabaseInitializer initializer = new ChangelogDatabaseInitializer(factory, NullLogger<ChangelogDatabaseInitializer>.Instance, new NoOpDatabaseCheck(DatabaseNames.Changelog));
         await initializer.InitialiseAsync();
         return (factory, keepAlive);
     }

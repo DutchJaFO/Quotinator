@@ -182,15 +182,12 @@ string dataDir = builder.Configuration["Quotinator:DataDir"]
     ?? HaFallbackDir()
     ?? Path.Combine(AppContext.BaseDirectory, "data");
 
-// #326: one cause, one message, wherever it is first noticed: the database failing to open, or a
-// directory failing to be created below. DatabaseHealthState.MarkFailed is first-wins, so whichever
-// gets there first, the operator sees the same actionable text rather than two descriptions of one
-// problem. Deliberately says a Reset cannot help: the generic database-init reason recommends exactly
-// that, and following it here wastes the operator's time on an operation that also writes.
-const string DataDirectoryNotWritableReason =
-    "The data directory cannot be written. This usually means the volume is mounted read-only, or " +
-    "the container user lacks write permission on it. Restore write access to the data directory " +
-    "and restart. A database Reset cannot resolve this: it writes too.";
+// #326: one cause, one message, wherever it is first noticed: the database check's Storage layer (#490),
+// the database failing to open, or a directory failing to be created below. DatabaseHealthState.MarkFailed
+// is first-wins, so whichever gets there first, the operator sees the same actionable text rather than two
+// descriptions of one problem. Deliberately says a Reset cannot help: the generic database-init reason
+// recommends exactly that, and following it here wastes the operator's time on an operation that also writes.
+const string DataDirectoryNotWritableReason = Quotinator.Api.Startup.StartupDegradationReasons.DataDirectoryNotWritable;
 
 // Walks the chain because the failure can arrive nested: DatabaseInitializer restores its backup and
 // rethrows on any migration exception, so the SqliteException that actually describes the cause is not
@@ -662,6 +659,7 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         sp.GetRequiredService<IAppVersionTracker>(),
         sp.GetRequiredService<IVersionService>(),
         sp.GetRequiredService<IDiskSpaceProvider>(),
+        sp.GetRequiredService<IDatabaseCheck>(),
         QuotinatorMigrations.Baseline);
 });
 // #285: resolves a Conversation's per-line quote/stage-direction/sound-cue lookups via
@@ -978,9 +976,11 @@ await app.StartAsync();
 bool changelogSchemaIntact = true;
 try
 {
+    // #490: a check that stops the changelog database falls back to the JSON files exactly as a schema
+    // difference does, and never degrades the main database (ADR 018).
     ChangelogDatabaseInitializer changelogInitializer = app.Services.GetRequiredService<ChangelogDatabaseInitializer>();
-    await changelogInitializer.InitialiseAsync();
-    changelogSchemaIntact = changelogInitializer.LastIntegrityResult?.IsIntact ?? true;
+    DatabaseOperationResult changelogInitialisation = await changelogInitializer.InitialiseAsync();
+    changelogSchemaIntact = changelogInitialisation.Succeeded;
 }
 catch (Exception ex)
 {
@@ -1040,41 +1040,22 @@ try
 {
     DatabaseOperationResult initialisation = await dbInitializer.InitialiseAsync();
 
-    // #348: a refused migration leaves the schema behind this build, so serving from it is not safe. It
-    // degrades rather than raising a notification, because writing that row into a table the build has
-    // not migrated is the unprotected write the refusal exists to prevent.
-    if (initialisation is { RefusedStep: BackupGuardedStep.Migration, BackupObstacle: BackupOutcome obstacle })
-    {
-        string failureReason = BackupObstacleGuidance.MigrationRefusedReason(obstacle);
-        app.Services.GetRequiredService<ILogger<Program>>().LogStartupMigrationRefused(failureReason);
-        dbHealth.MarkFailed(failureReason);
-    }
+    // #490: the check startup ran is kept as a result, whatever it found, so the layer a degraded start
+    // failed at, and a finding that leaves startup healthy, can be read rather than only logged.
+    if (initialisation.Check is { } startupCheck)
+        dbHealth.RecordStartupCheck(startupCheck);
 
-    // #350: a recorded version ahead of this build means the migrations it never saw may have added,
-    // altered or removed anything, so the schema is of unknown shape rather than known-good, and
-    // serving quote content from it is a foot gun. #289 shipped the opposite reading, that an
-    // overshoot is only ever a stale counter left by a migration squash; the plan doc records why that
-    // was reversed. Checked after the refused-migration case above and never before it:
-    // MarkFailed is first-wins, and a refusal leaves the schema behind this build, which is the
-    // stricter of the two faults because a live query may then throw.
-    if (dbInitializer.SchemaVersionOvershootDetected)
+    // #490: one mapping from how initialisation ended to the reason startup degrades with, holding the
+    // #348, #350 and #305 cases in their order of precedence. Degrading raises no notification: writing
+    // that row into a schema the build has not migrated, or knows to differ, is the unprotected write
+    // #348 refuses.
+    if (Quotinator.Api.Startup.StartupDegradationReasons.For(
+            initialisation, dbInitializer.SchemaVersionOvershootDetected,
+            dbInitializer.DataSchemaVersion, dbInitializer.SchemaVersion,
+            dbInitializer.LastIntegrityResult) is { } degradedReason)
     {
-        string overshootReason = SchemaOvershootGuidance.Reason(
-            dbInitializer.DataSchemaVersion, dbInitializer.SchemaVersion);
-        app.Services.GetRequiredService<ILogger<Program>>().LogStartupSchemaOvershoot(overshootReason);
-        dbHealth.MarkFailed(overshootReason);
-    }
-
-    // #305: the schema does not match the one its recorded version defines, so a query may fail at any
-    // call site. Degrades with every missing or different object named, and raises no notification:
-    // writing that row into a schema known to differ is the unprotected write #348 refuses, and the
-    // missing object can be System_Notification itself. After the two cases above, which skip the
-    // check and are the more specific faults.
-    if (initialisation.SchemaNotIntact && dbInitializer.LastIntegrityResult is SchemaIntegrityResult integrity)
-    {
-        string integrityReason = SchemaIntegrityGuidance.Reason(integrity);
-        app.Services.GetRequiredService<ILogger<Program>>().LogStartupSchemaNotIntact(integrityReason);
-        dbHealth.MarkFailed(integrityReason);
+        app.Services.GetRequiredService<ILogger<Program>>().LogStartupDegraded(degradedReason);
+        dbHealth.MarkFailed(degradedReason);
     }
 }
 // #326: an unwritable data directory is a different fault with a different remedy, and the generic
@@ -1093,13 +1074,8 @@ catch (Exception ex) when (IsDataDirectoryNotWritable(ex))
 catch (Exception ex)
 {
     ILogger<Program> startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
-    const string failureReason =
-        "Database initialisation failed. This often means the database's recorded schema " +
-        "version doesn't match its actual on-disk schema (e.g. after an interrupted upgrade). " +
-        "Resolve with an explicit database Reset (POST /api/v1/admin/database/reset) or by " +
-        "stopping the app, deleting the database file, and restarting.";
-    startupLogger.LogStartupDatabaseInitFailed(ex, failureReason);
-    dbHealth.MarkFailed(failureReason);
+    startupLogger.LogStartupDatabaseInitFailed(ex, Quotinator.Api.Startup.StartupDegradationReasons.InitialisationFailed);
+    dbHealth.MarkFailed(Quotinator.Api.Startup.StartupDegradationReasons.InitialisationFailed);
 }
 
 // #81: the version this app instance was running as of its *previous* healthy startup, the lower

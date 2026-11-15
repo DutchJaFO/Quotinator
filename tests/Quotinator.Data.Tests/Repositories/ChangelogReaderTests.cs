@@ -86,7 +86,7 @@ public class ChangelogReaderTests
     {
         SqliteConnectionFactory factory = new(UniqueConnectionString());
         ChangelogConnectionKeepAlive keepAlive = new(factory);
-        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance, new NoOpDatabaseCheck(DatabaseNames.Changelog));
         await initializer.InitialiseAsync();
 
         FakeChangelogService service = new(SourceDocument());
@@ -170,7 +170,7 @@ public class ChangelogReaderTests
     {
         SqliteConnectionFactory factory = new(UniqueConnectionString());
         using ChangelogConnectionKeepAlive keepAlive = new(factory);
-        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance, new NoOpDatabaseCheck(DatabaseNames.Changelog));
         await initializer.InitialiseAsync();
         ChangelogDocument fallback = new() { Language = "en" };
 
@@ -197,7 +197,7 @@ public class ChangelogReaderTests
     {
         SqliteConnectionFactory factory = new(UniqueConnectionString());
         using ChangelogConnectionKeepAlive keepAlive = new(factory);
-        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance, new NoOpDatabaseCheck(DatabaseNames.Changelog));
         await initializer.InitialiseAsync();
 
         // Schema exists, no content yet — exactly the state a read hits during the startup window.
@@ -235,7 +235,7 @@ public class ChangelogReaderTests
     {
         SqliteConnectionFactory factory = new(UniqueConnectionString());
         using ChangelogConnectionKeepAlive keepAlive = new(factory);
-        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance, new NoOpDatabaseCheck(DatabaseNames.Changelog));
         await initializer.InitialiseAsync();
         ChangelogRepository repository = new(factory, NoOpCallerContext.Instance);
 
@@ -283,7 +283,7 @@ public class ChangelogReaderTests
     {
         SqliteConnectionFactory factory = new(UniqueConnectionString());
         using ChangelogConnectionKeepAlive keepAlive = new(factory);
-        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance, new NoOpDatabaseCheck(DatabaseNames.Changelog));
         await initializer.InitialiseAsync();
         ChangelogDocument fallback = new() { Language = "en" };
 
@@ -306,7 +306,7 @@ public class ChangelogReaderTests
     {
         SqliteConnectionFactory factory = new(UniqueConnectionString());
         using ChangelogConnectionKeepAlive keepAlive = new(factory);
-        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance, new NoOpDatabaseCheck(DatabaseNames.Changelog));
         await initializer.InitialiseAsync();
         ChangelogDocument fallback = new() { Language = "en" };
 
@@ -363,7 +363,7 @@ public class ChangelogReaderTests
     {
         SqliteConnectionFactory factory = new(UniqueConnectionString());
         using ChangelogConnectionKeepAlive keepAlive = new(factory);
-        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance, new NoOpDatabaseCheck(DatabaseNames.Changelog));
         await initializer.InitialiseAsync();
 
         JoinQueryRepository<ChangelogLineRow> joinRepository = new(factory, new BrokenSqlStrategy());

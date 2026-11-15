@@ -113,6 +113,7 @@ public class SqliteImportActionServiceTests
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance,
             NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
             new AppVersionTracker(_factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
+            TestDatabaseChecks.ForMain(options.DbPath, QuotinatorMigrations.All, QuotinatorMigrations.Baseline),
             QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
     }

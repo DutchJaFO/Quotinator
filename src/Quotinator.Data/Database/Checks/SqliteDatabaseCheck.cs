@@ -40,7 +40,7 @@ public sealed class SqliteDatabaseCheck(
     string workFolder,
     IReadOnlyList<string> expectedSchemaScripts,
     Func<string, bool>? canCreateFileIn = null,
-    ILogger<SqliteDatabaseCheck>? logger = null) : IDatabaseCheck
+    ILogger? logger = null) : IDatabaseCheck
 {
     /// <summary>
     /// The reserved folder's name inside the data directory, where a copy is checked when the <c>-wal</c> holds
@@ -70,7 +70,7 @@ public sealed class SqliteDatabaseCheck(
         using SqliteCheckSubject subject = new(
             databasePath, workFolder, expectedSchemaScripts,
             canCreateFileIn ?? DirectoryWriteProbe.CanCreateFileIn,
-            (ILogger?)logger ?? NullLogger.Instance);
+            logger ?? NullLogger.Instance);
 
         List<DatabaseCheckLayerResult> results = [];
         bool stopped = false;

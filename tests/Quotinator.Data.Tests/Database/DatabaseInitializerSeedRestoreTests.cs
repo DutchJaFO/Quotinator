@@ -27,7 +27,8 @@ public class DatabaseInitializerSeedRestoreTests
     /// <param name="options">Database file paths.</param>
     /// <param name="failAfterWriting">Whether the hook throws after its write.</param>
     private sealed class WritingSeedInitializer(IDbConnectionFactory factory, DatabaseOptions options, bool failAfterWriting)
-        : DatabaseInitializer(factory, options, [], NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpDiskSpaceProvider.Instance)
+        : DatabaseInitializer(factory, options, [], NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpDiskSpaceProvider.Instance,
+            TestDatabaseChecks.ForMain(options.DbPath, migrations: [], baseline: null))
     {
         protected override async Task OnInitialisedAsync(SqliteConnection connection, bool databaseWasCreated)
         {
@@ -48,7 +49,7 @@ public class DatabaseInitializerSeedRestoreTests
     [TestMethod]
     public async Task InitialiseAsync_SeedingFailsAfterWriting_RestoresThePreSeedDatabase()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         await CreateInitializer(temp.DbPath, failAfterWriting: false).InitialiseAsync();
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(
@@ -61,7 +62,7 @@ public class DatabaseInitializerSeedRestoreTests
     [TestMethod]
     public async Task InitialiseAsync_SeedingSucceeds_KeepsWhatItWrote()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         await CreateInitializer(temp.DbPath, failAfterWriting: false).InitialiseAsync();
 
         await CreateInitializer(temp.DbPath, failAfterWriting: false).InitialiseAsync();

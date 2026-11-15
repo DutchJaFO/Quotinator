@@ -188,6 +188,7 @@ public class DatabaseBackupPreflightTests
 
         return new DatabaseInitializer(new SqliteConnectionFactory(_dbPath), options, [],
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
-            NullLogger<DatabaseInitializer>.Instance, diskSpaceProvider ?? new DiskSpaceProvider());
+            NullLogger<DatabaseInitializer>.Instance, diskSpaceProvider ?? new DiskSpaceProvider(),
+            TestDatabaseChecks.ForMain(_dbPath, migrations: [], baseline: null));
     }
 }

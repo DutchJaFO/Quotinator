@@ -76,6 +76,7 @@ public class SourceCacheWiringTests
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance,
             NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
             new AppVersionTracker(factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
+            TestDatabaseChecks.ForMain(options.DbPath, QuotinatorMigrations.All, QuotinatorMigrations.Baseline),
             QuotinatorMigrations.Baseline);
     }
 
@@ -177,6 +178,7 @@ public class SourceCacheWiringTests
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance,
             NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
             new AppVersionTracker(factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
+            TestDatabaseChecks.ForMain(options.DbPath, QuotinatorMigrations.All, QuotinatorMigrations.Baseline),
             QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
 
@@ -215,6 +217,7 @@ public class SourceCacheWiringTests
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance,
             NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
             new AppVersionTracker(factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
+            TestDatabaseChecks.ForMain(options.DbPath, QuotinatorMigrations.All, QuotinatorMigrations.Baseline),
             QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
 

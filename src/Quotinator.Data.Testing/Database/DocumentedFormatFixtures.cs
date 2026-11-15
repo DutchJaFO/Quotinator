@@ -366,11 +366,13 @@ public static class DocumentedFormatFixtures
         return connection;
     }
 
+    // Immutable, not only read-only: a read-only connection to a WAL database creates a -wal and -shm it
+    // cannot remove when it closes, which would leave the fixture with sidecars no test asked for.
     private static long RootPage(string path, string name)
     {
         using SqliteConnection connection = new(new SqliteConnectionStringBuilder
         {
-            DataSource = path,
+            DataSource = new Uri(Path.GetFullPath(path)).AbsoluteUri + "?immutable=1",
             Mode       = SqliteOpenMode.ReadOnly,
             Pooling    = false,
         }.ToString());

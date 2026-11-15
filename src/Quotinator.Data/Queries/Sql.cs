@@ -29,6 +29,13 @@ internal static class Sql
     /// </summary>
     internal static class Schema
     {
+        /// <summary>
+        /// Moves every committed transaction from the <c>-wal</c> into the main file and truncates the <c>-wal</c>
+        /// to zero bytes (#490), so a check after a migration reads the main file directly.
+        /// https://www.sqlite.org/pragma.html#pragma_wal_checkpoint
+        /// </summary>
+        internal const string CheckpointTruncate = "PRAGMA wal_checkpoint(TRUNCATE);";
+
         // Bootstrap-only, one-time legacy detection — not part of the numbered migration list.
         // Runs before the current version is even known, since SchemaVersion itself is what the
         // numbered migration system depends on to know what to apply. Idempotent by construction:

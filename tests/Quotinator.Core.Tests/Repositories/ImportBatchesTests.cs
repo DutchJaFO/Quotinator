@@ -74,6 +74,7 @@ public class ImportBatchesTests
             NoOpFileResourceRepository.Instance,
             NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
             new AppVersionTracker(factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
+            TestDatabaseChecks.ForMain(options.DbPath, migrations, useBaseline ? QuotinatorMigrations.Baseline : null),
             useBaseline ? QuotinatorMigrations.Baseline : null);
     }
 

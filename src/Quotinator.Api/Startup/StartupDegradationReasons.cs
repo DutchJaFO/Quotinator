@@ -1,5 +1,8 @@
+using Quotinator.Constants.Api;
 using Quotinator.Constants.Routes;
 using Quotinator.Data.Database;
+using Quotinator.Data.Database.Checks;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Schema;
 
 namespace Quotinator.Api.Startup;
@@ -11,11 +14,6 @@ namespace Quotinator.Api.Startup;
 /// <para>
 /// First wins, as <see cref="DatabaseHealthState.MarkFailed"/> already is: the order of the cases is the
 /// order of their precedence, and lives in one place.
-/// </para>
-/// <para>
-/// <b>A signature only:</b> <see cref="For"/> throws <see cref="NotImplementedException"/>.
-/// <c>Program.cs</c> holds its own copy of <see cref="DataDirectoryNotWritable"/> and
-/// <see cref="InitialisationFailed"/>.
 /// </para>
 /// </summary>
 internal static class StartupDegradationReasons
@@ -47,7 +45,7 @@ internal static class StartupDegradationReasons
         "The database could not be checked. It holds changes that were not yet written into the main " +
         "file, which happens after an unclean stop, and checking them safely needs a working copy in the " +
         "data directory that could not be made. Free disk space in the data directory, or restore write " +
-        "access to it, and restart: the database is then checked again.";
+        "access to it, and restart: the database is then checked again. See " + KnowledgebaseLinks.TheDatabaseCouldNotBeChecked;
 
     /// <summary>
     /// The reason startup degrades with, or <see langword="null"/> when it does not.
@@ -62,6 +60,39 @@ internal static class StartupDegradationReasons
         bool schemaVersionOvershootDetected,
         int dataSchemaVersion,
         int appSchemaVersion,
-        SchemaIntegrityResult? integrity) =>
-        throw new NotImplementedException();
+        SchemaIntegrityResult? integrity)
+    {
+        // #490: a check that stopped the initialisation stopped it before anything else ran, so it wins.
+        if (StoppingLayer(initialisation) is { } stopping)
+        {
+            return stopping.Status == DatabaseCheckLayerStatus.Inconclusive ? CheckInconclusive
+                : stopping.Layer == DatabaseCheckLayer.Storage ? DataDirectoryNotWritable
+                : InitialisationFailed;
+        }
+
+        // #348: a refused migration leaves the schema behind this build, the stricter fault, so it wins over
+        // an overshoot reported in the same initialisation.
+        if (initialisation is { RefusedStep: BackupGuardedStep.Migration, BackupObstacle: BackupOutcome obstacle })
+            return BackupObstacleGuidance.MigrationRefusedReason(obstacle);
+
+        // #350: a recorded version ahead of this build skips the schema comparison, and is the more specific fault.
+        if (schemaVersionOvershootDetected)
+            return SchemaOvershootGuidance.Reason(dataSchemaVersion, appSchemaVersion);
+
+        // #305: the schema does not match the one its recorded version defines.
+        if (initialisation.SchemaNotIntact && integrity is not null)
+            return SchemaIntegrityGuidance.Reason(integrity);
+
+        return null;
+    }
+
+    /// <summary>
+    /// The layer the database check stopped the initialisation at, or <see langword="null"/> when the check did
+    /// not stop it: it passed, it found something that does not stop startup (decision E), or the initialisation
+    /// stopped for another reason.
+    /// </summary>
+    private static DatabaseCheckLayerResult? StoppingLayer(DatabaseOperationResult initialisation) =>
+        initialisation is { Succeeded: false, SchemaNotIntact: false, BackupObstacle: null, Check.FirstFailure: { } failure }
+            ? failure
+            : null;
 }

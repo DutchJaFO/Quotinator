@@ -6,6 +6,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Core.Tests.Database;
@@ -55,6 +56,7 @@ internal static class QuotinatorTestInitializer
             NoOpFileResourceRepository.Instance,
             NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
             new AppVersionTracker(factory), new VersionService(), diskSpaceProvider ?? NoOpDiskSpaceProvider.Instance,
+            TestDatabaseChecks.ForMain(dbPath, migrations ?? QuotinatorMigrations.All, QuotinatorMigrations.Baseline),
             QuotinatorMigrations.Baseline);
     }
 

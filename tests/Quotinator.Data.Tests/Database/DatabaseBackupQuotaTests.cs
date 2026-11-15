@@ -366,7 +366,8 @@ public class DatabaseBackupQuotaTests
         int quotaPercent = DatabaseOptions.DefaultBackupQuotaPercent, ILogger<DatabaseInitializer>? logger = null)
         => new(new SqliteConnectionFactory(_dbPath), NewOptions(quotaPercent), [],
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
-            logger ?? NullLogger<DatabaseInitializer>.Instance, new DiskSpaceProvider());
+            logger ?? NullLogger<DatabaseInitializer>.Instance, new DiskSpaceProvider(),
+            TestDatabaseChecks.ForMain(_dbPath, migrations: [], baseline: null));
 
     /// <summary>
     /// Records whether the destructive reset hook actually ran, which is the only way to tell a refusal
@@ -375,7 +376,8 @@ public class DatabaseBackupQuotaTests
     private sealed class RecordingInitializer(DatabaseOptions options, string dbPath, ILogger<DatabaseInitializer>? logger = null)
         : DatabaseInitializer(new SqliteConnectionFactory(dbPath), options, [],
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
-            logger ?? NullLogger<DatabaseInitializer>.Instance, new DiskSpaceProvider())
+            logger ?? NullLogger<DatabaseInitializer>.Instance, new DiskSpaceProvider(),
+            TestDatabaseChecks.ForMain(dbPath, migrations: [], baseline: null))
     {
         public bool ResetHookRan { get; private set; }
 
@@ -393,7 +395,8 @@ public class DatabaseBackupQuotaTests
     private sealed class RebuildingInitializer(DatabaseOptions options, string dbPath)
         : DatabaseInitializer(new SqliteConnectionFactory(dbPath), options, [],
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
-            NullLogger<DatabaseInitializer>.Instance, new DiskSpaceProvider())
+            NullLogger<DatabaseInitializer>.Instance, new DiskSpaceProvider(),
+            TestDatabaseChecks.ForMain(dbPath, migrations: [], baseline: null))
     {
         protected override Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
             => RebuildAsync(connection, preserveSchemaVersion);

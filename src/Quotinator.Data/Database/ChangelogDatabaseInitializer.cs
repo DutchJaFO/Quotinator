@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Database.Checks;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Logging;
 using Quotinator.Data.Queries;
@@ -25,9 +26,11 @@ namespace Quotinator.Data.Database;
 /// <remarks>Initialises the instance with the changelog database's own keyed connection factory and logger.</remarks>
 /// <param name="factory">The keyed <see cref="IDbConnectionFactory"/> for the changelog database (see <see cref="DatabaseConnectionKeys.Changelog"/>).</param>
 /// <param name="logger">Logger for startup diagnostics.</param>
+/// <param name="databaseCheck">The keyed check this database is judged by at startup (#490, ADR 028).</param>
 public sealed class ChangelogDatabaseInitializer(
     [FromKeyedServices(DatabaseConnectionKeys.Changelog)] IDbConnectionFactory factory,
-    ILogger<ChangelogDatabaseInitializer> logger) : IIntegrityCheckedDatabase
+    ILogger<ChangelogDatabaseInitializer> logger,
+    [FromKeyedServices(DatabaseConnectionKeys.Changelog)] IDatabaseCheck databaseCheck) : IIntegrityCheckedDatabase
 {
     // Append-only, same discipline as DatabaseInitializer.DataOwnedMigrations — once applied to any
     // real (persistent-file-variant) database, a migration here is frozen too.
@@ -77,20 +80,44 @@ public sealed class ChangelogDatabaseInitializer(
     // exactly one implementation (ADR 003), and this is the only place in the check that names it.
     private static readonly ISchemaSnapshotReader SnapshotReader = SqliteSchemaSnapshotReader.Instance;
 
-    /// <summary>Applies the baseline (genuinely empty database) or any pending migrations.</summary>
-    public Task InitialiseAsync() => InitialiseAsync(forceIncremental: false);
+    /// <summary>
+    /// Checks the database (#490), then applies the baseline (genuinely empty database) or any pending
+    /// migrations. A result that did not succeed is never thrown: the caller falls back to the JSON files.
+    /// </summary>
+    public Task<DatabaseOperationResult> InitialiseAsync() => InitialiseAsync(forceIncremental: false);
 
     /// <summary>
     /// Test-only entry point that forces the incremental path even on an empty database, bypassing
     /// the baseline short-circuit — used by the schema-drift parity test to produce a "pure
     /// incremental" comparison database, mirroring <see cref="DatabaseInitializer.InitialiseForTestingAsync"/>.
     /// </summary>
-    internal Task InitialiseForTestingAsync(bool forceIncremental) => InitialiseAsync(forceIncremental);
+    internal Task<DatabaseOperationResult> InitialiseForTestingAsync(bool forceIncremental) => InitialiseAsync(forceIncremental);
 
-    private async Task InitialiseAsync(bool forceIncremental)
+    private async Task<DatabaseOperationResult> InitialiseAsync(bool forceIncremental)
     {
-        await ApplySchemaAsync(forceIncremental);
+        // #490, decision F: judged in the state it starts in, and again once it has been created or migrated.
+        DatabaseCheckResult check = await CheckAsync();
+        if (StartupDatabaseCheck.Stops(check))
+            return DatabaseOperationResult.StoppedByCheck(check);
+
+        if (await ApplySchemaAsync(forceIncremental))
+        {
+            check = await CheckAsync();
+            if (StartupDatabaseCheck.Stops(check))
+                return DatabaseOperationResult.StoppedByCheck(check);
+        }
+
         await RecordIntegrityAsync();
+        return LastIntegrityResult is { IsIntact: false }
+            ? DatabaseOperationResult.NotIntact(check)
+            : DatabaseOperationResult.Success(check: check);
+    }
+
+    private async Task<DatabaseCheckResult> CheckAsync()
+    {
+        DatabaseCheckResult check = await databaseCheck.CheckAsync(DatabaseCheckDepth.Full);
+        StartupDatabaseCheck.Log(logger, check);
+        return check;
     }
 
     /// <summary>
@@ -117,11 +144,23 @@ public sealed class ChangelogDatabaseInitializer(
             logger.LogChangelogSchemaNotIntact(result.Differences.Count(d => d.Kind != SchemaDifferenceKind.Extra));
     }
 
-    private async Task ApplySchemaAsync(bool forceIncremental)
+    /// <summary>
+    /// Creates or migrates the schema. Returns whether it changed the database, after moving what it wrote out
+    /// of the <c>-wal</c>, so the check that follows reads the main file directly.
+    /// </summary>
+    private async Task<bool> ApplySchemaAsync(bool forceIncremental)
     {
         using SqliteConnection connection = (SqliteConnection)factory.CreateConnection();
         await connection.OpenAsync();
 
+        bool changed = await ApplySchemaAsync(connection, forceIncremental);
+        if (changed)
+            await connection.ExecuteAsync(Sql.Schema.CheckpointTruncate);
+        return changed;
+    }
+
+    private async Task<bool> ApplySchemaAsync(SqliteConnection connection, bool forceIncremental)
+    {
         // Must run before Sql.ChangelogSchema.CreateVersionTable below — otherwise every fresh
         // database registers as "not empty" on the very next line, permanently disabling the
         // baseline path. Matches DatabaseInitializer.ApplyMigrationsAsync's own ordering for the
@@ -133,7 +172,7 @@ public sealed class ChangelogDatabaseInitializer(
         if (isEmptyDatabase && !forceIncremental)
         {
             await ApplyBaselineAsync(connection);
-            return;
+            return true;
         }
 
         int current = await connection.ExecuteScalarAsync<int>(Sql.ChangelogSchema.GetCurrentVersion);
@@ -142,7 +181,7 @@ public sealed class ChangelogDatabaseInitializer(
         {
             SchemaVersion = current;
             logger.LogChangelogSchemaUpToDate(current);
-            return;
+            return false;
         }
 
         for (int i = current; i < Migrations.Count; i++)
@@ -158,6 +197,7 @@ public sealed class ChangelogDatabaseInitializer(
 
         SchemaVersion = Migrations.Count;
         logger.LogChangelogSchemaUpdated(current, Migrations.Count);
+        return true;
     }
 
     private async Task ApplyBaselineAsync(SqliteConnection connection)

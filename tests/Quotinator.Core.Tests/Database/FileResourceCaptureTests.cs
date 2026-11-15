@@ -86,6 +86,7 @@ public class FileResourceCaptureTests
             fileResources,
             NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
             new AppVersionTracker(factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
+            TestDatabaseChecks.ForMain(options.DbPath, QuotinatorMigrations.All, QuotinatorMigrations.Baseline),
             QuotinatorMigrations.Baseline);
 
         await db.InitialiseAsync();

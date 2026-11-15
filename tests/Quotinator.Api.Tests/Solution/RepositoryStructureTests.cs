@@ -1169,7 +1169,7 @@ public partial class RepositoryStructureTests
     [TestMethod]
     public void InitializerConstructors_DoNotMakeAServiceDependencyOptional()
     {
-        Type[] initializers = [typeof(DatabaseInitializer), typeof(QuotinatorDatabaseInitializer)];
+        Type[] initializers = [typeof(DatabaseInitializer), typeof(QuotinatorDatabaseInitializer), typeof(ChangelogDatabaseInitializer)];
 
         List<string> offenders = [];
 

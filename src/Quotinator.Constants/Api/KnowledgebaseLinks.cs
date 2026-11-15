@@ -18,4 +18,7 @@ public static class KnowledgebaseLinks
 
     /// <summary>What the backup quota warning means, why a backup is still taken past it, and how to clear it.</summary>
     public const string BackupsHaveReachedTheirQuota = Base + "backups-have-reached-their-quota.md";
+
+    /// <summary>Why startup could not check the database after an unclean stop, and what to free or restore (#490).</summary>
+    public const string TheDatabaseCouldNotBeChecked = Base + "the-database-could-not-be-checked.md";
 }

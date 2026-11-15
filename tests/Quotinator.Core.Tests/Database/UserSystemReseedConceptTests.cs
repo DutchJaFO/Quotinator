@@ -26,7 +26,7 @@ public class UserSystemReseedConceptTests
     private const string ExampleWidgetId = "22222222-2222-2222-2222-222222222222";
 
     private sealed class UserContentTestInitializer(
-        IDbConnectionFactory factory, DatabaseOptions options, IReadOnlyList<SchemaMigration> migrations, SchemaBaseline baseline) : DatabaseInitializer(factory, options, migrations, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpDiskSpaceProvider.Instance, baseline)
+        IDbConnectionFactory factory, DatabaseOptions options, IReadOnlyList<SchemaMigration> migrations, SchemaBaseline baseline) : DatabaseInitializer(factory, options, migrations, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpDiskSpaceProvider.Instance, TestDatabaseChecks.ForMain(options.DbPath, migrations, baseline), baseline)
     {
         public int SeedSystemContentCallCount { get; private set; }
 

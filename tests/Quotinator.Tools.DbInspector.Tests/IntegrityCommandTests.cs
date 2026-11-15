@@ -62,7 +62,8 @@ public class IntegrityCommandTests
     public async Task ChangelogFile_ComparedAgainstTheChangelogSchema()
     {
         string file = Path.Combine(_tempDir.Path, "changelog.db");
-        await new ChangelogDatabaseInitializer(new SqliteConnectionFactory(file), NullLogger<ChangelogDatabaseInitializer>.Instance)
+        await new ChangelogDatabaseInitializer(
+                new SqliteConnectionFactory(file), NullLogger<ChangelogDatabaseInitializer>.Instance, TestDatabaseChecks.ForChangelog(file))
             .InitialiseAsync();
         SqliteConnection.ClearAllPools();
 
@@ -87,6 +88,7 @@ public class IntegrityCommandTests
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
             NullLogger<DatabaseInitializer>.Instance,
             NoOpDiskSpaceProvider.Instance,
+            TestDatabaseChecks.ForMain(file, QuotinatorMigrations.All, QuotinatorMigrations.Baseline),
             QuotinatorMigrations.Baseline);
         await initializer.InitialiseAsync();
         SqliteConnection.ClearAllPools();

@@ -30,7 +30,8 @@ public class DatabaseInitializerOwnershipTests
         };
         return new DatabaseInitializer(factory, options, consumerMigrations,
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
-            NullLogger<DatabaseInitializer>.Instance, NoOpDiskSpaceProvider.Instance, baseline);
+            NullLogger<DatabaseInitializer>.Instance, NoOpDiskSpaceProvider.Instance,
+            TestDatabaseChecks.ForMain(dbPath, consumerMigrations, baseline), baseline);
     }
 
     private static async Task<List<string>> DumpTableSchemaAsync(SqliteConnection conn, string table)
@@ -67,11 +68,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -100,7 +101,7 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_FreshDatabase_RecordsNoAppVersionHistory()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         DatabaseInitializer db = CreateBareInitializer(temp.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await db.InitialiseAsync();
 
@@ -119,11 +120,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemImportConflictsSchema()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -146,11 +147,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemChangeLogSchema()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -174,11 +175,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemImportActionsSchema()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -198,11 +199,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemSourceFileOverridesSchema()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -226,11 +227,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalFileResourceSchema()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -257,11 +258,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameFileResourceCheckConstraintValues()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -316,7 +317,7 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task Migration007_RemapsPreGeneralizationOriginValuesAndPreservesChildRowLinks()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         using SqliteConnection conn = new($"Data Source={temp.DbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
@@ -375,11 +376,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameSourceFileOverridesCheckConstraintValues()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -413,11 +414,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameImportActionsCheckConstraintValues()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -504,11 +505,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameImportConflictsCheckConstraintValues()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -548,11 +549,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameChangeLogCheckConstraintValues()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -589,11 +590,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -623,7 +624,7 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task SystemNotification_ColumnSet_IsPinned()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         DatabaseInitializer db = CreateBareInitializer(temp.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await db.InitialiseAsync();
 
@@ -660,11 +661,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationTranslationSchema()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -688,11 +689,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AgreeOnNotificationOriginalLanguage()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -718,11 +719,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -838,7 +839,7 @@ public class DatabaseInitializerOwnershipTests
     [DynamicData(nameof(NotificationMetadataKinds))]
     public async Task NotificationMetadataKind_IsAcceptedByTheBaseline(string kind)
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         await CreateBareInitializer(temp.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" }).InitialiseAsync();
 
         Assert.AreEqual(1, await InsertNotificationOfKindAsync(temp.DbPath, kind));
@@ -849,7 +850,7 @@ public class DatabaseInitializerOwnershipTests
     [DynamicData(nameof(NotificationMetadataKinds))]
     public async Task NotificationMetadataKind_IsAcceptedByTheIncrementalReplay(string kind)
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         await CreateBareInitializer(temp.DbPath, []).InitialiseForTestingAsync(forceIncremental: true);
 
         Assert.AreEqual(1, await InsertNotificationOfKindAsync(temp.DbPath, kind));
@@ -867,7 +868,7 @@ public class DatabaseInitializerOwnershipTests
     [DynamicData(nameof(NotificationDismissTriggers))]
     public async Task NotificationDismissTrigger_IsAcceptedByTheBaseline(string trigger)
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         await CreateBareInitializer(temp.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" }).InitialiseAsync();
 
         Assert.AreEqual(1, await InsertNotificationWithAsync(temp.DbPath, "DismissTriggerKey", trigger));
@@ -878,7 +879,7 @@ public class DatabaseInitializerOwnershipTests
     [DynamicData(nameof(NotificationDismissTriggers))]
     public async Task NotificationDismissTrigger_IsAcceptedByTheIncrementalReplay(string trigger)
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         await CreateBareInitializer(temp.DbPath, []).InitialiseForTestingAsync(forceIncremental: true);
 
         Assert.AreEqual(1, await InsertNotificationWithAsync(temp.DbPath, "DismissTriggerKey", trigger));
@@ -896,7 +897,7 @@ public class DatabaseInitializerOwnershipTests
     [DynamicData(nameof(NotificationResolutions))]
     public async Task NotificationResolution_IsAcceptedByTheBaseline(string resolution)
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         await CreateBareInitializer(temp.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" }).InitialiseAsync();
 
         Assert.AreEqual(1, await InsertNotificationWithAsync(temp.DbPath, "Resolution", resolution));
@@ -907,7 +908,7 @@ public class DatabaseInitializerOwnershipTests
     [DynamicData(nameof(NotificationResolutions))]
     public async Task NotificationResolution_IsAcceptedByTheIncrementalReplay(string resolution)
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         await CreateBareInitializer(temp.DbPath, []).InitialiseForTestingAsync(forceIncremental: true);
 
         Assert.AreEqual(1, await InsertNotificationWithAsync(temp.DbPath, "Resolution", resolution));
@@ -962,11 +963,11 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAppVersionSchema()
     {
-        using TempDatabase tempA = new([]);
+        using TempDatabase tempA = TempDatabase.WithoutFile();
         DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using TempDatabase tempB = new([]);
+        using TempDatabase tempB = TempDatabase.WithoutFile();
         DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
@@ -986,7 +987,7 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task ApplyBaselineAsync_NoConsumerBaselineDefined_FallsThroughToIncremental()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         DatabaseInitializer db = CreateBareInitializer(temp.DbPath, []);
 
         await db.InitialiseAsync();
@@ -1053,7 +1054,7 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedMigrations_AlwaysApplyBeforeConsumerMigrations()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         IReadOnlyList<SchemaMigration> consumerMigrations =
         [
             new SchemaMigration
@@ -1086,7 +1087,8 @@ public class DatabaseInitializerOwnershipTests
     // minimal test-only subclass exists purely to exercise that method directly.
     private sealed class ResettableTestInitializer(
         IDbConnectionFactory factory, DatabaseOptions options, IReadOnlyList<SchemaMigration> migrations,
-        IAuditEntryWriter auditWriter, ICallerContext callerContext, ILogger<DatabaseInitializer> logger) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, NoOpDiskSpaceProvider.Instance)
+        IAuditEntryWriter auditWriter, ICallerContext callerContext, ILogger<DatabaseInitializer> logger) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, NoOpDiskSpaceProvider.Instance,
+            TestDatabaseChecks.ForMain(options.DbPath, migrations, baseline: null))
     {
         protected override Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
             => RebuildAsync(connection, preserveSchemaVersion);
@@ -1111,7 +1113,7 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task ResetAsync_MigrationFailsDuringReplay_LeavesTheDatabaseUntouchedAndRethrows()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
 
         IReadOnlyList<SchemaMigration> workingMigrations =
         [
@@ -1143,7 +1145,7 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task ResetAsync_CorruptDatabase_FailedRebuild_LeavesTheFileInPlace()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         SqliteConnection.ClearAllPools();
         File.WriteAllText(temp.DbPath, "this file is not a SQLite database");
 

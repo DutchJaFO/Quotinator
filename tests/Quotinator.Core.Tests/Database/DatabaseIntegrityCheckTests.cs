@@ -204,7 +204,8 @@ public class DatabaseIntegrityCheckTests
         migrations: [],
         NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
         NullLogger<DatabaseInitializer>.Instance,
-        NoOpDiskSpaceProvider.Instance);
+        NoOpDiskSpaceProvider.Instance,
+        TestDatabaseChecks.ForMain(dbPath, migrations: [], baseline: null));
 
     private async Task<SchemaSnapshot> ReadSchemaAsync(string dbPath)
     {

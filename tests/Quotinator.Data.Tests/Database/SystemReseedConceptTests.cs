@@ -24,7 +24,7 @@ public class SystemReseedConceptTests
     private const string ExampleSettingId = "11111111-1111-1111-1111-111111111111";
 
     private sealed class SystemContentTestInitializer(
-        IDbConnectionFactory factory, DatabaseOptions options, IReadOnlyList<SchemaMigration> migrations, SchemaBaseline baseline) : DatabaseInitializer(factory, options, migrations, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpDiskSpaceProvider.Instance, baseline)
+        IDbConnectionFactory factory, DatabaseOptions options, IReadOnlyList<SchemaMigration> migrations, SchemaBaseline baseline) : DatabaseInitializer(factory, options, migrations, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpDiskSpaceProvider.Instance, TestDatabaseChecks.ForMain(options.DbPath, migrations, baseline), baseline)
     {
         public int SeedSystemContentCallCount { get; private set; }
 
@@ -63,7 +63,7 @@ public class SystemReseedConceptTests
     [TestMethod]
     public async Task SeedSystemContentAsync_AfterFreshInitialise_PopulatesSystemContentTable()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         SystemContentTestInitializer db = CreateInitializer(temp.DbPath);
 
         await db.InitialiseAsync();
@@ -77,7 +77,7 @@ public class SystemReseedConceptTests
     [TestMethod]
     public async Task SeedSystemContentAsync_AfterReset_RepopulatesSystemContentTable()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         SystemContentTestInitializer db = CreateInitializer(temp.DbPath);
         await db.InitialiseAsync();
 
@@ -94,7 +94,7 @@ public class SystemReseedConceptTests
     [TestMethod]
     public async Task ReseedEquivalentCall_DoesNotInvokeSeedSystemContentAsync()
     {
-        using TempDatabase temp = new([]);
+        using TempDatabase temp = TempDatabase.WithoutFile();
         SystemContentTestInitializer db = CreateInitializer(temp.DbPath);
         await db.InitialiseAsync();
         Assert.AreEqual(1, db.SeedSystemContentCallCount);
