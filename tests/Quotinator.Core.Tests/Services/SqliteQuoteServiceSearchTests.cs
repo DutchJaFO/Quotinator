@@ -88,14 +88,14 @@ public class SqliteQuoteServiceSearchTests
         }));
 
         _factory = new SqliteConnectionFactory(_dbPath);
-        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        DatabaseOptions options       = new() { DbPath = _dbPath, BackupsPath = _backups };
+        SqliteImportBatchRepository importBatches = new(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         NullLogger<DatabaseInitializer> logger        = NullLogger<DatabaseInitializer>.Instance;
-        SeedBatch batch         = new SeedBatch([new SeedFile(_fixture, null)], ManifestPolicy.HardcodedDefault, "search-fixture");
-        ImportActionReader actionReader  = new ImportActionReader(_factory);
-        ImportActionWriter actionWriter  = new ImportActionWriter(_factory);
-        ImportActionResolutionCoordinator coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        SqliteImportActionService actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        SeedBatch batch         = new([new SeedFile(_fixture, null)], ManifestPolicy.HardcodedDefault, "search-fixture");
+        ImportActionReader actionReader  = new(_factory);
+        ImportActionWriter actionWriter  = new(_factory);
+        ImportActionResolutionCoordinator coordinator   = new(actionReader, actionWriter, _factory);
+        SqliteImportActionService actionService = new(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -104,7 +104,7 @@ public class SqliteQuoteServiceSearchTests
             new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory, NoOpNotificationWriter.Instance);
-        QuotinatorDatabaseInitializer db            = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [batch], importBatches,
+        QuotinatorDatabaseInitializer db            = new(_factory, options, QuotinatorMigrations.All, [batch], importBatches,
                               coordinator, actionService, actionWriter,
                               NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, logger,
                               NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
@@ -131,7 +131,7 @@ public class SqliteQuoteServiceSearchTests
 
     private async Task InsertQuoteTranslationAsync(string quoteId, string language, string quoteText)
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync();
         await conn.ExecuteAsync(Sql.QuoteTranslations.Insert, new
         {

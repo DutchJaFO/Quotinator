@@ -62,13 +62,13 @@ public class FileResourceCaptureTests
 
     private async Task InitialiseAsync(IReadOnlyList<SeedBatch> batches, IFileResourceRepository fileResources)
     {
-        SqliteConnectionFactory factory        = new SqliteConnectionFactory(_dbPath);
-        DatabaseOptions options         = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        SqliteImportBatchRepository importBatches   = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        ImportActionReader actionReader    = new ImportActionReader(factory);
-        ImportActionWriter actionWriter    = new ImportActionWriter(factory);
-        ImportActionResolutionCoordinator coordinator     = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        SqliteImportActionService actionService   = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        SqliteConnectionFactory factory        = new(_dbPath);
+        DatabaseOptions options         = new() { DbPath = _dbPath, BackupsPath = _backups };
+        SqliteImportBatchRepository importBatches   = new(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        ImportActionReader actionReader    = new(factory);
+        ImportActionWriter actionWriter    = new(factory);
+        ImportActionResolutionCoordinator coordinator     = new(actionReader, actionWriter, factory);
+        SqliteImportActionService actionService   = new(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -78,7 +78,7 @@ public class FileResourceCaptureTests
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory, NoOpNotificationWriter.Instance);
 
-        QuotinatorDatabaseInitializer db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
+        QuotinatorDatabaseInitializer db = new(factory, options, QuotinatorMigrations.All, batches, importBatches,
             coordinator, actionService, actionWriter, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
             NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
@@ -100,12 +100,12 @@ public class FileResourceCaptureTests
         string manifestPath = Path.Combine(_sourcesDir, ManifestSeedPlanner.ManifestFileName);
         File.WriteAllText(manifestPath, """{ "files": [ { "file": "quotes.json", "name": "quotes" } ] }""");
 
-        SqliteFileResourceRepository fileResources = new SqliteFileResourceRepository(new SqliteConnectionFactory(_dbPath));
-        SeedBatch batch = new SeedBatch([new SeedFile(quotesPath, null)], ManifestPolicy.HardcodedDefault, "test");
+        SqliteFileResourceRepository fileResources = new(new SqliteConnectionFactory(_dbPath));
+        SeedBatch batch = new([new SeedFile(quotesPath, null)], ManifestPolicy.HardcodedDefault, "test");
 
         await InitialiseAsync([batch], fileResources);
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         dynamic? manifestRow = await conn.QuerySingleOrDefaultAsync(
             "SELECT Id, FileName FROM Import_FileResource WHERE FileName = @name AND IsDeleted = 0;",
@@ -137,16 +137,16 @@ public class FileResourceCaptureTests
         string cachedQuotesPath = Path.Combine(cacheDir, "quotes.json");
         File.WriteAllText(cachedQuotesPath, MinimalQuoteJson);
 
-        SqliteFileResourceRepository fileResources = new SqliteFileResourceRepository(new SqliteConnectionFactory(_dbPath));
+        SqliteFileResourceRepository fileResources = new(new SqliteConnectionFactory(_dbPath));
         // FilePath points at the cache dir (no manifest.json there) — only SourceDirectory (the real
         // scanned directory) points at _sourcesDir, matching what ISourceCacheUpdater actually produces.
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(cachedQuotesPath, null)], ManifestPolicy.HardcodedDefault, "test",
             SeedBatchOrigin.Bundled, SourceDirectory: _sourcesDir);
 
         await InitialiseAsync([batch], fileResources);
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         int manifestCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Import_FileResource WHERE FileName = @name AND IsDeleted = 0;",
@@ -161,12 +161,12 @@ public class FileResourceCaptureTests
         string quotesPath = Path.Combine(_sourcesDir, "quotes.json");
         File.WriteAllText(quotesPath, MinimalQuoteJson);
 
-        SqliteFileResourceRepository fileResources = new SqliteFileResourceRepository(new SqliteConnectionFactory(_dbPath));
-        SeedBatch batch = new SeedBatch([new SeedFile(quotesPath, null)], ManifestPolicy.HardcodedDefault, "test");
+        SqliteFileResourceRepository fileResources = new(new SqliteConnectionFactory(_dbPath));
+        SeedBatch batch = new([new SeedFile(quotesPath, null)], ManifestPolicy.HardcodedDefault, "test");
 
         await InitialiseAsync([batch], fileResources);
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         int manifestCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Import_FileResource WHERE FileName = @name;",
@@ -182,14 +182,14 @@ public class FileResourceCaptureTests
         File.WriteAllText(quotesPath, MinimalQuoteJson);
 
         JsonElement converterOptions = JsonDocument.Parse("""{"delimiter":","}""").RootElement;
-        SeedFile seedFile = new SeedFile(quotesPath, null, Converter: "csv", ConverterOptions: converterOptions);
+        SeedFile seedFile = new(quotesPath, null, Converter: "csv", ConverterOptions: converterOptions);
 
-        SqliteFileResourceRepository fileResources = new SqliteFileResourceRepository(new SqliteConnectionFactory(_dbPath));
-        SeedBatch batch = new SeedBatch([seedFile], ManifestPolicy.HardcodedDefault, "test");
+        SqliteFileResourceRepository fileResources = new(new SqliteConnectionFactory(_dbPath));
+        SeedBatch batch = new([seedFile], ManifestPolicy.HardcodedDefault, "test");
 
         await InitialiseAsync([batch], fileResources);
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         dynamic row = await conn.QuerySingleAsync(
             "SELECT Converter, ConverterOptions FROM Import_FileResource WHERE FileName = 'quotes.json' AND IsDeleted = 0;");

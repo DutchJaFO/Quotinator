@@ -46,12 +46,12 @@ public class SqliteQuoteServiceTests
             new JoinQueryRepository<StageDirectionLineRow>(_factory, new StageDirectionLineStrategy()),
             new JoinQueryRepository<SoundCueLineRow>(_factory, new SoundCueLineStrategy()));
 
-        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir.Path, "backups") };
-        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        ImportActionReader actionReader   = new ImportActionReader(_factory);
-        ImportActionWriter actionWriter   = new ImportActionWriter(_factory);
-        ImportActionResolutionCoordinator coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        SqliteImportActionService actionService  = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, new ChangeWriter(_factory),
+        DatabaseOptions options       = new() { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir.Path, "backups") };
+        SqliteImportBatchRepository importBatches = new(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        ImportActionReader actionReader   = new(_factory);
+        ImportActionWriter actionWriter   = new(_factory);
+        ImportActionResolutionCoordinator coordinator    = new(actionReader, actionWriter, _factory);
+        SqliteImportActionService actionService  = new(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, new ChangeWriter(_factory),
             new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -61,7 +61,7 @@ public class SqliteQuoteServiceTests
             new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory, NoOpNotificationWriter.Instance);
 
-        QuotinatorDatabaseInitializer db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
+        QuotinatorDatabaseInitializer db = new(_factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService, actionWriter, NoOpAuditEntryWriter.Instance,
             NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
             autoUpdateSources: false,
@@ -73,8 +73,8 @@ public class SqliteQuoteServiceTests
             QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
 
-        SqliteRestorableRepository<SourceEntity> sourceRepo = new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        SourceEntity source = new SourceEntity
+        SqliteRestorableRepository<SourceEntity> sourceRepo = new(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        SourceEntity source = new()
         {
             Title = "Test Source",
             Type = new SafeValue<QuoteType?>(nameof(QuoteType.Movie), QuoteType.Movie),
@@ -82,7 +82,7 @@ public class SqliteQuoteServiceTests
         };
         await sourceRepo.InsertAsync(source);
 
-        SqliteRestorableRepository<QuoteEntity> quoteRepo = new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        SqliteRestorableRepository<QuoteEntity> quoteRepo = new(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         for (int i = 0; i < 5; i++)
             await quoteRepo.InsertAsync(new QuoteEntity
             {
@@ -129,8 +129,8 @@ public class SqliteQuoteServiceTests
 
     private async Task<UniverseEntity> InsertUniverseAsync(string name)
     {
-        SqliteRestorableRepository<UniverseEntity> repo = new SqliteRestorableRepository<UniverseEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        UniverseEntity universe = new UniverseEntity
+        SqliteRestorableRepository<UniverseEntity> repo = new(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        UniverseEntity universe = new()
         {
             Name = name,
             CompletenessStatus = new SafeValue<CompletenessStatus?>(nameof(CompletenessStatus.Incomplete), CompletenessStatus.Incomplete),
@@ -141,8 +141,8 @@ public class SqliteQuoteServiceTests
 
     private async Task<SeriesEntity> InsertSeriesAsync(string name, Guid? universeId = null)
     {
-        SqliteRestorableRepository<SeriesEntity> repo = new SqliteRestorableRepository<SeriesEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        SeriesEntity series = new SeriesEntity
+        SqliteRestorableRepository<SeriesEntity> repo = new(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        SeriesEntity series = new()
         {
             Name = name,
             UniverseId = universeId,
@@ -154,8 +154,8 @@ public class SqliteQuoteServiceTests
 
     private async Task<SourceEntity> InsertSourceAsync(string title, Guid? seriesId = null)
     {
-        SqliteRestorableRepository<SourceEntity> repo = new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        SourceEntity source = new SourceEntity
+        SqliteRestorableRepository<SourceEntity> repo = new(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        SourceEntity source = new()
         {
             Title = title,
             Type = new SafeValue<QuoteType?>(nameof(QuoteType.Movie), QuoteType.Movie),
@@ -168,8 +168,8 @@ public class SqliteQuoteServiceTests
 
     private async Task<QuoteEntity> InsertQuoteAsync(Guid sourceId, string text)
     {
-        SqliteRestorableRepository<QuoteEntity> repo = new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        QuoteEntity quote = new QuoteEntity
+        SqliteRestorableRepository<QuoteEntity> repo = new(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        QuoteEntity quote = new()
         {
             QuoteText = text,
             SourceId = sourceId,
@@ -181,7 +181,7 @@ public class SqliteQuoteServiceTests
 
     private async Task InsertQuoteTranslationAsync(Guid quoteId, string language, string quoteText)
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync(Sql.QuoteTranslations.Insert, new
         {
@@ -265,7 +265,7 @@ public class SqliteQuoteServiceTests
         SourceEntity source = await InsertSourceAsync("A Film In A Deleted Series", series.Id);
         QuoteEntity quote  = await InsertQuoteAsync(source.Id, "A quote whose series gets soft-deleted.");
 
-        SqliteRestorableRepository<SeriesEntity> seriesRepo = new SqliteRestorableRepository<SeriesEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        SqliteRestorableRepository<SeriesEntity> seriesRepo = new(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         await seriesRepo.SoftDeleteAsync(series.Id);
 
         QuoteResponse? result = await _service.GetById(quote.Id.ToString("D"));
@@ -291,7 +291,7 @@ public class SqliteQuoteServiceTests
         SourceEntity source      = await InsertSourceAsync("A Film With A Lowercase-Stored Quote Id");
         string lowercaseId = Guid.NewGuid().ToString("D");
 
-        using SqliteConnection connection = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
         connection.Open();
         await connection.ExecuteAsync(Sql.Quotes.Insert, new
         {
@@ -408,7 +408,7 @@ public class SqliteQuoteServiceTests
         QuoteEntity quoteA = await InsertQuoteAsync(sourceA.Id, "A line both films happen to share.");
         QuoteEntity quoteB = await InsertQuoteAsync(sourceB.Id, "A line both films happen to share.");
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         int count = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Quotinator_Quote WHERE QuoteText = @text",

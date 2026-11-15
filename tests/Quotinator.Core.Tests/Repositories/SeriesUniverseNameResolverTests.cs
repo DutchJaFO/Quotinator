@@ -34,12 +34,12 @@ public class SeriesUniverseNameResolverTests
         _dbPath  = Path.Combine(_tempDir.Path, "test.db");
         _factory = new SqliteConnectionFactory(_dbPath);
 
-        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir.Path, "backups") };
-        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        ImportActionReader actionReader  = new ImportActionReader(_factory);
-        ImportActionWriter actionWriter  = new ImportActionWriter(_factory);
-        ImportActionResolutionCoordinator coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        SqliteImportActionService actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        DatabaseOptions options       = new() { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir.Path, "backups") };
+        SqliteImportBatchRepository importBatches = new(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        ImportActionReader actionReader  = new(_factory);
+        ImportActionWriter actionWriter  = new(_factory);
+        ImportActionResolutionCoordinator coordinator   = new(actionReader, actionWriter, _factory);
+        SqliteImportActionService actionService = new(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<Quotinator.Core.Entities.QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Quotinator.Core.Entities.SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Quotinator.Core.Entities.CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -48,7 +48,7 @@ public class SeriesUniverseNameResolverTests
             new SqliteRestorableRepository<Quotinator.Core.Entities.StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Quotinator.Core.Entities.SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory, NoOpNotificationWriter.Instance);
-        QuotinatorDatabaseInitializer db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
+        QuotinatorDatabaseInitializer db = new(_factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService, actionWriter, NoOpAuditEntryWriter.Instance,
             NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
             autoUpdateSources: false,
@@ -69,7 +69,7 @@ public class SeriesUniverseNameResolverTests
 
     private async Task SeedSeriesAsync(string name)
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync();
         string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
@@ -79,7 +79,7 @@ public class SeriesUniverseNameResolverTests
 
     private async Task SeedUniverseAsync(string name)
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync();
         string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
@@ -91,7 +91,7 @@ public class SeriesUniverseNameResolverTests
     public async Task SeriesNameResolver_ExactCasing_ResolvesId()
     {
         await SeedSeriesAsync("The Lord of the Rings");
-        SeriesNameResolver resolver = new SeriesNameResolver(_factory);
+        SeriesNameResolver resolver = new(_factory);
 
         Guid? id = await resolver.ResolveIdByNameAsync("The Lord of the Rings");
 
@@ -103,7 +103,7 @@ public class SeriesUniverseNameResolverTests
     public async Task SeriesNameResolver_DifferingCasing_StillResolvesId()
     {
         await SeedSeriesAsync("The Lord of the Rings");
-        SeriesNameResolver resolver = new SeriesNameResolver(_factory);
+        SeriesNameResolver resolver = new(_factory);
 
         Guid? id = await resolver.ResolveIdByNameAsync("the lord of the rings");
 
@@ -113,7 +113,7 @@ public class SeriesUniverseNameResolverTests
     [TestMethod]
     public async Task SeriesNameResolver_NoMatch_ReturnsNull()
     {
-        SeriesNameResolver resolver = new SeriesNameResolver(_factory);
+        SeriesNameResolver resolver = new(_factory);
 
         Guid? id = await resolver.ResolveIdByNameAsync("Does Not Exist");
 
@@ -124,7 +124,7 @@ public class SeriesUniverseNameResolverTests
     public async Task UniverseNameResolver_ExactCasing_ResolvesId()
     {
         await SeedUniverseAsync("Middle Earth");
-        UniverseNameResolver resolver = new UniverseNameResolver(_factory);
+        UniverseNameResolver resolver = new(_factory);
 
         Guid? id = await resolver.ResolveIdByNameAsync("Middle Earth");
 
@@ -136,7 +136,7 @@ public class SeriesUniverseNameResolverTests
     public async Task UniverseNameResolver_DifferingCasing_StillResolvesId()
     {
         await SeedUniverseAsync("Middle Earth");
-        UniverseNameResolver resolver = new UniverseNameResolver(_factory);
+        UniverseNameResolver resolver = new(_factory);
 
         Guid? id = await resolver.ResolveIdByNameAsync("MIDDLE EARTH");
 
@@ -146,7 +146,7 @@ public class SeriesUniverseNameResolverTests
     [TestMethod]
     public async Task UniverseNameResolver_NoMatch_ReturnsNull()
     {
-        UniverseNameResolver resolver = new UniverseNameResolver(_factory);
+        UniverseNameResolver resolver = new(_factory);
 
         Guid? id = await resolver.ResolveIdByNameAsync("Does Not Exist");
 

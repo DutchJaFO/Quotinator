@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 14)
+**Status:** In progress (step 15)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492.
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 14.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute from step 15, T1, which is the developer's to perform and confirm.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. Step 6 left one deviation from the verification table for the developer to confirm; it
 is listed under step 6. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
@@ -846,10 +846,24 @@ sets aside a file that reads but is not a sound copy.
 
 ### 14. Boyscout pass and full build
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`,
 both 0 warnings and 0 errors.
+
+**Done 2026-11-15.**
+
+- **Scoped lists:** of the 103 C# files this issue touched since `342e0cfa`, 13 were in the IDE0008 list
+  but not the IDE0090 one: test files and `CurrentSchema.cs`, edited after step 3 when the check became a
+  required constructor parameter. They were added, which surfaced 197 IDE0090 warnings; `dotnet format style
+  --diagnostics IDE0090` on those 13 files alone cleared them in one pass, and a second and third found
+  nothing more. Every changed line only rewrote `new X(...)` as `new(...)`.
+- **Logging prefix:** every log message in the touched source files carries a defined prefix (`[Server]`,
+  `[Config]`, `[Database - …]`) or takes it as its `{Tag}`; the startup banner is `logging.md`'s documented
+  exception.
+- **`nameof` for SQL columns:** nothing to apply. The SQL this issue added is PRAGMAs, which name no columns,
+  and `SelectRootPage`, which reads `sqlite_master`, an engine table with no entity type.
+- **Build and tests:** 0 warnings and 0 errors; 5,177 tests, all passed. Verification row 22.
 
 ### 15. T1
 
@@ -902,7 +916,7 @@ says that the database is checked thoroughly at every start, and that the faster
 | 19 | ✅ | The new strings, the add-on option and the endpoint documentation are complete | Unit test | Existing `TranslationCompletenessTests` and `OpenApiSpecEndpointTests`, plus `RepositoryStructureTests.EveryAddOnOption_IsTranslatedInEveryLanguage` and `…AddOnDatabaseStartupCheckDefault_MatchesTheApplicationDefault` (built in step 10) |
 | 20 | ✅ | Live: a broken index degrades at startup and recovers through a Reset | Live (T2) | `startup-and-degradation/15`; passes on this build, red on `quotinator:canary-490` |
 | 21 | ✅ | Live: with `Fast`, the same database starts healthy, and the endpoint still reports the broken index | Live (T2) | `startup-and-degradation/16`; same canary |
-| 22 | ❌ | The full build and test suite are clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all passed |
+| 22 | ✅ | The full build and test suite are clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all passed |
 | 23 | ❌ | T1: startup time at `Full` is acceptable, and a broken index degrades with its reason | Live (T1) | Step 15, confirmed by the developer |
 | 24 | ✅ | *(developer, 2026-11-15)* A Reset's restore point and both set-aside notifications say why the file was set aside: the check layer, its status and finding, or the backup's own error when the check passed | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabase_RestorePointNamesTheLayerThatShowedIt`, `…ResetAsync_CorruptDatabase_NotificationRecordsTheLayerThatShowedIt`, `…ResetAsync_FileOnlyTheBackupFindsUnreadable_RestorePointCarriesTheBackupError`, `…ResetAsync_FileOnlyTheBackupFindsUnreadable_NotificationRecordsTheBackupError`; `DatabaseActionResultRecorderTests.RecordAsync_SetAsideByTheCheck_RecordsTheLayerThatShowedIt`, `…RecordAsync_SetAsideByTheBackup_RecordsTheBackupError`, the `ResetSetAsideByBackup` rows; `StartupResilienceTests.Startup_DatabaseFileCorrupt_RepairActionNotificationsSayWhichLayerShowedIt` |
 | 25 | ✅ | *(developer, 2026-11-15)* Every other surface reporting a Reset says why the file was set aside, or had to be: the response, the refusal, the repair control, the Notifications page and the refused Reset's notification | Unit test | `RestorePointDtoTests` (3); `DatabaseInitializerTests.ResetAsync_CorruptDatabaseThatCannotBeSetAside_RefusalSaysWhichLayerShowedIt`, `…ResetAsync_FileOnlyTheBackupFindsUnreadableThatCannotBeSetAside_RefusalCarriesTheBackupError`; `StartupResilienceTests.Startup_DatabaseFileCorrupt_ResetResponseSaysWhichLayerShowedIt`, `…ResetRefusalSaysWhichLayerShowedIt`; `DatabaseRepairActionsTests.RefusedForAFileThatNeededSettingAside_SaysWhichLayerShowedIt`, `…RefusedForAFileTheBackupFoundUnreadable_GivesTheBackupError`; `NotificationsPageTests.ResetThatSetTheFileAside_SaysWhyAndWhere`, `…ResetThatSetAsideAFileTheBackupFoundUnreadable_GivesTheBackupError`; `DatabaseActionResultRecorderTests.RecordAsync_RefusedForAFileThatNeededSettingAside_RecordsTheLayerThatShowedIt`, `…RecordAsync_RefusedForAFileTheBackupFoundUnreadable_RecordsTheBackupError`, the `ResetNotMovable` rows |

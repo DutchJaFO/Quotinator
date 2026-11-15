@@ -33,9 +33,9 @@ public class ChangelogSystemContentImporterTests
 
     private static async Task<(SqliteConnectionFactory Factory, ChangelogConnectionKeepAlive KeepAlive)> CreateInitialisedDatabaseAsync()
     {
-        SqliteConnectionFactory factory = new SqliteConnectionFactory(UniqueConnectionString());
-        ChangelogConnectionKeepAlive keepAlive = new ChangelogConnectionKeepAlive(factory);
-        ChangelogDatabaseInitializer initializer = new ChangelogDatabaseInitializer(factory, NullLogger<ChangelogDatabaseInitializer>.Instance, new NoOpDatabaseCheck(DatabaseNames.Changelog));
+        SqliteConnectionFactory factory = new(UniqueConnectionString());
+        ChangelogConnectionKeepAlive keepAlive = new(factory);
+        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance, new NoOpDatabaseCheck(DatabaseNames.Changelog));
         await initializer.InitialiseAsync();
         return (factory, keepAlive);
     }
@@ -77,9 +77,9 @@ public class ChangelogSystemContentImporterTests
         (SqliteConnectionFactory? factory, ChangelogConnectionKeepAlive? keepAlive) = await CreateInitialisedDatabaseAsync();
         using ChangelogConnectionKeepAlive _ = keepAlive;
 
-        FakeChangelogService service = new FakeChangelogService(new Dictionary<string, ChangelogDocument> { ["en"] = OneReleaseDocument() });
-        ChangelogRepository repository = new ChangelogRepository(factory, NoOpCallerContext.Instance);
-        ChangelogSystemContentImporter importer = new ChangelogSystemContentImporter(factory, service, repository, NullLogger<ChangelogSystemContentImporter>.Instance);
+        FakeChangelogService service = new(new Dictionary<string, ChangelogDocument> { ["en"] = OneReleaseDocument() });
+        ChangelogRepository repository = new(factory, NoOpCallerContext.Instance);
+        ChangelogSystemContentImporter importer = new(factory, service, repository, NullLogger<ChangelogSystemContentImporter>.Instance);
 
         await importer.RefreshAsync();
 
@@ -132,9 +132,9 @@ public class ChangelogSystemContentImporterTests
         (SqliteConnectionFactory? factory, ChangelogConnectionKeepAlive? keepAlive) = await CreateInitialisedDatabaseAsync();
         using ChangelogConnectionKeepAlive _ = keepAlive;
 
-        FakeChangelogService service = new FakeChangelogService(new Dictionary<string, ChangelogDocument> { ["en"] = OneReleaseDocument() });
-        ChangelogRepository repository = new ChangelogRepository(factory, NoOpCallerContext.Instance);
-        ChangelogSystemContentImporter importer = new ChangelogSystemContentImporter(factory, service, repository, NullLogger<ChangelogSystemContentImporter>.Instance);
+        FakeChangelogService service = new(new Dictionary<string, ChangelogDocument> { ["en"] = OneReleaseDocument() });
+        ChangelogRepository repository = new(factory, NoOpCallerContext.Instance);
+        ChangelogSystemContentImporter importer = new(factory, service, repository, NullLogger<ChangelogSystemContentImporter>.Instance);
 
         await importer.RefreshAsync();
         await importer.RefreshAsync();
@@ -163,11 +163,11 @@ public class ChangelogSystemContentImporterTests
         (SqliteConnectionFactory? factory, ChangelogConnectionKeepAlive? keepAlive) = await CreateInitialisedDatabaseAsync();
         using ChangelogConnectionKeepAlive _ = keepAlive;
 
-        ChangelogRepository repository = new ChangelogRepository(factory, NoOpCallerContext.Instance);
+        ChangelogRepository repository = new(factory, NoOpCallerContext.Instance);
 
         // Each document must carry its own Language: the importer writes document.Language, not the
         // dictionary key, and (Language, Version) is unique.
-        FakeChangelogService healthy = new FakeChangelogService(new Dictionary<string, ChangelogDocument>
+        FakeChangelogService healthy = new(new Dictionary<string, ChangelogDocument>
         {
             ["en"] = OneReleaseDocument(),
             ["nl"] = DocumentInLanguage("nl"),
@@ -182,9 +182,9 @@ public class ChangelogSystemContentImporterTests
         Assert.AreNotEqual(0, entriesBefore, "Guard: the first import must have written something for this test to mean anything.");
 
         // Second language throws, so the refresh dies after the clear and after "en" has been written.
-        FakeThrowingChangelogService failing = new FakeThrowingChangelogService(OneReleaseDocument(), failOn: "nl");
+        FakeThrowingChangelogService failing = new(OneReleaseDocument(), failOn: "nl");
         ChangelogSystemContentImporter importer =
-            new ChangelogSystemContentImporter(factory, failing, repository, NullLogger<ChangelogSystemContentImporter>.Instance);
+            new(factory, failing, repository, NullLogger<ChangelogSystemContentImporter>.Instance);
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => importer.RefreshAsync());
 

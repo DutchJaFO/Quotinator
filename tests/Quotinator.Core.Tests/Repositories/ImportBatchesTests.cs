@@ -49,14 +49,14 @@ public class ImportBatchesTests
 
     private QuotinatorDatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches, IReadOnlyList<SchemaMigration> migrations, bool useBaseline)
     {
-        SqliteConnectionFactory factory       = new SqliteConnectionFactory(_dbPath);
-        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        SqliteConnectionFactory factory       = new(_dbPath);
+        DatabaseOptions options       = new() { DbPath = _dbPath, BackupsPath = _backups };
+        SqliteImportBatchRepository importBatches = new(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         NullLogger<DatabaseInitializer> logger        = NullLogger<DatabaseInitializer>.Instance;
-        ImportActionReader actionReader  = new ImportActionReader(factory);
-        ImportActionWriter actionWriter  = new ImportActionWriter(factory);
-        ImportActionResolutionCoordinator coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        SqliteImportActionService actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        ImportActionReader actionReader  = new(factory);
+        ImportActionWriter actionWriter  = new(factory);
+        ImportActionResolutionCoordinator coordinator   = new(actionReader, actionWriter, factory);
+        SqliteImportActionService actionService = new(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -85,7 +85,7 @@ public class ImportBatchesTests
     // history specifically, not Quotinator.Data's.
     private async Task CreateV2DatabaseAsync()
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         await conn.ExecuteAsync("CREATE TABLE System_ConsumerSchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL)");
         await conn.ExecuteAsync("INSERT INTO System_ConsumerSchemaVersion VALUES (1, '2025-01-01 00:00:00')");
@@ -131,7 +131,7 @@ public class ImportBatchesTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         HashSet<string> columns = [.. (await conn.QueryAsync<string>(
             "SELECT name FROM pragma_table_info('Import_Batch')"))];
@@ -146,11 +146,11 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Schema_ImportBatchesConflictPolicy_PersistsAppliedPolicy()
     {
-        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], new ManifestPolicy(DuplicateResolutionPolicy.MergeTheirs), "test");
+        SeedBatch batch = new([new SeedFile(CuratedFile, null)], new ManifestPolicy(DuplicateResolutionPolicy.MergeTheirs), "test");
         QuotinatorDatabaseInitializer db    = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         string? conflictPolicy = await conn.ExecuteScalarAsync<string>(
             "SELECT ConflictPolicy FROM Import_Batch WHERE Name = @name", new { name = Path.GetFileName(CuratedFile) });
@@ -165,7 +165,7 @@ public class ImportBatchesTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
 
         foreach (string? table in new[] { "Quotinator_Quote", "Quotinator_Source", "Quotinator_Character", "Quotinator_Person" })
@@ -193,13 +193,13 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Seeding_TwoSourceFiles_ProduceTwoDistinctBatchesWithCorrectTypes()
     {
-        SeedFile curatedFile = new SeedFile(CuratedFile, null);
-        SeedFile seedFile    = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
-        SeedBatch batch       = new SeedBatch([curatedFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
+        SeedFile curatedFile = new(CuratedFile, null);
+        SeedFile seedFile    = new(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
+        SeedBatch batch       = new([curatedFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
         QuotinatorDatabaseInitializer db          = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         List<(string Name, string Type, string? Url)> rows = [.. (await conn.QueryAsync<(string Name, string Type, string? Url)>(
             "SELECT Name, Type, Url FROM Import_Batch WHERE IsDeleted = 0"))];
@@ -220,13 +220,13 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Seeding_TwoSourceFiles_QuotesLinkToOwningBatchAndRecordCountMatches()
     {
-        SeedFile curatedFile = new SeedFile(CuratedFile, null);
-        SeedFile seedFile    = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
-        SeedBatch batch       = new SeedBatch([curatedFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
+        SeedFile curatedFile = new(CuratedFile, null);
+        SeedFile seedFile    = new(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
+        SeedBatch batch       = new([curatedFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
         QuotinatorDatabaseInitializer db         = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
 
         List<(string Id, string Name, int RecordCount)> batches = [.. (await conn.QueryAsync<(string Id, string Name, int RecordCount)>(
@@ -256,14 +256,14 @@ public class ImportBatchesTests
         string emptyFile = Path.Combine(_tempDir.Path, "empty.json");
         File.WriteAllText(emptyFile, string.Empty);
 
-        SeedFile curatedFile = new SeedFile(CuratedFile, null);
-        SeedFile emptySeedFile = new SeedFile(emptyFile, null);
-        SeedBatch batch = new SeedBatch([curatedFile, emptySeedFile], ManifestPolicy.HardcodedDefault, "test");
+        SeedFile curatedFile = new(CuratedFile, null);
+        SeedFile emptySeedFile = new(emptyFile, null);
+        SeedBatch batch = new([curatedFile, emptySeedFile], ManifestPolicy.HardcodedDefault, "test");
         QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
 
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
 
         int quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote");
@@ -278,12 +278,12 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Seeding_UserImportsOriginNoUrl_TypeIsUserSeed()
     {
-        SeedFile userFile = new SeedFile(CuratedFile, null);
-        SeedBatch batch    = new SeedBatch([userFile], ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.UserImports);
+        SeedFile userFile = new(CuratedFile, null);
+        SeedBatch batch    = new([userFile], ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.UserImports);
         QuotinatorDatabaseInitializer db       = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         string? type = await conn.ExecuteScalarAsync<string>(
             "SELECT Type FROM Import_Batch WHERE Name = @name", new { name = Path.GetFileName(CuratedFile) });
@@ -295,12 +295,12 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Seeding_UserImportsOriginWithUrl_TypeIsStillUserSeed()
     {
-        SeedFile userFile = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
-        SeedBatch batch    = new SeedBatch([userFile], ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.UserImports);
+        SeedFile userFile = new(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
+        SeedBatch batch    = new([userFile], ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.UserImports);
         QuotinatorDatabaseInitializer db       = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         string? type = await conn.ExecuteScalarAsync<string>(
             "SELECT Type FROM Import_Batch WHERE Name = @name", new { name = Path.GetFileName(VilaboimFile) });
@@ -314,12 +314,12 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task ImportBatches_TypeCheckConstraint_AcceptsUserSeedAlongsideExistingSeedRow()
     {
-        SeedBatch seedBatch = new SeedBatch([new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes")],
+        SeedBatch seedBatch = new([new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes")],
             ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.Bundled);
         QuotinatorDatabaseInitializer db = CreateInitializer([seedBatch]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         (string Id, string Type) existingRow = await conn.QuerySingleAsync<(string Id, string Type)>(
             "SELECT Id, Type FROM Import_Batch WHERE Name = @name", new { name = Path.GetFileName(VilaboimFile) });
@@ -346,7 +346,7 @@ public class ImportBatchesTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         List<string> seedBatches = [.. (await conn.QueryAsync<string>(
             "SELECT Name FROM Import_Batch WHERE Type = 'Seed' AND IsDeleted = 0"))];
@@ -365,7 +365,7 @@ public class ImportBatchesTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         string? importBatchId = await conn.ExecuteScalarAsync<string?>(
             "SELECT ImportBatchId FROM Quotinator_Quote WHERE Id = 'TEST-QUOTE-ID'");
@@ -393,7 +393,7 @@ public class ImportBatchesTests
     public async Task Migration_RenameImportedByToImportedById_ColumnRenamedAndDataPreserved()
     {
         string batchId = Guid.NewGuid().ToString();
-        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
@@ -415,7 +415,7 @@ public class ImportBatchesTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection verifyConn = new($"Data Source={_dbPath}");
         await verifyConn.OpenAsync(TestContext.CancellationToken);
 
         HashSet<string> columns = (await verifyConn.QueryAsync<string>(
@@ -441,7 +441,7 @@ public class ImportBatchesTests
     public async Task Migration_ImportBatchConflictPolicyCheckConstraint_NormalisesLegacyLowercaseDefault()
     {
         string batchId = Guid.NewGuid().ToString();
-        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
@@ -468,7 +468,7 @@ public class ImportBatchesTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection verifyConn = new($"Data Source={_dbPath}");
         await verifyConn.OpenAsync(TestContext.CancellationToken);
 
         string? normalisedValue = await verifyConn.ExecuteScalarAsync<string>(
