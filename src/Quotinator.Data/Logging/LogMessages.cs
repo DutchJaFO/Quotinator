@@ -87,8 +87,8 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Init] the schema does not match what its version defines: {Count} object(s) missing or different. Nothing is loaded into it and nothing is repaired: resolve it with a database Reset, or restore a backup")]
     public static partial void LogSchemaNotIntact(this ILogger logger, int count);
 
-    /// <summary>Logs that a recorded schema version exceeds the app's own known migration count (#289), which #350 treats as a fault: the migrations this build never saw may have added, altered or removed anything, so the schema's shape is unknown rather than known-complete.</summary>
-    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Init] schema version overshoot detected: recorded data v{DataVersion} (known: v{DataKnown}), recorded app v{AppVersion} (known: v{AppKnown}). This build does not know what the migrations it never saw changed, so the schema's shape is unknown: resolve it with a database Reset, or restore a backup taken before the version moved ahead")]
+    /// <summary>Logs that a recorded schema version exceeds the app's own known migration count (#289), which #350 treats as a fault: the migrations this build never saw may have added, altered or removed anything. Since #490 the schema is compared against this build's, so its structure is known; what those migrations meant for the data is not.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Init] schema version overshoot detected: recorded data v{DataVersion} (known: v{DataKnown}), recorded app v{AppVersion} (known: v{AppKnown}). The schema is compared with this build's, but what the migrations this build never saw meant for the data is unknown: resolve it with a database Reset, or restore a backup taken before the version moved ahead")]
     public static partial void LogSchemaVersionOvershoot(this ILogger logger, int dataVersion, int dataKnown, int appVersion, int appKnown);
 
     /// <summary>Logs completion of an incremental migration pass.</summary>

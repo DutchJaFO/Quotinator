@@ -46,6 +46,30 @@ public class StartupDegradationReasonsTests
         Assert.AreEqual(SchemaOvershootGuidance.Reason(DataVersion, AppVersion), reason);
     }
 
+    /// <summary>
+    /// #490 (developer, 2026-11-16): the schema is compared on an overshoot, so the reason no longer says its shape is
+    /// unknown. It says what is still unknown, what the migrations this build never saw meant, and where the comparison
+    /// is read.
+    /// </summary>
+    [TestMethod]
+    public void OvershootReason_PointsToTheComparisonRatherThanCallingTheShapeUnknown()
+    {
+        string reason = SchemaOvershootGuidance.Reason(DataVersion, AppVersion);
+
+        Assert.DoesNotContain("shape is unknown", reason, StringComparison.Ordinal);
+        Assert.Contains(Quotinator.Constants.Routes.ApiRoutes.DatabaseIntegrity, reason, StringComparison.Ordinal);
+    }
+
+    /// <summary>The overshoot notification says the same, so the two surfaces do not contradict each other.</summary>
+    [TestMethod]
+    public void OvershootNotification_PointsToTheComparisonRatherThanCallingTheShapeUnknown()
+    {
+        string body = Quotinator.Api.Tests.Components.BaselineUiText.Load().NotificationSchemaOvershootBody;
+
+        Assert.DoesNotContain("shape is unknown", body, StringComparison.Ordinal);
+        Assert.Contains(Quotinator.Constants.Routes.ApiRoutes.DatabaseIntegrity, body, StringComparison.Ordinal);
+    }
+
     /// <summary>#305, unchanged: a schema that does not match its migration path degrades naming the differences.</summary>
     [TestMethod]
     public void For_SchemaNotIntact_IsTheIntegrityReason()

@@ -946,6 +946,13 @@ runs them. Folding them into T1 is what the T1 gate rules out.
   (replacing `…SkipsSchema`), `DatabaseIntegrityCheckTests.SchemaVersionOvershoot_IntegrityChecked` (replacing
   `…IntegrityNotChecked`) and `…SchemaVersionOvershoot_WithATableDropped_NamesIt` failed on their claims; the
   behind-and-missing controls passed throughout. ADR 028 follows. Verification rows 26 and 32.
+- **Reworded to match (developer, 2026-11-16).** The overshoot's degraded reason, its notification body in all
+  three languages and its log line said *the schema's shape is unknown*, which the comparison now contradicts.
+  Each now says the schema was compared, names `GET /api/v1/admin/database/integrity` where the reason and the
+  notification are read, and keeps what is still unknown: what the migrations this build never saw meant for
+  the data. **Red first:** `StartupDegradationReasonsTests.OvershootReason_PointsToTheComparisonRatherThanCallingTheShapeUnknown`
+  and `…OvershootNotification_…` failed on the old text. `startup-and-degradation/06` asserts the route in the
+  reason and no longer explains the degradation by an unknown shape.
 
 ### 16. T2
 

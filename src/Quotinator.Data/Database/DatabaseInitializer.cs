@@ -1641,7 +1641,8 @@ public class DatabaseInitializer(
         // #289 read it as that case alone: a complete schema behind a stale counter.
         //
         // #350: nothing here can tell that case apart from a database that ran migrations this build
-        // has never seen, so the schema's shape is unknown rather than known-complete. Still detected
+        // has never seen, so what they meant is unknown rather than known-complete; #490 compares the
+        // schema afterwards, which shows its structure against this build's but not that. Still detected
         // rather than thrown, per ADR 022: the condition is reported as an outcome and the consumer
         // decides what it means, which is where the degradation now happens.
         // See IDatabaseInitializer.SchemaVersionOvershootDetected.

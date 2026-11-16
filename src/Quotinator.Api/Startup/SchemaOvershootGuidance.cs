@@ -13,10 +13,11 @@ namespace Quotinator.Api.Startup;
 /// every message that shipped before it.
 /// </para>
 /// <para>
-/// The text claims nothing about the schema being complete. An overshoot means the migrations this
-/// build never saw may have added, altered or removed anything, so its shape is unknown: that is
-/// also why the only remedies are a Reset or a restore, neither of which asks the operator to trust
-/// the current contents.
+/// The text claims nothing about the schema being complete. Since #490 (developer, 2026-11-16) the schema is
+/// compared on an overshoot, so its structure against this build's is known, and the integrity endpoint names
+/// any difference. What the migrations this build never saw meant for the data is still unknown: that is why
+/// the content is not served, and why the only remedies are a Reset or a restore, neither of which asks the
+/// operator to trust the current contents.
 /// </para>
 /// </summary>
 internal static class SchemaOvershootGuidance
@@ -26,8 +27,9 @@ internal static class SchemaOvershootGuidance
     /// <param name="appSchemaVersion">The recorded version of this application's own migrations.</param>
     internal static string Reason(int dataSchemaVersion, int appSchemaVersion) =>
         $"The database's recorded schema version is ahead of this build (data v{dataSchemaVersion}, "
-        + $"app v{appSchemaVersion}). This build does not know what the migrations it never saw "
-        + "changed, so the schema's shape is unknown and quote content is not served from it. Resolve "
+        + $"app v{appSchemaVersion}). Its schema has been compared with this build's, and GET "
+        + $"{ApiRoutes.DatabaseIntegrity} names any difference, but this build does not know what the "
+        + "migrations it never saw meant for the data, so quote content is not served from it. Resolve "
         + $"it with a database Reset (POST {ApiRoutes.DatabaseReset}), which rebuilds the schema at "
         + "this build's own version and discards what the database holds now, or restore a backup "
         + "taken before the version moved ahead and restart.";

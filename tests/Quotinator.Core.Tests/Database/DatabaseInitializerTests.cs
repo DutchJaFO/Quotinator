@@ -5149,8 +5149,8 @@ public partial class DatabaseInitializerTests
             + "it never saw may have added, altered or removed anything");
         Assert.Contains(
             "unknown", overshoot, StringComparison.OrdinalIgnoreCase,
-            "what is actually true is that the schema's shape is unknown, and the message has to say "
-            + "so rather than describing stale bookkeeping");
+            "what is actually true is that what the unseen migrations meant is unknown, and the message has "
+            + "to say so rather than describing stale bookkeeping");
     }
 
     /// <summary>#289: an ordinary, correctly-migrated database never flags an overshoot.</summary>

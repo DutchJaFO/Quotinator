@@ -20,14 +20,15 @@ volume would put the file somewhere `execute-sql.csx` cannot reach.
 #289 read an overshoot as a complete schema behind a stale counter, the state a migration squash leaves,
 and had the application carry on. #350 reversed that, because nothing can tell that case apart from a
 database that ran migrations this build has never seen. The migrations it never saw may have added,
-altered or removed anything, so what the schema actually holds is unknown, and serving quote content
-from it is a foot gun.
+altered or removed anything. Since #490 the schema is compared against this build's, so its structure is
+known, but what those migrations meant for the data is not, and serving quote content from it is a foot gun.
 
 ## Determinism
 
-- **The unknown schema is the fault; the stale counter is only its symptom.** That is why `503` is the
-  expected answer here and not an over-strict reading of a cosmetic mismatch. A build that serves from
-  this database is not being lenient, it is vouching for a shape it has never seen.
+- **The unknown meaning of the migrations is the fault; the stale counter is only its symptom.** That is
+  why `503` is the expected answer here, even though the schema compares as intact, and not an
+  over-strict reading of a cosmetic mismatch. A build that serves from this database is not being lenient,
+  it is vouching for data whose meaning changed in ways it has never seen.
 - **The extra version is computed, never written as a literal.** Step 2 inserts `MAX(Version) + 1`, so
   the row is one beyond whatever this build actually migrated to. A literal would need re-deriving every
   time a milestone adds a migration, and would silently stop overshooting once the build caught up with
@@ -54,8 +55,8 @@ from it is a foot gun.
   level it already holds, the flag is never set, the application stays healthy, and every step below
   would be asserting against an ordinary install.
 - **Nothing read from the database is shown while degraded, and that is asserted rather than assumed.**
-  An overshot schema is of unknown shape, so its content is untrusted whether or not a query against it
-  would execute: the notifications page, the import-review page and the file history all render their
+  An overshot database holds data the migrations this build never saw may have changed the meaning of, so
+  its content is untrusted whether or not a query against it would execute: the notifications page, the import-review page and the file history all render their
   degraded empty state. The operator's explanation comes from `StartupErrorModal`'s reason, which is
   in-memory state and cannot depend on a row that may never have been written.
 
@@ -94,7 +95,7 @@ asserting against an ordinary healthy database, which proves nothing. Stop.
 ```
 dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-06 --port 18406 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-06-data --wait-listening
 dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18406/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\health.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\health.json --equals status=unhealthy --contains "reason=schema version is ahead" --contains reason=Reset --contains "reason=restore a backup"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\health.json --equals status=unhealthy --contains "reason=schema version is ahead" --contains reason=/api/v1/admin/database/integrity --contains reason=Reset --contains "reason=restore a backup"
 docker inspect -f '{{.State.Running}}' qt-startup-06
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/quotes --expect 503 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/quotes/random --expect 503 --status
@@ -109,7 +110,7 @@ dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/he
 ```
 
 **Expected:** the first `json` command exits `0`: `status = unhealthy`, the reason naming the overshoot, the
-Reset and restoring a backup. `docker inspect` prints `true`, and every one of the seven database reads
+integrity endpoint where the schema comparison is read, the Reset and restoring a backup. `docker inspect` prints `true`, and every one of the seven database reads
 answers `503`. The integrity endpoint answers `200`, and the second `json` command exits `0`: the Schema layer
 of the main database was compared and passed, and the database is intact. `/health` still answers `503`.
 
@@ -120,12 +121,12 @@ the comparison says so. The overshoot is still the reason the application degrad
 not make it healthy, which the second `/health` read shows.
 
 **`true` and `unhealthy` together are the never-crash contract** for a database this build cannot vouch
-for. The seven reads refuse because a schema of unknown shape is untrusted whether or not a given query
-against it would execute.
+for. The seven reads refuse because data whose meaning this build cannot know is untrusted whether or not
+a given query against it would execute.
 
 **On failure:** a container that is not running means the overshoot killed the process. `status=healthy`
-or a `200` from any read is the defect #350 exists to remove: the application vouching for a schema whose
-shape it has never seen. A reason naming only the Reset leaves an operator who wants their data back
+or a `200` from any read is the defect #350 exists to remove: the application vouching for data changed by
+migrations it has never seen. A reason naming only the Reset leaves an operator who wants their data back
 believing the route that discards it is the only one there is. `starting` or `down` means the wait gave
 up after 180 seconds.
 
@@ -174,7 +175,7 @@ remedies, and it carries no notification row. The notifications page has no rows
 shows its empty state (*No notifications yet.*). Both screenshots record it.
 
 **The reason is the only channel that can be relied on here, and that is the point of this step.** An
-overshot schema is of unknown shape, so every row read from it is untrusted content, the notification
+overshot database holds data of unknown meaning, so every row read from it is untrusted content, the notification
 explaining the overshoot included: this build cannot even assume that row was written, since the
 `INSERT` ran against a table it cannot vouch for. The reason text is in-memory state, so it is there
 whatever the database turns out to hold.
