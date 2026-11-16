@@ -8,7 +8,7 @@
 ## Preconditions
 
 This replaces the old flat `duplicates` count everywhere a seed or import operation reports back, and every surface it
-checks (seed preview, reseed, reset, import, import preview and the startup log) is reachable on one container.
+checks (the counts after the seed, seed preview, reseed, reset, import and import preview) is reachable on one container.
 
 **Beyond the profile.** The container runs with `Quotinator__IncludeDefaultSources=false` and seeds one file of its own at
 first boot, from `{dataDir}/imports/`: the [fixture](../database-lifecycle/fixtures/reset-content.json) that holds rows in
@@ -35,12 +35,21 @@ so a blocked run reads as that.
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-import-19-data --delete C:\repos\Quotinator\.claude\temp\qt-import-19-out --copy C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-content.json C:\repos\Quotinator\.claude\temp\qt-import-19-data\imports\reset-content.json --copy C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-imports-manifest.json C:\repos\Quotinator\.claude\temp\qt-import-19-data\imports\manifest.json
 dotnet script scripts/testing/test-env.csx -- create --name qt-import-19 --port 18619 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-import-19-data --env Quotinator__IncludeDefaultSources=false
+dotnet script scripts/testing/http.csx -- --url http://localhost:18619/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-import-19-out\version-seeded.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-19-out\version-seeded.json --equals database.quotes=4 --equals database.sources=3 --equals database.characters=3 --equals database.people=2 --equals database.series=2 --equals database.seasons=2 --equals database.universes=2 --equals database.stageDirections=2 --equals database.soundCues=2 --equals database.conversations=2
 ```
 
-**Expected:** the app reports healthy, so the seed has finished.
+**Expected:** the app reports healthy, so the seed has finished, and the `json` command exits `0`: the version
+endpoint reports every entity type with the count the fixture gives it. Each type is named in its own assertion,
+so a missing one fails naming itself.
+
+**Read here, straight after the first boot**, because every later step changes the counts: the reseed, the
+Reset and the import. These are the counts the seed left. They were read from the `[Database - Stats]` startup
+line until 2026-11-16; the log is not evidence (#490's T2 review, developer), and the version endpoint reports
+the same counts from the same source.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
-never became healthy.
+never became healthy. A count other than the fixture's means the seed did not load what the file holds.
 
 ### 2. Read the seed preview
 
@@ -105,26 +114,7 @@ reports an absence exactly as a removed field does; only a field the same read *
 `api-surface/04` shipped a removal check with no control and passed it for weeks on patterns that could never match; see the
 index's *A removed or added feature needs its own proof, alongside the normal behaviour*.
 
-### 8. Read the startup line
-
-```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-19 --pattern "\[Database - Stats\] 4 quotes" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-19 --pattern "\[Database - Stats\].*3 sources" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-19 --pattern "\[Database - Stats\].*3 characters" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-19 --pattern "\[Database - Stats\].*2 people" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-19 --pattern "\[Database - Stats\].*2 series" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-19 --pattern "\[Database - Stats\].*2 seasons" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-19 --pattern "\[Database - Stats\].*2 universes" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-19 --pattern "\[Database - Stats\].*2 stage directions" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-19 --pattern "\[Database - Stats\].*2 sound cues" --at-least 1
-dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-19 --pattern "\[Database - Stats\].*2 conversations" --at-least 1
-```
-
-**Expected:** `[Database - Stats]` names every entity type with the count the fixture gives it, one command per name, so a
-missing one fails naming itself. The line writes each type as the plural it renders, not as the API's field name:
-`stage directions`, not `stageDirections`. This line is the surface being tested, which is why a log line is read here at all.
-
-### 9. Nothing unexpected was thrown
+### 8. Nothing unexpected was thrown
 
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-19 --pattern "\[Runtime - Exception\]" --exactly 0
@@ -152,7 +142,7 @@ line that names it.
 | `POST /admin/database/reset` | `200` | Every count `0`, no reports |
 | `POST /import` | `200` | `summary.imported=4`, and a singular `report` with `Quote.new=4` |
 | `POST /import/preview` | `200` | `preview=true`, and the same `report` shape |
-| The startup log | | `[Database - Stats] 4 quotes  3 sources  3 characters  2 people  2 series  2 seasons  2 universes  2 stage directions  2 sound cues  2 conversations` |
+| The counts after the seed | | Read then from the `[Database - Stats]` line: 4 quotes, 3 sources, 3 characters, and 2 of each other type. Step 1 reads them from `GET /api/v1/version` since 2026-11-16, not yet measured in that form |
 
 The seed preview holds none of `totalQuotes`, `uniqueQuotes` and `crossFileDuplicates`, and holds both `fileName` and
 `entityTypes`.
@@ -162,16 +152,18 @@ The seed preview holds none of `totalQuotes`, `uniqueQuotes` and `crossFileDupli
 ## Canary
 
 Build the commit before [#221](https://github.com/DutchJaFO/Quotinator/issues/221)'s first code
-change, under a distinct tag, and run steps 2 to 8 against it. Per-file, per-entity-type counts are
+change, under a distinct tag, and run steps 1 to 7 against it. Per-file, per-entity-type counts are
 what #221 added, so every surface reports a single total there and step 7's removed fields are still
 present. The fixture may name categories that build predates, which would fail step 2 there instead: remove those sections
 from the canary's copy and say so in its reading.
 
-**Measured 2026-11-01** on `quotinator:canary-221`, built from `22d45db9`, steps 2 to 8 in order after step 1, with the fixture
+**Measured 2026-11-01** on `quotinator:canary-221`, built from `22d45db9`, steps 2 to 8 of the document's form then in order after step 1, with the fixture
 unchanged, since that build seeded it. Step 2 fails: no `reports`. Step 3 fails: `quotes=4`, `sources=3`, `characters=3` and
 `people=2`, with no other counts and no `reports`. Step 4 fails: the reset reimports and reads those same counts, which is
 #156's defect rather than this one. Steps 5 and 6 fail: no `report`. Step 7 fails: the preview still holds the removed fields.
-Step 8 fails: `[Database - Stats]` names quotes, sources, characters and people, and none of the other six.
+Step 8 of that form, which read the `[Database - Stats]` line, fails: it names quotes, sources, characters and people, and
+none of the other six. That reading is step 1's counts today; whether that build's version endpoint reports the other six is
+not yet read.
 
 Remove the container, image and worktree afterwards.
 
