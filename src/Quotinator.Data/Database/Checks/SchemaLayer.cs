@@ -23,8 +23,9 @@ internal sealed class SchemaLayer : QueryLayer
     protected override async Task<DatabaseCheckLayerResult> CheckAsync(SqliteConnection connection, SqliteCheckSubject subject)
     {
         // #490, found in T1: before its migrations run, an old database's schema differs from this build's by
-        // design, so a comparison then says nothing. It is compared only once every version table records what
-        // this build expects; a database ahead of this build has a schema it does not know (#350).
+        // design, and the migrations will fix it, so a comparison then says nothing. That is the only skip
+        // (developer, 2026-11-16): a database ahead of this build has nothing that will fix it, and comparing it is
+        // what shows what the overshoot consists of.
         if (await WhyNotYetComparableAsync(connection, subject) is string whyNot)
             return LayerResults.Skipped(Layer, whyNot);
 
@@ -46,8 +47,9 @@ internal sealed class SchemaLayer : QueryLayer
     }
 
     /// <summary>
-    /// Why the schema cannot be compared yet: the first version table that does not record what this build
-    /// expects, or <see langword="null"/> when every one does.
+    /// Why the schema cannot be compared yet: the first version table that is missing or behind this build, so
+    /// migrations are still to run and will change the schema, or <see langword="null"/> when none is. A table
+    /// ahead of this build does not stop the comparison.
     /// </summary>
     private static async Task<string?> WhyNotYetComparableAsync(SqliteConnection connection, SqliteCheckSubject subject)
     {
@@ -58,8 +60,8 @@ internal sealed class SchemaLayer : QueryLayer
                 return $"{name} does not exist, so the database records no migration: its schema is compared once its migrations have run.";
 
             int recorded = await connection.ExecuteScalarAsync<int>(Sql.SchemaMetadata.SelectRecordedVersion(table));
-            if (recorded != expected)
-                return $"{name} records version {recorded}, and this build's is {expected}: the schema is compared only once they match.";
+            if (recorded < expected)
+                return $"{name} records version {recorded}, and this build's is {expected}: the schema is compared once the migrations that bring it to this build's have run.";
         }
 
         return null;

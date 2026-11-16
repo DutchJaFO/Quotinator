@@ -745,11 +745,14 @@ public class DatabaseInitializer(
                 return WithRestorePoint(DatabaseOperationResult.StoppedByCheck(check), migrationRestorePoint);
         }
 
-        // #305: a version recorded ahead of this build means the schema's shape is unknown to it, so there
-        // is nothing meaningful to compare; that state already degrades on its own. Otherwise the schema
-        // must match what its version defines before anything is loaded into it, and a difference is a
-        // hard failure, returned rather than thrown (ADR 022) and never repaired.
-        if (!SchemaVersionOvershootDetected && !await IsSchemaIntactAsync())
+        // #305: the schema must match what its version defines before anything is loaded into it, and a
+        // difference is a hard failure, returned rather than thrown (ADR 022) and never repaired. #490
+        // (developer, 2026-11-16): compared on an overshoot too. Until then a version recorded ahead of this
+        // build skipped the comparison (#350), but only a migration about to run justifies a skip, and on an
+        // overshoot none will: the comparison is what shows what the overshoot consists of. The overshoot stays
+        // the reason the application degrades; a difference found here is its detail, and also stops content
+        // being loaded into a schema this build does not match.
+        if (!await IsSchemaIntactAsync())
             return WithRestorePoint(DatabaseOperationResult.NotIntact(check), migrationRestorePoint);
 
         BackupOutcome? obstacle = await RunInitialisedHookAsync(connection, migrations.TookBaselinePath, migrations.DatabaseWasCreated);

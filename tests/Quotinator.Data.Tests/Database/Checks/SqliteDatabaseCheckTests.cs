@@ -341,16 +341,21 @@ public class SqliteDatabaseCheckTests
         Assert.Contains(VersionTable, schema.Finding ?? string.Empty, StringComparison.Ordinal);
     }
 
-    /// <summary>A database ahead of this build has a schema it does not know, so there is nothing to compare either (#350).</summary>
+    /// <summary>
+    /// Developer, 2026-11-16: the schema is skipped only when a migration is about to fix it. A database ahead of this
+    /// build has nothing that will, and comparing it is what shows what the overshoot consists of: here, a table this
+    /// build expects that the database lacks is named.
+    /// </summary>
     [TestMethod]
-    public async Task Check_RecordedVersionAheadOfThisBuild_SkipsSchema()
+    public async Task Check_RecordedVersionAheadOfThisBuild_ComparesTheSchema()
     {
         using TempDirectory directory = new("quotinator_check_");
         string path = CreateWithRecordedVersion(directory, recorded: 3);
 
         DatabaseCheckResult result = await VersionedCheck(path, expected: 2).CheckAsync(DatabaseCheckDepth.Full);
 
-        Assert.AreEqual(DatabaseCheckLayerStatus.Skipped, result.Layers.Single(l => l.Layer == DatabaseCheckLayer.Schema).Status);
+        AssertFailsAt(result, DatabaseCheckLayer.Schema, DatabaseCheckLayerStatus.Failed);
+        Assert.Contains("AddedByAPendingMigration", result.FirstFailure?.Finding ?? string.Empty, StringComparison.Ordinal);
     }
 
     /// <summary>A database with no version table yet has recorded no migration, so its schema is not this build's either.</summary>

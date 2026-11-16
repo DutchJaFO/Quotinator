@@ -3,7 +3,7 @@
 **Smoke:** yes
 **Environment:** Fresh
 **Deterministic:** yes
-**Traces to:** #350, #327, #289
+**Traces to:** #350, #327, #289, #490
 **Fully green after:** [#445](https://github.com/DutchJaFO/Quotinator/issues/445): step 6's
 *nothing thrown since Cancel* `log` command reads `TaskCanceledException` lines logged after the page
 that confirmed the Reset closes, until the application stops logging a circuit the client closed as an
@@ -103,11 +103,21 @@ dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/co
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/notifications --expect 503 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/masterdata/sources --expect 503 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/version --expect 503 --status
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/admin/database/integrity --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\integrity.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\integrity.json --equals databases.0.database=main --equals databases.0.layers.6.layer=schema --equals databases.0.layers.6.status=passed --equals databases.0.isIntact=true
+dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/health --expect 503 --status
 ```
 
-**Expected:** the `json` command exits `0`: `status = unhealthy`, the reason naming the overshoot, the
+**Expected:** the first `json` command exits `0`: `status = unhealthy`, the reason naming the overshoot, the
 Reset and restoring a backup. `docker inspect` prints `true`, and every one of the seven database reads
-answers `503`.
+answers `503`. The integrity endpoint answers `200`, and the second `json` command exits `0`: the Schema layer
+of the main database was compared and passed, and the database is intact. `/health` still answers `503`.
+
+**The schema is compared on an overshoot (#490, developer, 2026-11-16).** Only migrations still to run justify
+skipping the comparison, and on an overshoot none will, so the comparison is what says what the overshoot
+consists of. Here the database only records one version past this build, so its schema is this build's, and
+the comparison says so. The overshoot is still the reason the application degrades: a passing comparison does
+not make it healthy, which the second `/health` read shows.
 
 **`true` and `unhealthy` together are the never-crash contract** for a database this build cannot vouch
 for. The seven reads refuse because a schema of unknown shape is untrusted whether or not a given query
@@ -295,6 +305,9 @@ The container stays running and `/health` answers `503` with:
 
 The version numbers are observed output, not assertions: they move whenever a migration is added.
 
+Step 3's integrity read was added for #490 on 2026-11-16 and is read for the first time in #490's T2 run,
+which replaces this section.
+
 All seven database reads answer `503`. The six pages, the spec and `GET /api/v1/admin/backups` answer
 `200`. The modal names the overshoot and both remedies with no notification row, and the notifications
 page shows its empty state.
@@ -329,6 +342,11 @@ current step, so run step 6 against the current build only.
 Remove the container, image and worktree afterwards.
 
 **Where the canary has been run, 2026-10-31.** Against `e4078444`, the commit before #327 and before #350, as `quotinator:canary-327`: step 3 read `status=healthy` with no overshoot reason. A fuller pass on 2026-10-24 against the same commit read every database read `200`, `404` from `/api/v1/admin/backups`, no overshoot in step 5's modal, and no repair control on any page.
+
+**#490's canary.** Build `db335a3c`, the commit before the schema was compared on an overshoot, as
+`quotinator:canary-490-overshoot`, and run steps 1 to 3. Step 3's second `json` command must fail on
+`databases.0.layers.6.status`: that build reports the Schema layer `skipped` on an overshoot, so the
+overshoot's schema went unexamined. Remove the container, image and worktree afterwards.
 
 ## Cleanup
 

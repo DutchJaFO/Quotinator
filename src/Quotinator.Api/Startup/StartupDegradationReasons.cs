@@ -71,7 +71,8 @@ internal static class StartupDegradationReasons
         if (initialisation is { RefusedStep: BackupGuardedStep.Migration, BackupObstacle: BackupOutcome obstacle })
             return BackupObstacleGuidance.MigrationRefusedReason(obstacle);
 
-        // #350: a recorded version ahead of this build skips the schema comparison, and is the more specific fault.
+        // #350: a recorded version ahead of this build is the more specific fault. Its schema is compared too (#490,
+        // developer, 2026-11-16), and what that finds is the overshoot's detail, never a second reason.
         if (schemaVersionOvershootDetected)
             return SchemaOvershootGuidance.Reason(dataSchemaVersion, appSchemaVersion);
 

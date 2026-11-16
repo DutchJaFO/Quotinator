@@ -42,7 +42,7 @@ The layers name *what* is checked, never how an engine checks it:
 | Pages | Can every page be read, and is every record well-formed? | Yes |
 | Indexes | Does every index agree with its table, and does every unique constraint hold? | No |
 | References | Does every declared reference point at a row that exists? | No |
-| Schema | Does the schema match this build's, once the database records this build's version? | Yes |
+| Schema | Does the schema match this build's, unless migrations are still to run? | Yes |
 
 A layer an engine has no counterpart for reports that it passed, with a finding saying it does not apply.
 It is never left out.
@@ -69,8 +69,8 @@ Each layer reports one of five statuses:
 - **Inconclusive:** the layer's test ran and gave neither a pass nor a fail. An inconclusive layer is
   **never** a pass.
 - **Not run:** an earlier layer failed or was inconclusive.
-- **Skipped:** the depth excluded it, or, for Schema, the comparison cannot mean anything yet (below). A
-  skip for a reason states it as the finding.
+- **Skipped:** the depth excluded it, or, for Schema, migrations are still to run and will change the schema
+  (below). A skip for a reason states it as the finding.
 
 **Something the check could not do is a result, never an inconclusive one (developer, 2026-11-15).** A file
 that could not be read is what Storage found: it fails, with the reason as its finding. Inconclusive is kept
@@ -123,13 +123,17 @@ paths, and the check follows each:
   again, compares the schema, and that result is startup's.
 - **An up-to-date database:** the check before writing compares the schema, and is startup's result.
 
-**Schema is compared only when every version table records this build's version (developer, 2026-11-15).**
+**Schema is skipped only when migrations are still to run (developer, 2026-11-15, narrowed 2026-11-16).**
 The layer reads the version tables first, through the check's own read-only connection. A table that is
-missing, behind this build or ahead of it means the comparison cannot mean anything yet, so the layer
-reports itself skipped and names the table, the recorded version and this build's. Ahead of this build, the
-schema is one the build does not know, the case #350 degrades on. A database with no version tables is always
-compared. T1 found why this matters: comparing before migrating, then disregarding the result, logged a
-certain and harmless difference as an error.
+missing or behind this build means the migrations about to run will change the schema, so a comparison now
+could only report differences they will remove: the layer reports itself skipped and names the table, the
+recorded version and this build's. T1 found why this matters: comparing before migrating, then disregarding
+the result, logged a certain and harmless difference as an error. **A table ahead of this build does not
+skip it.** Nothing will change that schema, and comparing it is what shows what the overshoot consists of:
+objects a newer build added are reported as extras, which leave it intact, and objects it dropped or changed
+are named. The overshoot is still the fault the application degrades with (#350); the comparison is its
+detail. A database with no version tables is always compared. The startup initialisation's own schema
+comparison (#305) follows the same rule.
 
 **`Fast` gives up Indexes and References.** An index that disagrees with its table, a broken unique
 constraint or a dangling reference is then not detected at startup. A Reset and the endpoint still detect
@@ -173,7 +177,7 @@ documents it (read 2026-11-14), and every case that page leaves open, with the w
 | Pages | `PRAGMA quick_check`. A sound result is the single row `ok`. | [pragma.html](https://www.sqlite.org/pragma.html#pragma_quick_check) |
 | Indexes | `PRAGMA integrity_check`. Unlike `quick_check`, it verifies UNIQUE constraints and that index content matches table content. | [pragma.html](https://www.sqlite.org/pragma.html#pragma_integrity_check) |
 | References | `PRAGMA foreign_key_check`. `integrity_check` does not find foreign key errors. This pragma is documented without any condition on the `foreign_keys` setting, so the check never sets that. | [pragma.html](https://www.sqlite.org/pragma.html#pragma_foreign_key_check) |
-| Schema | The comparison of the schema against this build's (#305), once every version table records this build's version | (project-defined) |
+| Schema | The comparison of the schema against this build's (#305), unless a version table is missing or behind this build | (project-defined) |
 
 ### Where the query layers run
 

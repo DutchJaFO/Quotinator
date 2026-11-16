@@ -141,26 +141,47 @@ public class DatabaseIntegrityCheckTests
     }
 
     /// <summary>
-    /// A recorded version ahead of this build means the schema's shape is unknown to it, so there is
-    /// nothing meaningful to compare. The control: a Reset rebuilds at this build's version and checks it.
+    /// #490 (developer, 2026-11-16): the schema comparison is skipped only when a migration is about to fix the
+    /// difference. A recorded version ahead of this build has nothing that will, so it is compared, and the result
+    /// says what the overshoot consists of. Until then it was skipped (#350), leaving its shape unknown.
     /// </summary>
     [TestMethod]
-    public async Task SchemaVersionOvershoot_IntegrityNotChecked()
+    public async Task SchemaVersionOvershoot_IntegrityChecked()
     {
-        await QuotinatorTestInitializer.Create(_dbPath, _backups).InitialiseAsync();
-        int recorded = await ScalarAsync("SELECT COALESCE(MAX(Version), 0) FROM System_ConsumerSchemaVersion;");
-        await ExecuteAsync(
-            $"INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) VALUES ({recorded + 1}, '{DateTimeOffset.UtcNow:O}');");
+        await OvershootAsync();
 
         QuotinatorDatabaseInitializer overshot = QuotinatorTestInitializer.Create(_dbPath, _backups);
         await overshot.InitialiseAsync();
 
         Assert.IsTrue(overshot.SchemaVersionOvershootDetected, "precondition: the overshoot was detected");
-        Assert.IsNull(overshot.LastIntegrityResult);
+        Assert.IsNotNull(overshot.LastIntegrityResult, "the overshot schema was not compared");
+        Assert.IsTrue(overshot.LastIntegrityResult.IsIntact, "a schema that only records a later version is still this build's");
+    }
 
-        await overshot.ResetAsync();
+    /// <summary>
+    /// What a newer build dropped is what the comparison names on an overshoot: here, a table this build expects. The
+    /// overshoot is still the fault reported; the comparison is its detail.
+    /// </summary>
+    [TestMethod]
+    public async Task SchemaVersionOvershoot_WithATableDropped_NamesIt()
+    {
+        await OvershootAsync();
+        await ExecuteAsync("DROP TABLE System_Notification;");
 
-        Assert.IsNotNull(overshot.LastIntegrityResult, "control: a Reset rebuilds at this build's version and checks it");
+        QuotinatorDatabaseInitializer overshot = QuotinatorTestInitializer.Create(_dbPath, _backups);
+        await overshot.InitialiseAsync();
+
+        Assert.IsTrue(overshot.SchemaVersionOvershootDetected, "precondition: the overshoot was detected");
+        AssertMissingTable(overshot.LastIntegrityResult, "System_Notification");
+    }
+
+    // A database this build created, then recorded one consumer version past this build, as a newer build would.
+    private async Task OvershootAsync()
+    {
+        await QuotinatorTestInitializer.Create(_dbPath, _backups).InitialiseAsync();
+        int recorded = await ScalarAsync("SELECT COALESCE(MAX(Version), 0) FROM System_ConsumerSchemaVersion;");
+        await ExecuteAsync(
+            $"INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) VALUES ({recorded + 1}, '{DateTimeOffset.UtcNow:O}');");
     }
 
     /// <summary>R3: a Reset re-runs the check, so "Reset repaired the database" is measured, not assumed.</summary>

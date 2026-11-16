@@ -142,7 +142,10 @@ public class StartupDegradationReasonsTests
         Assert.AreEqual(BackupObstacleGuidance.MigrationRefusedReason(BackupOutcome.InsufficientDiskSpace), reason);
     }
 
-    /// <summary>#350's precedence, unchanged: an overshoot skips the schema comparison and is the more specific fault.</summary>
+    /// <summary>
+    /// #350's precedence, unchanged: an overshoot is the more specific fault. Since #490 (developer, 2026-11-16) the
+    /// schema is compared on an overshoot too, as its detail, never as a second reason.
+    /// </summary>
     [TestMethod]
     public void For_OvershootAndSchemaNotIntact_OvershootWins()
     {
