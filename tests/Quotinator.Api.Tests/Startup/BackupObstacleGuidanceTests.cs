@@ -101,12 +101,34 @@ public class BackupObstacleGuidanceTests
     }
 
     /// <summary>
-    /// The override is a Reset parameter; a startup migration has none, so its reason must not offer one.
-    /// The first version of this reason did, by reusing the Reset remedies whole.
+    /// #490 step 17 (developer, 2026-11-16): a refused migration can now be confirmed without a backup, so its
+    /// reason offers the confirmation, on the endpoint that resumes the migration rather than on a Reset. Until
+    /// this step the reason rightly left it out: a startup migration had no override.
     /// </summary>
     [TestMethod]
-    public void MigrationRefusedReason_DoesNotOfferTheOverride()
+    public void MigrationRefusedReason_OffersTheConfirmationOnTheMigrateEndpoint()
     {
-        Assert.DoesNotContain(OverrideMarker, BackupObstacleGuidance.MigrationRefusedReason(BackupOutcome.BudgetExceeded), StringComparison.Ordinal);
+        string reason = BackupObstacleGuidance.MigrationRefusedReason(BackupOutcome.BudgetExceeded);
+
+        Assert.Contains(ApiRoutes.DatabaseMigrate + "?allowNoBackup=true", reason, StringComparison.Ordinal);
+    }
+
+    /// <summary>Once the obstacle is resolved, the same endpoint resumes the migration with its backup, no restart needed.</summary>
+    [TestMethod]
+    public void MigrationRefusedReason_OffersResumingOnceResolved()
+    {
+        string reason = BackupObstacleGuidance.MigrationRefusedReason(BackupOutcome.InsufficientDiskSpace);
+
+        Assert.Contains("POST " + ApiRoutes.DatabaseMigrate + " ", reason, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Control: a source file that cannot be read cannot be migrated whatever the operator accepts, so no
+    /// confirmation is offered for it.
+    /// </summary>
+    [TestMethod]
+    public void MigrationRefusedReason_SourceUnreadable_OffersNoConfirmation()
+    {
+        Assert.DoesNotContain(OverrideMarker, BackupObstacleGuidance.MigrationRefusedReason(BackupOutcome.SourceUnreadable), StringComparison.Ordinal);
     }
 }

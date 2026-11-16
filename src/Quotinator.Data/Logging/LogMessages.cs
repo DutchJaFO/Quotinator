@@ -164,6 +164,10 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Backup] reset proceeding WITHOUT a backup ({Obstacle:l}): the caller accepted responsibility. There is no restore point for this reset; do not look for one later")]
     public static partial void LogResetProceedingWithoutBackup(this ILogger logger, string obstacle);
 
+    /// <summary>Logs that pending migrations ran without a backup because the operator confirmed it (#490 step 17).</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Backup] migration proceeding WITHOUT a backup ({Obstacle:l}): the operator confirmed it. There is no restore point for this migration; do not look for one later")]
+    public static partial void LogMigrationProceedingWithoutBackup(this ILogger logger, string obstacle);
+
     /// <summary>Logs that the configured backup quota percentage is out of range and the default is being used (#348).</summary>
     [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Backup] Quotinator:BackupQuotaPercent is {Configured}, which is outside 1-100, so the {Default}% default is used instead. The configured value is ignored, not adjusted; correct it to take effect")]
     public static partial void LogBackupQuotaPercentOutOfRange(this ILogger logger, int configured, int @default);

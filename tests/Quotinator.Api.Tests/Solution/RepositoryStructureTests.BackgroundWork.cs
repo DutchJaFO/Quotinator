@@ -6,6 +6,8 @@ public partial class RepositoryStructureTests
     // guaranteed order, and a field built from RepoRoot could read it before it is set.
     private static string ProgramCs => Path.Combine(RepoRoot, "src", "Quotinator.Api", "Program.cs");
 
+    private static string SequenceCs => Path.Combine(RepoRoot, "src", "Quotinator.Api", "Startup", "DatabaseInitialisationSequence.cs");
+
     /// <summary>
     /// Every piece of work startup begins in the background goes through
     /// <see cref="Quotinator.Api.Startup.StartupBackgroundWork"/>, which the host waits for when it stops
@@ -27,10 +29,21 @@ public partial class RepositoryStructureTests
     /// version row it was about to remove.
     /// </para>
     /// </summary>
+    /// <remarks>
+    /// #490 step 17 moved the wait, with the work it waits for, into <c>DatabaseInitialisationSequence.CompleteAsync</c>,
+    /// which startup and the migrate endpoint both run. So the wait is asserted there, and its last statement, after
+    /// everything that starts work; startup calling it is asserted by the test below.
+    /// </remarks>
     [TestMethod]
     public void Program_WaitsForTheBackgroundWorkItStarted()
     {
-        Assert.Contains("WhenAllCompletedAsync();", File.ReadAllText(ProgramCs), StringComparison.Ordinal);
+        string sequence = File.ReadAllText(SequenceCs);
+        int complete = sequence.IndexOf("public async Task CompleteAsync()", StringComparison.Ordinal);
+
+        Assert.IsGreaterThanOrEqualTo(0, complete, "DatabaseInitialisationSequence.CompleteAsync was not found.");
+        Assert.IsGreaterThan(sequence.LastIndexOf("backgroundWork.Start(", StringComparison.Ordinal),
+            sequence.IndexOf("await backgroundWork.WhenAllCompletedAsync();", complete, StringComparison.Ordinal),
+            "CompleteAsync does not wait for the background work, after the last place it starts some.");
     }
 
     /// <summary>
@@ -46,9 +59,12 @@ public partial class RepositoryStructureTests
     {
         string program = File.ReadAllText(ProgramCs);
 
+        int waits = program.IndexOf("await initialisationSequence.CompleteAsync();", StringComparison.Ordinal);
+
+        Assert.IsGreaterThanOrEqualTo(0, waits, "Program.cs does not run DatabaseInitialisationSequence.CompleteAsync, which holds the wait.");
         Assert.IsLessThan(
             program.IndexOf("MarkComplete();", StringComparison.Ordinal),
-            program.IndexOf("WhenAllCompletedAsync();", StringComparison.Ordinal),
+            waits,
             "startup marks itself complete before waiting for the work it began, so the gate opens while that work is still running");
     }
 }

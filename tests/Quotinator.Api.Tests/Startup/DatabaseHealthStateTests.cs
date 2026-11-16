@@ -60,6 +60,70 @@ public class DatabaseHealthStateTests
         Assert.AreEqual("schema mismatch", state.FailureReason);
     }
 
+    /// <summary>#490 step 17: a migration refused for want of a backup degrades, and is the one the migrate endpoint can resume.</summary>
+    [TestMethod]
+    public void MarkMigrationRefused_DegradesAndAwaitsConfirmation()
+    {
+        DatabaseHealthState state = new();
+
+        state.MarkMigrationRefused("no backup could be taken");
+
+        Assert.IsFalse(state.IsHealthy);
+        Assert.AreEqual("no backup could be taken", state.FailureReason);
+        Assert.IsTrue(state.MigrationAwaitsConfirmation);
+    }
+
+    /// <summary>
+    /// Already degraded for an earlier reason at startup, an unwritable key ring (#326), that reason stands, and
+    /// resuming the migration would not resolve it, so nothing awaits confirmation.
+    /// </summary>
+    [TestMethod]
+    public void MarkMigrationRefused_AfterAnEarlierFailure_KeepsItAndDoesNotAwaitConfirmation()
+    {
+        DatabaseHealthState state = new();
+        state.MarkFailed("key ring not writable");
+
+        state.MarkMigrationRefused("no backup could be taken");
+
+        Assert.AreEqual("key ring not writable", state.FailureReason);
+        Assert.IsFalse(state.MigrationAwaitsConfirmation);
+    }
+
+    /// <summary>Control: any other degradation leaves nothing for the migrate endpoint to resume.</summary>
+    [TestMethod]
+    public void MarkFailed_DoesNotAwaitConfirmation()
+    {
+        DatabaseHealthState state = new();
+
+        state.MarkFailed("schema mismatch");
+
+        Assert.IsFalse(state.MigrationAwaitsConfirmation);
+    }
+
+    [TestMethod]
+    public void MarkHealthy_AfterAMigrationRefusal_NoLongerAwaitsConfirmation()
+    {
+        DatabaseHealthState state = new();
+        state.MarkMigrationRefused("no backup could be taken");
+
+        state.MarkHealthy();
+
+        Assert.IsFalse(state.MigrationAwaitsConfirmation);
+    }
+
+    /// <summary>A resumed initialisation that degrades for another reason is no longer a refused migration.</summary>
+    [TestMethod]
+    public void ReplaceFailure_AfterAMigrationRefusal_NoLongerAwaitsConfirmation()
+    {
+        DatabaseHealthState state = new();
+        state.MarkMigrationRefused("no backup could be taken");
+
+        state.ReplaceFailure("schema mismatch");
+
+        Assert.IsFalse(state.MigrationAwaitsConfirmation);
+        Assert.AreEqual("schema mismatch", state.FailureReason);
+    }
+
     [TestMethod]
     public void MarkFailed_CalledTwice_KeepsFirstReason()
     {

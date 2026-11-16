@@ -68,9 +68,11 @@ The options, for reference:
 - **Reseed without a backup** loads the content with no restore point. It asks for your permission first,
   and records in the log and the audit trail that no backup was taken.
 
-A refused migration has no options: it runs at the next start once the obstacle is resolved. A refused
-Reset can be retried with `allowNoBackup=true`, accepting that it has no restore point, where the
-obstacle allows it.
+A refused migration is resumed with `POST /api/v1/admin/database/migrate`: once the obstacle is
+resolved it takes the backup and migrates, and with `?allowNoBackup=true` it migrates without one,
+accepting that there is no restore point, where the obstacle allows it. The skipped backup is recorded in
+the audit trail. A restart also migrates once the obstacle is resolved. A refused Reset can be retried
+with `allowNoBackup=true` in the same way.
 
 ### `BudgetExceeded`
 
@@ -154,7 +156,9 @@ The backup failed for a reason this build does not recognise.
 
 ## Remedy
 
-Resolve the obstacle as its section above describes. A refused migration then runs at the next start. For
+Resolve the obstacle as its section above describes, then resume a refused migration with
+`POST /api/v1/admin/database/migrate`, or restart. If the obstacle cannot be resolved, confirm migrating
+without a backup with `POST /api/v1/admin/database/migrate?allowNoBackup=true`. For
 content that was not loaded, use one of the notification's options: once the obstacle is resolved,
 *Back up, then reseed* is offered and is the one that keeps a restore point. A refused Reset can simply
 be run again.
@@ -164,3 +168,5 @@ be run again.
 Found by [#327](https://github.com/DutchJaFO/Quotinator/issues/327) and resolved in
 [#348](https://github.com/DutchJaFO/Quotinator/issues/348). Before 1.9.0, a startup with no backup
 possible loaded content or ran migrations without one, and a Reset answered an unhandled `500`.
+[#490](https://github.com/DutchJaFO/Quotinator/issues/490) added the migrate endpoint, so a refused
+migration can be resumed, or confirmed without a backup, without a restart.

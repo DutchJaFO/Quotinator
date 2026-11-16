@@ -28,6 +28,7 @@ namespace Quotinator.Api.Endpoints;
 internal static class AdminEndpoints
 {
     private const string CheckDatabaseIntegrityName = "CheckDatabaseIntegrity";
+    private const string MigrateDatabaseName = "MigrateDatabase";
 
     internal static void MapAdminEndpoints(this WebApplication app)
     {
@@ -426,10 +427,6 @@ internal static class AdminEndpoints
         })
         .WithName("ResetDatabase")
         .WithSummary("Reset the database")
-        .Produces<DatabaseSeedSummaryResponse>(StatusCodes.Status200OK)
-        .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
-        .Produces<ProblemDetails>(StatusCodes.Status409Conflict)
-        .Produces<ProblemDetails>(StatusCodes.Status500InternalServerError)
         .WithDescription(
             "Replaces the database with a new one built from scratch via the baseline schema, equivalent to " +
             "deleting the database file and restarting, except it does **not** reimport any bundled or user " +
@@ -470,7 +467,93 @@ internal static class AdminEndpoints
             "The rebuilt schema is then checked against the one its migration path defines (issue #305); if it does not match, " +
             "the call answers `500` naming every missing or different object, and the application stays degraded on that reason. " +
             "Protected by a concurrency-1 limiter: a second call while one is in progress receives `429 Too Many Requests` immediately. " +
-            "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
+            "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.")
+        .Produces<DatabaseSeedSummaryResponse>(StatusCodes.Status200OK)
+        .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
+        .Produces<ProblemDetails>(StatusCodes.Status409Conflict)
+        .Produces<ProblemDetails>(StatusCodes.Status500InternalServerError);
+
+        adminGroup.MapPost("/database/migrate", async (
+            Quotinator.Api.Startup.DatabaseInitialisationSequence sequence, Quotinator.Api.Startup.DatabaseHealthState dbHealth,
+            IDatabaseInitializer db, IAuditEntryWriter auditWriter, ICallerContext callerContext,
+            [Description("Confirm migrating without a backup when none can be taken. A backup that can be taken is always taken.")]
+            bool allowNoBackup = false) =>
+        {
+            // #490 step 17 (developer, 2026-11-16): only a migration refused for want of a backup can be resumed.
+            // A healthy application has already initialised, and every other degraded reason has its own remedy,
+            // which rerunning initialisation would not reach.
+            if (!dbHealth.MigrationAwaitsConfirmation)
+                return Results.Problem(
+                    title: "Nothing to resume",
+                    detail: dbHealth.IsHealthy
+                        ? "The database is up to date: no migration is waiting."
+                        : $"The application is degraded for a reason a migration cannot resolve: {dbHealth.FailureReason}",
+                    statusCode: StatusCodes.Status409Conflict);
+
+            DatabaseOperationResult? result = await sequence.InitialiseAsync(allowNoBackup);
+
+            // Still no backup and no confirmation: refused as at startup, saying why and offering the
+            // confirmation. Nothing changed, and the application stays degraded on the same reason.
+            if (result is { RefusedStep: BackupGuardedStep.Migration, BackupObstacle: BackupOutcome obstacle })
+                return Results.Problem(
+                    title: "Migration refused: no backup could be taken",
+                    detail: BackupObstacleGuidance.Cause(obstacle),
+                    statusCode: StatusCodes.Status409Conflict,
+                    extensions: new Dictionary<string, object?>
+                    {
+                        ["backupObstacle"] = obstacle.ToString(),
+                        ["remedies"]       = BackupObstacleGuidance.Remedies(obstacle, allowNoBackup),
+                    });
+
+            // #348's rule for a Reset, applied to the migration: a backup skipped by the operator's confirmation
+            // is recorded where it will still be found long after the log has rotated. The migration ran,
+            // whatever happened after it.
+            if (result?.BackupSkippedByOverride == true)
+                await auditWriter.WriteAsync(new AuditEntryEntity
+                {
+                    TableName   = "Database",
+                    Operation   = AuditOperation.BackupSkipped,
+                    Agent       = callerContext.Agent,
+                    PerformedAt = DateTime.UtcNow,
+                });
+
+            // What a healthy start does next, so the resumed migration leaves the state a healthy restart would.
+            if (dbHealth.IsHealthy)
+                await sequence.CompleteAsync();
+            else
+                return Results.Problem(
+                    title: "Migration resumed, but the database is still degraded",
+                    detail: dbHealth.FailureReason,
+                    statusCode: StatusCodes.Status500InternalServerError);
+
+            return Results.Ok(new DatabaseMigrationResponse
+            {
+                DataSchemaVersion = db.DataSchemaVersion,
+                AppSchemaVersion  = db.SchemaVersion,
+                MigrationsApplied = db.MigrationsApplied.Count,
+                Backup            = RestorePointDto.From(result?.RestorePoint),
+            });
+        })
+        .WithName(MigrateDatabaseName)
+        .WithSummary("Resume a migration refused for want of a backup")
+        .WithDescription(
+            "Resumes the startup that degraded because a migration was refused for want of a backup (issue #490). " +
+            "It runs startup's own initialisation again: the database check, the migrations, the check after them, " +
+            "the schema comparison and the content load, and then what a healthy start does next, including one " +
+            "notification per migration applied. Without `allowNoBackup` it takes the backup first, as startup does, " +
+            "and refuses with `409` naming the `backupObstacle` and its `remedies` when it still cannot; with " +
+            "`allowNoBackup=true` a backup that cannot be taken is skipped, the operator's confirmation, recorded in " +
+            "the audit trail. A backup that can be taken is always taken. It covers the migration's backup only: a " +
+            "content load keeps its own backup and its own refusal. Called on a healthy application, or one degraded " +
+            "for any other reason, it answers `409` and changes nothing. When the resumed initialisation degrades for " +
+            "another reason, it answers `500` with that reason, which replaces the refusal. On success it returns " +
+            "the schema versions the database now records, how many migrations ran, and `backup`: `Succeeded` with " +
+            "the backup's `name`, or `Skipped` with the `obstacle`. Protected by a concurrency-1 limiter. " +
+            "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.")
+        .Produces<DatabaseMigrationResponse>(StatusCodes.Status200OK)
+        .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
+        .Produces<ProblemDetails>(StatusCodes.Status409Conflict)
+        .Produces<ProblemDetails>(StatusCodes.Status500InternalServerError);
 
         adminGroup.MapPost("/sources/refresh", async (IDatabaseInitializer db, bool force = false) =>
         {

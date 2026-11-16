@@ -236,7 +236,7 @@ internal sealed class BackupTestHarness : IDisposable
         /// <inheritdoc/>
         public IReadOnlyList<FileImportReport> LastSeedReport => _inner.LastSeedReport;
         /// <inheritdoc/>
-        public Task<DatabaseOperationResult> InitialiseAsync() => _inner.InitialiseAsync();
+        public Task<DatabaseOperationResult> InitialiseAsync(bool allowNoBackup = false) => _inner.InitialiseAsync(allowNoBackup);
         /// <inheritdoc/>
         public Task ReseedAsync(bool forceSourceRefresh = false) => _inner.ReseedAsync(forceSourceRefresh);
         /// <inheritdoc/>

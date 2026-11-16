@@ -1057,7 +1057,7 @@ behaviour rather than predict it: `backup/03`'s full volume.
 
 ### 17. Let the operator confirm a migration without a backup
 
-**Status:** ⬜ Not started. Added 2026-11-16 (developer): *"when there is no room we cannot make any
+**Status:** ✅ Built 2026-11-16; its T2 (`backup/07`) runs with step 16's restart. Added 2026-11-16 (developer): *"when there is no room we cannot make any
 backups. so we have to inform the user and ask them to confirm. when that happens when we need to migrate
 that means we start degraded as we first need to allow the user to fix it or allow us to migrate without a
 backup."* Found in step 16: a Reset already works this way, a migration does not. Startup degrades with
@@ -1077,10 +1077,15 @@ the reason a Reset does: by the time it is called, the room may be back.
 
 **It reruns startup's own initialisation, not a second path through it.** `InitialiseAsync` gains
 `allowNoBackup`, so the endpoint runs exactly what startup runs: the check before writing, the migrations,
-the check after, the schema comparison, and the content load, whose own backup the option covers too
-(`BackupGuardedStep.ContentLoad`). Its result is mapped by `StartupDegradationReasons.For`, the one mapping
-startup uses: healthy if nothing degrades, otherwise the application stays degraded on the new reason, which
-replaces the old one.
+the check after, the schema comparison, and the content load. Its result is mapped by
+`StartupDegradationReasons.For`, the one mapping startup uses: healthy if nothing degrades, otherwise the
+application stays degraded on the new reason, which replaces the old one.
+
+**The option covers the migration's backup only (corrected 2026-11-16, on reading the code).** A content load
+refused for want of a backup does not degrade startup: it raises its own notification, whose remedy is a
+reseed (#348). Letting the migration's confirmation also skip the content load's backup would bundle a second
+data decision into the call, which CLAUDE.md's endpoint side-effect policy rules out. The content load keeps
+its own backup and its own refusal.
 
 **What startup does after a healthy initialisation runs too.** Program.cs gates on `dbHealth.IsHealthy`
 everything after initialisation: reading the last active version, recording the current one, and the
@@ -1090,8 +1095,8 @@ same state a healthy restart would, so that block moves out of Program.cs into o
 the endpoint both call. The ordering comments that hold it in place (#81's read before #312's write) move
 with it.
 
-**Where it can be called.** Only when startup degraded because a backup was refused before a migration or a
-content load. Anywhere else it answers `409` saying there is nothing to resume: a healthy application has
+**Where it can be called (developer, 2026-11-16).** Only while the application is degraded because a backup
+was refused before a migration, the one backup refusal that degrades. Anywhere else it answers `409` saying there is nothing to resume: a healthy application has
 already initialised, and every other degraded reason has its own remedy, which rerunning initialisation
 would not reach.
 
@@ -1112,6 +1117,44 @@ would not reach.
 option, then completed with it, and the restart it uses today kept as the control that freeing room still
 works. `startup-and-degradation/12` is reviewed against it, since it asserts the same refusal's startup
 contract.
+
+**As built, 2026-11-16.**
+- `IDatabaseInitializer.InitialiseAsync(allowNoBackup)`: the migration's backup is still attempted first; only
+  when it cannot be taken does the confirmation skip it, logged by `LogMigrationProceedingWithoutBackup`. The
+  result carries what the migration left to restore from, `BackedUp` or `Skipped`, whatever happens after it.
+- `DatabaseInitialisationSequence` (`Quotinator.Api/Startup`) holds what Program.cs did with the main database,
+  moved verbatim with its comments: `InitialiseAsync` maps the result to health through
+  `StartupDegradationReasons.For`, and `CompleteAsync` is the healthy-start work. Program.cs calls both; the
+  endpoint calls both. `DataDirectoryFault.IsNotWritable` moved out of Program.cs with it rather than being copied.
+- `DatabaseHealthState.MigrationAwaitsConfirmation`, set by `MarkMigrationRefused`, cleared by anything that
+  changes the reason, decides where the endpoint can be called.
+- `POST /api/v1/admin/database/migrate` answers `409` with the obstacle and remedies when still refused, `409`
+  with nothing to resume elsewhere, `500` when the resumed initialisation degrades for another reason, and `200`
+  with `DatabaseMigrationResponse` otherwise. A skipped backup is written to the audit trail, as a Reset's is.
+- `MigrationRefusedReason` names the endpoint, with and without the confirmation, where the obstacle allows
+  it. `no-backup-could-be-taken.md` and `api-endpoints.md` say the same.
+
+**Red first.** `DatabaseInitializerTests.InitialiseAsync_MigrationPendingWithNoBackupPossible_WithOverride_Migrates`
+and `…_ReportsTheSkippedBackup` failed on their claims, the controls `…MigrationPendingWithRoom_WithOverride_StillTakesTheBackup`
+and `…ContentLoadWithNoBackupPossible_WithOverride_IsStillRefused` passing. `AdminMigrateEndpointTests` (6 of 7)
+and `DatabaseHealthStateTests.MarkMigrationRefused_DegradesAndAwaitsConfirmation` failed against a stub endpoint
+answering `501` and a marker that was always false, the controls passing. `BackupObstacleGuidanceTests.MigrationRefusedReason_OffersTheConfirmationOnTheMigrateEndpoint`
+and `…OffersResumingOnceResolved` failed on the old reason; `…_DoesNotOfferTheOverride`, whose premise this step
+reverses, was replaced, its control kept as `…SourceUnreadable_OffersNoConfirmation`.
+
+**Found by the full suite, and fixed.** The first version of the sequence marked the application healthy after a
+clean initialisation, and replaced rather than kept an earlier reason, which erased a failure startup had recorded
+before the database: `StartupResilienceTests.Startup_KeysDirectoryCannotBeCreated_StartsDegradedInsteadOfCrashingBeforeKestrelBinds`
+and `…Startup_KeysDirectoryNotWritable_HealthReportsUnhealthyRatherThanHealthy` failed, reading `200`. Now only a
+resumed migration clears or replaces a reason; at startup the first reason stands, and a migration refused after an
+earlier failure does not await confirmation (`DatabaseHealthStateTests.MarkMigrationRefused_AfterAnEarlierFailure_KeepsItAndDoesNotAwaitConfirmation`).
+`RepositoryStructureTests.Program_WaitsForTheBackgroundWorkItStarted` and `…BeforeMarkingStartupComplete` read
+Program.cs for #419's wait, which moved into `CompleteAsync`; they now assert the wait there, after the last
+background start, and that startup runs `CompleteAsync` before `MarkComplete()`.
+
+**Not in this step, raised for the developer:** the degraded page's repair control offers a Reset, not the
+migration. The reason text names the endpoint, but a confirmation button there would match how the Reset is
+offered.
 
 ### 18. Changelog
 
@@ -1155,5 +1198,5 @@ says that the database is checked thoroughly at every start, and that the faster
 | 27 | ✅ | *(T2, developer, 2026-11-15)* The integrity endpoint never throws, comparing the schema only when Storage passed, and a check that finds the main database failing degrades the application at any point; a dangling reference alone, or the changelog database, does not | Unit test | `AdminDatabaseIntegrityEndpointTests.Check_LayerFailsAfterStartup_DegradesTheApplication`, `…Check_StorageFails_ReportsWithoutComparingAndDegrades`, `…Check_SchemaBrokenAfterStartup_DegradesTheApplication`, `…Check_ReferencesFailOnly_LeavesTheApplicationHealthy`, `…Check_ChangelogFails_LeavesTheApplicationHealthy`, `…Check_ThatPasses_LeavesHealthAsItWas` |
 | 28 | ✅ | *(T2, developer, 2026-11-15; the copy's part superseded 2026-11-16 by row 30)* A failure to read the file is a Storage failure with its fault typed, never an inconclusive layer; a file Storage could not read gets the generic startup reason | Unit test | `SqliteDatabaseCheckTests.Check_DirectoryNotWritable_FailsStorageAndStillChecksTheFile`; `StartupDegradationReasonsTests.For_StorageFoundTheFileUnreadable_IsTheGenericReason`. The copy's tests were removed with the copy |
 | 30 | ✅ | *(T2, developer, 2026-11-16)* The check needs no disk space: a `-wal`'s committed frames are applied in memory by the documented format and the image opened with `sqlite3_deserialize`; a full volume or an unwritable directory no longer stops it, so a Reset of a sound database refuses only for its backup, and with `allowNoBackup` skips it | Unit test + Live (T2) | `WalReplayTests` (11), including `…Apply_WalSQLiteWrote_MatchesWhatACheckpointWrites`, which also proves `sqlite3_deserialize` is in the bundled library; `SqliteDatabaseCheckTests.Check_WalHoldsData_NothingCanBeWritten_StillChecksTheFile` and `…Check_AnyOutcome_LeavesTheFileAndSidecarsUntouched` (now also: nothing left in the data directory); `DatabaseInitializerTests.ResetAsync_WalHoldsData_NothingWritableForTheCheck_BacksTheSoundCopyUp`; `backup/03` step 6 |
-| 31 | ❌ | *(step 17, developer, 2026-11-16)* A migration refused for want of a backup can be completed from inside the application: `POST /admin/database/migrate` takes the backup or refuses naming the obstacle, and with `allowNoBackup` proceeds without one, recorded; it leaves the state a healthy restart would | Unit test + Live (T2) | Step 17's red-first tests; `backup/07` |
+| 31 | ❌ | *(step 17, developer, 2026-11-16)* A migration refused for want of a backup can be completed from inside the application: `POST /admin/database/migrate` takes the backup or refuses naming the obstacle, and with `allowNoBackup` proceeds without one, recorded; it leaves the state a healthy restart would | Unit test + Live (T2) | Unit tests green: `DatabaseInitializerTests` (4 `…WithOverride…`), `AdminMigrateEndpointTests` (7), `DatabaseHealthStateTests` (4 new), `BackupObstacleGuidanceTests` (3 new). Pending: `backup/07` in T2 |
 | 29 | ❌ | *(T2, developer, 2026-11-15)* Free space is measured on the file system that holds the path, not on its root: a full volume mounted at `/data` reads as full | Live (T2) + unit test | `backup/03`, red on `9b59f414`, green on this build (pending the T2 run); controls `DiskSpaceProviderTests.GetAvailableFreeSpaceBytes_ExistingDirectory_IsPositive`, `…FolderNotCreatedYet_MeasuresItsNearestExistingParent` |

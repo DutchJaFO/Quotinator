@@ -137,7 +137,12 @@ public interface IDatabaseInitializer : IIntegrityCheckedDatabase
     /// cannot be taken refuses rather than proceeding unprotected: the schema change would then be
     /// unrecoverable, which is the outcome the backup exists to prevent.
     /// </returns>
-    Task<DatabaseOperationResult> InitialiseAsync();
+    /// <param name="allowNoBackup">
+    /// The operator's confirmation that a migration may run without the backup it would take first, when that
+    /// backup cannot be taken (#490 step 17). A backup that can be taken is always taken. It covers the
+    /// migration's backup only: a content load keeps its own backup and its own refusal.
+    /// </param>
+    Task<DatabaseOperationResult> InitialiseAsync(bool allowNoBackup = false);
 
     /// <summary>Imports from all configured source files without deleting anything first (#372): adds what is missing, leaves already-correct content untouched, and raises a decision where content disagrees. Schema migration history is preserved. Updates the row-count properties when done.</summary>
     /// <param name="forceSourceRefresh">

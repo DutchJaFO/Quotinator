@@ -84,7 +84,7 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public IReadOnlyList<FileImportReport> LastSeedReport => [];
 
     /// <inheritdoc/>
-    public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
+    public Task<DatabaseOperationResult> InitialiseAsync(bool allowNoBackup = false) => Task.FromResult(DatabaseOperationResult.Success());
 
     /// <inheritdoc/>
     public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;

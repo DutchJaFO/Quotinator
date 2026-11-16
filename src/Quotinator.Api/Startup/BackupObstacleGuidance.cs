@@ -70,16 +70,27 @@ internal static class BackupObstacleGuidance
     /// The degraded reason a startup reports when its pending migration was refused for want of a backup:
     /// the obstacle, what it means, what the operator can do, and where the whole story is written down.
     /// <para>
-    /// The override is left out: it is a Reset parameter, and a startup migration has no override, so
-    /// naming it here would offer a remedy for a different action.
+    /// #490 step 17 (developer, 2026-11-16): the operator either resolves the obstacle or confirms migrating
+    /// without a backup, and both are done on <c>POST /api/v1/admin/database/migrate</c>, which resumes the
+    /// migration. Until then the Reset's override was left out here, since a startup migration had none; the
+    /// confirmation is now offered on the migrate endpoint instead, wherever the obstacle has one.
     /// </para>
     /// </summary>
     /// <param name="obstacle">The obstacle that stopped the backup.</param>
-    internal static string MigrationRefusedReason(BackupOutcome obstacle) =>
-        $"Database migration refused: no backup could be taken ({obstacle}). {Cause(obstacle)} "
-        + "The database stays at its recorded schema version until a backup can be taken. "
-        + string.Join(" ", WithoutOverride(RemediesFor(obstacle)))
-        + $" See {KnowledgebaseLinks.NoBackupCouldBeTaken}";
+    internal static string MigrationRefusedReason(BackupOutcome obstacle)
+    {
+        IReadOnlyList<string> all = RemediesFor(obstacle);
+        bool canConfirm = all.Any(r => r.Contains("allowNoBackup", StringComparison.Ordinal));
+
+        return $"Database migration refused: no backup could be taken ({obstacle}). {Cause(obstacle)} "
+            + "The database stays at its recorded schema version until the migration is resumed. "
+            + string.Join(" ", WithoutOverride(all))
+            + $" Once resolved, resume it with POST {ApiRoutes.DatabaseMigrate} (or restart)."
+            + (canConfirm
+                ? $" To migrate without a backup instead, accepting there will be no restore point, call POST {ApiRoutes.DatabaseMigrate}?allowNoBackup=true."
+                : string.Empty)
+            + $" See {KnowledgebaseLinks.NoBackupCouldBeTaken}";
+    }
 
     private static IReadOnlyList<string> WithoutOverride(IReadOnlyList<string> remedies) =>
         [.. remedies.Where(r => !r.Contains("allowNoBackup", StringComparison.Ordinal))];

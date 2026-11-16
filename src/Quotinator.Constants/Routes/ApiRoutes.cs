@@ -9,6 +9,7 @@ public static class ApiRoutes
     public const string DatabaseReseed      = "/api/v1/admin/database/reseed";
     public const string DatabaseReset       = "/api/v1/admin/database/reset";
     public const string DatabaseIntegrity   = "/api/v1/admin/database/integrity";
+    public const string DatabaseMigrate     = "/api/v1/admin/database/migrate";
     public const string AuditLog            = "/api/v1/admin/audit";
     public const string AuditExport         = "/api/v1/admin/audit/export";
     public const string AuditDateRange      = "/api/v1/admin/audit/date-range";

@@ -5798,6 +5798,65 @@ public partial class DatabaseInitializerTests
         Assert.AreEqual(0, tables, "the pending migration's table was created, so the migration ran without a backup");
     }
 
+    /// <summary>
+    /// #490 step 17 (developer, 2026-11-16): with no room there can be no backup, so the operator is asked to
+    /// confirm, and <c>allowNoBackup</c> is that confirmation: the migration runs without one.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_MigrationPendingWithNoBackupPossible_WithOverride_Migrates()
+    {
+        DatabaseOperationResult result = await InitialiseWithMigrationPendingAndNoDiskSpaceAsync(allowNoBackup: true);
+
+        Assert.IsTrue(result.Succeeded, $"The confirmed migration was refused ({result.BackupObstacle}, {result.RefusedStep}).");
+        Assert.AreEqual(1, await PendingMigrationTableCountAsync(), "The confirmed migration did not run.");
+    }
+
+    /// <summary>The confirmed migration says it left no restore point, and why, so the skip can be recorded.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_MigrationPendingWithNoBackupPossible_WithOverride_ReportsTheSkippedBackup()
+    {
+        DatabaseOperationResult result = await InitialiseWithMigrationPendingAndNoDiskSpaceAsync(allowNoBackup: true);
+
+        Assert.IsTrue(result.BackupSkippedByOverride, "The result does not say the backup was skipped.");
+        Assert.AreEqual(BackupOutcome.InsufficientDiskSpace, result.RestorePoint?.Obstacle);
+    }
+
+    /// <summary>The override accepts going without a backup; it never asks to. A backup that can be taken is taken.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_MigrationPendingWithRoom_WithOverride_StillTakesTheBackup()
+    {
+        QuotinatorDatabaseInitializer db1 = CreateInitializer([SimpleQuoteBatch()], QuotinatorMigrations.All, useBaseline: true);
+        await db1.InitialiseAsync();
+        int before = BackupFileCount();
+
+        DatabaseOperationResult result = await CreateInitializer([], [.. QuotinatorMigrations.All, PendingMigration()], useBaseline: true)
+            .InitialiseAsync(allowNoBackup: true);
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.IsGreaterThan(before, BackupFileCount(), "The override skipped a backup that could be taken.");
+        Assert.IsFalse(result.BackupSkippedByOverride, "The result says a backup was skipped although one was taken.");
+    }
+
+    /// <summary>
+    /// The confirmation covers the migration's backup only: a content load refused for want of its own backup
+    /// is still refused, since it is a second data decision the operator did not make (CLAUDE.md's endpoint
+    /// side-effect policy).
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_ContentLoadWithNoBackupPossible_WithOverride_IsStillRefused()
+    {
+        DatabaseOperationResult result = await InitialiseWithContentPendingAndNoDiskSpaceAsync(allowNoBackup: true);
+
+        Assert.AreEqual(BackupGuardedStep.ContentLoad, result.RefusedStep);
+    }
+
+    private async Task<int> PendingMigrationTableCountAsync()
+    {
+        using SqliteConnection conn = new($"Data Source={_dbPath};Pooling=False");
+        await conn.OpenAsync(TestContext.CancellationToken);
+        return await conn.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '{PendingMigrationTable}';");
+    }
+
     /// <summary>A refused content load leaves the schema intact, which the caller reports differently from a refused migration.</summary>
     [TestMethod]
     public async Task InitialiseAsync_ContentLoadWithNoBackupPossible_NamesTheContentLoadStep()
@@ -5815,22 +5874,22 @@ public partial class DatabaseInitializerTests
     /// taken. Loading content first matters: an empty database would also refuse its content load, and that
     /// refusal would satisfy these tests whether or not the migration refused.
     /// </summary>
-    private async Task<DatabaseOperationResult> InitialiseWithMigrationPendingAndNoDiskSpaceAsync()
+    private async Task<DatabaseOperationResult> InitialiseWithMigrationPendingAndNoDiskSpaceAsync(bool allowNoBackup = false)
     {
         QuotinatorDatabaseInitializer db1 = CreateInitializer([SimpleQuoteBatch()], QuotinatorMigrations.All, useBaseline: true);
         await db1.InitialiseAsync();
 
-        SchemaMigration pending = new()
-        {
-            Version = QuotinatorMigrations.All.Count + 1,
-            Sql     = $"CREATE TABLE IF NOT EXISTS {PendingMigrationTable} (Id INTEGER);",
-            Description = "Adds the fixture table that makes a migration pending.",
-        };
-
         QuotinatorDatabaseInitializer db2 = CreateInitializer(
-            [], [.. QuotinatorMigrations.All, pending], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0));
-        return await db2.InitialiseAsync();
+            [], [.. QuotinatorMigrations.All, PendingMigration()], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0));
+        return await db2.InitialiseAsync(allowNoBackup);
     }
+
+    private static SchemaMigration PendingMigration() => new()
+    {
+        Version = QuotinatorMigrations.All.Count + 1,
+        Sql     = $"CREATE TABLE IF NOT EXISTS {PendingMigrationTable} (Id INTEGER);",
+        Description = "Adds the fixture table that makes a migration pending.",
+    };
 
     /// <summary>
     /// #348: loading content writes what this database cannot get back if it goes wrong, and the backup is
@@ -5993,12 +6052,12 @@ public partial class DatabaseInitializerTests
         return batch;
     }
 
-    private async Task<DatabaseOperationResult> InitialiseWithContentPendingAndNoDiskSpaceAsync()
+    private async Task<DatabaseOperationResult> InitialiseWithContentPendingAndNoDiskSpaceAsync(bool allowNoBackup = false)
     {
         _pendingContentBatch = await ContentSeedPendingDatabaseAsync();
 
         QuotinatorDatabaseInitializer db2 = CreateInitializer([_pendingContentBatch], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0));
-        return await db2.InitialiseAsync();
+        return await db2.InitialiseAsync(allowNoBackup);
     }
 
     private async Task<int> GenreCountAsync()

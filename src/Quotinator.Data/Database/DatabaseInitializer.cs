@@ -699,7 +699,7 @@ public class DatabaseInitializer(
     protected static SemaphoreSlim SharedSeedLock => SeedLock;
 
     /// <inheritdoc/>
-    public async Task<DatabaseOperationResult> InitialiseAsync()
+    public async Task<DatabaseOperationResult> InitialiseAsync(bool allowNoBackup = false)
     {
         MigrateFilenameIfNeeded();
 
@@ -714,7 +714,11 @@ public class DatabaseInitializer(
         await connection.OpenAsync();
 
         EnableWal(connection);
-        MigrationsResult migrations = await ApplyMigrationsAsync(connection);
+        MigrationsResult migrations = await ApplyMigrationsAsync(connection, allowNoBackup: allowNoBackup);
+
+        // #490 step 17: what the migrations left to restore from is on whatever this initialisation returns,
+        // since they ran whatever happens after them, and a skipped backup is recorded by the caller.
+        RestorePointResult? migrationRestorePoint = migrations.RestorePoint;
 
         // #371: assigned here rather than inside ApplyMigrationsAsync, and that placement is
         // load-bearing. RebuildAsync calls ApplyMigrationsAsync too, against the new database it is
@@ -738,7 +742,7 @@ public class DatabaseInitializer(
             check = await _check.CheckAsync(_options.StartupCheckDepth);
             StartupDatabaseCheck.Log(Logger, check);
             if (StartupDatabaseCheck.Stops(check))
-                return DatabaseOperationResult.StoppedByCheck(check);
+                return WithRestorePoint(DatabaseOperationResult.StoppedByCheck(check), migrationRestorePoint);
         }
 
         // #305: a version recorded ahead of this build means the schema's shape is unknown to it, so there
@@ -746,14 +750,29 @@ public class DatabaseInitializer(
         // must match what its version defines before anything is loaded into it, and a difference is a
         // hard failure, returned rather than thrown (ADR 022) and never repaired.
         if (!SchemaVersionOvershootDetected && !await IsSchemaIntactAsync())
-            return DatabaseOperationResult.NotIntact(check);
+            return WithRestorePoint(DatabaseOperationResult.NotIntact(check), migrationRestorePoint);
 
         BackupOutcome? obstacle = await RunInitialisedHookAsync(connection, migrations.TookBaselinePath, migrations.DatabaseWasCreated);
 
         return obstacle is null
-            ? DatabaseOperationResult.Success(check: check)
-            : DatabaseOperationResult.RefusedForBackup(obstacle.Value, BackupGuardedStep.ContentLoad);
+            ? DatabaseOperationResult.Success(restorePoint: migrationRestorePoint, check: check)
+            : WithRestorePoint(DatabaseOperationResult.RefusedForBackup(obstacle.Value, BackupGuardedStep.ContentLoad), migrationRestorePoint);
     }
+
+    // An initialisation result as returned, with what the migrations left to restore from on it when they ran.
+    // Only the fields an initialisation sets are carried: a Reset's obstacle and set-aside reason never arise here.
+    private static DatabaseOperationResult WithRestorePoint(DatabaseOperationResult result, RestorePointResult? restorePoint) =>
+        restorePoint is null
+            ? result
+            : new DatabaseOperationResult
+            {
+                Succeeded       = result.Succeeded,
+                BackupObstacle  = result.BackupObstacle,
+                RefusedStep     = result.RefusedStep,
+                SchemaNotIntact = result.SchemaNotIntact,
+                Check           = result.Check,
+                RestorePoint    = restorePoint,
+            };
 
     /// <summary>
     /// Test-only entry point that mirrors <see cref="InitialiseAsync"/> but can force the
@@ -1581,14 +1600,19 @@ public class DatabaseInitializer(
     /// baseline path, which applies no individual migration, and empty when nothing was pending or the
     /// migrations were refused for want of a backup.
     /// </param>
+    /// <param name="RestorePoint">
+    /// What the migrations left to restore from (#490 step 17): the backup taken before them, or that it was
+    /// skipped because the operator confirmed it, and why. <see langword="null"/> when no migration ran.
+    /// </param>
     private readonly record struct MigrationsResult(
         bool TookBaselinePath,
         bool DatabaseWasCreated,
         BackupOutcome? Obstacle,
-        IReadOnlyList<AppliedMigrationResult> Applied);
+        IReadOnlyList<AppliedMigrationResult> Applied,
+        RestorePointResult? RestorePoint = null);
 
     /// <summary>Applies pending migrations, or the baseline for a genuinely fresh database, unless no backup can be taken first.</summary>
-    private async Task<MigrationsResult> ApplyMigrationsAsync(SqliteConnection connection, bool forceIncremental = false, bool skipOwnBackup = false)
+    private async Task<MigrationsResult> ApplyMigrationsAsync(SqliteConnection connection, bool forceIncremental = false, bool skipOwnBackup = false, bool allowNoBackup = false)
     {
         // Must run before either CreateXVersionTable call below: those would otherwise make every
         // fresh database register as "not empty" on the very next line, permanently disabling the
@@ -1645,15 +1669,24 @@ public class DatabaseInitializer(
         // let every pending migration run unprotected, and the restore handler below, filtered on that
         // path, could not roll back a migration that then threw. Nothing is applied and the recorded
         // versions stand, so a later start with a backup possible migrates from exactly here.
+        // #490 step 17 (developer, 2026-11-16): unless the operator confirmed it may run without one. The
+        // backup was still attempted first, so the override never skips one that could be taken.
+        BackupOutcome? skippedFor = null;
         if (migrationBackup is { Succeeded: false } refused)
         {
-            DataSchemaVersion = dataCurrent;
-            SchemaVersion     = consumerCurrent;
-            Logger.LogMigrationRefusedNoBackup(refused.Outcome.ToString());
-            return new MigrationsResult(TookBaselinePath: false, DatabaseWasCreated: isEmptyDatabase, Obstacle: refused.Outcome, Applied: []);
+            if (!allowNoBackup)
+            {
+                DataSchemaVersion = dataCurrent;
+                SchemaVersion     = consumerCurrent;
+                Logger.LogMigrationRefusedNoBackup(refused.Outcome.ToString());
+                return new MigrationsResult(TookBaselinePath: false, DatabaseWasCreated: isEmptyDatabase, Obstacle: refused.Outcome, Applied: []);
+            }
+
+            Logger.LogMigrationProceedingWithoutBackup(refused.Outcome.ToString());
+            skippedFor = refused.Outcome;
         }
 
-        string? backupPath = migrationBackup?.Path;
+        string? backupPath = migrationBackup is { Succeeded: true } ? migrationBackup.Path : null;
 
         // Some migrations recreate a table (SQLite has no ALTER ... CHECK) to widen a constraint,
         // which requires dropping a table that other tables still hold live foreign-key references
@@ -1698,7 +1731,10 @@ public class DatabaseInitializer(
 
         Logger.LogSchemaUpdated(DataSchemaVersion, SchemaVersion);
 
-        return new MigrationsResult(TookBaselinePath: false, DatabaseWasCreated: isEmptyDatabase, Obstacle: null, Applied: applied);
+        return new MigrationsResult(TookBaselinePath: false, DatabaseWasCreated: isEmptyDatabase, Obstacle: null, Applied: applied,
+            RestorePoint: skippedFor is BackupOutcome obstacle ? RestorePointResult.Skipped(obstacle)
+                : backupPath is not null ? RestorePointResult.BackedUp(Path.GetFileName(backupPath))
+                : null);
     }
 
     private async Task ApplyBaselineAsync(SqliteConnection connection)

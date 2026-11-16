@@ -572,7 +572,7 @@ public class AdminEndpointsTests
         public Task<Quotinator.Data.Schema.SchemaIntegrityResult> CheckIntegrityAsync() => Task.FromResult(Quotinator.Data.Schema.SchemaIntegrityResult.Intact);
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
 
-        public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
+        public Task<DatabaseOperationResult> InitialiseAsync(bool allowNoBackup = false) => Task.FromResult(DatabaseOperationResult.Success());
 
         public BackupOutcome CheckBackupReadiness(long bytesFreedFirst = 0) => BackupOutcome.Succeeded;
         public Task<DatabaseBackupResult> CreateBackupAsync() => Task.FromResult(DatabaseBackupResult.Success(SpyBackupName));

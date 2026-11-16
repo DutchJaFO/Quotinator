@@ -28,6 +28,13 @@ internal sealed class DatabaseHealthState
     public DatabaseCheckResult? StartupCheck { get; private set; }
 
     /// <summary>
+    /// Whether the application is degraded because a migration was refused for want of a backup (#490 step 17),
+    /// so <c>POST /api/v1/admin/database/migrate</c> can resume it, with the backup once there is room, or
+    /// without one once the operator confirms. Cleared by anything that changes the reason.
+    /// </summary>
+    public bool MigrationAwaitsConfirmation { get; private set; }
+
+    /// <summary>
     /// Raised when <see cref="IsHealthy"/> actually changes, so a rendered component can react to a
     /// repair instead of being reloaded into the new state (#350).
     /// </summary>
@@ -73,6 +80,23 @@ internal sealed class DatabaseHealthState
     }
 
     /// <summary>
+    /// Records that initialisation degraded because a migration was refused for want of a backup (#490 step 17),
+    /// which the migrate endpoint can resume. Otherwise as <see cref="MarkFailed"/>.
+    /// </summary>
+    /// <param name="reason">A short, user-facing description of the refusal and its remedies.</param>
+    public void MarkMigrationRefused(string reason)
+    {
+        // Already degraded for an earlier reason at startup, that reason stands (first wins), and resuming the
+        // migration would not resolve it, so nothing awaits the operator's confirmation. Already awaiting it, a
+        // second refusal changes nothing.
+        if (!IsHealthy)
+            return;
+
+        MarkFailed(reason);
+        MigrationAwaitsConfirmation = true;
+    }
+
+    /// <summary>
     /// Records a failure found by a repair that ran, replacing whatever reason was recorded before it
     /// (#305): a Reset rebuilds every table, so the earlier reason no longer describes the database, and
     /// the application stays degraded throughout rather than passing through healthy.
@@ -83,6 +107,7 @@ internal sealed class DatabaseHealthState
         bool wasHealthy = IsHealthy;
         IsHealthy       = false;
         FailureReason   = reason;
+        MigrationAwaitsConfirmation = false;
         if (wasHealthy) Changed?.Invoke();
     }
 
@@ -98,6 +123,7 @@ internal sealed class DatabaseHealthState
         bool wasDegraded = !IsHealthy;
         IsHealthy        = true;
         FailureReason    = null;
+        MigrationAwaitsConfirmation = false;
         if (wasDegraded) Changed?.Invoke();
     }
 }

@@ -1044,7 +1044,7 @@ public class NotificationActionExecutorTests
         public Task<Quotinator.Data.Schema.SchemaIntegrityResult> CheckIntegrityAsync() => Task.FromResult(Quotinator.Data.Schema.SchemaIntegrityResult.Intact);
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
 
-        public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
+        public Task<DatabaseOperationResult> InitialiseAsync(bool allowNoBackup = false) => Task.FromResult(DatabaseOperationResult.Success());
 
         /// <summary>What the pre-flight answers when nothing is freed first.</summary>
         public BackupOutcome Readiness { get; init; } = BackupOutcome.Succeeded;
