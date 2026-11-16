@@ -91,6 +91,6 @@ public class ChangelogDatabaseCheckTests
             new SqliteConnectionFactory(_dbPath),
             NullLogger<ChangelogDatabaseInitializer>.Instance,
             new SqliteDatabaseCheck(
-                DatabaseNames.Changelog, _dbPath, Path.Combine(_directory.Path, SqliteDatabaseCheck.WorkFolderName),
+                DatabaseNames.Changelog, _dbPath,
                 ChangelogDatabaseInitializer.ExpectedSchemaScripts(), ChangelogDatabaseInitializer.ExpectedSchemaVersions()));
 }

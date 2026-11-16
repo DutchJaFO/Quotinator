@@ -36,7 +36,7 @@ The layers name *what* is checked, never how an engine checks it:
 
 | Layer | What it answers | Run at `Fast` |
 |---|---|---|
-| Storage | Is the file there, can it be read, can its directory be written, and is there room for what checking it needs? | Yes |
+| Storage | Is the file there, can it be read, and can its directory be written? | Yes |
 | Format | Is it a database of this engine, by its documented file format? | Yes |
 | Journal | Is the engine's write-ahead file, if there is one, valid by its documented format? | Yes |
 | Pages | Can every page be read, and is every record well-formed? | Yes |
@@ -72,15 +72,14 @@ Each layer reports one of five statuses:
 - **Skipped:** the depth excluded it, or, for Schema, the comparison cannot mean anything yet (below). A
   skip for a reason states it as the finding.
 
-**Something the check could not do is a result, never an inconclusive one (developer, 2026-11-15).** A copy
-that could not be made, or a directory without room for one, is what Storage found: it fails, with the reason
-as its finding. Inconclusive is kept for a test that ran and answered neither way.
+**Something the check could not do is a result, never an inconclusive one (developer, 2026-11-15).** A file
+that could not be read is what Storage found: it fails, with the reason as its finding. Inconclusive is kept
+for a test that ran and answered neither way.
 
-**One exception to "the first failure stops the check": a directory that cannot be written or has no room,
-when the reading layers need nothing written.** Every later layer only reads, so Storage reports that failure
-and the reading layers still run, and the report can say whether the file itself is sound. When the reading
-layers can run only on a copy, and the copy cannot be made, they do not run. A file that cannot be read stops
-the check as usual.
+**One exception to "the first failure stops the check": a directory that cannot be written.** Every later
+layer only reads, and needs nothing written (below), so Storage reports that failure and the reading layers
+still run, and the report can say whether the file itself is sound. A file that cannot be read stops the
+check as usual.
 
 ### Only documented behaviour is relied on
 
@@ -95,10 +94,10 @@ reliance on how the engine reacts to misuse.
 ### The check changes nothing
 
 **A check leaves the database file and every file beside it exactly as it found them.** It writes nothing,
-starts no recovery on the original, and holds no lock afterwards. Where a layer can only be run soundly by
-letting the engine recover something, it runs on a copy. Making that copy is Storage's: the room it needs is
-measured before it is attempted, and a copy that cannot be made, for want of room or a writable folder, or
-because the operating system refused it, is a Storage failure.
+starts no recovery on the original, and holds no lock afterwards. **It needs no disk space either (developer,
+2026-11-16).** Where a layer can only be run soundly once what the engine would recover is applied, that is
+done in memory, from the files' documented formats, and the layer reads the result. A full volume therefore
+never stops the check; it stops only what writes, such as a backup, through that operation's own obstacles.
 
 ### Who calls it, and at what depth
 
@@ -155,14 +154,9 @@ A Reset backs up a sound copy and sets aside a file that is not one (ADR 025, AD
   it, so it needs no free space.
 - **A sound copy, so backed up:** only References or Schema failed. Their data can still be read and
   restored, even though the database cannot be used as it is.
-- **Storage found no room, so the backup cannot be taken either (developer, 2026-11-15).** Room for the
-  check's copy is room a backup needs too, so a Reset refuses as it does for any backup obstacle (ADR 025):
-  the operator frees space, or retries with `allowNoBackup` and proceeds without a restore point, with a
-  warning. With the override, a file whose reading layers ran and passed is replaced as a sound copy is
-  without a backup; one whose reading layers could not run is set aside, since nothing showed it sound, and
-  moving it needs no room. The refusal is the expected path, since the room is measured first; an operating
-  system that refuses the copy anyway, because something else took the space or the need was underestimated,
-  is answered the same way.
+- **No room for the backup of a sound copy (developer, 2026-11-16).** With no room there can be no backup,
+  so a Reset refuses as it does for any backup obstacle (ADR 025), says why, and proceeds only once the
+  operator confirms with `allowNoBackup`, without a restore point.
 
 ## The SQLite implementation
 
@@ -173,7 +167,7 @@ documents it (read 2026-11-14), and every case that page leaves open, with the w
 
 | Layer | How SQLite checks it | Documented in |
 |---|---|---|
-| Storage | File system calls, a write probe in the directory, and the volume's free space measured against the copy the query layers need when the `-wal` holds data (below) | (not an engine fact) |
+| Storage | File system calls and a write probe in the directory | (not an engine fact) |
 | Format | The 100-byte header begins with the 16 bytes `SQLite format 3\0`. The page size (2 bytes, big-endian, at offset 16) is a power of two from 512 to 32768, or 1 for 65536. | [fileformat.html §1.3](https://www.sqlite.org/fileformat.html#the_database_header) |
 | Journal | When a `-wal` of non-zero length exists, its 32-byte header holds: the magic `0x377f0682` or `0x377f0683`, version 3007000, a page size equal to the database's, and valid checksums over its first 24 bytes, in the byte order the magic selects | [fileformat.html §4.1](https://www.sqlite.org/fileformat.html#wal_file_format), [§4.2](https://www.sqlite.org/fileformat.html#checksum_algorithm) |
 | Pages | `PRAGMA quick_check`. A sound result is the single row `ok`. | [pragma.html](https://www.sqlite.org/pragma.html#pragma_quick_check) |
@@ -186,26 +180,35 @@ documents it (read 2026-11-14), and every case that page leaves open, with the w
 - **No `-wal`, or an empty one:** the query layers run on a read-only `immutable` open of the main file.
   [uri.html](https://www.sqlite.org/uri.html) documents that `immutable` skips all locking and change
   detection.
-- **A `-wal` holding data:** the database and its sidecars are copied, and the copy is opened normally, so
-  SQLite recovers the copy's `-wal`. [wal.html](https://www.sqlite.org/wal.html) documents three relevant
-  facts:
-  - the `-wal` is part of the database's persistent state;
-  - it must be kept with the database when the database is copied;
-  - the first connection to open the database runs that recovery.
-
-  The originals are never opened.
-- **The copy goes in a reserved folder inside the data directory,** never the system temporary folder.
-  SQLite locks the files it opens, and the Home Assistant add-on's AppArmor profile grants the system
-  temporary folder read and write but not file locking. The room it needs, the database and its `-wal`
-  together, is measured against the volume's free space before the copy is made. Too little room, a folder
-  that cannot be written, or a copy the operating system refuses fails Storage, with what refused it as the
-  finding, and the query layers do not run.
+- **A `-wal` holding data:** the `-wal` is part of the database's persistent state
+  ([wal.html](https://www.sqlite.org/wal.html)), so the query layers run on an in-memory image of the
+  database with the `-wal`'s committed frames applied. Both files are read into memory, never opened by
+  SQLite, and nothing is written to disk:
+  - **Which frames count** ([fileformat.html §4.1](https://www.sqlite.org/fileformat.html#wal_file_format)):
+    a frame is valid if and only if its salts match the `-wal` header's, and its checksum matches the one
+    computed consecutively over the header's first 24 bytes and the first 8 bytes and content of every
+    frame up to and including it (§4.2's algorithm). A frame whose second field is not zero is a commit
+    record, and that field is the database's size in pages after the commit.
+  - **Which version of a page is read** ([§4.5](https://www.sqlite.org/fileformat.html#reader_algorithm)):
+    "the last valid instance of page P that is followed by a commit frame or is a commit frame itself";
+    otherwise the page from the main file. The image is sized to the last commit's page count.
+  - **Opening it:** header bytes 18 and 19 are set to 1, as
+    [c3ref/deserialize.html](https://www.sqlite.org/c3ref/deserialize.html) documents for a database in WAL
+    mode, which otherwise fails with `SQLITE_CANTOPEN`, and the image is opened read-only with
+    `sqlite3_deserialize`.
+  - **What it costs:** memory for the database and its `-wal` while the check runs.
 
 ### Not documented, and the worst case assumed
 
 - **What an `immutable` open does with an existing `-wal`.** *Worst case:* it ignores the `-wal`, and
   transactions committed before a crash are missed. So no query layer runs on an `immutable` open while
   the `-wal` holds data.
+- **Whether a reader stops at the first invalid frame.** *Worst case:* it does not, and a later frame is
+  read. So the image takes exactly what §4.1 and §4.5 define, and no frame is used unless it is valid by the
+  consecutive checksum, which includes every frame before it.
+- **Whether the bundled library includes `sqlite3_deserialize`.** It "is omitted if SQLite is compiled
+  with the SQLITE_OMIT_DESERIALIZE option", and nothing documents how the bundled library was compiled. A
+  test proves it is present.
 - **What SQLite does with a `-wal` whose header is invalid.** *Worst case:* it discards the `-wal`
   silently, losing committed transactions. So an invalid `-wal` header fails Journal, and the file is not a
   sound copy.
@@ -239,10 +242,9 @@ documents it (read 2026-11-14), and every case that page leaves open, with the w
 - **Startup costs more.** A `Full` check of the bundled databases takes milliseconds. Larger databases and
   slower storage cost more, which is what `Fast` is for. Its cost is that some damage goes undetected until
   a Reset or the endpoint looks.
-- **The check may need disk space.** A copy is needed only when a `-wal` still holds data, which happens
-  after an unclean stop or while the application runs. With too little room, Storage fails: startup degrades
-  rather than opening the database unchecked, the endpoint reports it and degrades the application, and a
-  Reset refuses unless the operator accepts going without a backup.
+- **The check needs memory, never disk space.** When a `-wal` still holds data, after an unclean stop or
+  while the application runs, the check holds the database and its `-wal` in memory. A full volume does not
+  stop it, so a full volume is reported by what it actually stops: a backup.
 - **The engine's documentation is pinned.** A newer engine release that documents more may allow a layer
   to be narrowed or a worst case to be dropped. That is a change to this ADR's engine section, made only
   once the new behaviour is documented.

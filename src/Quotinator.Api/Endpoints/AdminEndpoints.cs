@@ -436,10 +436,8 @@ internal static class AdminEndpoints
             "quote content afterward (issue #156). Nothing survives, including the audit log: no table " +
             "is protected from this reset; export the audit trail first via `GET /api/v1/admin/audit/export` " +
             "if you need to keep it (issue #249). " +
-            "It works whatever state the old file is in (issue #482). The old file is checked at full depth first (issue #490). " +
-            "When the check finds too little room for the copy it needs, there is no room for a backup either, so the Reset " +
-            "refuses with `409` and `backupObstacle` `InsufficientDiskSpace`, as it does for any backup it cannot take; with " +
-            "`allowNoBackup=true` it proceeds and sets the file aside. A file that is not a sound copy, because its format, " +
+            "It works whatever state the old file is in (issue #482). The old file is checked at full depth first (issue #490), " +
+            "in memory, so the check itself needs no disk space. A file that is not a sound copy, because its format, " +
             "journal, pages or indexes did not pass or could not be checked, is never backed up: it is moved, with its `-wal` and `-shm`, into the `unreadable` folder inside the backups folder, " +
             "where it counts towards backup storage, and a notification names it and says why it was set aside: the check layer " +
             "that failed, with its status and finding, or the backup's own error when the check passed and the backup copy " +

@@ -184,69 +184,22 @@ public partial class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// Row 14: when the <c>-wal</c> holds data and the check's copy cannot be written, Storage fails and no
-    /// reading layer runs, so nothing shows the file is a sound copy. The data directory itself is writable, so
-    /// the Reset sets the file aside, which moves it and needs no extra space.
+    /// Row 14, as superseded (developer, 2026-11-16): a sound database whose <c>-wal</c> holds data is checked in
+    /// memory, so nothing the data directory refuses the check can stop it showing the file is a sound copy, and
+    /// the Reset backs it up. Before, a copy that could not be made in the data directory set a healthy file aside.
     /// </summary>
     [TestMethod]
-    public async Task ResetAsync_CopyCannotBeWritten_SetsTheFileAside()
+    public async Task ResetAsync_WalHoldsData_NothingWritableForTheCheck_BacksTheSoundCopyUp()
     {
         await MigrateThenDamageAsync([], () => DocumentedFormatFixtures.AddWalHoldingData(_dbPath, "CREATE TABLE AddedInTheWal (Id INTEGER PRIMARY KEY);"));
-        File.WriteAllText(Path.Combine(Path.GetDirectoryName(_dbPath)!, SqliteDatabaseCheck.WorkFolderName),
-            "A file where the work folder belongs, so no copy can be made in it.");
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(_dbPath)!, ".database-check"),
+            "A file where the check once made its copy, so nothing can be written there.");
 
         DatabaseOperationResult result = await CreateInitializer([]).ResetAsync();
 
         Assert.IsTrue(result.Succeeded, $"The Reset refused ({result.BackupObstacle}, {result.ResetObstacle}).");
-        Assert.HasCount(1, MainSetAsideFiles(), "A file whose copy could not be written was not set aside.");
-        Assert.AreEqual(0, BackupFileCount(), "A file that could not be checked was kept as a backup.");
-    }
-
-    /// <summary>
-    /// #490 (developer, 2026-11-15): no room for the check's copy is no room for a backup either, so a Reset
-    /// refuses as for any backup obstacle, and changes nothing: the file is neither set aside nor replaced.
-    /// </summary>
-    [TestMethod]
-    public async Task ResetAsync_NoRoomToCheck_RefusesForWantOfABackup()
-    {
-        await MigrateThenDamageAsync([], () => DocumentedFormatFixtures.AddWalHoldingData(_dbPath, "CREATE TABLE AddedInTheWal (Id INTEGER PRIMARY KEY);"));
-        long lengthBefore = new FileInfo(_dbPath).Length;
-
-        DatabaseOperationResult result = await CreateInitializer([], databaseCheck: CheckWithFreeSpace(0)).ResetAsync();
-
-        Assert.IsFalse(result.Succeeded, "A Reset with no room to check the file went ahead.");
-        Assert.AreEqual(BackupOutcome.InsufficientDiskSpace, result.BackupObstacle);
-        Assert.IsEmpty(MainSetAsideFiles(), "A refused Reset set the file aside.");
-        Assert.AreEqual(lengthBefore, new FileInfo(_dbPath).Length, "A refused Reset changed the database.");
-    }
-
-    /// <summary>
-    /// #490: with the operator's <c>allowNoBackup</c>, the same Reset proceeds. Nothing showed the file sound, so
-    /// it is set aside rather than replaced, which needs no room.
-    /// </summary>
-    [TestMethod]
-    public async Task ResetAsync_NoRoomToCheck_WithOverride_SetsTheFileAside()
-    {
-        await MigrateThenDamageAsync([], () => DocumentedFormatFixtures.AddWalHoldingData(_dbPath, "CREATE TABLE AddedInTheWal (Id INTEGER PRIMARY KEY);"));
-
-        DatabaseOperationResult result = await CreateInitializer([], databaseCheck: CheckWithFreeSpace(0)).ResetAsync(allowNoBackup: true);
-
-        Assert.IsTrue(result.Succeeded, $"The Reset refused ({result.BackupObstacle}, {result.ResetObstacle}).");
-        Assert.HasCount(1, MainSetAsideFiles(), "A file nothing showed sound was not set aside.");
-        Assert.AreEqual(DatabaseCheckLayer.Storage, result.RestorePoint?.SetAsideReason?.CheckLayer?.Layer);
-    }
-
-    /// <summary>The real check of the test's database, on a volume reporting a fixed amount of free space.</summary>
-    private SqliteDatabaseCheck CheckWithFreeSpace(long bytes) =>
-        new(DatabaseNames.Main, _dbPath, Path.Combine(Path.GetDirectoryName(_dbPath)!, SqliteDatabaseCheck.WorkFolderName),
-            DatabaseInitializer.ExpectedSchemaScripts(QuotinatorMigrations.All, QuotinatorMigrations.Baseline),
-            DatabaseInitializer.ExpectedSchemaVersions(QuotinatorMigrations.All),
-            diskSpace: new FixedDiskSpace(bytes));
-
-    /// <summary>A volume reporting a fixed amount of free space.</summary>
-    private sealed class FixedDiskSpace(long bytes) : IDiskSpaceProvider
-    {
-        public long GetAvailableFreeSpaceBytes(string path) => bytes;
+        Assert.IsEmpty(MainSetAsideFiles(), "A sound database was set aside.");
+        Assert.AreEqual(1, BackupFileCount(), "A sound database was not backed up.");
     }
 
     /// <summary>

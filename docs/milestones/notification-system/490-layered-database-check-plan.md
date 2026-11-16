@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 16, T2.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute step 16's in-memory check (decision D, superseded 2026-11-16), then restart T2.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. Step 6 left one deviation from the verification table for the developer to confirm; it
 is listed under step 6. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
@@ -220,13 +220,9 @@ the URLs.
 - A `-wal` page size different from the database's is treated as a `-wal` that does not belong to this
   database. Nothing documents that case, so the worst case applies.
 - **Where the query layers run.** When there is no `-wal`, or it is empty, they run on an `immutable`
-  read-only open of the main file, as #482's do. When the `-wal` holds data, they run on a copy of the
-  database and its sidecars in a temporary folder, opened normally, so SQLite recovers the copy's `-wal`.
-  `wal.html` documents both that copying and that recovery. The originals are never opened.
-- **The temporary folder is a reserved folder inside the data directory, not the system temporary
-  folder.** The add-on's AppArmor profile (`addon/apparmor.txt`) grants `/tmp/** rw` with no lock
-  permission (`k`), and SQLite locks the files it opens (the #294 comment in `SqliteConnectionFactory`).
-  The data directory has `rwk`. If the folder cannot be written, the copy cannot be made (decision D).
+  read-only open of the main file, as #482's do. When the `-wal` holds data, they run on an in-memory image
+  of the database with the `-wal`'s committed frames applied, opened with `sqlite3_deserialize` (decision D,
+  as superseded 2026-11-16). The originals are never opened for writing, and nothing is written to disk.
 - Every engine-specific fact in the code cites its sqlite.org page in a comment.
 
 ### Where the check is called
@@ -304,6 +300,32 @@ Each was raised per `process.md`, Planning step 3. **All five were accepted as r
       aside rather than backed up. Setting aside moves the file, so it needs no extra space.
   - *Alternative:* fall back to the main file alone and say so in the `Finding`. That accepts the very
     blind spot the documentation leaves open.
+  - **Superseded (developer, 2026-11-16): the check needs no disk space; it is done in memory.** A copy on
+    disk made the check depend on room it should never need, and T2 found the consequence: a full volume
+    stopped the check and with it every Reset and migration. The query layers now run on an in-memory image,
+    built only from what sqlite.org documents:
+    - The main file and the `-wal` are read into memory; neither is opened by SQLite or written.
+    - The `-wal`'s frames are applied to the main file's pages by `fileformat.html` §4: a frame is valid if
+      and only if its salts match the header's and its checksum matches the one computed consecutively from
+      the header (§4.1, §4.2); a frame whose second field is not zero is a commit record carrying the
+      database's size in pages after the commit (§4.1); and a page takes "the last valid instance of page P
+      that is followed by a commit frame or is a commit frame itself" (§4.5). The image is sized to the last
+      commit's page count.
+    - Header bytes 18 and 19 are set to 1, as `c3ref/deserialize.html` documents: "The deserialized database
+      should not be in WAL mode", and the application can set them "to 0x01 … to force the database file
+      into rollback mode".
+    - The image is opened with `sqlite3_deserialize`, read-only. The interface "is omitted if SQLite is
+      compiled with the SQLITE_OMIT_DESERIALIZE option", and nothing documents whether the bundled library
+      was, so a test proves it is present.
+    - *Not documented, and the worst case assumed:* whether a reader stops at the first invalid frame. The
+      image takes only what §4.5 defines, frames valid by §4.1 and covered by a commit, so a frame after an
+      invalid one is used only if it is itself valid by the consecutive checksum, which includes the invalid
+      frame's content.
+    - **What it removes:** the work folder, the room measurement for the copy, `DatabaseStorageFault.InsufficientSpace`,
+      the Reset's refusal when the check has no room, and startup's `NotEnoughSpace` reason. A full volume no
+      longer stops the check; it stops only what writes, a backup, through the obstacles that already exist.
+    - **What it costs:** memory for the database and its `-wal` while the check runs, only when the `-wal`
+      holds data.
 - **E. Whether a References failure degrades startup.** By the worst case above, a database the
   application produced itself may fail this layer, because enforcement rests on an undocumented compile
   option, is turned off during migrations and Rebuild, and ADR 014 keeps dangling references on purpose.
@@ -1012,6 +1034,21 @@ behaviour rather than predict it: `backup/03`'s full volume.
   elsewhere or when the call fails. A separate mount needs a Linux container, so the red proof is
   `backup/03`, run on `9b59f414` (before this fix) and on this build; `DiskSpaceProviderTests` holds the
   controls. Verification row 29.
+- **Found while converting `backup/03`'s override step, and corrected by the developer (2026-11-16): the
+  check must not need disk space at all; it is done in memory.** With a `-wal` holding data the check
+  copied the database to disk, so a full volume stopped it, and the outcome of a confirmed Reset depended on
+  what the `-wal` held. Decision D is superseded (above): the `-wal`'s committed frames are applied in memory
+  by `fileformat.html` §4, header bytes 18 and 19 set to 1, and the image opened with `sqlite3_deserialize`.
+  It removed the work folder, the room measurement, `DatabaseStorageFault.InsufficientSpace`, the Reset's
+  refusal when the check had no room, startup's `NotEnoughSpace` reason and its knowledgebase entry. ADR
+  028, the Reset's description and `api-endpoints.md` follow. **Red first:** `WalReplayTests`, against a
+  `WalReplay.Apply` that returned the main file unchanged, failed on 8 of 11 claims, the 3 controls passing;
+  `SqliteDatabaseCheckTests.Check_WalHoldsData_NothingCanBeWritten_StillChecksTheFile` and a no-free-space
+  variant failed on the copy-based check. The no-free-space test was then removed with the check's disk-space
+  parameter, which no longer exists. `DatabaseInitializerTests.ResetAsync_WalHoldsData_NothingWritableForTheCheck_BacksTheSoundCopyUp`
+  was written after the change, so its red was proven by running it against `0323c57f` in a temporary
+  worktree: it failed on `Assert.IsEmpty(MainSetAsideFiles())`, the healthy file set aside. `backup/03` step 6
+  now asserts the confirmed Reset exactly: `Skipped`, naming `InsufficientDiskSpace`. Verification row 30.
 - **Still open from the review, for the developer:** whether to convert `notifications-and-changelog/09`,
   which breaks rule 1 throughout, or drop it from this scope; whether `import-and-staged-actions/19` step 8,
   which reads the `[Database - Stats]` line as the surface it tests, is a dedicated log test; and the review of
@@ -1040,10 +1077,10 @@ says that the database is checked thoroughly at every start, and that the faster
 | 8 | ✅ | `Fast` skips Indexes and References, and reports them `Skipped` | Unit test | `SqliteDatabaseCheckTests.Check_Fast_SkipsIndexesAndReferences` |
 | 9 | ✅ | Every outcome leaves the file and its sidecars byte-for-byte as they were | Unit test | `SqliteDatabaseCheckTests.Check_AnyOutcome_LeavesTheFileAndSidecarsUntouched` (data-driven over rows 1 to 7 and 11) |
 | 10 | ✅ | *(decision C)* An unwritable directory fails Storage, but the reading layers still run | Unit test | `SqliteDatabaseCheckTests.Check_DirectoryNotWritable_FailsStorageAndStillChecksTheFile` |
-| 11 | ✅ | A `-wal` holding data is checked through a temporary copy, never through an `immutable` open of the main file | Unit test | `SqliteDatabaseCheckTests.Check_WalHoldsData_ChecksACopyAndLeavesTheOriginalsUntouched` |
-| 12 | ✅ | *(decision D, as corrected 2026-11-15, row 28)* When the copy cannot be made, Storage fails, and no reading layer runs or is reported a pass | Unit test | `SqliteDatabaseCheckTests.Check_CopyCannotBeWritten_FailsStorageAndRunsNoReadingLayer` |
+| 11 | ✅ | *(decision D, superseded 2026-11-16, row 30)* A `-wal` holding data is checked through an in-memory image with its committed frames applied, never through an `immutable` open of the main file | Unit test | `SqliteDatabaseCheckTests.Check_WalHoldsData_ChecksItsCommittedStateAndLeavesTheOriginalsUntouched` |
+| 12 | ✅ | *(decision D, superseded 2026-11-16, row 30)* A `-wal` holding data beside a directory where nothing can be written is still checked: Storage reports the directory, and the reading layers run | Unit test | `SqliteDatabaseCheckTests.Check_WalHoldsData_NothingCanBeWritten_StillChecksTheFile` |
 | 13 | ✅ | Startup returns a failed or inconclusive check as an outcome, without opening the database for writing | Unit test | `DatabaseInitializerTests.InitialiseAsync_LayerFails_ReturnsThatLayersOutcomeWithoutOpeningForWrite` |
-| 14 | ✅ | A Reset sets aside a file with a broken index or one whose copy could not be written, backs up one with a dangling reference, and always checks at `Full` | Unit test | `DatabaseInitializerTests.ResetAsync_IndexDisagreesWithItsTable_SetsTheFileAside`, `…ResetAsync_CopyCannotBeWritten_SetsTheFileAside`, `…ResetAsync_DanglingReference_BacksTheFileUp`, `…ResetAsync_FastSetting_StillRunsEveryLayer` |
+| 14 | ✅ | A Reset sets aside a file with a broken index, backs up a sound one whose `-wal` holds data even when nothing can be written for the check, backs up one with a dangling reference, and always checks at `Full` | Unit test | `DatabaseInitializerTests.ResetAsync_IndexDisagreesWithItsTable_SetsTheFileAside`, `…ResetAsync_WalHoldsData_NothingWritableForTheCheck_BacksTheSoundCopyUp`, `…ResetAsync_DanglingReference_BacksTheFileUp`, `…ResetAsync_FastSetting_StillRunsEveryLayer` |
 | 15 | ✅ | Choosing the startup reason is one mapping: this issue's cases are added, and the #348, #350 and #305 cases keep their order and text | Unit test | `StartupDegradationReasonsTests` (one test per case, plus the first-wins order); the existing #348, #350 and #305 `StartupResilienceTests` stay green |
 | 16 | ✅ | *(decision A)* No type the Api layer sees from the check comes from the SQLite library | Unit test | `RepositoryStructureTests.TheDatabaseCheckContract_NamesNoEngineType` |
 | 17 | ✅ | Startup detects an unwritable data directory before the database is opened, degrades on a broken index naming the layer in the startup check it keeps (generic reason until #457), and treats a dangling reference as decision E decides, reporting it in the same check | Unit test | `StartupResilienceTests.Startup_DataDirectoryNotWritable_DetectedBeforeTheDatabaseIsOpened`, `…Startup_IndexDisagreesWithItsTable_DegradesNamingTheLayer`, `…Startup_DanglingReference_StaysHealthyAndReportsTheLayer`; `DatabaseHealthStateTests.RecordStartupCheck_KeepsTheCheckWithoutChangingHealth`, `…MarkHealthy_KeepsTheStartupCheck` |
@@ -1057,5 +1094,6 @@ says that the database is checked thoroughly at every start, and that the faster
 | 25 | ✅ | *(developer, 2026-11-15)* Every other surface reporting a Reset says why the file was set aside, or had to be: the response, the refusal, the repair control, the Notifications page and the refused Reset's notification | Unit test | `RestorePointDtoTests` (3); `DatabaseInitializerTests.ResetAsync_CorruptDatabaseThatCannotBeSetAside_RefusalSaysWhichLayerShowedIt`, `…ResetAsync_FileOnlyTheBackupFindsUnreadableThatCannotBeSetAside_RefusalCarriesTheBackupError`; `StartupResilienceTests.Startup_DatabaseFileCorrupt_ResetResponseSaysWhichLayerShowedIt`, `…ResetRefusalSaysWhichLayerShowedIt`; `DatabaseRepairActionsTests.RefusedForAFileThatNeededSettingAside_SaysWhichLayerShowedIt`, `…RefusedForAFileTheBackupFoundUnreadable_GivesTheBackupError`; `NotificationsPageTests.ResetThatSetTheFileAside_SaysWhyAndWhere`, `…ResetThatSetAsideAFileTheBackupFoundUnreadable_GivesTheBackupError`; `DatabaseActionResultRecorderTests.RecordAsync_RefusedForAFileThatNeededSettingAside_RecordsTheLayerThatShowedIt`, `…RecordAsync_RefusedForAFileTheBackupFoundUnreadable_RecordsTheBackupError`, the `ResetNotMovable` rows |
 | 26 | ✅ | *(T1, decision F corrected)* The Schema layer compares only when every version table records this build's version, and is skipped, naming the table, otherwise; startup over an old database logs no Schema failure; a passed check that skipped a layer says so rather than claiming every layer | Unit test | `SqliteDatabaseCheckTests.Check_RecordedVersionBehindThisBuild_SkipsSchemaNamingTheVersionTable`, `…Check_RecordedVersionAheadOfThisBuild_SkipsSchema`, `…Check_NoVersionTable_SkipsSchema`, `…Check_RecordedVersionIsThisBuilds_ComparesTheSchema`; `DatabaseInitializerTests.InitialiseAsync_OldDatabase_LogsTheSchemaSkippedRatherThanFailedBeforeMigrating`; `StartupDatabaseCheckTests` (3) |
 | 27 | ✅ | *(T2, developer, 2026-11-15)* The integrity endpoint never throws, comparing the schema only when Storage passed, and a check that finds the main database failing degrades the application at any point; a dangling reference alone, or the changelog database, does not | Unit test | `AdminDatabaseIntegrityEndpointTests.Check_LayerFailsAfterStartup_DegradesTheApplication`, `…Check_StorageFails_ReportsWithoutComparingAndDegrades`, `…Check_SchemaBrokenAfterStartup_DegradesTheApplication`, `…Check_ReferencesFailOnly_LeavesTheApplicationHealthy`, `…Check_ChangelogFails_LeavesTheApplicationHealthy`, `…Check_ThatPasses_LeavesHealthAsItWas` |
-| 28 | ✅ | *(T2, developer, 2026-11-15)* A copy the check cannot make is a Storage failure, its room measured first and its fault typed; a Reset with no room for it refuses for want of a backup, and with `allowNoBackup` sets the file aside; startup gives the free-space reason | Unit test | `SqliteDatabaseCheckTests.Check_CopyCannotBeWritten_FailsStorageAndRunsNoReadingLayer`, `…Check_NoRoomForTheCopy_FailsStorageWithoutAttemptingIt`, `…Check_RoomForTheCopy_ChecksThroughIt`, `…Check_NoCopyNeeded_NeedsNoRoom`, `…Check_DirectoryNotWritable_FailsStorageAndStillChecksTheFile`; `DatabaseInitializerTests.ResetAsync_NoRoomToCheck_RefusesForWantOfABackup`, `…ResetAsync_NoRoomToCheck_WithOverride_SetsTheFileAside`, `…ResetAsync_CopyCannotBeWritten_SetsTheFileAside`; `StartupDegradationReasonsTests.For_StorageFoundNoRoom_IsTheSpaceReason`, `…For_StorageFoundTheFileUnreadable_IsTheGenericReason` |
+| 28 | ✅ | *(T2, developer, 2026-11-15; the copy's part superseded 2026-11-16 by row 30)* A failure to read the file is a Storage failure with its fault typed, never an inconclusive layer; a file Storage could not read gets the generic startup reason | Unit test | `SqliteDatabaseCheckTests.Check_DirectoryNotWritable_FailsStorageAndStillChecksTheFile`; `StartupDegradationReasonsTests.For_StorageFoundTheFileUnreadable_IsTheGenericReason`. The copy's tests were removed with the copy |
+| 30 | ✅ | *(T2, developer, 2026-11-16)* The check needs no disk space: a `-wal`'s committed frames are applied in memory by the documented format and the image opened with `sqlite3_deserialize`; a full volume or an unwritable directory no longer stops it, so a Reset of a sound database refuses only for its backup, and with `allowNoBackup` skips it | Unit test + Live (T2) | `WalReplayTests` (11), including `…Apply_WalSQLiteWrote_MatchesWhatACheckpointWrites`, which also proves `sqlite3_deserialize` is in the bundled library; `SqliteDatabaseCheckTests.Check_WalHoldsData_NothingCanBeWritten_StillChecksTheFile` and `…Check_AnyOutcome_LeavesTheFileAndSidecarsUntouched` (now also: nothing left in the data directory); `DatabaseInitializerTests.ResetAsync_WalHoldsData_NothingWritableForTheCheck_BacksTheSoundCopyUp`; `backup/03` step 6 |
 | 29 | ❌ | *(T2, developer, 2026-11-15)* Free space is measured on the file system that holds the path, not on its root: a full volume mounted at `/data` reads as full | Live (T2) + unit test | `backup/03`, red on `9b59f414`, green on this build (pending the T2 run); controls `DiskSpaceProviderTests.GetAvailableFreeSpaceBytes_ExistingDirectory_IsPositive`, `…FolderNotCreatedYet_MeasuresItsNearestExistingParent` |

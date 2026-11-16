@@ -16,8 +16,7 @@ internal static class ResetDatabaseCheck
     /// <summary>
     /// Whether the file is a sound copy, so a Reset backs it up (ADR 025) rather than setting it aside. It is
     /// when every layer from Format to Indexes passed. One that failed, was inconclusive, or did not run because
-    /// Storage could not read the file or make the copy they needed means it is not: a file nobody could show
-    /// is sound is never kept as a backup. A References or Schema failure leaves it a sound copy, and a directory that cannot be written is
+    /// Storage could not read the file means it is not: a file nobody could show is sound is never kept as a backup. A References or Schema failure leaves it a sound copy, and a directory that cannot be written is
     /// the backup's own obstacle, found by the backup's readiness check. A file that does not exist passes every
     /// layer, and a Reset creates it.
     /// </summary>
@@ -35,12 +34,4 @@ internal static class ResetDatabaseCheck
         DatabaseCheckLayerResult? layer = check.Layers.FirstOrDefault(l => FileLayers.Contains(l.Layer) && l.Status != DatabaseCheckLayerStatus.Passed);
         return layer is { Status: DatabaseCheckLayerStatus.NotRun } ? check.FirstFailure ?? layer : layer;
     }
-
-    /// <summary>
-    /// The Storage result that found too little room for the check's copy, or <see langword="null"/>. Room for
-    /// that copy is room a backup needs too (developer, 2026-11-15), so a Reset refuses as for any backup obstacle.
-    /// </summary>
-    /// <param name="check">The check the Reset ran.</param>
-    internal static DatabaseCheckLayerResult? NoRoomToCheck(DatabaseCheckResult check) =>
-        check.Layers.FirstOrDefault(l => l.Layer == DatabaseCheckLayer.Storage && l.StorageFault == DatabaseStorageFault.InsufficientSpace);
 }

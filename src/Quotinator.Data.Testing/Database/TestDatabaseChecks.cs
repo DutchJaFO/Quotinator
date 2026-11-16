@@ -6,8 +6,7 @@ namespace Quotinator.Data.Testing.Database;
 
 /// <summary>
 /// The real SQLite database check for a test's database file (#490), built the way <c>Program.cs</c> builds the
-/// registered one: the reserved work folder beside the file, and the expected schema from the same migration
-/// path the test's initializer uses.
+/// registered one: the expected schema from the same migration path the test's initializer uses.
 /// </summary>
 public static class TestDatabaseChecks
 {
@@ -28,7 +27,5 @@ public static class TestDatabaseChecks
     private static SqliteDatabaseCheck For(
         string name, string dbPath, IReadOnlyList<string> expectedSchemaScripts,
         IReadOnlyDictionary<SchemaVersionTable, int> expectedSchemaVersions) =>
-        new(name, dbPath,
-            Path.Combine(Path.GetDirectoryName(Path.GetFullPath(dbPath))!, SqliteDatabaseCheck.WorkFolderName),
-            expectedSchemaScripts, expectedSchemaVersions);
+        new(name, dbPath, expectedSchemaScripts, expectedSchemaVersions);
 }

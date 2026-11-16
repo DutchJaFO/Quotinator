@@ -398,15 +398,13 @@ builder.Services.AddSingleton<IDatabaseBackupReader>(sp =>
 builder.Services.AddSingleton<IDatabaseBackupWriter>(_ => new DatabaseBackupWriter(dbOptions));
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 
-// #490 (ADR 028): one check per database. Factory overloads, because the path, the work folder and the
-// expected schema are computed values the container cannot supply. The expected schema is the one this
-// initializer's own migration path defines, so the check and #305's comparison judge the same thing.
-string databaseCheckWorkFolder = Path.Combine(dataDir, SqliteDatabaseCheck.WorkFolderName);
+// #490 (ADR 028): one check per database. Factory overloads, because the path and the expected schema are
+// computed values the container cannot supply. The expected schema is the one this initializer's own
+// migration path defines, so the check and #305's comparison judge the same thing.
 builder.Services.AddSingleton<IDatabaseCheck>(sp => new SqliteDatabaseCheck(
-    DatabaseNames.Main, dbPath, databaseCheckWorkFolder,
+    DatabaseNames.Main, dbPath,
     DatabaseInitializer.ExpectedSchemaScripts(QuotinatorMigrations.All, QuotinatorMigrations.Baseline),
     DatabaseInitializer.ExpectedSchemaVersions(QuotinatorMigrations.All),
-    diskSpace: sp.GetRequiredService<IDiskSpaceProvider>(),
     logger: sp.GetRequiredService<ILogger<SqliteDatabaseCheck>>()));
 
 // #309: separate database for changelog content (ADR 018): no relational or transactional coupling
@@ -423,10 +421,9 @@ SqliteConnectionFactory changelogConnectionFactory = new(changelogDbPath, useMem
 builder.Services.AddKeyedSingleton<IDbConnectionFactory>(
     DatabaseConnectionKeys.Changelog, (_, _) => changelogConnectionFactory);
 builder.Services.AddKeyedSingleton<IDatabaseCheck>(DatabaseConnectionKeys.Changelog, (sp, _) => new SqliteDatabaseCheck(
-    DatabaseNames.Changelog, changelogDbPath, databaseCheckWorkFolder,
+    DatabaseNames.Changelog, changelogDbPath,
     ChangelogDatabaseInitializer.ExpectedSchemaScripts(),
     ChangelogDatabaseInitializer.ExpectedSchemaVersions(),
-    diskSpace: sp.GetRequiredService<IDiskSpaceProvider>(),
     logger: sp.GetRequiredService<ILogger<SqliteDatabaseCheck>>()));
 builder.Services.AddSingleton<ChangelogDatabaseInitializer>();
 builder.Services.AddSingleton<ChangelogRepository>();

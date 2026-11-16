@@ -1,9 +1,9 @@
-# A reset refuses when the disk fills during the backup, instead of wiping behind a 200
+# A reset refuses when its volume has no room for a backup, instead of wiping behind a 200
 
 **Smoke:** no
 **Environment:** Fresh
 **Deterministic:** yes
-**Traces to:** #348
+**Traces to:** #348, #490
 
 ## Preconditions
 
@@ -12,8 +12,13 @@ or a bind mount, so the space available to a backup is a property of the test ra
 host happens to have free. The ceiling is deliberately roomy: the test seeds into it normally, then fills
 the space it does not want, computing that from what it measures rather than from a figure written here.
 
-**This is the one case the pre-flight cannot catch**, and that is the point of testing it. The check
-sees free space before the copy starts; the copy is what exhausts it.
+**The room is measured on the volume itself.** Until #490 the application measured the root file system
+of the container rather than the volume mounted at `/data`, about a terabyte free, so no pre-flight could
+refuse here and the copy met the real limit instead: this document was then titled *the disk fills during
+the backup*. Since #490 the room is measured on the mount, so the pre-flight refuses before any copy
+starts. **The Reset's own check needs no room** (ADR 028, since 2026-11-16: a `-wal` holding data is
+applied in memory), so it passes on this sound database whatever the write-ahead log holds, and only the
+backup is refused.
 
 ## Determinism
 
@@ -43,6 +48,12 @@ sees free space before the copy starts; the copy is what exhausts it.
 - **The fill is [`fill-volume.csx`](../../../scripts/testing/fill-volume.csx)**, which reads the free space
   and the database's size inside the container, writes the filler, and reads the free space again, so the
   derivation above is one command, and it fails when the fill did not take.
+
+## Explicitly not covered here
+
+- **A disk that fills after the pre-flight passed** (`DiskFilledDuringBackup`): this filler can no longer
+  provoke it, because the pre-flight now sees the same limit the copy meets. Provoking it needs another
+  writer filling the volume during the copy, which no step here controls.
 
 ## Steps
 
@@ -84,13 +95,15 @@ would succeed, so the test would pass without ever reaching its own condition.
 
 ```
 dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18383/api/v1/admin/database/reset --expect 409 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-03-out\reset.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-03-out\reset.json --equals backupObstacle=DiskFilledDuringBackup
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-03-out\reset.json --equals backupObstacle=InsufficientDiskSpace
 ```
 
-**Expected:** `409`, and the `json` command exits `0` on `DiskFilledDuringBackup`.
+**Expected:** `409`, and the `json` command exits `0` on `InsufficientDiskSpace`.
 
 **On failure:** a `200` is the exact regression this document exists to catch. See Observed effect.
-A `500` means the failure escaped unhandled instead of being reported.
+`DiskFilledDuringBackup` means the pre-flight measured the wrong file system again and the copy met the
+limit instead, the defect #490 fixed. A `500` means the failure escaped unhandled instead of being
+reported.
 
 ### 4. Confirm the test's own quote is still there
 
@@ -109,12 +122,14 @@ would not catch it.
 
 ```
 docker exec qt-backup-03 rm /data/filler.bin
-dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18383/api/v1/admin/database/reset --expect 200 --status
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18383/api/v1/admin/database/reset --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-03-out\reset-with-room.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-03-out\reset-with-room.json --equals backup.outcome=Succeeded --present backup.name
 dotnet script scripts/testing/http.csx -- --url http://localhost:18383/api/v1/quotes/5e7a1c3d-9b2f-4e6a-8d0c-b1f2a3e4c5d6 --expect 404 --status
 ```
 
-**Expected:** the reset answers `200`, and the sentinel now answers `404`: this time the reset ran, which
-is what separates step 4's `200` from a sentinel that would have survived anything.
+**Expected:** the reset answers `200` with `backup.outcome = Succeeded` and the backup's name, and the
+sentinel now answers `404`: this time the reset ran and took its backup, which is what separates step 4's
+`200` from a sentinel that would have survived anything.
 
 **The remedy is applied to the same container**, so the only thing that changed between the refusal and
 the success is the space the filler was occupying. A second container at a different ceiling would have
@@ -126,6 +141,37 @@ is also what proves step 3's stated remedy, *"free disk space and retry"*, is re
 
 **On failure:** a `409` with the filler gone means the refusal is not caused by the space at all, and this
 document's whole premise is wrong. Investigate rather than giving it more room until it passes.
+
+### 6. Fill it again, and confirm a Reset proceeds without a backup once the operator confirms
+
+The sentinel is stored again and the volume filled again, measured against the rebuilt database, so the
+Reset has something to remove and again no room for a backup.
+
+```
+dotnet script scripts/testing/http.csx -- --url http://localhost:18383/api/v1/import --method POST --file docs/automated-testing/startup-and-degradation/fixtures/sentinel-quote.json --expect 200 --status
+dotnet script scripts/testing/fill-volume.csx -- --container qt-backup-03 --file /data/quotinatordata.db
+dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18383/api/v1/admin/database/reset --expect 409 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-03-out\reset-refilled.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-03-out\reset-refilled.json --equals backupObstacle=InsufficientDiskSpace --contains "remedies=allowNoBackup"
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18383/api/v1/admin/database/reset?allowNoBackup=true" --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-backup-03-out\reset-override.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-03-out\reset-override.json --equals quotes=0 --equals backup.outcome=Skipped --equals backup.obstacle=InsufficientDiskSpace --absent backup.name
+dotnet script scripts/testing/http.csx -- --url http://localhost:18383/api/v1/quotes/5e7a1c3d-9b2f-4e6a-8d0c-b1f2a3e4c5d6 --expect 404 --status
+```
+
+**Expected:** the import answers `200`; the fill exits `0` with `roomForACopy=False`; the Reset without
+the override answers `409` on `InsufficientDiskSpace`, naming `allowNoBackup` among its remedies; with it,
+the Reset answers `200` with no quotes, `backup.outcome = Skipped` naming `InsufficientDiskSpace`, and no
+backup name; and the sentinel answers `404`.
+
+**This is the confirmation the refusal asks for.** With no room there can be no backup, so the Reset
+refuses and says so, and `allowNoBackup=true` is the operator confirming they accept none. The refusal is
+repeated here, against the database this step refilled around, so the override is the only difference
+between the `409` and the `200`.
+
+**On failure:** a `409` with the override means the confirmation does not reach a Reset that has no room.
+`backup.outcome = Succeeded` means a backup was written to a volume this step had just shown to be full,
+so the fill did not hold. `SetAside` naming the Storage layer means the check stopped for want of room
+again, the defect #490 removed when it moved the check into memory. A sentinel answering `200` means the
+Reset reported success and replaced nothing.
 
 ## Observed effect
 
@@ -194,6 +240,12 @@ caller was told it had succeeded. A `409` naming `DiskFilledDuringBackup` is wha
 where the cap turned out to be generous enough fails there instead of silently testing nothing.
 
 Remove the container, image and worktree afterwards.
+
+**The #490 canary.** Build `9b59f414`, the commit before the room was measured on the volume, as
+`quotinator:canary-490-space`, and run steps 1 to 3. Step 3's `json` command must fail on
+`backupObstacle`: that build cannot see the volume is full, so the Reset either answers `409` with
+`DiskFilledDuringBackup`, the backup's copy meeting the limit, or `200`, the check's own copy failing and the
+healthy file set aside, depending on what the write-ahead log holds. Either is the defect.
 
 ## Cleanup
 

@@ -13,20 +13,16 @@ namespace Quotinator.Data.Database.Checks;
 /// <list type="bullet">
 /// <item>The first layer that fails is the result, and no later layer runs.</item>
 /// <item>
-/// Except Storage, when the file can be read and only its directory cannot be written or has no room: that is
-/// no fault in the file, so the reading layers still run (decision C), unless they need a copy that was not made.
+/// Except Storage, when the file can be read and only its directory cannot be written: that is no fault in the
+/// file, and the reading layers need nothing written, so they still run (decision C).
 /// </item>
-/// <item>Something the check could not do, a copy it could not make, is a Storage failure, never an inconclusive layer.</item>
+/// <item>Something the check could not do, a file it could not read, is a Storage failure, never an inconclusive layer.</item>
+/// <item>The check needs no disk space: a <c>-wal</c> holding data is applied in memory (decision D as superseded, 2026-11-16).</item>
 /// <item>At <see cref="DatabaseCheckDepth.Fast"/>, Indexes and References are reported skipped, never left out.</item>
 /// </list>
 /// </summary>
 /// <param name="databaseName">The name the database is reported under.</param>
 /// <param name="databasePath">The database file to check. Neither it nor any file beside it is ever written.</param>
-/// <param name="workFolder">
-/// A reserved folder inside the data directory where a copy of the database and its sidecars is checked when
-/// its <c>-wal</c> holds data. Not the system temporary folder: the add-on's AppArmor profile grants no lock
-/// permission there, and SQLite locks the files it opens.
-/// </param>
 /// <param name="expectedSchemaScripts">The DDL that defines the schema the Schema layer compares against (#305).</param>
 /// <param name="expectedSchemaVersions">
 /// The version each version table records once every migration this build knows has run. The Schema layer
@@ -39,29 +35,15 @@ namespace Quotinator.Data.Database.Checks;
 /// <see cref="DirectoryWriteProbe.CanCreateFileIn"/>; a test supplies its own, since a directory that cannot
 /// be written is not something every platform lets a test create.
 /// </param>
-/// <param name="diskSpace">
-/// Measures the room on the data directory's volume, for the copy the check needs when the <c>-wal</c> holds
-/// data (ADR 028: the room is measured before the copy is made). <see langword="null"/> uses
-/// <see cref="DiskSpaceProvider"/>, the measurement a backup's readiness check uses.
-/// </param>
 /// <param name="logger">Logs each exception a layer handles (ADR 022). <see langword="null"/> logs nothing.</param>
 public sealed class SqliteDatabaseCheck(
     string databaseName,
     string databasePath,
-    string workFolder,
     IReadOnlyList<string> expectedSchemaScripts,
     IReadOnlyDictionary<SchemaVersionTable, int> expectedSchemaVersions,
     Func<string, bool>? canCreateFileIn = null,
-    IDiskSpaceProvider? diskSpace = null,
     ILogger? logger = null) : IDatabaseCheck
 {
-    /// <summary>
-    /// The reserved folder's name inside the data directory, where a copy is checked when the <c>-wal</c> holds
-    /// data. The leading dot keeps it out of what an operator browses, and no enumeration of the data
-    /// directory reads it.
-    /// </summary>
-    public const string WorkFolderName = ".database-check";
-
     /// <summary>Every layer, in the order the check runs them.</summary>
     private static readonly IDatabaseCheckLayer[] Layers =
     [
@@ -81,9 +63,8 @@ public sealed class SqliteDatabaseCheck(
     public async Task<DatabaseCheckResult> CheckAsync(DatabaseCheckDepth depth)
     {
         using SqliteCheckSubject subject = new(
-            databasePath, workFolder, expectedSchemaScripts, expectedSchemaVersions,
+            databasePath, expectedSchemaScripts, expectedSchemaVersions,
             canCreateFileIn ?? DirectoryWriteProbe.CanCreateFileIn,
-            diskSpace ?? new DiskSpaceProvider(),
             logger ?? NullLogger.Instance);
 
         List<DatabaseCheckLayerResult> results = [];
@@ -117,9 +98,8 @@ public sealed class SqliteDatabaseCheck(
     }
 
     // Decision C: an unwritable directory beside a readable file is reported, but the file is still checked.
-    // ADR 028: a Storage failure stops the reading layers only when they cannot run, because the file cannot be
-    // read or they need a copy that was not made.
+    // ADR 028: a Storage failure stops the reading layers only when they cannot run, because the file cannot be read.
     private static bool StopsTheCheck(DatabaseCheckLayerResult result, SqliteCheckSubject subject) =>
         result.Status == DatabaseCheckLayerStatus.Failed
-        && !(result.Layer == DatabaseCheckLayer.Storage && subject.ReadingLayersCanRun);
+        && !(result.Layer == DatabaseCheckLayer.Storage && subject.FileReadable);
 }

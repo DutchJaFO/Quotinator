@@ -9,12 +9,6 @@ public enum DatabaseStorageFault
     /// <summary>The database file exists but cannot be read.</summary>
     FileUnreadable,
 
-    /// <summary>The data directory, or the folder the check's copy goes in, cannot be written.</summary>
+    /// <summary>The data directory cannot be written.</summary>
     DirectoryNotWritable,
-
-    /// <summary>
-    /// There is not enough room for the copy the check needs, measured before it is made, or found when the
-    /// operating system refused it for want of space. Room for that copy is room a backup needs too.
-    /// </summary>
-    InsufficientSpace,
 }

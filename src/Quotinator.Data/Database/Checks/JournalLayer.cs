@@ -15,7 +15,9 @@ internal sealed class JournalLayer : IDatabaseCheckLayer
     /// <summary>The length of a <c>-wal</c>'s header (fileformat.html §4.1): anything beyond it is a frame.</summary>
     internal const int WalHeaderLength = 32;
     private const uint MagicLittleEndianChecksum = 0x377f0682;
-    private const uint MagicBigEndianChecksum = 0x377f0683;
+
+    /// <summary>The magic number of a <c>-wal</c> whose checksums read their words big-endian (fileformat.html §4.2).</summary>
+    internal const uint MagicBigEndianChecksum = 0x377f0683;
     private const uint FileFormatVersion = 3007000;
 
     /// <inheritdoc/>
@@ -53,8 +55,8 @@ internal sealed class JournalLayer : IDatabaseCheckLayer
         if (pageSize != subject.PageSize)
             return LayerResults.Failed(Layer, $"The -wal's page size, {pageSize}, differs from the database's, {subject.PageSize}: it does not belong to this database.");
 
-        (uint first, uint second) = Checksum(header.AsSpan(0, 24), bigEndian: magic == MagicBigEndianChecksum);
-        if (first != Word(header, 24) || second != Word(header, 28))
+        WalChecksum checksum = WalChecksum.Of(header.AsSpan(0, 24), bigEndian: magic == MagicBigEndianChecksum);
+        if (checksum.First != Word(header, 24) || checksum.Second != Word(header, 28))
             return LayerResults.Failed(Layer, "The -wal's header checksum does not match its header.");
 
         return LayerResults.Passed(Layer);
@@ -62,24 +64,4 @@ internal sealed class JournalLayer : IDatabaseCheckLayer
 
     // Every value in the WAL header is a big-endian 32-bit word (fileformat.html §4.1).
     private static uint Word(byte[] header, int offset) => BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(offset, 4));
-
-    // fileformat.html §4.2: over pairs of 32-bit words, s0 += x(i) + s1 and s1 += x(i+1) + s0, wrapping, with the
-    // words read in the byte order the magic number names.
-    private static (uint First, uint Second) Checksum(ReadOnlySpan<byte> content, bool bigEndian)
-    {
-        uint s0 = 0;
-        uint s1 = 0;
-        for (int i = 0; i < content.Length; i += 8)
-        {
-            uint x0 = bigEndian ? BinaryPrimitives.ReadUInt32BigEndian(content[i..]) : BinaryPrimitives.ReadUInt32LittleEndian(content[i..]);
-            uint x1 = bigEndian ? BinaryPrimitives.ReadUInt32BigEndian(content[(i + 4)..]) : BinaryPrimitives.ReadUInt32LittleEndian(content[(i + 4)..]);
-            unchecked
-            {
-                s0 += x0 + s1;
-                s1 += x1 + s0;
-            }
-        }
-
-        return (s0, s1);
-    }
 }

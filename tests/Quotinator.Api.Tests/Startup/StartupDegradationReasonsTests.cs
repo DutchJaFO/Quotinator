@@ -68,18 +68,6 @@ public class StartupDegradationReasonsTests
     }
 
     /// <summary>
-    /// #490 (developer, 2026-11-15): too little room for the check's copy is what Storage found, and startup
-    /// degrades telling the operator to free space, not that the directory cannot be written.
-    /// </summary>
-    [TestMethod]
-    public void For_StorageFoundNoRoom_IsTheSpaceReason()
-    {
-        string? reason = For(DatabaseOperationResult.StoppedByCheck(CheckFailingAt(DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed, DatabaseStorageFault.InsufficientSpace)));
-
-        Assert.AreEqual(StartupDegradationReasons.NotEnoughSpace, reason);
-    }
-
-    /// <summary>
     /// #490: a file that cannot be read is no fault of the directory, so it does not get the data directory's
     /// reason; it keeps the generic one until #457 gives each its own.
     /// </summary>
@@ -135,7 +123,7 @@ public class StartupDegradationReasonsTests
     [TestMethod]
     public void For_EveryNewReason_IsDistinct()
     {
-        string[] reasons = [StartupDegradationReasons.DataDirectoryNotWritable, StartupDegradationReasons.InitialisationFailed, StartupDegradationReasons.CheckInconclusive, StartupDegradationReasons.NotEnoughSpace];
+        string[] reasons = [StartupDegradationReasons.DataDirectoryNotWritable, StartupDegradationReasons.InitialisationFailed, StartupDegradationReasons.CheckInconclusive];
 
         Assert.HasCount(reasons.Length, reasons.Distinct());
         Assert.IsNotNull(For(DatabaseOperationResult.StoppedByCheck(CheckFailingAt(DatabaseCheckLayer.Format, DatabaseCheckLayerStatus.Failed))),

@@ -21,7 +21,7 @@ public class SqliteDatabaseCheckTests
     /// <summary>
     /// A schema with every kind of object a layer checks: a table spanning several pages, an index, and a
     /// declared reference. The ranks are 10 to 50, so each is stored as an 8-bit integer (fileformat.html
-    /// §2.1); 0 and 1 have serial types with no body, which <see cref="DocumentedFormatFixtures.RewriteLastIndexKey"/>
+    /// Â§2.1); 0 and 1 have serial types with no body, which <see cref="DocumentedFormatFixtures.RewriteLastIndexKey"/>
     /// cannot rewrite.
     /// </summary>
     private static readonly string[] Schema =
@@ -174,13 +174,14 @@ public class SqliteDatabaseCheckTests
     {
         using Scenario scenario = Scenario.Build(damage);
         string[] before = scenario.HashDatabaseFiles();
+        string[] filesBefore = scenario.FilesInTheDirectory();
 
         DatabaseCheckResult result = await scenario.Check().CheckAsync(DatabaseCheckDepth.Full);
 
         Assert.HasCount(LayerCount, result.Layers, "Positive control failed: the check did not report every layer.");
         Assert.Contains(l => l.Status != DatabaseCheckLayerStatus.NotRun, result.Layers, "Positive control failed: no layer ran.");
         Assert.AreSequenceEqual(before, scenario.HashDatabaseFiles(), "The check changed, created or removed a database file.");
-        Assert.IsEmpty(scenario.FilesInWorkFolder(), "The check left files behind in its work folder.");
+        Assert.AreSequenceEqual(filesBefore, scenario.FilesInTheDirectory(), "The check left a file or folder behind in the data directory.");
     }
 
     /// <summary>
@@ -202,13 +203,13 @@ public class SqliteDatabaseCheckTests
     }
 
     /// <summary>
-    /// Row 11: a <c>-wal</c> holding committed transactions is checked through a copy that SQLite recovers,
-    /// never through an <c>immutable</c> open of the main file, which nothing documents as reading the
-    /// <c>-wal</c>. The table that exists only in the <c>-wal</c> is the evidence: the Schema layer expects it,
-    /// so a check that read the main file alone would fail there.
+    /// Row 11: a <c>-wal</c> holding committed transactions is checked through an image with its committed frames
+    /// applied (decision D as superseded, 2026-11-16), never through an <c>immutable</c> open of the main file,
+    /// which nothing documents as reading the <c>-wal</c>. The table that exists only in the <c>-wal</c> is the
+    /// evidence: the Schema layer expects it, so a check that read the main file alone would fail there.
     /// </summary>
     [TestMethod]
-    public async Task Check_WalHoldsData_ChecksACopyAndLeavesTheOriginalsUntouched()
+    public async Task Check_WalHoldsData_ChecksItsCommittedStateAndLeavesTheOriginalsUntouched()
     {
         using Scenario scenario = Scenario.Build(Damage.WalHoldsData);
         string[] before = scenario.HashDatabaseFiles();
@@ -217,72 +218,26 @@ public class SqliteDatabaseCheckTests
 
         AssertEveryLayer(result, DatabaseCheckLayerStatus.Passed);
         Assert.AreSequenceEqual(before, scenario.HashDatabaseFiles(), "The check changed the original database or its sidecars.");
-        Assert.IsEmpty(scenario.FilesInWorkFolder(), "The copy was not removed.");
     }
 
     /// <summary>
-    /// Row 12, as corrected (developer, 2026-11-15): when the <c>-wal</c> holds data and the copy cannot be
-    /// written, that is what Storage found, never an inconclusive layer. Storage fails, saying the folder cannot
-    /// be written, and no reading layer runs, since the main file alone cannot be checked soundly.
+    /// Row 12, as superseded (developer, 2026-11-16): the check needs no disk space, so a <c>-wal</c> holding data
+    /// beside a directory where nothing can be written is still checked. Storage reports the directory, and the
+    /// reading layers run and pass.
     /// </summary>
     [TestMethod]
-    public async Task Check_CopyCannotBeWritten_FailsStorageAndRunsNoReadingLayer()
+    public async Task Check_WalHoldsData_NothingCanBeWritten_StillChecksTheFile()
     {
         using Scenario scenario = Scenario.Build(Damage.WalHoldsData);
-        File.WriteAllText(scenario.WorkFolder, "A file where the work folder should be, so no copy can be made in it.");
+        File.WriteAllText(scenario.WorkFolder, "A file where the check once made its copy, so nothing can be written there.");
 
-        DatabaseCheckResult result = await scenario.Check().CheckAsync(DatabaseCheckDepth.Full);
+        DatabaseCheckResult result = await scenario.Check(canCreateFileIn: _ => false).CheckAsync(DatabaseCheckDepth.Full);
 
-        AssertFailsAt(result, DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed);
         Assert.AreEqual(DatabaseStorageFault.DirectoryNotWritable, result.FirstFailure?.StorageFault);
-        Assert.IsFalse(string.IsNullOrWhiteSpace(result.FirstFailure?.Finding), "Storage does not say why.");
+        foreach (DatabaseCheckLayer layer in LayersAfter(DatabaseCheckLayer.Storage))
+            Assert.AreEqual(DatabaseCheckLayerStatus.Passed, StatusOf(result, layer), $"Layer {layer} did not check a readable file.");
     }
 
-    /// <summary>
-    /// #490 (developer, 2026-11-15): the room the copy needs is measured before it is attempted. Too little is
-    /// what Storage found: it fails naming the space, no copy is attempted, and no reading layer runs.
-    /// </summary>
-    [TestMethod]
-    public async Task Check_NoRoomForTheCopy_FailsStorageWithoutAttemptingIt()
-    {
-        using Scenario scenario = Scenario.Build(Damage.WalHoldsData);
-        string[] before = scenario.HashDatabaseFiles();
-
-        DatabaseCheckResult result = await scenario.Check(diskSpace: new FixedDiskSpace(0)).CheckAsync(DatabaseCheckDepth.Full);
-
-        AssertFailsAt(result, DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed);
-        Assert.AreEqual(DatabaseStorageFault.InsufficientSpace, result.FirstFailure?.StorageFault);
-        Assert.IsEmpty(scenario.FilesInWorkFolder(), "A copy was attempted although the room was measured as too little.");
-        Assert.AreSequenceEqual(before, scenario.HashDatabaseFiles(), "The check changed the original database or its sidecars.");
-    }
-
-    /// <summary>Control: with room for the copy, the same database is checked through it and passes every layer.</summary>
-    [TestMethod]
-    public async Task Check_RoomForTheCopy_ChecksThroughIt()
-    {
-        using Scenario scenario = Scenario.Build(Damage.WalHoldsData);
-
-        DatabaseCheckResult result = await scenario.Check(diskSpace: new FixedDiskSpace(long.MaxValue)).CheckAsync(DatabaseCheckDepth.Full);
-
-        AssertEveryLayer(result, DatabaseCheckLayerStatus.Passed);
-    }
-
-    /// <summary>Control: a database whose <c>-wal</c> holds nothing needs no copy, so no room is asked of the volume.</summary>
-    [TestMethod]
-    public async Task Check_NoCopyNeeded_NeedsNoRoom()
-    {
-        using Scenario scenario = Scenario.Build(Damage.None);
-
-        DatabaseCheckResult result = await scenario.Check(diskSpace: new FixedDiskSpace(0)).CheckAsync(DatabaseCheckDepth.Full);
-
-        AssertEveryLayer(result, DatabaseCheckLayerStatus.Passed);
-    }
-
-    /// <summary>A volume reporting a fixed amount of free space.</summary>
-    private sealed class FixedDiskSpace(long bytes) : IDiskSpaceProvider
-    {
-        public long GetAvailableFreeSpaceBytes(string path) => bytes;
-    }
 
     /// <summary>
     /// A first start has no database file yet, and a Reset creates one: neither is a fault. Storage passes, and
@@ -353,7 +308,7 @@ public class SqliteDatabaseCheckTests
     /// <summary>The fixture's schema records no migrations, so it is always compared.</summary>
     private static readonly IReadOnlyDictionary<SchemaVersionTable, int> NoVersionTables = new Dictionary<SchemaVersionTable, int>();
 
-    // ── Schema is compared only once the recorded version is this build's (#490, T1) ─────────────────────
+    // â”€â”€ Schema is compared only once the recorded version is this build's (#490, T1) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private const string VersionTable = "System_SchemaVersion";
 
@@ -379,7 +334,7 @@ public class SqliteDatabaseCheckTests
         using TempDirectory directory = new("quotinator_check_");
         string path = CreateWithRecordedVersion(directory, recorded: 1);
 
-        DatabaseCheckResult result = await VersionedCheck(directory, path, expected: 2).CheckAsync(DatabaseCheckDepth.Full);
+        DatabaseCheckResult result = await VersionedCheck(path, expected: 2).CheckAsync(DatabaseCheckDepth.Full);
 
         DatabaseCheckLayerResult schema = result.Layers.Single(l => l.Layer == DatabaseCheckLayer.Schema);
         Assert.AreEqual(DatabaseCheckLayerStatus.Skipped, schema.Status, $"Schema: {schema.Finding}");
@@ -393,7 +348,7 @@ public class SqliteDatabaseCheckTests
         using TempDirectory directory = new("quotinator_check_");
         string path = CreateWithRecordedVersion(directory, recorded: 3);
 
-        DatabaseCheckResult result = await VersionedCheck(directory, path, expected: 2).CheckAsync(DatabaseCheckDepth.Full);
+        DatabaseCheckResult result = await VersionedCheck(path, expected: 2).CheckAsync(DatabaseCheckDepth.Full);
 
         Assert.AreEqual(DatabaseCheckLayerStatus.Skipped, result.Layers.Single(l => l.Layer == DatabaseCheckLayer.Schema).Status);
     }
@@ -406,7 +361,7 @@ public class SqliteDatabaseCheckTests
         string path = Path.Combine(directory.Path, "test.db");
         DocumentedFormatFixtures.Create(path, [.. Schema, .. Rows]);
 
-        DatabaseCheckResult result = await VersionedCheck(directory, path, expected: 2).CheckAsync(DatabaseCheckDepth.Full);
+        DatabaseCheckResult result = await VersionedCheck(path, expected: 2).CheckAsync(DatabaseCheckDepth.Full);
 
         Assert.AreEqual(DatabaseCheckLayerStatus.Skipped, result.Layers.Single(l => l.Layer == DatabaseCheckLayer.Schema).Status);
     }
@@ -418,7 +373,7 @@ public class SqliteDatabaseCheckTests
         using TempDirectory directory = new("quotinator_check_");
         string path = CreateWithRecordedVersion(directory, recorded: 2);
 
-        DatabaseCheckResult result = await VersionedCheck(directory, path, expected: 2).CheckAsync(DatabaseCheckDepth.Full);
+        DatabaseCheckResult result = await VersionedCheck(path, expected: 2).CheckAsync(DatabaseCheckDepth.Full);
 
         AssertFailsAt(result, DatabaseCheckLayer.Schema, DatabaseCheckLayerStatus.Failed);
     }
@@ -435,8 +390,8 @@ public class SqliteDatabaseCheckTests
         return path;
     }
 
-    private static SqliteDatabaseCheck VersionedCheck(TempDirectory directory, string path, int expected) =>
-        new(DatabaseName, path, Path.Combine(directory.Path, "check-work"), ExpectedWithAMissingTable,
+    private static SqliteDatabaseCheck VersionedCheck(string path, int expected) =>
+        new(DatabaseName, path, ExpectedWithAMissingTable,
             new Dictionary<SchemaVersionTable, int> { [SchemaVersionTable.Data] = expected });
 
     /// <summary>The named layer is the first failure, every layer before it passed, and none after it ran.</summary>
@@ -463,11 +418,12 @@ public class SqliteDatabaseCheckTests
         {
             _expectedSchema = expectedSchema;
             DatabasePath = Path.Combine(_directory.Path, "test.db");
-            WorkFolder = Path.Combine(_directory.Path, "check-work");
+            WorkFolder = Path.Combine(_directory.Path, ".database-check");
         }
 
         public string DatabasePath { get; }
 
+        /// <summary>Where the check made its copy before it worked in memory (2026-11-16).</summary>
         public string WorkFolder { get; }
 
         public static Scenario Build(Damage damage)
@@ -517,8 +473,8 @@ public class SqliteDatabaseCheckTests
             return scenario;
         }
 
-        public SqliteDatabaseCheck Check(Func<string, bool>? canCreateFileIn = null, IDiskSpaceProvider? diskSpace = null) =>
-            new(DatabaseName, DatabasePath, WorkFolder, _expectedSchema, NoVersionTables, canCreateFileIn, diskSpace);
+        public SqliteDatabaseCheck Check(Func<string, bool>? canCreateFileIn = null) =>
+            new(DatabaseName, DatabasePath, _expectedSchema, NoVersionTables, canCreateFileIn);
 
         /// <summary>The database and each of its sidecars that exists, as its name and a hash of its content.</summary>
         public string[] HashDatabaseFiles() =>
@@ -528,8 +484,9 @@ public class SqliteDatabaseCheckTests
                 .Select(path => $"{Path.GetFileName(path)} {Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)))}"),
         ];
 
-        public string[] FilesInWorkFolder() =>
-            Directory.Exists(WorkFolder) ? Directory.GetFiles(WorkFolder, "*", SearchOption.AllDirectories) : [];
+        /// <summary>Every file and folder in the data directory, at any depth.</summary>
+        public string[] FilesInTheDirectory() =>
+            [.. Directory.GetFileSystemEntries(_directory.Path, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)];
 
         public void Dispose() => _directory.Dispose();
     }

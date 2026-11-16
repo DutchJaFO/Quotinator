@@ -38,16 +38,6 @@ internal static class StartupDegradationReasons
         "stopping the app, deleting the database file, and restarting.";
 
     /// <summary>
-    /// The reason for a Storage layer that found too little room for the copy the check needs (#490, ADR 028):
-    /// the database holds committed changes beside it that only a copy can check.
-    /// </summary>
-    internal const string NotEnoughSpace =
-        "There is not enough free space in the data directory to check the database. It holds changes that " +
-        "were not yet written into the main file, and checking them safely needs a working copy of the " +
-        "database beside it. Free disk space in the data directory and restart: the database is then checked " +
-        "again. See " + KnowledgebaseLinks.TheDatabaseCouldNotBeChecked;
-
-    /// <summary>
     /// The reason for a layer whose test ran and gave neither a pass nor a fail (ADR 028). An inconclusive
     /// layer is never a pass.
     /// </summary>
@@ -113,12 +103,8 @@ internal static class StartupDegradationReasons
     private static string ForLayer(DatabaseCheckLayerResult failure) =>
         failure.Status == DatabaseCheckLayerStatus.Inconclusive ? CheckInconclusive
             : failure.Layer != DatabaseCheckLayer.Storage ? InitialisationFailed
-            : failure.StorageFault switch
-            {
-                DatabaseStorageFault.InsufficientSpace => NotEnoughSpace,
-                DatabaseStorageFault.FileUnreadable    => InitialisationFailed,
-                _                                      => DataDirectoryNotWritable,
-            };
+            : failure.StorageFault == DatabaseStorageFault.FileUnreadable ? InitialisationFailed
+            : DataDirectoryNotWritable;
 
     /// <summary>
     /// The layer the database check stopped the initialisation at, or <see langword="null"/> when the check did

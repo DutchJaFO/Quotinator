@@ -1277,7 +1277,7 @@ different question in each.
 |---|---|---|
 | 01 | [A reset sets aside a database it cannot read, and rebuilds it](backup/01-a-reset-sets-aside-a-database-it-cannot-read.md) | no |
 | 02 | [A reset sets aside a truncated database, not only an unrecognisable one](backup/02-a-reset-sets-aside-a-truncated-database.md) | no |
-| 03 | [Refuses a reset when the disk fills during the backup](backup/03-refuses-a-reset-when-the-disk-fills-during-the-backup.md) | no |
+| 03 | [Refuses a reset when its volume has no room for a backup](backup/03-refuses-a-reset-when-the-disk-fills-during-the-backup.md) | no |
 | 04 | [Refuses a reset when the backup folder cannot be written](backup/04-refuses-a-reset-when-the-backup-folder-cannot-be-written.md) | no |
 | 05 | [A full backups folder is resolvable from inside the application](backup/05-a-full-quota-is-resolvable-from-inside-the-application.md) | no |
 | 06 | [A startup that cannot take a backup loads nothing, and offers only the options that can run](backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md) | no |
