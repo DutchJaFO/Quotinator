@@ -42,6 +42,12 @@ obstacle and its remedies.
   links the Knowledgebase entry.** That is
   [`backup/07`](../backup/07-a-migration-that-cannot-take-a-backup-leaves-the-database-unmigrated.md),
   which provokes this same state to assert the backup contract.
+- **Resuming the refused migration from inside the application** (#490 step 17), with the backup once there
+  is room or without one once the operator confirms, through `POST /api/v1/admin/database/migrate` or the
+  degraded page's repair control. That is also
+  [`backup/07`](../backup/07-a-migration-that-cannot-take-a-backup-leaves-the-database-unmigrated.md). Step 4
+  here keeps the restart route.
+
 ## Steps
 
 ### 1. Let the prior release create its database, then fill the backup budget

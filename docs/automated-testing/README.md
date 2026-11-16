@@ -1281,7 +1281,7 @@ different question in each.
 | 04 | [Refuses a reset when the backup folder cannot be written](backup/04-refuses-a-reset-when-the-backup-folder-cannot-be-written.md) | no |
 | 05 | [A full backups folder is resolvable from inside the application](backup/05-a-full-quota-is-resolvable-from-inside-the-application.md) | no |
 | 06 | [A startup that cannot take a backup loads nothing, and offers only the options that can run](backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md) | no |
-| 07 | [A migration that cannot take a backup leaves the database unmigrated, and says why](backup/07-a-migration-that-cannot-take-a-backup-leaves-the-database-unmigrated.md) | no |
+| 07 | [A migration that cannot take a backup leaves the database unmigrated, says why, and can be resumed](backup/07-a-migration-that-cannot-take-a-backup-leaves-the-database-unmigrated.md) | no |
 | 08 | [Backups continue from the reserve, with a warning, until the ceiling refuses one](backup/08-backups-continue-from-the-reserve-until-the-ceiling-refuses-one.md) | no |
 | 09 | [A reset of an unreadable database refuses when the data directory cannot be written](backup/09-a-reset-of-an-unreadable-database-refuses-when-the-data-directory-cannot-be-written.md) | no |
 | 10 | [A reset with the override proceeds when no backup can be taken](backup/10-a-reset-with-the-override-proceeds-when-no-backup-can-be-taken.md) | no |

@@ -1171,6 +1171,14 @@ there will be no backup to restore. **Red first:** `DatabaseRepairActionsTests.M
 nothing; `…MigrationResumed_SaysNothing` passed throughout, as the control. `AdminMigrateEndpointTests` stayed green
 across the move.
 
+**T2 documents, converted 2026-11-16, not yet run.** `backup/07` now proves each route on the same refused
+database, saved once (after confirming no `-wal` beside it) and restored per route: the reason offers the
+endpoint, the page shows both buttons, the endpoint without the confirmation refuses with `409`, the page's
+*Migrate without a backup* migrates with `backups/` holding only the filler, the endpoint resumes with the backup
+once the filler is gone, and the restart stays as the control. Its #490 canary is `56dfe433`. Two page scripts
+drive the buttons, `migration-repair-controls.js` and `migration-confirm-without-backup.js`.
+`startup-and-degradation/12` was reviewed: its contract is unchanged, and it points to `backup/07` for resuming.
+
 ### 18. Changelog
 
 **Status:** ⬜ Not started
