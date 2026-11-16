@@ -9,7 +9,8 @@
 
 ## Next action
 
-**Execute step 16's in-memory check (decision D, superseded 2026-11-16), then restart T2.** Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
+**Execute step 17, then restart step 16, T2, on the build that has it.** Step 16's in-memory check (decision D,
+superseded 2026-11-16) is done. Decisions A to E were accepted as recommended on 2026-11-14, and decision E's
 follow-up is #493. Step 6 left one deviation from the verification table for the developer to confirm; it
 is listed under step 6. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
@@ -1054,7 +1055,65 @@ behaviour rather than predict it: `backup/03`'s full volume.
   which reads the `[Database - Stats]` line as the surface it tests, is a dedicated log test; and the review of
   `notifications-and-changelog/14`. `backup/03` is converted once this fix is built.
 
-### 17. Changelog
+### 17. Let the operator confirm a migration without a backup
+
+**Status:** ⬜ Not started. Added 2026-11-16 (developer): *"when there is no room we cannot make any
+backups. so we have to inform the user and ask them to confirm. when that happens when we need to migrate
+that means we start degraded as we first need to allow the user to fix it or allow us to migrate without a
+backup."* Found in step 16: a Reset already works this way, a migration does not. Startup degrades with
+`MigrationRefusedReason`, which deliberately drops the `allowNoBackup` remedy
+(`BackupObstacleGuidance.WithoutOverride`), and nothing in the application can run the migration later; the
+only remedy is to free room and restart. Decided 2026-11-16: an admin endpoint, not a setting.
+
+**The endpoint: `POST /api/v1/admin/database/migrate`, with `?allowNoBackup=true`.** It needs the option for
+the reason a Reset does: by the time it is called, the room may be back.
+- Without the option it takes the backup, as startup would, or refuses with `409` naming the
+  `backupObstacle` and its `remedies`, `allowNoBackup` among them. The refusal is how the operator is told.
+- With it, a backup that cannot be taken is skipped: the operator's confirmation. The skip is written to the
+  audit trail, as the Reset's is (#348), and the response says what was left to restore from (`backup`, as
+  the Reset's does).
+- A backup that can be taken is always taken, with or without the option. The option accepts going without
+  one; it never asks to.
+
+**It reruns startup's own initialisation, not a second path through it.** `InitialiseAsync` gains
+`allowNoBackup`, so the endpoint runs exactly what startup runs: the check before writing, the migrations,
+the check after, the schema comparison, and the content load, whose own backup the option covers too
+(`BackupGuardedStep.ContentLoad`). Its result is mapped by `StartupDegradationReasons.For`, the one mapping
+startup uses: healthy if nothing degrades, otherwise the application stays degraded on the new reason, which
+replaces the old one.
+
+**What startup does after a healthy initialisation runs too.** Program.cs gates on `dbHealth.IsHealthy`
+everything after initialisation: reading the last active version, recording the current one, and the
+notification producers, among them one notification per migration applied (#371) and the what's-new
+catch-up (#81), then the condition checks (#348). A migration completed from the endpoint must leave the
+same state a healthy restart would, so that block moves out of Program.cs into one service that startup and
+the endpoint both call. The ordering comments that hold it in place (#81's read before #312's write) move
+with it.
+
+**Where it can be called.** Only when startup degraded because a backup was refused before a migration or a
+content load. Anywhere else it answers `409` saying there is nothing to resume: a healthy application has
+already initialised, and every other degraded reason has its own remedy, which rerunning initialisation
+would not reach.
+
+**The guidance.** `MigrationRefusedReason` names the endpoint, with and without the option, in place of
+*then restart*, and keeps `allowNoBackup` among its remedies. The knowledgebase entry it links,
+`no-backup-could-be-taken.md`, says the same.
+
+**Red first.** At least:
+- `InitialiseAsync(allowNoBackup: true)` with a backup obstacle migrates, records the skipped backup, and
+  reports no restore point; without the option it refuses as today; with room it takes the backup either way.
+- The endpoint: `409` with the obstacle and remedies; `200` with the option, after which `/health` is healthy,
+  the schema version is current, and the migrations-applied notifications exist; `409` when called on a
+  healthy application.
+- The startup-completion service: one test that startup and the endpoint leave the same notifications for the
+  same migrations.
+
+**T2.** `backup/07` (a migration refused for want of a backup) gains the endpoint: refused without the
+option, then completed with it, and the restart it uses today kept as the control that freeing room still
+works. `startup-and-degradation/12` is reviewed against it, since it asserts the same refusal's startup
+contract.
+
+### 18. Changelog
 
 **Status:** ⬜ Not started
 
@@ -1096,4 +1155,5 @@ says that the database is checked thoroughly at every start, and that the faster
 | 27 | ✅ | *(T2, developer, 2026-11-15)* The integrity endpoint never throws, comparing the schema only when Storage passed, and a check that finds the main database failing degrades the application at any point; a dangling reference alone, or the changelog database, does not | Unit test | `AdminDatabaseIntegrityEndpointTests.Check_LayerFailsAfterStartup_DegradesTheApplication`, `…Check_StorageFails_ReportsWithoutComparingAndDegrades`, `…Check_SchemaBrokenAfterStartup_DegradesTheApplication`, `…Check_ReferencesFailOnly_LeavesTheApplicationHealthy`, `…Check_ChangelogFails_LeavesTheApplicationHealthy`, `…Check_ThatPasses_LeavesHealthAsItWas` |
 | 28 | ✅ | *(T2, developer, 2026-11-15; the copy's part superseded 2026-11-16 by row 30)* A failure to read the file is a Storage failure with its fault typed, never an inconclusive layer; a file Storage could not read gets the generic startup reason | Unit test | `SqliteDatabaseCheckTests.Check_DirectoryNotWritable_FailsStorageAndStillChecksTheFile`; `StartupDegradationReasonsTests.For_StorageFoundTheFileUnreadable_IsTheGenericReason`. The copy's tests were removed with the copy |
 | 30 | ✅ | *(T2, developer, 2026-11-16)* The check needs no disk space: a `-wal`'s committed frames are applied in memory by the documented format and the image opened with `sqlite3_deserialize`; a full volume or an unwritable directory no longer stops it, so a Reset of a sound database refuses only for its backup, and with `allowNoBackup` skips it | Unit test + Live (T2) | `WalReplayTests` (11), including `…Apply_WalSQLiteWrote_MatchesWhatACheckpointWrites`, which also proves `sqlite3_deserialize` is in the bundled library; `SqliteDatabaseCheckTests.Check_WalHoldsData_NothingCanBeWritten_StillChecksTheFile` and `…Check_AnyOutcome_LeavesTheFileAndSidecarsUntouched` (now also: nothing left in the data directory); `DatabaseInitializerTests.ResetAsync_WalHoldsData_NothingWritableForTheCheck_BacksTheSoundCopyUp`; `backup/03` step 6 |
+| 31 | ❌ | *(step 17, developer, 2026-11-16)* A migration refused for want of a backup can be completed from inside the application: `POST /admin/database/migrate` takes the backup or refuses naming the obstacle, and with `allowNoBackup` proceeds without one, recorded; it leaves the state a healthy restart would | Unit test + Live (T2) | Step 17's red-first tests; `backup/07` |
 | 29 | ❌ | *(T2, developer, 2026-11-15)* Free space is measured on the file system that holds the path, not on its root: a full volume mounted at `/data` reads as full | Live (T2) + unit test | `backup/03`, red on `9b59f414`, green on this build (pending the T2 run); controls `DiskSpaceProviderTests.GetAvailableFreeSpaceBytes_ExistingDirectory_IsPositive`, `…FolderNotCreatedYet_MeasuresItsNearestExistingParent` |
