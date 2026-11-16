@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Quotinator.Api.Enums;
 using Quotinator.Api.Services;
 using Quotinator.Api.Startup;
 using Quotinator.Core.Services;
@@ -66,6 +67,25 @@ public partial class DatabaseRepairActions
         };
 
     /// <summary>
+    /// #490 step 17: what the operator is told after resuming a refused migration, or <see langword="null"/> when it
+    /// ran and the application is healthy.
+    /// </summary>
+    /// <param name="result">What resuming did.</param>
+    /// <param name="text">The translated strings for the current culture.</param>
+    internal static string? MigrationOutcomeText(MigrationResumeResult result, Quotinator.Api.I18nText.UI text) =>
+        result switch
+        {
+            { Outcome: MigrationResumeOutcome.Resumed } => null,
+            { Outcome: MigrationResumeOutcome.RefusedForBackup, BackupObstacle: BackupOutcome obstacle } =>
+                WithObstacle(text.DatabaseRepairMigrationRefusedForBackup, obstacle.ToString()) + " "
+                + BackupObstacleGuidance.Cause(obstacle) + " "
+                + text.DatabaseRepairNothingChanged,
+            { Outcome: MigrationResumeOutcome.StillDegraded } =>
+                text.DatabaseRepairMigrationStillDegraded + " " + result.FailureReason,
+            _ => text.DatabaseRepairNothingToResume,
+        };
+
+    /// <summary>
     /// #490: why a Reset set a file aside, or had to: the check layer that showed it was not a sound copy,
     /// with its status and finding, or the backup's own error when the check passed. Shared with the
     /// Notifications page, so the two surfaces word it alike.
@@ -84,6 +104,34 @@ public partial class DatabaseRepairActions
 
     [Inject] private I18nTextService I18nText { get; set; } = default!;
     [Inject] private INotificationActionExecutor ActionExecutor { get; set; } = default!;
+    [Inject] private DatabaseInitialisationSequence InitialisationSequence { get; set; } = default!;
+    [Inject] private DatabaseHealthState DatabaseHealth { get; set; } = default!;
+
+    private bool ConfirmingMigrationWithoutBackup;
+
+    /// <summary>
+    /// #490 step 17: resumes a migration refused for want of a backup through the same sequence the migrate endpoint
+    /// runs, with the backup, or, once the operator confirmed, without one. A migration that ran leaves the
+    /// application healthy, and every surface rendering this control re-renders from
+    /// <see cref="DatabaseHealthState.Changed"/>, as after a Reset.
+    /// </summary>
+    /// <param name="allowNoBackup">Whether the operator confirmed migrating without a backup.</param>
+    private async Task ResumeMigrationAsync(bool allowNoBackup)
+    {
+        ConfirmingMigrationWithoutBackup = false;
+        ConfirmingReset = false;
+        Repairing       = true;
+        RepairOutcome   = null;
+
+        try
+        {
+            RepairOutcome = MigrationOutcomeText(await InitialisationSequence.ResumeMigrationAsync(allowNoBackup), Text);
+        }
+        finally
+        {
+            Repairing = false;
+        }
+    }
 
     private Quotinator.Api.I18nText.UI Text = new();
 

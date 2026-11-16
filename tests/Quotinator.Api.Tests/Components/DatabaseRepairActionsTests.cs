@@ -1,4 +1,5 @@
 using Quotinator.Api.Components.Controls;
+using Quotinator.Api.Enums;
 using Quotinator.Api.Services;
 using Quotinator.Api.Startup;
 using Quotinator.Data.Database;
@@ -49,6 +50,53 @@ public class DatabaseRepairActionsTests
             Assert.IsNotNull(outcomes[i]);
             Assert.StartsWith(templates[i], outcomes[i]!, StringComparison.Ordinal);
         }
+    }
+
+    /// <summary>
+    /// #490 step 17: a resumed migration that ran leaves the application healthy, and the control disappears with
+    /// the degradation, so there is nothing left to say.
+    /// </summary>
+    [TestMethod]
+    public void MigrationResumed_SaysNothing()
+    {
+        Assert.IsNull(DatabaseRepairActions.MigrationOutcomeText(
+            new MigrationResumeResult { Outcome = MigrationResumeOutcome.Resumed }, Text));
+    }
+
+    /// <summary>
+    /// Still no room and no confirmation: the operator is told in their own language that nothing ran, which
+    /// obstacle stopped it, and what it means.
+    /// </summary>
+    [TestMethod]
+    public void MigrationRefusedForBackup_NamesTheObstacleInTheOperatorsLanguage()
+    {
+        string? outcome = DatabaseRepairActions.MigrationOutcomeText(
+            new MigrationResumeResult { Outcome = MigrationResumeOutcome.RefusedForBackup, BackupObstacle = BackupOutcome.InsufficientDiskSpace }, Text);
+
+        Assert.IsNotNull(outcome);
+        Assert.StartsWith(Text.DatabaseRepairMigrationRefusedForBackup.Replace("{0}", nameof(BackupOutcome.InsufficientDiskSpace), StringComparison.Ordinal),
+            outcome, StringComparison.Ordinal);
+        Assert.Contains(BackupObstacleGuidance.Cause(BackupOutcome.InsufficientDiskSpace), outcome, StringComparison.Ordinal);
+    }
+
+    /// <summary>The migration ran but the database degraded for another reason: the operator is told what is still wrong.</summary>
+    [TestMethod]
+    public void MigrationStillDegraded_NamesWhatIsStillWrong()
+    {
+        string? outcome = DatabaseRepairActions.MigrationOutcomeText(
+            new MigrationResumeResult { Outcome = MigrationResumeOutcome.StillDegraded, FailureReason = "schema mismatch" }, Text);
+
+        Assert.IsNotNull(outcome);
+        Assert.StartsWith(Text.DatabaseRepairMigrationStillDegraded, outcome, StringComparison.Ordinal);
+        Assert.Contains("schema mismatch", outcome, StringComparison.Ordinal);
+    }
+
+    /// <summary>Nothing to resume, which the control cannot normally show, still says so rather than nothing.</summary>
+    [TestMethod]
+    public void NothingToResume_SaysSo()
+    {
+        Assert.AreEqual(Text.DatabaseRepairNothingToResume, DatabaseRepairActions.MigrationOutcomeText(
+            new MigrationResumeResult { Outcome = MigrationResumeOutcome.NothingToResume }, Text));
     }
 
     /// <summary>

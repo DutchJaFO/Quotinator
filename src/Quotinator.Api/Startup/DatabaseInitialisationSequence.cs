@@ -1,3 +1,4 @@
+using Quotinator.Api.Enums;
 using Quotinator.Api.Logging;
 using Quotinator.Changelog.Models;
 using Quotinator.Changelog.Services;
@@ -29,6 +30,8 @@ namespace Quotinator.Api.Startup;
 /// <param name="changelogReader">The changelog the what's-new notification is built from.</param>
 /// <param name="conditionChecks">Re-checks every notification whose condition can change while the application runs.</param>
 /// <param name="backgroundWork">Startup work that runs in the background, and is waited for before the gate opens.</param>
+/// <param name="auditWriter">Records a migration's backup skipped by the operator's confirmation.</param>
+/// <param name="callerContext">Who confirmed it.</param>
 /// <param name="logger">Logs what degraded the application, and each non-fatal failure.</param>
 internal sealed class DatabaseInitialisationSequence(
     IDatabaseInitializer dbInitializer,
@@ -41,6 +44,8 @@ internal sealed class DatabaseInitialisationSequence(
     IChangelogReader changelogReader,
     NotificationConditionChecks conditionChecks,
     StartupBackgroundWork backgroundWork,
+    IAuditEntryWriter auditWriter,
+    ICallerContext callerContext,
     ILogger<DatabaseInitialisationSequence> logger)
 {
     /// <summary>
@@ -114,6 +119,49 @@ internal sealed class DatabaseInitialisationSequence(
             Degrade(StartupDegradationReasons.InitialisationFailed, migrationRefused: false);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Resumes a startup that degraded because a migration was refused for want of a backup (#490 step 17), for
+    /// <c>POST /api/v1/admin/database/migrate</c> and the degraded page's repair control alike.
+    /// </summary>
+    /// <param name="allowNoBackup">The operator's confirmation that the migration may run without a backup when none can be taken.</param>
+    public async Task<MigrationResumeResult> ResumeMigrationAsync(bool allowNoBackup)
+    {
+        // Only a migration refused for want of a backup can be resumed (developer, 2026-11-16). A healthy
+        // application has already initialised, and every other degraded reason has its own remedy, which
+        // rerunning initialisation would not reach.
+        if (!dbHealth.MigrationAwaitsConfirmation)
+            return new MigrationResumeResult { Outcome = MigrationResumeOutcome.NothingToResume, FailureReason = dbHealth.FailureReason };
+
+        DatabaseOperationResult? result = await InitialiseAsync(allowNoBackup);
+
+        // Still no backup and no confirmation: refused as at startup. Nothing changed, and the application stays
+        // degraded on the same reason.
+        if (result is { RefusedStep: BackupGuardedStep.Migration, BackupObstacle: BackupOutcome obstacle })
+            return new MigrationResumeResult { Outcome = MigrationResumeOutcome.RefusedForBackup, BackupObstacle = obstacle };
+
+        // #348's rule for a Reset, applied to the migration: a backup skipped by the operator's confirmation is
+        // recorded where it will still be found long after the log has rotated. The migration ran, whatever
+        // happened after it.
+        if (result?.BackupSkippedByOverride == true)
+            await auditWriter.WriteAsync(new AuditEntryEntity
+            {
+                TableName   = "Database",
+                Operation   = AuditOperation.BackupSkipped,
+                Agent       = callerContext.Agent,
+                PerformedAt = DateTime.UtcNow,
+            });
+
+        if (!dbHealth.IsHealthy)
+            return new MigrationResumeResult
+            {
+                Outcome = MigrationResumeOutcome.StillDegraded, FailureReason = dbHealth.FailureReason, RestorePoint = result?.RestorePoint,
+            };
+
+        // What a healthy start does next, so the resumed migration leaves the state a healthy restart would.
+        await CompleteAsync();
+        return new MigrationResumeResult { Outcome = MigrationResumeOutcome.Resumed, RestorePoint = result?.RestorePoint };
     }
 
     /// <summary>

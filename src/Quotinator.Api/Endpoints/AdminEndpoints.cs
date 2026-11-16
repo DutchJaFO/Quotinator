@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Quotinator.Api.Enums;
 using Quotinator.Api.Startup;
 using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Api.Endpoints.Shared;
@@ -474,65 +475,46 @@ internal static class AdminEndpoints
         .Produces<ProblemDetails>(StatusCodes.Status500InternalServerError);
 
         adminGroup.MapPost("/database/migrate", async (
-            Quotinator.Api.Startup.DatabaseInitialisationSequence sequence, Quotinator.Api.Startup.DatabaseHealthState dbHealth,
-            IDatabaseInitializer db, IAuditEntryWriter auditWriter, ICallerContext callerContext,
+            Quotinator.Api.Startup.DatabaseInitialisationSequence sequence, IDatabaseInitializer db,
             [Description("Confirm migrating without a backup when none can be taken. A backup that can be taken is always taken.")]
             bool allowNoBackup = false) =>
         {
-            // #490 step 17 (developer, 2026-11-16): only a migration refused for want of a backup can be resumed.
-            // A healthy application has already initialised, and every other degraded reason has its own remedy,
-            // which rerunning initialisation would not reach.
-            if (!dbHealth.MigrationAwaitsConfirmation)
-                return Results.Problem(
+            // #490 step 17: the same resume the degraded page's repair control runs; this maps its outcome to HTTP.
+            MigrationResumeResult resume = await sequence.ResumeMigrationAsync(allowNoBackup);
+
+            return resume.Outcome switch
+            {
+                MigrationResumeOutcome.NothingToResume => Results.Problem(
                     title: "Nothing to resume",
-                    detail: dbHealth.IsHealthy
+                    detail: resume.FailureReason is null
                         ? "The database is up to date: no migration is waiting."
-                        : $"The application is degraded for a reason a migration cannot resolve: {dbHealth.FailureReason}",
-                    statusCode: StatusCodes.Status409Conflict);
+                        : $"The application is degraded for a reason a migration cannot resolve: {resume.FailureReason}",
+                    statusCode: StatusCodes.Status409Conflict),
 
-            DatabaseOperationResult? result = await sequence.InitialiseAsync(allowNoBackup);
-
-            // Still no backup and no confirmation: refused as at startup, saying why and offering the
-            // confirmation. Nothing changed, and the application stays degraded on the same reason.
-            if (result is { RefusedStep: BackupGuardedStep.Migration, BackupObstacle: BackupOutcome obstacle })
-                return Results.Problem(
+                // Refused as at startup, saying why and offering the confirmation. Nothing changed.
+                MigrationResumeOutcome.RefusedForBackup => Results.Problem(
                     title: "Migration refused: no backup could be taken",
-                    detail: BackupObstacleGuidance.Cause(obstacle),
+                    detail: BackupObstacleGuidance.Cause(resume.BackupObstacle!.Value),
                     statusCode: StatusCodes.Status409Conflict,
                     extensions: new Dictionary<string, object?>
                     {
-                        ["backupObstacle"] = obstacle.ToString(),
-                        ["remedies"]       = BackupObstacleGuidance.Remedies(obstacle, allowNoBackup),
-                    });
+                        ["backupObstacle"] = resume.BackupObstacle.Value.ToString(),
+                        ["remedies"]       = BackupObstacleGuidance.Remedies(resume.BackupObstacle.Value, allowNoBackup),
+                    }),
 
-            // #348's rule for a Reset, applied to the migration: a backup skipped by the operator's confirmation
-            // is recorded where it will still be found long after the log has rotated. The migration ran,
-            // whatever happened after it.
-            if (result?.BackupSkippedByOverride == true)
-                await auditWriter.WriteAsync(new AuditEntryEntity
-                {
-                    TableName   = "Database",
-                    Operation   = AuditOperation.BackupSkipped,
-                    Agent       = callerContext.Agent,
-                    PerformedAt = DateTime.UtcNow,
-                });
-
-            // What a healthy start does next, so the resumed migration leaves the state a healthy restart would.
-            if (dbHealth.IsHealthy)
-                await sequence.CompleteAsync();
-            else
-                return Results.Problem(
+                MigrationResumeOutcome.StillDegraded => Results.Problem(
                     title: "Migration resumed, but the database is still degraded",
-                    detail: dbHealth.FailureReason,
-                    statusCode: StatusCodes.Status500InternalServerError);
+                    detail: resume.FailureReason,
+                    statusCode: StatusCodes.Status500InternalServerError),
 
-            return Results.Ok(new DatabaseMigrationResponse
-            {
-                DataSchemaVersion = db.DataSchemaVersion,
-                AppSchemaVersion  = db.SchemaVersion,
-                MigrationsApplied = db.MigrationsApplied.Count,
-                Backup            = RestorePointDto.From(result?.RestorePoint),
-            });
+                _ => Results.Ok(new DatabaseMigrationResponse
+                {
+                    DataSchemaVersion = db.DataSchemaVersion,
+                    AppSchemaVersion  = db.SchemaVersion,
+                    MigrationsApplied = db.MigrationsApplied.Count,
+                    Backup            = RestorePointDto.From(resume.RestorePoint),
+                }),
+            };
         })
         .WithName(MigrateDatabaseName)
         .WithSummary("Resume a migration refused for want of a backup")

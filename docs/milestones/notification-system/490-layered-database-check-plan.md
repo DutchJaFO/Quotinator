@@ -1152,9 +1152,24 @@ earlier failure does not await confirmation (`DatabaseHealthStateTests.MarkMigra
 Program.cs for #419's wait, which moved into `CompleteAsync`; they now assert the wait there, after the last
 background start, and that startup runs `CompleteAsync` before `MarkComplete()`.
 
-**Not in this step, raised for the developer:** the degraded page's repair control offers a Reset, not the
-migration. The reason text names the endpoint, but a confirmation button there would match how the Reset is
-offered.
+**The degraded page offers it too (developer, 2026-11-16: "Yes, add it").** The repair control,
+`DatabaseRepairActions`, rendered by the startup modal and the degraded banner, offers the Reset in-process. While
+`MigrationAwaitsConfirmation`, it also offers *Resume the migration*, which takes the backup, and *Migrate without a
+backup*, armed by the same confirm step the Reset uses. So both the endpoint and the control run one implementation,
+the endpoint's logic moves into `DatabaseInitialisationSequence.ResumeMigrationAsync`, returning a
+`MigrationResumeResult` that each maps to its own surface: HTTP statuses, or a translated sentence through
+`DatabaseRepairActions.MigrationOutcomeText`. Its sentences are in all three translation files. Tested through the
+static helper, as the control's Reset outcome is; what it renders is `startup-and-degradation/06`'s and
+`backup/07`'s.
+
+**As built, 2026-11-16.** `MigrationResumeResult` carries a `MigrationResumeOutcome` (`Resumed`,
+`NothingToResume`, `RefusedForBackup`, `StillDegraded`), the obstacle, the reason and the restore point; the endpoint
+maps it to `200`, `409`, `409` and `500`, and the control to a sentence. The control shows *Resume the migration* and
+*Migrate without a backup* only while `MigrationAwaitsConfirmation`, the second armed by a confirm step warning that
+there will be no backup to restore. **Red first:** `DatabaseRepairActionsTests.MigrationRefusedForBackup_NamesTheObstacleInTheOperatorsLanguage`,
+`…MigrationStillDegraded_NamesWhatIsStillWrong` and `…NothingToResume_SaysSo` failed against a helper that returned
+nothing; `…MigrationResumed_SaysNothing` passed throughout, as the control. `AdminMigrateEndpointTests` stayed green
+across the move.
 
 ### 18. Changelog
 
