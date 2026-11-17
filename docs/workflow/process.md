@@ -280,7 +280,12 @@ from, never a plan to execute as written.
    This step is the primary defence against implementing the wrong scope. It is not optional and must not be skipped even when the issue appears straightforward.
 
 4. Check the dependency map in `overview.md`. Verify that all blocking issues are fully complete before starting: a partially-done dependency means this issue cannot be closed either.
-5. For each requirement in the spec, create a verification checklist entry in the plan doc.
+5. **A plan never starts while any question is open** (developer, 2026-11-17). Every question the plan
+   raises, a scope mismatch, a design decision, a deviation from the issue, is answered by the developer
+   before the first step of implementation runs. An open question is the plan's *Next action*, named on its
+   first line, and the plan stays `Planning` until it is answered. A plan whose decisions are "recommended"
+   but not yet accepted has an open question.
+6. For each requirement in the spec, create a verification checklist entry in the plan doc.
    This is part of planning: it must exist before implementation starts. Each entry must state:
    - **Unit test preferred:** if a unit test can cover it, name the exact test class and method.
      Write the test as part of the issue if it does not yet exist.
@@ -388,9 +393,17 @@ nothing else was asking.
 **Do not stop at a reporting boundary when the next piece of work is identified and unblocked.**
 Summarising progress is not a deliverable, and splitting one task across turns costs a round trip for
 nothing. Stop for a genuine decision, a scope question, an unsafe action, or a design call that is the
-developer's (see *Gap resolution* below), never because the work looks large or the summary is getting
-long. Where one part is blocked, finish every unblocked part first and report the block at the end,
-rather than instead.
+developer's (see *A question raised during execution stops it* below), never because the work looks large
+or the summary is getting long. Where one part is blocked, finish every unblocked part first and report the
+block at the end, rather than instead.
+
+**A question raised during execution stops it until the developer answers** (developer, 2026-11-17). A
+deviation from the plan, a finding that changes its scope, or anything recorded "for the developer to
+confirm" is asked at once, and no later step starts until it is answered: recording it in the plan is not
+asking it. Until then it is the plan's *Next action*, named on its first line, the step that raised it does
+not read `✅ Done`, and every verification row it concerns stays ❌. Found live on #490 (2026-11-17): step 6
+recorded a deviation for the developer to confirm, its row was ticked, and steps 7 to 18 ran before anyone
+asked; the answer, when it came, added a test.
 
 ---
 

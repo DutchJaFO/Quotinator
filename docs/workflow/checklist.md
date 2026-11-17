@@ -128,6 +128,7 @@ behind each item.
 - [ ] Create the plan doc now, or re-plan an existing draft against the current code and issues, add it to `Quotinator.slnx`, and link it from `overview.md`
 - [ ] **Cross-check the spec against current authoritative sources before writing any code**. In order: `docs/architecture-decisions/` (ADRs), JSON schemas (`schemas/`), generator/script behaviour, C# models, project documentation. Raise any mismatch to the user and get explicit confirmation on scope before proceeding, never silently assume a gap is in-scope or out-of-scope.
 - [ ] Check the dependency map in `overview.md`; verify all blocking issues are fully complete before starting
+- [ ] **No question is open**: every question the plan raises is answered by the developer before implementation starts; until then it is the *Next action*'s first line and the status stays `Planning`
 - [ ] **Verification checklist created in the plan doc**: one entry per requirement in the spec, each naming either the exact unit test (class + method) to be written, or the exact live command and expected output. Status is its own column; `#` is plain sequential integers, never lettered.
 - [ ] **Plan doc steps are numbered sections** (`### N. <title>`), each with `**Status:**` as the first line, never a flat checklist
 - [ ] For bug fixes: the plan identifies what the red test/reproduction will be before any fix is written
@@ -146,6 +147,7 @@ full detail behind each item.
 - [ ] **New stored content is added to the Reset test**: a feature that stores a new kind of data gets rows in [`database-lifecycle/03`](../automated-testing/database-lifecycle/03-reset-is-a-full-wipe.md)'s fixture and is read there before and after Reset, in both variants. `RepositoryStructureTests.TheResetDocument_CoversEveryContentCategory` catches a new counter or list route, not data stored with neither
 - [ ] Issue status set to `In progress` in both the plan doc header and `overview.md` (use `In progress (step N)` in the plan doc header while a specific step is active)
 - [ ] Each plan-doc step's `**Status:**` line is updated as work on that step progresses: this is the only place step progress is tracked, and there is no separate list
+- [ ] **A question raised during execution is asked at once, and no later step starts until it is answered**: recording it in the plan is not asking it. Until answered it is the *Next action*'s first line, its step is not `✅ Done`, and every row it concerns stays ❌
 - [ ] Implementation makes each red test green, without weakening the test to pass
 - [ ] Before considering implementation done: re-read every requirement in the GitHub issue spec and execute each documented verification step against the actual code, not just the tests, the live commands too
 - [ ] Once every verification-table row is ✅, move to `checklist.md` → "Before closing an issue" → "Waiting for release"; do not leave these items for later
