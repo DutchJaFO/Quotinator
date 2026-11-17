@@ -9,8 +9,10 @@
 
 ## Next action
 
-**Execute step 18, the changelog.** Every earlier step is done: T2 passed on `3205ba49` (step 16), and step 17
-is built and verified. Decisions A to E were accepted as recommended on 2026-11-14, and decision E's follow-up
+**Work through `docs/workflow/checklist.md`'s *Waiting for release* list.** Every step is done: T2 passed on
+`3205ba49` (step 16), step 17 is built and verified, and step 18's changelog is written. T1 (step 15) was run
+before the backup pre-flight fix (`272fa048`) and the reworded disk-space cause (`3205ba49`); the checklist's
+own Visual Studio start covers both. Decisions A to E were accepted as recommended on 2026-11-14, and decision E's follow-up
 is #493. Step 6's deviation was answered on 2026-11-17: row 13 is proven with both variants. The plan is built
 against the code at `342e0cfa` and the sqlite.org documentation as read on that date.
 
@@ -1229,7 +1231,10 @@ drive the buttons, `migration-repair-controls.js` and `migration-confirm-without
 
 ### 18. Changelog
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done 2026-11-17. Two highlights (the thorough check at every start, with the faster one as an
+option; a migration with no room for its backup asks rather than fails), two *Added*, one *Changed* and two
+*Fixed* entries, in `en`, `nl` and `de`, and `CHANGELOG.md` regenerated. The add-on changelogs follow the
+release, per the tagging steps.
 
 Add an `unreleased` entry in `changelog.en.json`, `nl.json` and `de.json`, carrying issue 490. Its highlight
 says that the database is checked thoroughly at every start, and that the faster check is an option.
