@@ -94,8 +94,9 @@ names, and this shows it resolves the condition.
 
 ## Observed effect
 
-**Measured 2026-11-12** against `quotinator:local` built from the working tree of #348's step 29, the
-database replaced with 34 bytes of text and the data directory mounted read-only.
+**Measured 2026-11-17** against `quotinator:local` built from `3205ba49`, the database replaced with 34
+bytes of text and the data directory mounted read-only: 16 commands, all as expected. The read-only start
+degraded with the reason *The data directory cannot be written*.
 
 The Reset answers `409`, titled *Reset refused: the database could not be replaced*, with
 `resetObstacle=DataDirectoryNotWritable` and no `backupObstacle`. Its detail says the data directory

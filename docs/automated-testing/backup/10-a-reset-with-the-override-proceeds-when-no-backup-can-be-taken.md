@@ -90,24 +90,14 @@ object, or one not reading `Skipped`, means the caller was not told it has no re
 
 ## Observed effect
 
-**Measured 2026-11-12** against `quotinator:local` built from the working tree of #348's step 29.
+**Measured 2026-11-17** against `quotinator:local` built from `3205ba49`: 16 commands, all as expected.
 
-With the folder at its ceiling, the Reset without the override answers `409`, *Reset refused: no backup
-could be taken*, `backupObstacle=BudgetExceeded`, with three remedies: remove old backups, raise the
-ceiling, or retry with `allowNoBackup=true`. Retried with it, the Reset answers `200` and `/health` stays
-`200`. `backups/` still holds only the filler. The audit trail then holds two `Database` rows written in
-the same second: `Reset` and `BackupSkipped`.
-
-**Re-measured 2026-11-12** after the proof moved from the audit trail to the data, against an image built
-from `ec03fed5`. `/quotes` read `totalCount=795` after the seed and still `795` after the refused Reset.
-The override's Reset answered `200` with every count `0` (`quotes=0`, `sources=0`, through
-`conversations=0`, `reports=[]`), and `/quotes` then read `totalCount=0`. `backups/` held only the
-filler.
-
-**Re-measured 2026-11-12** after the Reset began reporting its restore point (#348 step 30), against an
-image built from the working tree of that step. The same reads as above, and the override's Reset now
-answers with `"backup":{"outcome":"Skipped","obstacle":"BudgetExceeded"}` and no `name`. The audit step
-was removed from this document: it no longer serves as evidence here.
+`/quotes` read `totalCount=795` after the seed. With the folder at its ceiling, the Reset without the
+override answered `409`, *Reset refused: no backup could be taken*, `backupObstacle=BudgetExceeded`, with
+three remedies: remove old backups, raise the ceiling, or retry with `allowNoBackup=true`; `/quotes` still
+read `795`. Retried with the override, the Reset answered `200` with every count `0` (`quotes=0` through
+`conversations=0`, `reports=[]`) and `"backup":{"outcome":"Skipped","obstacle":"BudgetExceeded"}`, no
+`name`. `/quotes` then read `totalCount=0`, and `backups/` held only the filler.
 
 ## Canary
 

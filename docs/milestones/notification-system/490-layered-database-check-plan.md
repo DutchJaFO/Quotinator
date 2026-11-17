@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 16)
+**Status:** In progress (step 18)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492, #493.
@@ -956,7 +956,7 @@ runs them. Folding them into T1 is what the T1 gate rules out.
 
 ### 16. T2
 
-**Status:** 🚧 In progress. Restarted from the first document on 2026-11-16, on `2fd67742`, after the review below.
+**Status:** ✅ Done 2026-11-17. Restarted from the first document on `2fd67742` after the review below; complete on `3205ba49`.
 
 The *end of an issue* scope (`docs/automated-testing/README.md`, *When to run what*): the smoke set, every
 document this issue changed, and every test relevant to what it touched, each against `quotinator:local` built
@@ -1076,9 +1076,31 @@ behaviour rather than predict it: `backup/03`'s full volume.
   `12` were converted or reviewed with step 17 and the overshoot comparison. **The review is complete**, and T2
   restarts from the first document on `2fd67742`.
 
+**Restarted run, 2026-11-17, on `2fd67742`, then `272fa048` and `3205ba49`: complete, every document
+passing.**
+
+- **The smoke set**, twenty of twenty, failing only where the documents record the known #468
+  (`database-lifecycle/03` step 8) and #472 (`notifications-and-changelog/01` step 9).
+- **Changed and relevant:** `startup-and-degradation/16` and `02`, `notifications-and-changelog/03`, `09`
+  (its first run in the converted form, so it left the awaiting-measurement list) and `14`,
+  `database-lifecycle/04`, and `backup/01`, `02`, `03`, `04`, `07`, `09` and `10`. Each *Observed effect*
+  is this run's reading.
+- **Found by `backup/03` step 6, a defect in the backup pre-flight:** it refused only when no space at all
+  was free, while the attempt refuses when the space is less than the database's size. With some room but
+  not enough, the pre-flight said a backup could be taken, so the override never applied and the attempt
+  refused the Reset the operator had confirmed. Hidden until the room was measured on the right file system.
+  **Fixed in `272fa048`, red first** (row 30's tests); the `InsufficientDiskSpace` cause, which said the
+  volume had no free space left, was reworded in `3205ba49`.
+- **Found by `backup/07` step 5, a defect in the document:** it copied the database after `destroy`, a
+  SIGKILL that leaves the `-wal`, and after DbInspector's read-only open, which leaves an empty one of its
+  own. Step 5 now stops the container cleanly and copies before reading. The `-wal` life cycle is the SQLite
+  engine's, and is now recorded for tests in `docs/automated-testing/README.md` and for operators in the
+  knowledgebase entry *Files named quotinatordata.db-wal and quotinatordata.db-shm appear beside the
+  database*.
+
 ### 17. Let the operator confirm a migration without a backup
 
-**Status:** ✅ Built 2026-11-16; its T2 (`backup/07`) runs with step 16's restart. Added 2026-11-16 (developer): *"when there is no room we cannot make any
+**Status:** ✅ Done. Built 2026-11-16; its T2, `backup/07`, green on `272fa048` (2026-11-17). Added 2026-11-16 (developer): *"when there is no room we cannot make any
 backups. so we have to inform the user and ask them to confirm. when that happens when we need to migrate
 that means we start degraded as we first need to allow the user to fix it or allow us to migrate without a
 backup."* Found in step 16: a Reset already works this way, a migration does not. Startup degrades with
@@ -1241,7 +1263,7 @@ says that the database is checked thoroughly at every start, and that the faster
 | 26 | ✅ | *(T1, decision F corrected; narrowed 2026-11-16, row 32)* The Schema layer is skipped, naming the table, only when a version table is missing or behind this build; startup over an old database logs no Schema failure; a passed check that skipped a layer says so rather than claiming every layer | Unit test | `SqliteDatabaseCheckTests.Check_RecordedVersionBehindThisBuild_SkipsSchemaNamingTheVersionTable`, `…Check_NoVersionTable_SkipsSchema`, `…Check_RecordedVersionIsThisBuilds_ComparesTheSchema`; `DatabaseInitializerTests.InitialiseAsync_OldDatabase_LogsTheSchemaSkippedRatherThanFailedBeforeMigrating`; `StartupDatabaseCheckTests` (3) |
 | 27 | ✅ | *(T2, developer, 2026-11-15)* The integrity endpoint never throws, comparing the schema only when Storage passed, and a check that finds the main database failing degrades the application at any point; a dangling reference alone, or the changelog database, does not | Unit test | `AdminDatabaseIntegrityEndpointTests.Check_LayerFailsAfterStartup_DegradesTheApplication`, `…Check_StorageFails_ReportsWithoutComparingAndDegrades`, `…Check_SchemaBrokenAfterStartup_DegradesTheApplication`, `…Check_ReferencesFailOnly_LeavesTheApplicationHealthy`, `…Check_ChangelogFails_LeavesTheApplicationHealthy`, `…Check_ThatPasses_LeavesHealthAsItWas` |
 | 28 | ✅ | *(T2, developer, 2026-11-15; the copy's part superseded 2026-11-16 by row 30)* A failure to read the file is a Storage failure with its fault typed, never an inconclusive layer; a file Storage could not read gets the generic startup reason | Unit test | `SqliteDatabaseCheckTests.Check_DirectoryNotWritable_FailsStorageAndStillChecksTheFile`; `StartupDegradationReasonsTests.For_StorageFoundTheFileUnreadable_IsTheGenericReason`. The copy's tests were removed with the copy |
-| 29 | ❌ | *(T2, developer, 2026-11-15)* Free space is measured on the file system that holds the path, not on its root: a full volume mounted at `/data` reads as full | Live (T2) + unit test | `backup/03`, red on `9b59f414`, green on this build (pending the T2 run); controls `DiskSpaceProviderTests.GetAvailableFreeSpaceBytes_ExistingDirectory_IsPositive`, `…FolderNotCreatedYet_MeasuresItsNearestExistingParent` |
-| 30 | ❌ | *(T2, developer, 2026-11-16)* The check needs no disk space: a `-wal`'s committed frames are applied in memory by the documented format and the image opened with `sqlite3_deserialize`; a full volume or an unwritable directory no longer stops it, so a Reset of a sound database refuses only for its backup, and with `allowNoBackup` skips it | Unit test + Live (T2) | Unit tests green: `WalReplayTests` (11), including `…Apply_WalSQLiteWrote_MatchesWhatACheckpointWrites`, which also proves `sqlite3_deserialize` is in the bundled library; `SqliteDatabaseCheckTests.Check_WalHoldsData_NothingCanBeWritten_StillChecksTheFile` and `…Check_AnyOutcome_LeavesTheFileAndSidecarsUntouched` (now also: nothing left in the data directory); `DatabaseInitializerTests.ResetAsync_WalHoldsData_NothingWritableForTheCheck_BacksTheSoundCopyUp`. Pending: `backup/03` step 6 in T2 |
-| 31 | ❌ | *(step 17, developer, 2026-11-16)* A migration refused for want of a backup can be completed from inside the application: `POST /admin/database/migrate` takes the backup or refuses naming the obstacle, and with `allowNoBackup` proceeds without one, recorded; it leaves the state a healthy restart would | Unit test + Live (T2) | Unit tests green: `DatabaseInitializerTests` (4 `…WithOverride…`), `AdminMigrateEndpointTests` (7), `DatabaseHealthStateTests` (4 new), `BackupObstacleGuidanceTests` (3 new), `DatabaseRepairActionsTests` (4 new). Pending: `backup/07` in T2 |
-| 32 | ❌ | *(developer, 2026-11-16)* The schema is compared on an overshoot, by the check's Schema layer and by the initialisation's #305 comparison: only migrations still to run justify a skip. The overshoot stays the degraded reason, reworded to say what is still unknown; the comparison is its detail | Unit test + Live (T2) | Unit tests green: `SqliteDatabaseCheckTests.Check_RecordedVersionAheadOfThisBuild_ComparesTheSchema`; `DatabaseIntegrityCheckTests.SchemaVersionOvershoot_IntegrityChecked`, `…SchemaVersionOvershoot_WithATableDropped_NamesIt`; `StartupDegradationReasonsTests.For_OvershootAndSchemaNotIntact_OvershootWins`, `…OvershootReason_PointsToTheComparisonRatherThanCallingTheShapeUnknown`, `…OvershootNotification_…`. Pending: `startup-and-degradation/06` step 3 in T2 |
+| 29 | ✅ | *(T2, developer, 2026-11-15)* Free space is measured on the file system that holds the path, not on its root: a full volume mounted at `/data` reads as full | Live (T2) + unit test | `backup/03`, red on `9b59f414`, green in T2 on `272fa048` (2026-11-17: 2,284 KB free read against a 4,572 KB database, `InsufficientDiskSpace`); controls `DiskSpaceProviderTests.GetAvailableFreeSpaceBytes_ExistingDirectory_IsPositive`, `…FolderNotCreatedYet_MeasuresItsNearestExistingParent` |
+| 30 | ✅ | *(T2, developer, 2026-11-16)* The check needs no disk space: a `-wal`'s committed frames are applied in memory by the documented format and the image opened with `sqlite3_deserialize`; a full volume or an unwritable directory no longer stops it, so a Reset of a sound database refuses only for its backup, and with `allowNoBackup` skips it | Unit test + Live (T2) | Unit tests green: `WalReplayTests` (11), including `…Apply_WalSQLiteWrote_MatchesWhatACheckpointWrites`, which also proves `sqlite3_deserialize` is in the bundled library; `SqliteDatabaseCheckTests.Check_WalHoldsData_NothingCanBeWritten_StillChecksTheFile` and `…Check_AnyOutcome_LeavesTheFileAndSidecarsUntouched` (now also: nothing left in the data directory); `DatabaseInitializerTests.ResetAsync_WalHoldsData_NothingWritableForTheCheck_BacksTheSoundCopyUp`. `backup/03` step 6 green in T2 on `272fa048` (2026-11-17), after T2 found the backup pre-flight weighing free space against zero while the attempt weighed it against the database's size, so the override never applied; fixed red-first: `DatabaseBackupPreflightTests.CheckBackupReadiness_WithLessFreeDiskSpaceThanTheBackupNeeds_ReportsInsufficientDiskSpace`, `…_AgreesWithTheAttempt`, `…WithNoFreeDiskSpaceAndLessFreedFirstThanTheBackupNeeds_ReportsInsufficientDiskSpace`; `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_WhenTheDiskHasLessRoomThanTheBackupNeeds_SkipsTheBackup` |
+| 31 | ✅ | *(step 17, developer, 2026-11-16)* A migration refused for want of a backup can be completed from inside the application: `POST /admin/database/migrate` takes the backup or refuses naming the obstacle, and with `allowNoBackup` proceeds without one, recorded; it leaves the state a healthy restart would | Unit test + Live (T2) | Unit tests green: `DatabaseInitializerTests` (4 `…WithOverride…`), `AdminMigrateEndpointTests` (7), `DatabaseHealthStateTests` (4 new), `BackupObstacleGuidanceTests` (3 new), `DatabaseRepairActionsTests` (4 new). `backup/07` green in T2 on `272fa048` (2026-11-17, 55 commands): refused with `BudgetExceeded`, confirmed from the page without a backup, and resumed from the endpoint with one |
+| 32 | ✅ | *(developer, 2026-11-16)* The schema is compared on an overshoot, by the check's Schema layer and by the initialisation's #305 comparison: only migrations still to run justify a skip. The overshoot stays the degraded reason, reworded to say what is still unknown; the comparison is its detail | Unit test + Live (T2) | Unit tests green: `SqliteDatabaseCheckTests.Check_RecordedVersionAheadOfThisBuild_ComparesTheSchema`; `DatabaseIntegrityCheckTests.SchemaVersionOvershoot_IntegrityChecked`, `…SchemaVersionOvershoot_WithATableDropped_NamesIt`; `StartupDegradationReasonsTests.For_OvershootAndSchemaNotIntact_OvershootWins`, `…OvershootReason_PointsToTheComparisonRatherThanCallingTheShapeUnknown`, `…OvershootNotification_…`. `startup-and-degradation/06` green in T2 on `2fd67742` (2026-11-17, 66 commands): the overshoot's Schema layer compared and passed, `isIntact=true`, `/health` `503` with the reworded reason |

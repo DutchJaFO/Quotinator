@@ -278,12 +278,13 @@ so a listing taken the moment health answers `200` can precede it.
 
 ## Observed effect
 
-**Measured 2026-11-08** against `quotinator:local` built from `ace79e6b`.
+**Measured 2026-11-17** against `quotinator:local` built from `3205ba49`: 67 commands, every one exiting
+`0`.
 
 | Kind | Trigger | Page | Popup |
 |---|---|---|---|
 | `Announcement` | cold start | no detail, `Dismiss` only | no detail, no button |
-| `WhatsNew` | cold start | no detail, `Dismiss` only | no detail; its body renders 6 line boxes under `pre-line` against 5 under `normal` |
+| `WhatsNew` | cold start | no detail, `Dismiss` only | no detail; its body renders 9 line boxes under `pre-line` against 5 under `normal` |
 | `DatabaseCreated` | cold start | no detail, `Dismiss` only | no detail, no button |
 | `ReseedFileApplied` | cold start, five bundled files | detail dialog: 8 headings, 2 rows and a `Total` row, every row one cell per heading; `Details, Dismiss` | expands in place, no button |
 | `ImportReviewPending` | the conflict fixture | detail dialog; `Details, Decide, Dismiss` | expands in place, no button |
@@ -293,11 +294,6 @@ so a listing taken the moment health answers `200` can precede it.
 The page held 9 rows after the first start and the popup 10 after the overshoot; no body was empty and no
 title appeared inside its body. Health read `503` while the version stood ahead and `200` once it was
 removed. No exception was logged at any read; the malformed upload's `JsonReaderException` was logged once.
-
-**Run as written before this conversion, the PowerShell form read the same**, apart from two readings that
-were its own: its popup expectation of `9` rows predated `DatabaseCreated`, and four `WebSocketException`s
-followed a capture of a snippet returning an array, which `capture-page.csx` cannot crop to and so exited
-without closing its browser.
 
 ## Canary
 
