@@ -1090,15 +1090,19 @@ public class DatabaseInitializer(
     public BackupOutcome CheckBackupReadiness(long bytesFreedFirst = 0)
     {
         long existingBytes = Math.Max(0L, BackupStorageBudget.UsedBytes(_options.BackupsPath) - bytesFreedFirst);
+        long estimatedBytes = EstimatedBackupBytes();
 
-        // The same comparison the attempt makes, so the two cannot disagree. Only the ceiling refuses:
+        // The same comparisons the attempt makes, so the two cannot disagree. Only the ceiling refuses:
         // between the quota and the ceiling a backup is still taken and a warning raised, which is what
         // the reserve is for (#348, developer 2026-09-26). The estimate is only an approximation, since
         // SQLite copies pages, which is why an option offering a backup at the quota says so.
-        if (BackupStorageBudget.WouldPassTheCeiling(_options, existingBytes, EstimatedBackupBytes()))
+        if (BackupStorageBudget.WouldPassTheCeiling(_options, existingBytes, estimatedBytes))
             return BackupOutcome.BudgetExceeded;
 
-        if (_diskSpaceProvider.GetAvailableFreeSpaceBytes(_options.BackupsPath) + bytesFreedFirst <= 0L)
+        // #490: weighed against the backup's size, as the attempt does, not against zero. Found live: with
+        // some room but less than the database, this check passed and the attempt refused, so a Reset the
+        // operator had confirmed to run without a backup was refused all the same.
+        if (_diskSpaceProvider.GetAvailableFreeSpaceBytes(_options.BackupsPath) + bytesFreedFirst < estimatedBytes)
             return BackupOutcome.InsufficientDiskSpace;
 
         try { Directory.CreateDirectory(_options.BackupsPath); }

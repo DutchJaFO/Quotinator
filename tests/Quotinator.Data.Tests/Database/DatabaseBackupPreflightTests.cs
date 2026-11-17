@@ -140,12 +140,45 @@ public class DatabaseBackupPreflightTests
         Assert.AreEqual(BackupOutcome.BudgetExceeded, CreateInitializer(quotaPercent: 100).CheckBackupReadiness(bytesFreedFirst: 1));
     }
 
-    /// <summary>A full volume is cleared the same way: the space a removed backup occupied becomes free.</summary>
+    /// <summary>
+    /// A full volume is cleared the same way: the space a removed backup occupied becomes free. A megabyte
+    /// freed leaves room for a backup of a few kilobytes.
+    /// </summary>
     [TestMethod]
     public void CheckBackupReadiness_WithNoFreeDiskSpaceAndSpaceFreedFirst_ReportsSucceeded()
     {
         Assert.AreEqual(BackupOutcome.Succeeded,
-            CreateInitializer(diskSpaceProvider: new FixedDiskSpaceProvider(0)).CheckBackupReadiness(bytesFreedFirst: 1_000));
+            CreateInitializer(diskSpaceProvider: new FixedDiskSpaceProvider(0)).CheckBackupReadiness(bytesFreedFirst: 1_048_576));
+    }
+
+    /// <summary>
+    /// #490 T2 (backup/03): a volume with some room, but less than the backup needs. The attempt refuses
+    /// it, so the check must too. Found live: the check refused only at zero bytes free, said a backup
+    /// could be taken, and a Reset the operator had confirmed to run without one was then refused by the
+    /// attempt.
+    /// </summary>
+    [TestMethod]
+    public void CheckBackupReadiness_WithLessFreeDiskSpaceThanTheBackupNeeds_ReportsInsufficientDiskSpace()
+    {
+        Assert.AreEqual(BackupOutcome.InsufficientDiskSpace,
+            CreateInitializer(diskSpaceProvider: new FixedDiskSpaceProvider(1)).CheckBackupReadiness());
+    }
+
+    [TestMethod]
+    public void CheckBackupReadiness_WithLessFreeDiskSpaceThanTheBackupNeeds_AgreesWithTheAttempt()
+    {
+        DatabaseInitializer initializer = CreateInitializer(diskSpaceProvider: new FixedDiskSpaceProvider(1));
+        using SqliteConnection connection = SeededDatabase();
+
+        Assert.AreEqual(initializer.CreateBackup(connection, fromVersion: 1).Outcome, initializer.CheckBackupReadiness());
+    }
+
+    /// <summary>Freeing less than the backup needs leaves no room for it: removing that one would delete it for nothing.</summary>
+    [TestMethod]
+    public void CheckBackupReadiness_WithNoFreeDiskSpaceAndLessFreedFirstThanTheBackupNeeds_ReportsInsufficientDiskSpace()
+    {
+        Assert.AreEqual(BackupOutcome.InsufficientDiskSpace,
+            CreateInitializer(diskSpaceProvider: new FixedDiskSpaceProvider(0)).CheckBackupReadiness(bytesFreedFirst: 1));
     }
 
     private void FillTheBackupsFolder(long bytes)

@@ -204,6 +204,27 @@ public class DatabaseBackupQuotaTests
     }
 
     /// <summary>
+    /// #490 T2 (backup/03): the same override against a volume with some room, but less than the backup
+    /// needs. Found live: the readiness check passed it, so the override never applied, and the Reset's own
+    /// backup then failed on the disk and refused the Reset the operator had confirmed.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetAsync_WithTheOverride_WhenTheDiskHasLessRoomThanTheBackupNeeds_SkipsTheBackup()
+    {
+        DatabaseOperationResult result = await new RebuildingInitializer(NewOptions(), _dbPath, new FixedDiskSpaceProvider(1))
+            .ResetAsync(allowNoBackup: true);
+
+        Assert.IsTrue(result.Succeeded, $"the override is permission to proceed without a backup; the Reset answered {result.BackupObstacle}");
+        Assert.AreEqual(RestorePointOutcome.Skipped, result.RestorePoint?.Outcome);
+        Assert.AreEqual(BackupOutcome.InsufficientDiskSpace, result.RestorePoint?.Obstacle);
+    }
+
+    private sealed class FixedDiskSpaceProvider(long availableBytes) : IDiskSpaceProvider
+    {
+        public long GetAvailableFreeSpaceBytes(string path) => availableBytes;
+    }
+
+    /// <summary>
     /// The other side of the same answer: a Reset that took its backup names the file, which is the one in
     /// the backups folder, so the caller knows what to restore from.
     /// </summary>
@@ -392,10 +413,10 @@ public class DatabaseBackupQuotaTests
     /// Resets the way the application's initializer does, through <see cref="DatabaseInitializer.RebuildAsync"/>,
     /// so the Reset's own backup is taken or skipped for real.
     /// </summary>
-    private sealed class RebuildingInitializer(DatabaseOptions options, string dbPath)
+    private sealed class RebuildingInitializer(DatabaseOptions options, string dbPath, IDiskSpaceProvider? diskSpaceProvider = null)
         : DatabaseInitializer(new SqliteConnectionFactory(dbPath), options, [],
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
-            NullLogger<DatabaseInitializer>.Instance, new DiskSpaceProvider(),
+            NullLogger<DatabaseInitializer>.Instance, diskSpaceProvider ?? new DiskSpaceProvider(),
             TestDatabaseChecks.ForMain(dbPath, migrations: [], baseline: null))
     {
         protected override Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
