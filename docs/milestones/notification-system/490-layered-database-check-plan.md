@@ -1,6 +1,6 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** In progress (step 18)
+**Status:** Waiting for release
 **GitHub issue:** #490
 **Tiers required:** T1, T2
 **Depends on:** none. Blocks #457, #491, #492, #493.
@@ -9,12 +9,16 @@
 
 ## Next action
 
-**Work through `docs/workflow/checklist.md`'s *Waiting for release* list.** Every step is done: T2 passed on
-`3205ba49` (step 16), step 17 is built and verified, and step 18's changelog is written. T1 (step 15) was run
-before the backup pre-flight fix (`272fa048`) and the reworded disk-space cause (`3205ba49`); the checklist's
-own Visual Studio start covers both. Decisions A to E were accepted as recommended on 2026-11-14, and decision E's follow-up
-is #493. Step 6's deviation was answered on 2026-11-17: row 13 is proven with both variants. The plan is built
-against the code at `342e0cfa` and the sqlite.org documentation as read on that date.
+**Finish the GitHub side of `Waiting for release`, each after the developer approves its drafted text:** post
+the comment matching *Scope changes* below, and tick the issue's Definition of done except *Findings summarised
+in a closing comment*. Then nothing remains until the release; closing follows `checklist.md`'s *Released*
+list.
+
+Every step and every verification row is ✅: T1 was repeated on 2026-11-17 after the last code change (row 23),
+T2 passed on `3205ba49` (step 16), and the full suite on `98892875` (row 22). Decisions A to E were accepted as
+recommended on 2026-11-14, and decision E's follow-up is #493. Step 6's deviation was answered on 2026-11-17:
+row 13 is proven with both variants. The plan is built against the code at `342e0cfa` and the sqlite.org
+documentation as read on that date.
 
 ---
 
@@ -365,6 +369,29 @@ Each was raised per `process.md`, Planning step 3. **All five were accepted as r
   logged at Error on every upgrade. The developer's question, *why compare when migrations are already
   known to be needed*, settled it: the layer now reads the version tables first and compares only when each
   records this build's version, reporting itself skipped otherwise. See step 15.
+
+---
+
+## Scope changes
+
+Recorded on 2026-11-17, before `Waiting for release`, with a matching comment on the issue. The issue body
+lists what was asked; these are where the delivered work differs, each with where its reasoning lives.
+
+**Changed:**
+- Layers named for what they check, and the expected test names renamed to match: decision A.
+- An unwritable data directory fails Storage without stopping the reading layers: decision C, row 10.
+- A dangling reference does not degrade startup until #493: decision E, row 17.
+- A database is checked in the state it starts in, the Schema layer skipped only while migrations are still to
+  run, and compared on an overshoot: decision F, rows 26 and 32.
+- A `-wal` holding data is checked in memory, needing no disk space: decision D as superseded, row 30.
+
+**Added:**
+- A failed check degrades the application whenever it is found, not only at startup: row 27.
+- Every surface reporting a Reset says why the old file was set aside: rows 24 and 25.
+- A migration refused for want of a backup can be completed from inside the application: step 17, row 31.
+
+**Defects found and fixed on the way:** free space measured on the wrong file system (row 29), and the backup
+pre-flight weighing free space against zero (row 30).
 
 ---
 
@@ -1266,8 +1293,8 @@ says that the database is checked thoroughly at every start, and that the faster
 | 19 | ✅ | The new strings, the add-on option and the endpoint documentation are complete | Unit test | Existing `TranslationCompletenessTests` and `OpenApiSpecEndpointTests`, plus `RepositoryStructureTests.EveryAddOnOption_IsTranslatedInEveryLanguage` and `…AddOnDatabaseStartupCheckDefault_MatchesTheApplicationDefault` (built in step 10) |
 | 20 | ✅ | Live: a broken index degrades at startup and recovers through a Reset | Live (T2) | `startup-and-degradation/15`; passes on this build, red on `quotinator:canary-490` |
 | 21 | ✅ | Live: with `Fast`, the same database starts healthy, and the endpoint still reports the broken index | Live (T2) | `startup-and-degradation/16`; same canary |
-| 22 | ✅ | The full build and test suite are clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all passed |
-| 23 | ✅ | T1: the application starts without error | Live (T1) | Step 15: the developer's three Visual Studio runs on 2026-11-15, the last on `f431b7f4`, each reaching *Quotinator ready* |
+| 22 | ✅ | The full build and test suite are clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all passed. Last run 2026-11-17 on `98892875`: 5,261 tests across the twelve test projects |
+| 23 | ✅ | T1: the application starts without error | Live (T1) | Step 15: the developer's three Visual Studio runs on 2026-11-15, the last on `f431b7f4`, each reaching *Quotinator ready*. Repeated for `Waiting for release` on 2026-11-17, on `98892875` plus the uncommitted plan edits: an upgrade from data v3 / app v5 reached *Quotinator ready*, the Schema layer skipped before migrating (37 ms), the backup taken, 27 Data and 4 App migrations applied, and every layer passed after migrating (39 ms); no warning or error |
 | 24 | ✅ | *(developer, 2026-11-15)* A Reset's restore point and both set-aside notifications say why the file was set aside: the check layer, its status and finding, or the backup's own error when the check passed | Unit test | `DatabaseInitializerTests.ResetAsync_CorruptDatabase_RestorePointNamesTheLayerThatShowedIt`, `…ResetAsync_CorruptDatabase_NotificationRecordsTheLayerThatShowedIt`, `…ResetAsync_FileOnlyTheBackupFindsUnreadable_RestorePointCarriesTheBackupError`, `…ResetAsync_FileOnlyTheBackupFindsUnreadable_NotificationRecordsTheBackupError`; `DatabaseActionResultRecorderTests.RecordAsync_SetAsideByTheCheck_RecordsTheLayerThatShowedIt`, `…RecordAsync_SetAsideByTheBackup_RecordsTheBackupError`, the `ResetSetAsideByBackup` rows; `StartupResilienceTests.Startup_DatabaseFileCorrupt_RepairActionNotificationsSayWhichLayerShowedIt` |
 | 25 | ✅ | *(developer, 2026-11-15)* Every other surface reporting a Reset says why the file was set aside, or had to be: the response, the refusal, the repair control, the Notifications page and the refused Reset's notification | Unit test | `RestorePointDtoTests` (3); `DatabaseInitializerTests.ResetAsync_CorruptDatabaseThatCannotBeSetAside_RefusalSaysWhichLayerShowedIt`, `…ResetAsync_FileOnlyTheBackupFindsUnreadableThatCannotBeSetAside_RefusalCarriesTheBackupError`; `StartupResilienceTests.Startup_DatabaseFileCorrupt_ResetResponseSaysWhichLayerShowedIt`, `…ResetRefusalSaysWhichLayerShowedIt`; `DatabaseRepairActionsTests.RefusedForAFileThatNeededSettingAside_SaysWhichLayerShowedIt`, `…RefusedForAFileTheBackupFoundUnreadable_GivesTheBackupError`; `NotificationsPageTests.ResetThatSetTheFileAside_SaysWhyAndWhere`, `…ResetThatSetAsideAFileTheBackupFoundUnreadable_GivesTheBackupError`; `DatabaseActionResultRecorderTests.RecordAsync_RefusedForAFileThatNeededSettingAside_RecordsTheLayerThatShowedIt`, `…RecordAsync_RefusedForAFileTheBackupFoundUnreadable_RecordsTheBackupError`, the `ResetNotMovable` rows |
 | 26 | ✅ | *(T1, decision F corrected; narrowed 2026-11-16, row 32)* The Schema layer is skipped, naming the table, only when a version table is missing or behind this build; startup over an old database logs no Schema failure; a passed check that skipped a layer says so rather than claiming every layer | Unit test | `SqliteDatabaseCheckTests.Check_RecordedVersionBehindThisBuild_SkipsSchemaNamingTheVersionTable`, `…Check_NoVersionTable_SkipsSchema`, `…Check_RecordedVersionIsThisBuilds_ComparesTheSchema`; `DatabaseInitializerTests.InitialiseAsync_OldDatabase_LogsTheSchemaSkippedRatherThanFailedBeforeMigrating`; `StartupDatabaseCheckTests` (3) |

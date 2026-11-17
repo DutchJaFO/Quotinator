@@ -107,7 +107,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#389](https://github.com/DutchJaFO/Quotinator/issues/389) | A staged review batch cannot be discarded once the planner has staged a no-op in it as Applied | Waiting for release | T1 ✅ T2 ✅ | [389-discard-keeps-plan-time-no-ops-plan.md](389-discard-keeps-plan-time-no-ops-plan.md) |
 | [#390](https://github.com/DutchJaFO/Quotinator/issues/390) | A reseed imports the file list captured at startup, not the files currently in either folder | Planning | T1 ⬜ T2 ⬜ | none |
 | [#482](https://github.com/DutchJaFO/Quotinator/issues/482) | A Reset cannot rebuild a database SQLite cannot read | Waiting for release | T1 ✅ T2 ✅ | [482-reset-rebuilds-an-unreadable-database-plan.md](482-reset-rebuilds-an-unreadable-database-plan.md) |
-| [#490](https://github.com/DutchJaFO/Quotinator/issues/490) | Check every database in layers, cheapest first, at startup, before a Reset, and on demand | In progress | T1 ✅ T2 ✅ | [490-layered-database-check-plan.md](490-layered-database-check-plan.md) |
+| [#490](https://github.com/DutchJaFO/Quotinator/issues/490) | Check every database in layers, cheapest first, at startup, before a Reset, and on demand | Waiting for release | T1 ✅ T2 ✅ | [490-layered-database-check-plan.md](490-layered-database-check-plan.md) |
 | [#457](https://github.com/DutchJaFO/Quotinator/issues/457) | The health reason for an unreadable database file misdiagnoses it as a schema-version mismatch | In progress | T1 ⬜ T2 ⬜ | [457-unreadable-database-health-reason-plan.md](457-unreadable-database-health-reason-plan.md) |
 | [#493](https://github.com/DutchJaFO/Quotinator/issues/493) | Make foreign key enforcement explicit on every connection, instead of relying on how the SQLite library was compiled | Planning | T1 ⬜ T2 ⬜ | none |
 | [#491](https://github.com/DutchJaFO/Quotinator/issues/491) | A Maintenance page that runs the database check and shows its report | Planning | T1 ⬜ T2 ⬜ | none |
@@ -193,7 +193,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #371 ─── (none): Waiting for release
 #368 ─── depends on #303, #304, #390: Planning
 #482 ─── (none); blocks #327, #348, #457: Waiting for release
-#490 ─── (none); blocks #457, #491, #492, #493: In progress
+#490 ─── (none); blocks #457, #491, #492, #493: Waiting for release
 #457 ─── depends on #482, #490; blocks #327: In progress
 #493 ─── depends on #490: Planning
 #491 ─── depends on #490; soft-relates to #492: Planning
@@ -255,8 +255,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 42 | **#305** ✅ | Waiting for release |
 | 43 | **#482** ✅ | Waiting for release |
 | 44 | **#348** ✅ | Waiting for release |
-| 45 | **#490** 🚧 | In progress |
-| 46 | **#457** 🚧 | In progress; waits for #490 |
+| 45 | **#490** ✅ | Waiting for release |
+| 46 | **#457** 🚧 | In progress |
 | 47 | **#493** | Planning |
 | 48 | **#491** | Planning |
 | 49 | **#492** | Planning |
