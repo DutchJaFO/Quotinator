@@ -31,7 +31,8 @@ internal static class BackupObstacleGuidance
         BackupOutcome.BudgetExceeded =>
             "The backup folder has reached its storage ceiling, so no new backup can be written.",
         BackupOutcome.InsufficientDiskSpace =>
-            "The volume holding the backup folder has no free space left, so no new backup can be written.",
+            "The volume holding the backup folder has less free space than a backup of the database needs, "
+            + "so no new backup can be written.",
         BackupOutcome.DestinationDirectoryNotWritable =>
             "The backup folder could not be created: the data directory is read-only, or the container "
             + "user lacks write permission on it.",

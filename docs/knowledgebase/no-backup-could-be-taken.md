@@ -90,7 +90,7 @@ still taken, from the reserve, and a warning raised instead. See
 
 ### `InsufficientDiskSpace`
 
-The volume holding the backups folder has no free space left.
+The volume holding the backups folder has less free space than a backup of the database needs.
 
 - **Blocked:** *Back up, then reseed*, because there is nowhere to write the backup.
 - **Offered:** *Remove the oldest backup, then back up and reseed*, when the space that backup occupies
