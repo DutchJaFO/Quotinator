@@ -108,19 +108,16 @@ writes its key ring, so the degraded state above is about the read-only mount an
 
 ## Observed effect
 
-**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`.
 
 The process stays up and `/health` settles at `503 unhealthy` with the data-directory reason, no key file
-written. `/openapi/v1.json` answers `200`, all seven database reads `503`, and `/` `500`. With `keys/`
-writable again, the same data directory starts healthy, writes one key file, and every one of the seven
-reads answers `200`.
+written. `/openapi/v1.json` answers `200` and all seven database reads `503`. With `keys/` writable again,
+the same data directory starts healthy, writes one key file, and every one of the seven reads answers `200`.
 
-**The reason names the data directory, not `keys/`.** The data directory here is writable; the reason
-is #326's, reused until [#455](https://github.com/DutchJaFO/Quotinator/issues/455) gives `keys/` a reason
-of its own. The page failure is [#454](https://github.com/DutchJaFO/Quotinator/issues/454)'s. The
-Knowledgebase entry
-`every-page-fails-when-the-keys-directory-cannot-be-created.md` covers what an operator does about it.
-
+**The reason names the data directory, not `keys/`.** The data directory here is writable; the reason is
+#326's, reused until [#455](https://github.com/DutchJaFO/Quotinator/issues/455) gives `keys/` a reason of
+its own. What the pages answer in this state is not read by the steps; it is
+[#454](https://github.com/DutchJaFO/Quotinator/issues/454)'s subject.
 ## Canary
 
 **A pre-fix build.** Run against the build from before #327's step 14 fix, step 1 reads

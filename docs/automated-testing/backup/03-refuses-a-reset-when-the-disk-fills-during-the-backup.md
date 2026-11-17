@@ -175,30 +175,20 @@ Reset reported success and replaced nothing.
 
 ## Observed effect
 
-**Measured 2026-11-08** against `quotinator:local` built from `ea9bd594`, in this form and in the
-PowerShell form it replaced. The fill left 2,308 KB against a 4,620 KB database (`roomForACopy=False`);
-the reset answered `409` / `DiskFilledDuringBackup`; the sentinel was still there afterwards; and with the
-filler removed the same container's reset answered `200`, after which the sentinel answered `404`.
+**Measured 2026-11-17** against `quotinator:local` built from `272fa048`: 21 commands, all as expected.
+Both fills left 2,284 KB against a 4,572 KB database (`roomForACopy=False`). The Reset answered `409` on
+`InsufficientDiskSpace` both times, the second naming `allowNoBackup` among its remedies, and the sentinel
+was still there after the first. With the filler removed the same container's Reset answered `200`,
+`backup.outcome = Succeeded`, and the sentinel answered `404`. With the override the refilled Reset
+answered `200`, `quotes = 0`, `backup.outcome = Skipped` naming `InsufficientDiskSpace` and no backup
+name, and the sentinel answered `404`.
 
-**Rewritten and re-measured 2026-09-28** against `quotinator:local`. The behaviour is unchanged, the
-reset refuses with `DiskFilledDuringBackup` and the quotes are still there, but the document no longer
-calibrates anything against the dataset. It had held two figures that both went stale: a copy stopped
-being smaller than its source, because this database no longer carries free pages for SQLite to skip, and
-the free space swung by megabytes with the size of the write-ahead log. The ceiling sized to make a seed
-just fit and a copy just not fit was drifting on both sides at once, and each drift surfaced only when a
-reader noticed a number that no longer matched.
-
-The condition is now established by measurement: read the free space and the database's own size, fill
-all but half the latter, and a copy is always a whole copy short. The database read 4,596 KB and then
-4,552 KB across two runs in the same session, which is the point. Nothing asserts a byte count, and the
-positive control removes the filler from the same container, so the space is the only thing that differs
-between the refusal and the success.
-
-**Why the pre-flight does not catch this**, established while rewriting: the application reads free space
-for the backups folder as roughly a terabyte on a tmpfs mount, the host drive rather than the mount, so
-`InsufficientDiskSpace` cannot fire here however little room is left. The copy meets the real limit
-instead. That is what makes this the one case the pre-flight cannot catch, rather than a matter of
-timing, and it is worth knowing before anyone tries to provoke `InsufficientDiskSpace` the same way.
+**The run before this one failed step 6**, on `2fd67742`: the Reset with the override answered `409`.
+The pre-flight refused only when no space at all was free, so with some room but less than the database
+it said a backup could be taken, the override never applied, and the backup attempt, which weighs the
+room against the database's size, refused. Step 3's `409` had come from the attempt, not the pre-flight.
+`272fa048` makes the pre-flight weigh the same thing. The mismatch had been hidden while the room was
+measured on the wrong file system, about a terabyte free, where neither check could fire.
 
 **Measured 2026-08-28** against `quotinator:local`, and this document exists because the first
 measurement found something worse than the bug it was written for.

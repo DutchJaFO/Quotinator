@@ -36,9 +36,9 @@ route on the same refused database, and keeps the restart as the control that fr
   refusal is compared with the reading before it (`--equals-json`), and each reading after a migration,
   taken from `/api/v1/version` since that application is healthy, with the same earlier reading
   (`--greater-than-json`), so no migration number appears in this document.
-- **The refused database is saved once and restored for each route.** Step 5 copies it, after confirming
-  the stop left no `-wal` beside it, so the file alone is the whole database; steps 7 and 8 copy it back.
-  Each route therefore starts from the same unmigrated file.
+- **The refused database is saved once and restored for each route.** Step 5 stops the container cleanly
+  and copies it, after confirming the stop left no `-wal` beside it, so the file alone is the whole
+  database; steps 7 and 8 copy it back. Each route therefore starts from the same unmigrated file.
 - **The degraded start is waited on by its `status` field**, since the startup wait page answers `503`
   too.
 - **The log is read before each stop.**
@@ -117,15 +117,26 @@ endpoint does not exist on this build (the #490 canary below).
 
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-backup-07 --pattern "\[Runtime - Exception\]" --exactly 0
+docker stop -t 15 qt-backup-07
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-07 --bind C:\repos\Quotinator\.claude\temp\qt-backup-07
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-absent C:\repos\Quotinator\.claude\temp\qt-backup-07\quotinatordata.db-wal --copy C:\repos\Quotinator\.claude\temp\qt-backup-07\quotinatordata.db C:\repos\Quotinator\.claude\temp\qt-backup-07-out\refused.db
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db C:\repos\Quotinator\.claude\temp\qt-backup-07\quotinatordata.db --sql "SELECT MAX(Version) AS Recorded FROM System_ConsumerSchemaVersion" --json-out C:\repos\Quotinator\.claude\temp\qt-backup-07-out\version-refused.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-backup-07-out\version-refused.json --equals-json 0.Recorded=C:\repos\Quotinator\.claude\temp\qt-backup-07-out\version-before.json#0.Recorded
-dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-absent C:\repos\Quotinator\.claude\temp\qt-backup-07\quotinatordata.db-wal --copy C:\repos\Quotinator\.claude\temp\qt-backup-07\quotinatordata.db C:\repos\Quotinator\.claude\temp\qt-backup-07-out\refused.db
 ```
 
-**Expected:** nothing thrown before the stop; the `json` command exits `0`: the version recorded after the
-refused start and the refused resume is the version the release recorded; and the file command exits `0`:
-no `-wal` beside the database, which is copied to `refused.db`.
+**Expected:** nothing thrown before the stop; the `docker stop` prints the container's name; the file
+command exits `0`: no `-wal` beside the database, which is copied to `refused.db`; and the `json` command
+exits `0`: the version recorded after the refused start and the refused resume is the version the release
+recorded.
+
+**The stop is `docker stop`, before `destroy`.** `destroy` removes the container with `docker rm -f`, a
+SIGKILL, so SQLite never checkpoints and the `-wal` survives. A clean stop lets the application close the
+database, and SQLite then folds the `-wal` back into the main file and removes it, so the file alone is the
+whole database.
+
+**The copy is taken before the version is read.** DbInspector opens the file read-only and leaves an empty
+`-wal` and a `-shm` beside it (measured 2026-11-17). An empty `-wal` holds nothing, but read first it would
+fail the check that the application left none, which is the only state the check is about.
 
 **The version is read from the file, not from the API.** A degraded start reports no `database` block
 (#428), and the claim being made is about what the file holds after a refused migration, so asking the
@@ -211,18 +222,25 @@ migration would satisfy them all without this one. It is the restart the reason 
 
 ## Observed effect
 
-**Measured 2026-11-08** on `feature/notification-system` (1.9.0-alpha), in this document's earlier form,
-every command exiting `0`. That form is the current steps 1, 2, 3's first half, 5 and 8; steps 2's endpoint
-assertion, 3's second half, 4, 6 and 7 were added for #490 step 17 on 2026-11-16 and are read for the first
-time in #490's T2 run, which replaces this section.
+**Measured 2026-11-17** against `quotinator:local` built from `272fa048`: 55 commands, every one exiting
+`0`. This is the first run of steps 4, 6 and 7, of the endpoint and page halves of steps 2 and 3, and of
+step 5's clean stop.
 
 | Step | Observed |
 |---|---|
 | 1 | 1.8.3 healthy, `0` exceptions; `Recorded = 5` |
-| 2 | filler `1073741824` bytes; `status = unhealthy`, reason *Database migration refused: no backup could be taken (BudgetExceeded).* with the entry's link |
-| 3 | `innerHeight = 1100`, the link to `no-backup-could-be-taken.md` reading *How to resolve this (Knowledgebase)* |
-| 5 | `0` exceptions; `Recorded = 5`, equal to step 1's reading |
+| 2 | filler `1073741824` bytes; `status = unhealthy`, the reason naming `BudgetExceeded`, the migrate endpoint with `allowNoBackup=true`, and the entry's link |
+| 3 | `innerHeight = 1100`, the link reading *How to resolve this (Knowledgebase)*; `resumeButtons = 1`, `withoutBackupButtons = 1` |
+| 4 | `409`, `backupObstacle = BudgetExceeded`, `allowNoBackup` among the remedies; `/health` `503` |
+| 5 | `0` exceptions; the stop clean, no `-wal` left, `refused.db` saved; `Recorded = 5`, equal to step 1's reading |
+| 6 | degraded again; `reasonGone = true` after *Migrate without a backup* and *Confirm*; `/health` `200`; `schemaVersion = 9`; `backups/` holding only the filler; `0` exceptions |
+| 7 | degraded again from `refused.db`; with the filler gone the call answered `200`, `backup.outcome = Succeeded`, `quotinatordata_v5_…Z.db`, `migrationsApplied = 31`, `appSchemaVersion = 9`; `/health` `200`; one file in `backups/`; `0` exceptions |
 | 8 | `totalCount = 795`; one backup, `quotinatordata_v5_…Z.db`, named for the version it protects; `schemaVersion = 9`, above step 1's `5`; `0` exceptions |
+
+**The first run of this form failed step 5**, and the fault was the document's: `destroy` is a SIGKILL,
+which leaves the `-wal` behind, and DbInspector's read, then placed before the check, leaves an empty one
+of its own. Step 5 now stops the container cleanly and copies the file before reading it. Measured
+separately: the clean stop exited `0` in under a second with both sidecars gone.
 
 ## Canary
 

@@ -137,19 +137,18 @@ means a readable database was treated as unreadable.
 
 ## Observed effect
 
-**Measured 2026-11-09** against `quotinator:local` built from the working tree at `271c4c54`, the database
-replaced with 34 bytes of text.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`, the database replaced with 34 bytes
+of text.
 
 The start degrades to `unhealthy`, and the Reset answers `200` with `/health` back at `200`. The file is
-moved, not copied: `backups/unreadable/quotinatordata_unreadable_20261109T084832739Z.db`, 34 bytes and
-byte-identical to what step 2 wrote, and no backup of it exists anywhere in `backups/`. The notification
-is a `warning` titled *The database file could not be read, and was set aside*, naming that file and the
-`unreadable` folder, saying it is not a backup to restore and that it counts towards backup storage, with
-no actions offered. The Reset's reseed recommendation sits beside it, as after any Reset.
+moved, not copied: `backups/unreadable/quotinatordata_unreadable_20261117T054121749Z.db`, byte-identical to
+what step 2 wrote, and no backup of it exists in `backups/`. The notification is a `warning` titled *The
+database file could not be confirmed sound, and was set aside*, its body beginning *"A database reset could
+not confirm that the database file was sound: the database check's Format layer was Failed"*, so it says
+which layer showed it (#490).
 
-The control Reset of the rebuilt database took its own backup, `quotinatordata_v9_20261109T084837087Z.db`,
+The control Reset of the rebuilt database took its own backup, `quotinatordata_v9_20261117T054126719Z.db`,
 and left the set-aside file where it was.
-
 ## Canary
 
 Build the commit before #482's first commit, `69800a23`, as `quotinator:canary-482`, and run steps 1 to 4

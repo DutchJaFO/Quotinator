@@ -102,7 +102,8 @@ steps 2 and 3 prove nothing about it.
 
 ## Observed effect
 
-**Measured 2026-11-12** against `quotinator:local` built from the working tree of #348's step 29.
+**Measured 2026-11-17** against `quotinator:local` built from `272fa048`, plus the reworded
+`InsufficientDiskSpace` cause, which this document does not reach: 15 commands, all as expected.
 
 The first attempt answers `409` with `DestinationFileNotWritable` and two remedies: restore write
 access, or retry with the override. The second attempt, using that override, answers `409` again,

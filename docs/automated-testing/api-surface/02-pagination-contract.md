@@ -126,7 +126,7 @@ line that names it.
 
 ## Observed effect
 
-**Measured 2026-11-15** against `quotinator:local` built from `9b59f414`.
+**Measured 2026-11-16** against `quotinator:local` built from `2fd67742`.
 
 | Request | `/quotes` | `/import/actions` | `/admin/audit` |
 |---|---|---|---|

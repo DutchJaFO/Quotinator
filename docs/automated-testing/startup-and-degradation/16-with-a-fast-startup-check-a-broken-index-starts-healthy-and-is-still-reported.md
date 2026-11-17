@@ -126,14 +126,15 @@ copy as a backup.
 
 ## Observed effect
 
-**Measured 2026-11-15** against `quotinator:local` built from `6cb7a4b9`.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`.
 
 With `Quotinator__DatabaseStartupCheck=fast`, the fresh database was sound and the endpoint reported Indexes
 `passed`, not skipped. After the index was damaged, the restart read `{"status":"healthy"}` and
-`/quotes/random` answered `200`. The endpoint reported the main database not sound, Indexes `failed` with
-*"row 5 missing from index IX_CheckFixture_Rank"*. The Reset answered `200` with `backup.outcome = SetAside`,
-and the rebuilt database was sound.
-
+`/quotes/random` answered `200`. The endpoint, which always checks at `Full`, reported the main database not
+sound, Indexes `failed`, and that check degraded the application: `/health` then read `unhealthy` with the
+reason *"Database initialisation failed. …"* and `/quotes/random` answered `503`. The Reset answered `200`
+with `backup.outcome = SetAside`, the rebuilt database was sound, and `/health` and `/quotes/random` answered
+`200`.
 ## Canary
 
 Build the commit before #490's first code change, `342e0cfa`, under a distinct tag, and run steps 1 to 4

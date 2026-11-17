@@ -107,16 +107,13 @@ one. That cannot be fixed by editing a baseline: it needs a migration, and it is
 
 ## Observed effect
 
-**Measured 2026-11-08** against `quotinator:local` built from `870a0502`, whose check compares every
-value as written.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`.
 
 The fresh container reported two databases, main and changelog, each intact with no difference. With
 `System_Notification.Stray` added, the restart read `200` on `/health`, and the endpoint reported the main
 database intact with one difference, `extra` `column` `System_Notification.Stray`. The published `1.8.3`
-image read `healthy` on a fresh directory; this build upgraded that database, logging *"migration applied:
-Data v3 → v28, App v5 → v9"*, read `200` on `/health`, and the endpoint reported both databases intact
-with no difference.
-
+image read `healthy` on a fresh directory; this build upgraded that database, read `200` on `/health`, and the
+endpoint reported both databases intact with no difference.
 ## Canary
 
 Build the commit before [#305](https://github.com/DutchJaFO/Quotinator/issues/305)'s first code change,

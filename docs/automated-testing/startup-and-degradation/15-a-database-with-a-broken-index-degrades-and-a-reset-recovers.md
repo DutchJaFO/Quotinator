@@ -138,25 +138,18 @@ and 4: the same container, repaired by the remedy the reason names.
 
 ## Observed effect
 
-**Measured 2026-11-15** against `quotinator:local` built from `6cb7a4b9`.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`.
 
-The fresh database was sound, every layer of both databases passed, and it was intact. After the index was
-damaged, the restart read `unhealthy` with the reason *"Database initialisation failed. …"*; the container was
-running, `/quotes/random` answered `503` and the spec `200`. The endpoint reported the main database not sound:
-Pages `passed`, Indexes `failed` with SQLite's own finding *"row 5 missing from index IX_CheckFixture_Rank"*,
-References and Schema `notrun`, and the database intact, with the added table reported as one `extra`. The
-Reset answered `200` with `backup.outcome = SetAside` and a file named
-`quotinatordata_unreadable_20261115T161817234Z.db`; `/health` and `/quotes/random` then answered `200`, and the
+The fresh database was sound, its Indexes layer passed, and it was intact. After the index was damaged, the
+restart read `unhealthy` with the reason *"Database initialisation failed. …"*; the container was running,
+`/quotes/random` answered `503` and the spec `200`. The endpoint reported the main database not sound: Pages
+`passed`, Indexes `failed`, and the database intact, with the added table reported as one `extra`. The Reset
+answered `200` with `backup.outcome = SetAside` and a file named
+`quotinatordata_unreadable_20261117T051849116Z.db`; `/health` and `/quotes/random` then answered `200`, and the
 rebuilt database was sound.
 
-**Recorded rather than asserted:**
-
-- **The layers took far longer here than step 2 of #490's plan measured** on the same machine outside
-  Docker: Pages about 270 to 430 ms and Indexes about 320 ms on the main database through a Windows bind mount,
-  against 7.6 ms and 14.4 ms read directly. The add-on option's description quotes the direct figure.
-- **The set-aside file's name says `unreadable`**, though this file was readable and only not a sound copy:
-  the name is #482's, from before a file could be set aside for any other reason.
-
+**Recorded rather than asserted:** the set-aside file's name says `unreadable`, though this file was readable
+and only not a sound copy: the name is #482's, from before a file could be set aside for any other reason.
 ## Canary
 
 Build the commit before #490's first code change, `342e0cfa`, under a distinct tag, and run steps 1 to 3

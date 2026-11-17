@@ -133,7 +133,7 @@ line that names it.
 
 ## Observed effect
 
-**Measured 2026-11-15** against `quotinator:local` built from `9b59f414`.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`.
 
 | Surface | Answer | What it reported |
 |---|---|---|
@@ -142,7 +142,7 @@ line that names it.
 | `POST /admin/database/reset` | `200` | Every count `0`, no reports |
 | `POST /import` | `200` | `summary.imported=4`, and a singular `report` with `Quote.new=4` |
 | `POST /import/preview` | `200` | `preview=true`, and the same `report` shape |
-| The counts after the seed | | Read then from the `[Database - Stats]` line: 4 quotes, 3 sources, 3 characters, and 2 of each other type. Step 1 reads them from `GET /api/v1/version` since 2026-11-16, not yet measured in that form |
+| `GET /api/v1/version` after the seed | `200` | 4 quotes, 3 sources, 3 characters, and 2 of each other type |
 
 The seed preview holds none of `totalQuotes`, `uniqueQuotes` and `crossFileDuplicates`, and holds both `fileName` and
 `entityTypes`.

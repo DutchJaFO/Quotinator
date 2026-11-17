@@ -37,3 +37,4 @@ per `knowledgebase.md`'s bootstrapping rule, entries come first and codes are as
 | [Notifications written at the same moment are listed out of order](notifications-written-together-list-out-of-order.md) | No | 1.9.0-alpha, the only version measured |
 | [The audit export gives every row the export's own moment as its creation date](audit-export-dates-are-the-export-moment.md) | No | 1.9.0-alpha, the only version measured |
 | [A page capture starts a fresh browser because the page produced no frames](a-page-capture-stops-producing-frames.md) | No | test tooling, not the application |
+| [Files named quotinatordata.db-wal and quotinatordata.db-shm appear beside the database](database-wal-and-shm-files-beside-the-database.md) | No | all |

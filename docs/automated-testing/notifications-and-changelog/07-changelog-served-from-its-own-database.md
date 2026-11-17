@@ -91,14 +91,14 @@ the positive control: the same channel that read zero can see an exception, so t
 
 ## Observed effect
 
-**Measured 2026-11-01** against `quotinator:local` built from `00a9dfe2`.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`.
 
 | Check | Reading |
 |---|---|
-| `quotinatorchangelog.db` after the first start | 1150976 bytes |
+| `quotinatorchangelog.db` after the first start | 1171456 bytes |
 | `/about` after the first start | `200`, matches `changelog-entry` |
 | `[Runtime - Exception]` before the restart | 0 |
-| `quotinatorchangelog.db` after the restart | 1159168 bytes |
+| `quotinatorchangelog.db` after the restart | 1179648 bytes |
 | `/about` after the restart | `200`, matches `changelog-entry` |
 | `[Runtime - Exception]` since the restart | 0 |
 | Malformed upload (the control) | `422`, `thrown: JsonReaderException` once |

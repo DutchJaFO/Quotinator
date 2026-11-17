@@ -129,7 +129,7 @@ used. A missing sentinel means the refused Reset ran anyway, which is the defect
 
 ## Observed effect
 
-**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`.
 
 A fresh install and a healthy restart leave no `backups` directory. The Reset leaves one backup, the restart
 after it none further. With the budget at `0`, the Reset answers `409`, obstacle `BudgetExceeded`, naming

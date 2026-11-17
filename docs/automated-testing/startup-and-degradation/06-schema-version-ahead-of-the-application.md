@@ -294,35 +294,35 @@ means the Reset refused for want of a backup, which is a different fault with it
 
 ## Observed effect
 
-**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`, every step run unattended.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`, every step run unattended.
 
 The container stays running and `/health` answers `503` with:
 
-> The database's recorded schema version is ahead of this build (data v28, app v10). This build does
-> not know what the migrations it never saw changed, so the schema's shape is unknown and quote content
-> is not served from it. Resolve it with a database Reset (POST /api/v1/admin/database/reset), which
-> rebuilds the schema at this build's own version and discards what the database holds now, or restore
-> a backup taken before the version moved ahead and restart.
+> The database's recorded schema version is ahead of this build (data v30, app v10). Its schema has been
+> compared with this build's, and GET /api/v1/admin/database/integrity names any difference, but this
+> build does not know what the migrations it never saw meant for the data, so quote content is not
+> served from it. Resolve it with a database Reset (POST /api/v1/admin/database/reset), which rebuilds
+> the schema at this build's own version and discards what the database holds now, or restore a backup
+> taken before the version moved ahead and restart.
 
 The version numbers are observed output, not assertions: they move whenever a migration is added.
 
-Step 3's integrity read was added for #490 on 2026-11-16 and is read for the first time in #490's T2 run,
-which replaces this section.
-
-All seven database reads answer `503`. The six pages, the spec and `GET /api/v1/admin/backups` answer
-`200`. The modal names the overshoot and both remedies with no notification row, and the notifications
-page shows its empty state.
+All seven database reads answer `503`. While overshot, the integrity endpoint answers `200` with the main
+database sound and intact and its Schema layer `passed`, and `/health` still answers `503`. The six pages,
+the spec and `GET /api/v1/admin/backups` answer `200`. The modal names the overshoot and both remedies with
+no notification row, and the notifications page shows its empty state.
 
 **The remedy works from the pages.** One Reset button and the reason appear on `/rest-api`,
 `/notifications`, `/import-review` and `/stats`, and neither on `/about`. The modal offers
 `Reset the database, Continue`, arming to `Confirm, Cancel, Continue`. Cancel returns to the first and
 leaves `/health` at `503`. Confirm clears the reason in place, `/health` and all seven reads answer `200`,
-and `database.quotes` reads `0`.
+`database.quotes` reads `0`, and the Notifications page shows one `Reset` result, `Completed`, with a
+backup taken first.
 
-**The repair logs `TaskCanceledException` lines, and nothing else.** Since the mark taken after Cancel,
-the exception channel read 9 lines, then 11 moments later, every one of them that type: #445. The
-malformed upload then answered `422` and logged its `JsonReaderException`, and nothing was thrown after it.
-
+**No exception was logged since the mark taken after Cancel.** This run read `0` there, where earlier runs
+read the `TaskCanceledException` lines of #445; the count depends on when the page's circuit closes, so one
+clean reading does not show #445 resolved. The malformed upload then answered `422` and logged its
+`JsonReaderException`, and nothing was thrown after it.
 ## Canary
 
 Build the commit before [#350](https://github.com/DutchJaFO/Quotinator/issues/350)'s first code

@@ -164,7 +164,7 @@ line that names it.
 
 ## Observed effect
 
-**Measured 2026-11-15** against `quotinator:local` built from `9b59f414`.
+**Measured 2026-11-16** against `quotinator:local` built from `2fd67742`.
 
 | Request | Answer |
 |---|---|
@@ -181,8 +181,8 @@ line that names it.
 | `search?q=Xyzzysource&type=tv` | `200`, `status=NoResults` |
 | `POST /api/v1/import`, a malformed file | `422` |
 
-**No exception was logged before the malformed upload.** That upload logged one `JsonReaderException` and one
-`QuoteImportValidationException`. The second appears four times with one id, as the rethrow crosses each frame.
+**No exception was logged before the malformed upload.** That upload's `JsonReaderException` was then logged
+once.
 
 ## Canary
 

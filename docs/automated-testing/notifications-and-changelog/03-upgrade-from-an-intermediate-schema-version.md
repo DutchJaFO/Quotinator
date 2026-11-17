@@ -157,7 +157,7 @@ running build never appeared.
 
 ## Observed effect
 
-**Measured 2026-11-08** against `quotinator:local` built from `cd33b5b0`, with `quotinator:pre-312` built
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`, with `quotinator:pre-312` built
 from `e94e9c82`.
 
 | Stage | Reading |

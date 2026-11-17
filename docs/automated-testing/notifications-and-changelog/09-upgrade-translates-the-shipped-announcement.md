@@ -141,11 +141,21 @@ above `Languages` means the backfill appended on the second boot instead of skip
 
 ## Observed effect
 
-A user upgrading from v1.8.3 keeps the notification that release wrote, in the words it wrote, and gains
-Dutch and German versions of it without the notification reappearing as new. Reading the Notifications
-page in Dutch shows the Dutch text; reading it in English shows exactly what was there before the
-upgrade. A database that never ran v1.8.3 gains nothing, because the backfill matches no row there.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`, upgrading a `1.8.3` database.
 
+| Stage | Reading |
+|---|---|
+| Released `1.8.3` | One announcement (`Message` holding `GetAllImportBatches`); no `System_NotificationTranslation` table |
+| After the upgrade, `lang=en` | One announcement, `language=en`, `isTranslated=false`, *Two API operation IDs were renamed* |
+| `lang=nl` | `language=nl`, `isTranslated=true`, *Twee API-bewerkings-ID's zijn hernoemd* |
+| `lang=de` | `language=de`, `isTranslated=true`, *Zwei API-Operations-IDs wurden umbenannt* |
+| After a second boot | Still one announcement |
+| The file, stopped | The original row still carries its text (`Announcements = 1`); `Translations = 2` over `Languages = 2` |
+
+No exception was logged before any of the three stops.
+
+A user upgrading from v1.8.3 keeps the notification that release wrote, in the words it wrote, and gains
+Dutch and German versions of it without the notification reappearing as new.
 ## Canary
 
 Build the commit before [#319](https://github.com/DutchJaFO/Quotinator/issues/319)'s first code

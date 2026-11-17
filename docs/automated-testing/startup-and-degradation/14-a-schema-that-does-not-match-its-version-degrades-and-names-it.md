@@ -180,7 +180,7 @@ dotnet script scripts/testing/http.csx -- --url http://localhost:18414/api/v1/he
 
 ## Observed effect
 
-**Measured 2026-11-08** against `quotinator:local` built from `870a0502`.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`.
 
 The fresh database was intact, main and changelog, with no difference. With `System_Notification`
 dropped, the restart read `unhealthy` with the reason *"The database's schema does not match the one its

@@ -206,7 +206,7 @@ then*](../api-surface/06-a-cookie-from-another-key-ring-is-replaced.md).
 
 ## Observed effect
 
-**Measured 2026-11-01** against `quotinator:local` built from `00a9dfe2`, with a browser driven by `capture-page.csx`.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`, with a browser driven by `capture-page.csx`.
 
 | Stage | Reading |
 |---|---|
@@ -222,7 +222,8 @@ then*](../api-surface/06-a-cookie-from-another-key-ring-is-replaced.md).
 | Filters, with the four constructed rows | Opens on Active with 1 row. All reads `Active`, `Expired`, `Dismissed`, `No longer applicable`. Expired only lists 1 row |
 | Cancel | `Confirm` and `Cancel` offered, then `Reset the database` again, and `/quotes` still reads `1` |
 | Confirm | The row leaves the page, `/quotes` reads `0`, and none of the constructed rows survives |
-| The reseed recommendation after Confirm | **`GET /notifications` lists nothing, where it should list one: #472** |
+| After Confirm | The Reset's own result record, `databaseactionresult`, titled *The database was reset* with a backup taken first |
+| The reseed recommendation after Confirm | **Not listed, where it should be: #472** |
 
 **No exception was logged before the stop, or after the restart before the malformed upload**, the Reset included. That upload's
 `JsonReaderException` was then logged once.

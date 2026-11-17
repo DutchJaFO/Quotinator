@@ -141,23 +141,19 @@ its backup, the same volume migrates and keeps the sentinel.
 sentinel means the migration cost the operator their data.
 ## Observed effect
 
-**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`, upgrading a `1.8.3` volume
-holding the sentinel quote.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`, upgrading a `1.8.3` volume holding
+the sentinel quote.
 
-The process stays up and `/health` settles at `503 unhealthy`: *"Database migration refused: no backup
-could be taken (BudgetExceeded). The backup folder has reached its storage ceiling, so no new backup can
-be written. The database stays at its recorded schema version until a backup can be taken."*, followed
-by two remedies, removing old backups through `GET /api/v1/admin/backups` and
-`DELETE /api/v1/admin/backups/{name}`, or raising `Quotinator:MaxBackupStorageGb` and restarting, and the
-Knowledgebase address. `/openapi/v1.json` answers `200`, all seven database reads `503`, and `/`, `/stats`
-and `/notifications` `200`.
+The process stays up and `/health` settles at `503 unhealthy`, the reason beginning *"Database migration
+refused: no backup could be taken (BudgetExceeded). The backup folder has reached its storage ceiling, so no
+new backup can be written."*. `/openapi/v1.json` answers `200`, and all seven database reads answer `503`.
 
-**Recovery route, recorded rather than asserted.** A Reset is reachable and refuses with `409`, obstacle
-`BudgetExceeded`, for the same reason. The backup category is reachable and is the route that works: the
-listing shows `filler.db` at `1073741824` bytes, and `DELETE /api/v1/admin/backups/filler.db` answers
-`204`. After a restart the migration applies, one backup is taken, the sentinel quote is still there, and
-every read answers `200`.
+With the filler removed, the same data directory starts healthy: `/health` and all seven reads answer `200`,
+the sentinel quote is still there, and the notifications list holds `migrationapplied` notifications, the
+first titled *Migration applied (Data v11)*.
 
+Resuming the refused migration from inside the application, which the reason now also offers, is
+`backup/07`'s subject.
 ## Canary
 
 A build from the commit before [#348](https://github.com/DutchJaFO/Quotinator/issues/348)'s refusal, under

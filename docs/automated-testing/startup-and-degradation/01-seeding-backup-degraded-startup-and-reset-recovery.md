@@ -231,7 +231,7 @@ the database is genuinely empty after a Reset.
 
 ## Observed effect
 
-**Measured 2026-11-15** against `quotinator:local` built from `9b59f414`.
+**Measured 2026-11-16** against `quotinator:local` built from `2fd67742`.
 
 The fresh seed created the database and no `backups` directory, and the restart left it that way, with no
 exception logged before either. After `Quotinator_Quote` was dropped, the restart logged 2

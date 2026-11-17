@@ -228,9 +228,8 @@ remedy does not work. A missing sentinel means the remedy cost the operator thei
 
 ## Observed effect
 
-**Measured 2026-11-08** against `quotinator:local` built from `870a0502`, upgrading a `1.8.2` volume
-holding the sentinel quote. The paragraph on a read-only `/data` with no migration pending is from the
-2026-10-31 run against `00a9dfe2`; this run did not repeat it.
+**Measured 2026-11-16** against `quotinator:local` built from `2fd67742`, upgrading a `1.8.2` volume holding
+the sentinel quote.
 
 The process stays up and `/health` settles at `503 unhealthy` with the data-directory reason:
 
@@ -238,23 +237,20 @@ The process stays up and `/health` settles at `503 unhealthy` with the data-dire
 > container user lacks write permission on it. Restore write access to the data directory and restart.
 > A database Reset cannot resolve this: it writes too.
 
-The log holds 12 `SqliteException` throws. `/openapi/v1.json` answers `200` and all seven database reads
-answer `503`. The reset reaches its handler and refuses with `409`, obstacle
-`DestinationDirectoryNotWritable`, naming *restore write access* first and *retry with
+The integrity endpoint answers `200` while degraded: the main database's Storage layer `failed`, finding
+*The data directory /data cannot be written.*, and its Format layer `passed`. `/openapi/v1.json` answers
+`200` and all seven database reads answer `503`. The reset reaches its handler and refuses with `409`,
+obstacle `DestinationDirectoryNotWritable`, naming *restore write access* first and *retry with
 `allowNoBackup=true`* second.
 
 `/`, `/stats` and `/notifications` each answer `200`, render the reason, carry no stack trace, keep
 Blazor's error banner hidden, and make no failing request other than a `503`.
 
-**A read-only `/data` with no migration pending degrades too.** Measured on 2026-10-31 by creating a
-database on this build and re-entering it with `--read-only-data`: `503 unhealthy`, the same reason.
-
 **Recovery route, and whether it can succeed.** Reachable: the pages, `/openapi/v1.json` and the reset
 handler all answer. **A Reset cannot fix this one**: it writes, and the mount is what is read-only. The
 remedy is outside the container, remount the volume writable or fix its permissions, and restart. Doing
 that returned `200` from `/health`, all seven reads and all three pages, with the sentinel quote present
-and one `migrationapplied` notification per migration applied.
-
+and a `migrationapplied` notification in the list.
 The original incident was a live HA v1.8.2 to v1.8.3-beta upgrade whose migration failed partway through,
 leaving `NotificationSummary` (embedded in Home's modal) and `/notifications` crashing instead of showing
 degraded UI.

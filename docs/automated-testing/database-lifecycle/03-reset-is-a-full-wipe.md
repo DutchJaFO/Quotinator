@@ -330,7 +330,7 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-db-0
 
 ## Observed effect
 
-**Measured 2026-11-15** against `quotinator:local` built from `9b59f414`.
+**Measured 2026-11-16** against `quotinator:local` built from `2fd67742`.
 
 | Read | A, before | A, after | B, before | B, after |
 |---|---|---|---|---|

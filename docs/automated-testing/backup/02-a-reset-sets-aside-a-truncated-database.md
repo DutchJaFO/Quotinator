@@ -126,18 +126,18 @@ the truncation and nothing else.
 
 ## Observed effect
 
-**Measured 2026-11-09** against `quotinator:local` built from the working tree at `271c4c54`, the database
-truncated from 4,714,496 to 2,357,248 bytes.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`, the database truncated from
+4,718,592 to 2,359,296 bytes.
 
 The start degrades to `unhealthy`, and the Reset answers `200` with `/health` back at `200`. The truncated
-file is moved to `backups/unreadable/quotinatordata_unreadable_20261109T085041559Z.db`, byte-identical to
-the truncated original, with no backup of it in `backups/`. The notification reads exactly as in
-[`01`](01-a-reset-sets-aside-a-database-it-cannot-read.md), naming this file: a truncated file is told
-apart from a readable one by the same check, not by a second path.
+file is moved to `backups/unreadable/quotinatordata_unreadable_20261117T054251246Z.db`, byte-identical to the
+truncated original, with no backup of it in `backups/`. The notification has the same title as in
+[`01`](01-a-reset-sets-aside-a-database-it-cannot-read.md), naming this file, and its body says the check's
+Pages layer was Failed: a truncated file is told apart from a readable one by the same check, not by a
+second path, and the notification names the layer that showed it.
 
-The control Reset of the rebuilt database took its own backup, `quotinatordata_v9_20261109T085046518Z.db`,
+The control Reset of the rebuilt database took its own backup, `quotinatordata_v9_20261117T054256283Z.db`,
 and left the set-aside file where it was.
-
 ## Canary
 
 Build `69800a23`, the commit before #482's first commit, as `quotinator:canary-482`, shared with `backup/01`,

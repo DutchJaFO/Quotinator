@@ -156,37 +156,22 @@ passing case this document would stay green against a build that degraded on eve
 assertion above worthless.
 ## Observed effect
 
-**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`, the database replaced with 34
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`, the database replaced with 34
 bytes of text.
 
 The process stays up and `/health` settles at `503 unhealthy` with the generic initialisation-failure
-reason. `/`, `/stats` and `/notifications` each return `200`, `/openapi/v1.json` returns `200`, and the
-home page carries the degraded text with no stack trace. All seven database reads answer `503`.
-`GET /api/v1/version` answers `503 {"status":"degraded","version":...,"environment":...}` with no
-`database` block, and `200` when healthy.
+reason, *"Database initialisation failed. …"*. `/openapi/v1.json` answers `200` and all seven database reads
+answer `503`.
 
-**Six admin endpoints answer an unhandled `500` in this state, and this document does not assert
-them:** `GET /api/v1/admin/database/seed/preview`, `GET /api/v1/admin/audit`,
-`GET /api/v1/admin/audit/date-range`, `GET /api/v1/admin/audit/export`,
-`POST /api/v1/admin/database/reseed` and `DELETE /api/v1/admin/audit`. The admin surface is exempt from
-the health gate so it can be the recovery route; these six reach their handlers and throw, and two of
-them are writes. `GET /api/v1/admin/backups` answers `200` in the same run, off the filesystem.
-[#453](https://github.com/DutchJaFO/Quotinator/issues/453) owns the fix: narrowing the gate's exemption
-to the reset and the backup category. ADR 022 governs it, since a condition the code has already
-detected is being thrown rather than returned.
-
-**Recovery route.** `POST /api/v1/admin/database/reset` reaches its handler rather than being gated away
-by the `503`. Since #482 it rebuilds the database and sets the file aside: **measured 2026-11-09** against
-`quotinator:local` built from the working tree at `271c4c54`, it answered `200`, `/health` returned to
-`200`, and the 34-byte file was in `backups/unreadable/` as
-`quotinatordata_unreadable_20261109T085231926Z.db`. Deleting the file and restarting also returns the container to
-`200`, which is step 6's positive control.
+**Recovery route.** `POST /api/v1/admin/database/reset` reaches its handler rather than being gated away by
+the `503`: it answered `200`, `/health` returned to `200`, and the 34-byte file was in `backups/unreadable/`
+as `quotinatordata_unreadable_20261117T050402761Z.db`. Deleting the file and restarting also returned the
+container to `200` on `/health` and all seven reads, which is step 6's positive control.
 
 **The reason's diagnosis does not fit this fault.** `/health` says the recorded schema version probably
-does not match the on-disk schema, for a file that is not a database at all. Its first remedy, the
-Reset, is now the one that works. Telling the two conditions apart is
+does not match the on-disk schema, for a file that is not a database at all. Its first remedy, the Reset,
+is the one that works. Telling the conditions apart is
 [#457](https://github.com/DutchJaFO/Quotinator/issues/457).
-
 ## Canary
 
 **A pre-issue build.** The commit before #327's first commit, under a distinct tag, run through every

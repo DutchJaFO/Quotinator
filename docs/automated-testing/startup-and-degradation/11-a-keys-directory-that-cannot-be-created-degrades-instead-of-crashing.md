@@ -116,28 +116,17 @@ a build that degraded on everything. With the path free, the application creates
 makes every assertion above worthless.
 ## Observed effect
 
-**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`.
 
-The process stays up and the database file is created, while `/health` settles at `503` with the
-data-directory reason: *"The data directory cannot be written … Restore write access to the data
-directory and restart. A database Reset cannot resolve this: it writes too."* None of that describes this
-fault: the data directory is writable, and the Reset runs. `/openapi/v1.json` answers `200` and all
-seven database reads answer `503`.
+With `keys` a file, the process stays up and `/health` settles at `503 unhealthy` with the data-directory
+reason, *"The data directory cannot be written … Restore write access to the data directory and restart.
+A database Reset cannot resolve this: it writes too."*, though the data directory itself is writable.
+`/openapi/v1.json` answers `200` and all seven database reads answer `503`. With the file removed, the
+restart answered `200` on `/health` and all seven reads, and `keys` was created as a directory, which is
+step 3's positive control.
 
-**All three pages answer `500`, recorded rather than asserted**, as in
-[`10`](10-a-data-directory-that-cannot-be-created-degrades-instead-of-crashing.md).
-
-**A Reset answers `200` and turns `/health` healthy while the fault remains.** After the reset, `/health`
-reads `healthy`, `/api/v1/quotes` answers `200`, and `/` still answers `500`, with `keys` still a file.
-
-**Recovery route, recorded rather than asserted.** Reachable, and it runs, but it is not a remedy: `keys`
-is still a file after it. Removing the file and restarting returns the container to `200` with `/`
-rendering, which is step 3's positive control.
-
-All three readings trace to one decision: #326 folds an uncreatable `keys/` directory into the database
-health state with the data-directory reason. None of them is a crash, since the application still says it
-is degraded; each is a finding for its own issue.
-
+Folding an uncreatable `keys/` into the database health state with the data-directory reason is #326's
+decision; the pages and the Reset in this state are not read by the steps.
 ## Canary
 
 A build from the commit before [#326](https://github.com/DutchJaFO/Quotinator/issues/326)'s first code

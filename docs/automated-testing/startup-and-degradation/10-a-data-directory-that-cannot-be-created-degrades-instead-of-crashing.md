@@ -119,33 +119,16 @@ configuration on a writable mount creates the directory and the database.
 every assertion above worthless.
 ## Observed effect
 
-**Measured 2026-10-31** against `quotinator:local` built from `00a9dfe2`.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`.
 
-The process stays up, `/health` answers `503` with the data-directory reason, and the host directory stays
-empty. `/openapi/v1.json` answers `200` and all seven database-reading endpoints answer `503`. By the end
-of the reads below, the log held 12 `IOException` and 27 `SqliteException` throws.
+The process stays up, `/health` answers `503 unhealthy` with the data-directory reason, *"The data directory
+cannot be written. …"*, and the host directory stays empty. `/openapi/v1.json` answers `200` and all seven
+database-reading endpoints answer `503`. With the mount writable, the same container's restart answered
+`200` on `/health` and all seven reads, and created the database in the directory, which is step 3's
+positive control.
 
-**All three pages answer `500`, recorded rather than asserted**, while `/health` correctly reports the
-fault, so the application still says it is degraded. That is
-[#454](https://github.com/DutchJaFO/Quotinator/issues/454)'s, not this document's contract. The same holds
-for an uncreatable `keys/` alone, which
-[`11`](11-a-keys-directory-that-cannot-be-created-degrades-instead-of-crashing.md) covers.
-
-**Recovery route, recorded rather than asserted.** Reachable: `POST /api/v1/admin/database/reset` reaches
-its handler and refuses with `409`, obstacle `DestinationDirectoryNotWritable`, naming *restore write
-access* first. **Not workable**: a Reset writes. The refusal's second remedy, *Retry with
-`allowNoBackup=true`*, answers an unhandled `500` here; this document does not assert it, so as not to
-write the `500` in as the contract. Remounting `/data` writable and restarting returns the container to
-`200`, which is step 3's positive control.
-
-**Re-measured 2026-11-15** against `quotinator:local` built from `6cb7a4b9`, after #490 added the database
-check, whose Storage layer also detects a data directory that cannot be written. Steps 1 to 3 held as before:
-`unhealthy` with the data-directory reason, the container running, the bind directory empty, the spec `200`,
-the seven reads `503`, and every one of them `200` once the mount was writable. The configuration-time guard
-still records the failure first, before the database check runs, so this run cannot show the Storage layer
-reporting it; `StartupResilienceTests.Startup_DataDirectoryNotWritable_DetectedBeforeTheDatabaseIsOpened`
-proves that layer in-process.
-
+The pages and the Reset's refusal in this state are not read by the steps; what the pages answer is
+[#454](https://github.com/DutchJaFO/Quotinator/issues/454)'s subject.
 ## Canary
 
 A build from the commit before [#326](https://github.com/DutchJaFO/Quotinator/issues/326)'s first code

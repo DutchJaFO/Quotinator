@@ -1043,6 +1043,19 @@ and **their absence is not evidence of a missing write**. Where they *do* exist,
 -f`, a crash, or a copy taken while the container runs, they are load-bearing and must be copied,
 which is the case this rule was written for.
 
+**`test-env.csx`'s `destroy` is not a clean stop.** It removes the container with `docker rm -f`, a
+SIGKILL, so the sidecars survive it. A step that needs the database file complete on its own runs
+`docker stop -t 15 <name>` first; `reenter` already does. Measured 2026-11-17 (#490, `backup/07`): the
+clean stop exited `0` in under a second and left only the `.db`.
+
+**Check or copy the file before anything else opens it.** A read-only open by DbInspector, after a clean
+stop, left an empty `-wal` and a `-shm` behind (measured 2026-11-17; SQLite does not document what a
+read-only open leaves). An empty `-wal` holds nothing, but a step that reads the version first and then
+asserts no `-wal` is left fails on DbInspector's own file, which is how `backup/07`'s first run failed.
+These are SQLite's own files and their life cycle is the engine's: see the Knowledgebase entry
+[*Files named quotinatordata.db-wal and quotinatordata.db-shm appear beside the
+database*](../knowledgebase/database-wal-and-shm-files-beside-the-database.md).
+
 **Restore is unconditional between tests**, never "if the test dirtied something". The moment it is
 conditional, inherited state is back with a better name.
 
@@ -1135,7 +1148,7 @@ an entry needs; a happy-path-only test has nothing to contribute.
 
 ## Observed effects awaiting measurement
 
-**36 of 85 documents describe their effect without having measured it.** Each row below names the
+**35 of 85 documents describe their effect without having measured it.** Each row below names the
 quantity its next run must read, so the measurement is a specific act rather than a vague intention to
 look. A document leaves this list by recording `**Measured <date>**` in its own section, and
 `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails if it does so while its row is still
@@ -1178,7 +1191,6 @@ asserts what it should; what is missing is a reading an entry can quote.
 | [notifications-and-changelog/02-notification-metadata-and-provenance.md](notifications-and-changelog/02-notification-metadata-and-provenance.md) | The stored payload and its provenance, as read, with the date of the reading |
 | [notifications-and-changelog/05-legacy-notification-provenance.md](notifications-and-changelog/05-legacy-notification-provenance.md) | The order of the version-history rows, and the fresh database's absence of a released row |
 | [notifications-and-changelog/08-notification-text-resolves-per-language.md](notifications-and-changelog/08-notification-text-resolves-per-language.md) | The text each language returns for the same notification |
-| [notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md](notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md) | The text each language returns after the upgrade, and the English row either side |
 | [notifications-and-changelog/11-clean-reseed-confirmation.md](notifications-and-changelog/11-clean-reseed-confirmation.md) | The confirmation count per file, and the breakdown's own totals against its parts |
 | [notifications-and-changelog/12-running-action-state.md](notifications-and-changelog/12-running-action-state.md) | The badge text and the control set while the action runs, and the quote count after an interrupted run |
 | [notifications-and-changelog/13-notification-layout.md](notifications-and-changelog/13-notification-layout.md) | The computed `white-space`, the line-box count, and the dialog's height against a non-zero viewport |
