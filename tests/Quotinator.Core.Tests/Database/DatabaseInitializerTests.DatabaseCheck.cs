@@ -63,6 +63,28 @@ public partial class DatabaseInitializerTests
     }
 
     /// <summary>
+    /// Row 13, the file the verification table first named (developer, 2026-11-17: both variants): bytes that
+    /// are not a SQLite database stop startup at Format, the first layer that reads the file, with the file
+    /// untouched and nothing created beside it. The index variant above proves the same for a file SQLite
+    /// would otherwise open and write to; this one proves the cheapest layer stops startup on its own.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_NotADatabase_ReturnsTheFormatOutcomeWithoutOpeningForWrite()
+    {
+        File.WriteAllText(_dbPath, "this file is not a SQLite database");
+        string before = HashOf(_dbPath);
+
+        DatabaseOperationResult result = await CreateInitializer([]).InitialiseAsync();
+
+        Assert.IsFalse(result.Succeeded, "Startup succeeded over a file that is not a database.");
+        Assert.AreEqual(DatabaseCheckLayer.Format, result.Check?.FirstFailure?.Layer);
+        SqliteConnection.ClearAllPools();
+        Assert.AreEqual(before, HashOf(_dbPath), "The file was written to.");
+        Assert.IsFalse(File.Exists(_dbPath + "-wal"), "A -wal was created: the file was opened for writing.");
+        Assert.IsFalse(File.Exists(_dbPath + "-shm"), "A -shm was created: the file was opened for writing.");
+    }
+
+    /// <summary>
     /// Row 13's positive control: the same database without the damage starts, and the result carries the
     /// check startup ran, with every layer passed.
     /// </summary>

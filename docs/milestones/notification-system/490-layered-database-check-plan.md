@@ -9,11 +9,10 @@
 
 ## Next action
 
-**Run step 16, T2, from the first document on `quotinator:local` built from `2fd67742`, then step 18.** Every
-document in scope was reviewed or converted before this run (step 16's review); step 17 is built. Decisions A
-to E were accepted as recommended on 2026-11-14, and decision E's follow-up is #493. Step 6 left one deviation
-from the verification table for the developer to confirm; it is listed under step 6. The plan is built against the code at `342e0cfa` and the sqlite.org
-documentation as read on that date.
+**Execute step 18, the changelog.** Every earlier step is done: T2 passed on `3205ba49` (step 16), and step 17
+is built and verified. Decisions A to E were accepted as recommended on 2026-11-14, and decision E's follow-up
+is #493. Step 6's deviation was answered on 2026-11-17: row 13 is proven with both variants. The plan is built
+against the code at `342e0cfa` and the sqlite.org documentation as read on that date.
 
 ---
 
@@ -589,10 +588,16 @@ uses it.
     names `Startup_IndexDisagreesWithItsTable_DegradesNamingTheLayer` and
     `Startup_DanglingReference_StaysHealthyAndReportsTheLayer`. The operator's reason for a broken index is
     still the generic one until #457 (step 8).
-- **Deviation for the developer to confirm:** row 13 uses an index that disagrees with its table, not a file
-  that is not a database. Today a file that is not a database makes `InitialiseAsync` throw, so the test
-  would fail on an exception rather than on its assertion. A broken index is opened and written to today,
-  which the test observes as a `-wal` and `-shm` appearing beside the file.
+- **Deviation, answered (developer, 2026-11-17: *"why not use both variants?"*):** row 13 used an index that
+  disagrees with its table, not a file that is not a database. Before this issue a file that is not a
+  database made `InitialiseAsync` throw, so the test would fail on an exception rather than on its assertion.
+  A broken index is opened and written to today, which the test observes as a `-wal` and `-shm` appearing
+  beside the file. Once the check existed, the throw was gone, so row 13 now has both:
+  `InitialiseAsync_NotADatabase_ReturnsTheFormatOutcomeWithoutOpeningForWrite` was added on 2026-11-17 and
+  proven red by making `StartupDatabaseCheck.Stops` answer `false`, where it failed with *SQLite Error 26:
+  'file is not a database'*, the index variant failing alongside it on its assertion.
+  **Not raised again between step 6 and step 18**, though it was open throughout and row 13 was ticked:
+  an open question blocks the row it concerns until it is answered.
 - **How row 17's unwritable directory is observed:** the database's `-wal` and `-shm` already exist and are
   writable, so SQLite opens the database without complaint, and today startup is healthy. Only the check's
   directory probe can detect it. Denied with a Windows deny ACE, or owner read and execute elsewhere, as
@@ -1247,7 +1252,7 @@ says that the database is checked thoroughly at every start, and that the faster
 | 10 | ✅ | *(decision C)* An unwritable directory fails Storage, but the reading layers still run | Unit test | `SqliteDatabaseCheckTests.Check_DirectoryNotWritable_FailsStorageAndStillChecksTheFile` |
 | 11 | ✅ | *(decision D, superseded 2026-11-16, row 30)* A `-wal` holding data is checked through an in-memory image with its committed frames applied, never through an `immutable` open of the main file | Unit test | `SqliteDatabaseCheckTests.Check_WalHoldsData_ChecksItsCommittedStateAndLeavesTheOriginalsUntouched` |
 | 12 | ✅ | *(decision D, superseded 2026-11-16, row 30)* A `-wal` holding data beside a directory where nothing can be written is still checked: Storage reports the directory, and the reading layers run | Unit test | `SqliteDatabaseCheckTests.Check_WalHoldsData_NothingCanBeWritten_StillChecksTheFile` |
-| 13 | ✅ | Startup returns a failed or inconclusive check as an outcome, without opening the database for writing | Unit test | `DatabaseInitializerTests.InitialiseAsync_LayerFails_ReturnsThatLayersOutcomeWithoutOpeningForWrite` |
+| 13 | ✅ | Startup returns a failed or inconclusive check as an outcome, without opening the database for writing | Unit test | `DatabaseInitializerTests.InitialiseAsync_LayerFails_ReturnsThatLayersOutcomeWithoutOpeningForWrite` (an index that disagrees with its table, failing at Indexes); `…InitialiseAsync_NotADatabase_ReturnsTheFormatOutcomeWithoutOpeningForWrite` (a file that is not a database, failing at Format; added 2026-11-17, step 6) |
 | 14 | ✅ | A Reset sets aside a file with a broken index, backs up a sound one whose `-wal` holds data even when nothing can be written for the check, backs up one with a dangling reference, and always checks at `Full` | Unit test | `DatabaseInitializerTests.ResetAsync_IndexDisagreesWithItsTable_SetsTheFileAside`, `…ResetAsync_WalHoldsData_NothingWritableForTheCheck_BacksTheSoundCopyUp`, `…ResetAsync_DanglingReference_BacksTheFileUp`, `…ResetAsync_FastSetting_StillRunsEveryLayer` |
 | 15 | ✅ | Choosing the startup reason is one mapping: this issue's cases are added, and the #348, #350 and #305 cases keep their order and text | Unit test | `StartupDegradationReasonsTests` (one test per case, plus the first-wins order); the existing #348, #350 and #305 `StartupResilienceTests` stay green |
 | 16 | ✅ | *(decision A)* No type the Api layer sees from the check comes from the SQLite library | Unit test | `RepositoryStructureTests.TheDatabaseCheckContract_NamesNoEngineType` |
