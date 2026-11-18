@@ -3,7 +3,7 @@
 **Smoke:** yes
 **Environment:** Fresh + Constrained
 **Deterministic:** yes
-**Traces to:** #327, #482
+**Traces to:** #327, #482, #457
 
 ## Preconditions
 
@@ -78,7 +78,7 @@ than forcing the write.
 ```
 dotnet script scripts/testing/test-env.csx -- create --name qt-startup-09 --port 18409 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-09 --wait-listening
 dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18409/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-startup-09-out\health.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-09-out\health.json --equals status=unhealthy --not-empty reason
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-09-out\health.json --equals status=unhealthy --contains "reason=Parts of the database file are damaged or missing"
 docker inspect -f '{{.State.Running}}' qt-startup-09
 ```
 
@@ -87,10 +87,14 @@ docker inspect -f '{{.State.Running}}' qt-startup-09
 
 **These three are the point of this document.** `true` is the never-crash contract. `unhealthy` with a
 reason is the application saying it is degraded, rather than the operator discovering it from failures.
+**The reason names the fault** (#457): the Pages layer's cause, that parts of the file are damaged or
+missing, rather than a schema-version mismatch.
 
 **On failure:** a container that is not running means the fault killed the process, which is the defect
 this document exists to catch. `status=healthy` means the truncation did not take, so re-run from step 2.
-`starting` or `down` means the wait gave up after 180 seconds.
+`starting` or `down` means the wait gave up after 180 seconds. `unhealthy` with a reason that lacks the
+phrase is either the misdiagnosis #457 fixed, or a truncation the check did not catch at Pages: read the
+reason the command printed.
 
 ### 4. Confirm the OpenAPI surface answers and every database read is gated
 
@@ -156,6 +160,9 @@ that degraded on everything.
 assertion above worthless.
 ## Observed effect
 
+**Awaiting measurement for #457.** The reason below is the one measured before #457 changed it; #457's T2
+run records the new one here.
+
 **Measured 2026-11-17** against `quotinator:local` built from `2fd67742`, the database truncated from
 4,681,728 to 2,340,864 bytes.
 
@@ -179,6 +186,9 @@ step. That build predates the gating of `/version` while degraded, so step 4 rea
 **#482's step.** `quotinator:canary-482`, built from `69800a23`, the commit before #482, run through steps 1
 to 5: step 5's Reset must answer `409` with obstacle `SourceUnreadable`. **Run 2026-11-09:** steps 1 to 4
 passed, and step 5 read `409`, `/health` stayed `503`, and no `backups/unreadable/` existed.
+
+**#457's step.** `quotinator:canary-457`, built from `a004340f`, the commit before #457's first commit, run
+through steps 1 to 3: step 3's `json` command must fail, because that build gives the generic reason.
 
 **The positive control this run produces for itself.** Step 6 removes the truncation and reads `200` in
 the same environment, so a build that degraded unconditionally fails there. Step 3's `unhealthy` is the

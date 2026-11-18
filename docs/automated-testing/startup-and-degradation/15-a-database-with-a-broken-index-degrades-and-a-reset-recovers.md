@@ -3,7 +3,7 @@
 **Smoke:** yes
 **Environment:** Fresh
 **Deterministic:** yes
-**Traces to:** #490
+**Traces to:** #490, #457
 
 ## Preconditions
 
@@ -35,9 +35,9 @@ database's only fault.
   does: the startup wait page answers `503` too.
 - **Layers are read by position.** The check reports them in a fixed order: storage, format, journal, pages,
   indexes, references, schema. Indexes is position 4, and the main database is always reported first.
-- **The reason is asserted for its opening words only.** A broken index gives the generic initialisation
-  reason until [#457](https://github.com/DutchJaFO/Quotinator/issues/457) gives each layer its own; the layer
-  itself is asserted from the integrity endpoint.
+- **The reason is asserted for the Indexes layer's cause only**, the words #457 gave it, not its remedies,
+  which belong to [`08`](08-a-database-that-is-not-a-database-degrades-instead-of-crashing.md); the layer itself
+  is asserted from the integrity endpoint.
 
 ## Explicitly not covered here
 
@@ -84,13 +84,13 @@ written. Step 3 would read an ordinary healthy start. Stop.
 ```
 dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-15 --port 18415 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-startup-15-data --wait-listening
 dotnet run --project tools/Quotinator.Tools.TestProbe -- wait-field --url http://localhost:18415/api/v1/health --field status --in unhealthy,healthy --out C:\repos\Quotinator\.claude\temp\qt-startup-15-out\health-broken.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-15-out\health-broken.json --equals status=unhealthy --contains "reason=Database initialisation failed"
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-15-out\health-broken.json --equals status=unhealthy --contains "reason=an index no longer agrees with its table"
 docker inspect -f '{{.State.Running}}' qt-startup-15
 dotnet script scripts/testing/http.csx -- --url http://localhost:18415/api/v1/quotes/random --expect 503 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18415/openapi/v1.json --expect 200 --status
 ```
 
-**Expected:** the `json` command exits `0`: `status = unhealthy` with the initialisation reason. `docker
+**Expected:** the `json` command exits `0`: `status = unhealthy` with the reason naming the broken index (#457). `docker
 inspect` prints `true`, `/quotes/random` answers `503` and the spec answers `200`.
 
 **On failure:** `status=healthy` is the defect #490 exists to remove: a database whose index disagrees with
@@ -138,6 +138,9 @@ and 4: the same container, repaired by the remedy the reason names.
 
 ## Observed effect
 
+**Awaiting measurement for #457.** The reason below is the one measured before #457 changed it; #457's T2
+run records the new one here.
+
 **Measured 2026-11-17** against `quotinator:local` built from `2fd67742`.
 
 The fresh database was sound, its Indexes layer passed, and it was intact. After the index was damaged, the
@@ -160,6 +163,10 @@ and 3 anyway, without step 1's `json` command, because step 3 is the reading tha
 broken, `/health` must read `healthy`, the gap #490 closes.
 
 Remove the container, image and worktree afterwards.
+
+**#457's step.** `quotinator:canary-457`, built from `a004340f`, the commit before #457's first commit, run
+through steps 1 to 3: step 3's `json` command must fail, because that build gives the generic reason for a
+broken index.
 
 **Where the canary has been run, 2026-11-15.** Against `342e0cfa`, as `quotinator:canary-490`: step 1's `json`
 command failed on `databases.0.isSound`, `layers.4.layer` and `layers.4.status`, each absent. With the index
