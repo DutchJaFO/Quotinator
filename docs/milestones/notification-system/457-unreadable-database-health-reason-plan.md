@@ -1,6 +1,6 @@
 # #457: The health reason for an unreadable database file misdiagnoses it as a schema-version mismatch
 
-**Status:** In progress (step 6)
+**Status:** In progress (step 11)
 **GitHub issue:** #457
 **Tiers required:** T1, T2
 **Depends on:** #482, #490
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 6.** No question is open. #490 reached `Waiting for release` on 2026-11-17. The plan
+**Execute from step 11.** No question is open. #490 reached `Waiting for release` on 2026-11-17. The plan
 was reviewed against what it delivered on 2026-11-18 at `a004340f` (*Reviewed against #490's delivery*
 below), and decisions D and E, which that review raised, were accepted as recommended the same day
 (developer, 2026-11-18). Every choice the steps leave to execution is already made in the step itself:
@@ -279,21 +279,51 @@ replace the issue's `…HealthReasonSaysTheFileCannotBeRead`: decision B means a
 
 Done 2026-11-18. Every existing file below was already in both lists from earlier issues; the four new
 files (`IResetReadiness.cs`, `DatabaseUnsoundGuidance.cs`, `DatabaseInitializerTests.ResetReadiness.cs`,
-`DatabaseUnsoundGuidanceTests.cs`) were added to both, ahead of being created.
+`DatabaseUnsoundGuidanceTests.cs`) were added to both, ahead of being created. At step 6 the readiness moved to its
+own class, so `SetAsideReadiness.cs` was added and `DatabaseInitializerTests.ResetReadiness.cs` was replaced by
+`tests/Quotinator.Data.Tests/Database/SetAsideReadinessTests.cs`, in both lists.
 
 Each file this issue creates or edits goes into `.editorconfig`'s scoped sections the moment it is first
 touched (`CLAUDE.md`, *Zero-warnings policy and boyscout rules*). Expected files:
 
 - `StartupDegradationReasons.cs`, `DatabaseInitialisationSequence.cs`, `AdminEndpoints.cs`, `Program.cs`
   (DI registration only) and `DatabaseInitializer.cs`;
-- the new `IResetReadiness.cs` and `DatabaseUnsoundGuidance.cs`;
+- the new `IResetReadiness.cs`, `SetAsideReadiness.cs` and `DatabaseUnsoundGuidance.cs`;
 - `BackupObstacleGuidance.cs`, `ResetObstacleGuidance.cs` and `KnowledgebaseLinks.cs`;
 - `StartupResilienceTests.cs`, `StartupDegradationReasonsTests.cs`, `AdminDatabaseIntegrityEndpointTests.cs`,
   and the new test files.
 
 ### 6. Write the failing tests and confirm them red
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+**Done 2026-11-18.**
+
+- **Measured first:** `FactoryWithTruncatedDatabase` fails at **Pages** (`SQLite Error 11: 'database disk image is
+  malformed'`), read from `DatabaseHealthState.StartupCheck` by a temporary probe test, then removed. A file layer, so
+  row 2 uses the existing fixture and no valid-header test is added.
+- **Signatures first:** `IResetReadiness`, `SetAsideReadiness` (returning `null`), `DatabaseUnsoundGuidance` (`Covers`,
+  `Cause`, `Reason`, all empty), the `Func<ResetObstacle?>` parameter on `For` and `ForCheck`, the shared members
+  `BackupObstacleGuidance.ResetSetsTheFileAside` and `RestoreAnOlderBackup` and `ResetObstacleGuidance.FreeTheSetAsideFolder`
+  (empty), and `KnowledgebaseLinks.TheDatabaseFileCannotBeRead`. The build had only the shells' unused-parameter
+  warnings.
+- **Deviation from step 7 as planned:** readiness is a standalone `SetAsideReadiness(DatabaseOptions, ILogger)` in
+  `Quotinator.Data.Database`, registered as `IResetReadiness`, not implemented by `DatabaseInitializer`. Twelve test
+  stubs replace `IDatabaseInitializer`, so a registration that casts it would fail in those hosts; the readiness reads
+  only two paths, which `DatabaseOptions` already holds as a registered singleton. `DatabaseInitializer` calls the
+  same static `SetAsideReadiness.Check`, so there is still one implementation. Decision D is unchanged.
+- **Deviation from row 6:** the generic reason is held by `StartupDegradationReasonsTests.InitialisationFailed_DoesNotClaimASchemaMismatch`,
+  a unit test of the constant. Reaching the backstop catch in a host needs an initializer that throws, which
+  `StartupResilienceTests` deliberately does not use (its class summary), and the backstop's wiring is already held by
+  #490's tests.
+- **Readiness asked only when needed** gained its own test, `StartupDegradationReasonsTests.For_AsksResetReadinessOnlyForAReasonThatOffersTheReset`,
+  since asking writes a probe file.
+- **Red, 2026-11-18:** 25 tests failed on their assertions: 23 in `Quotinator.Api.Tests` and both
+  `SetAsideReadinessTests`. Three guards passed vacuously against the empty shell and stay as guards:
+  `DatabaseUnsoundGuidanceTests.Reason_NeverClaimsASchemaVersionMismatch`, `…Reason_Indexes_DoesNotSayTheFileCannotBeRead`
+  and `…Reason_NeverNamesTheEngine`.
+- **The lock fixture works on Windows:** Storage failed with *"being used by another process"*. Linux is first
+  exercised by CI.
 
 Red first means signatures first: `IResetReadiness`, the new `ForLayer` parameter and
 `DatabaseUnsoundGuidance` are added with no behaviour, so each test compiles and fails on its assertion.
@@ -325,8 +355,8 @@ Red first means signatures first: `IResetReadiness`, the new `ForLayer` paramete
   - `Check_LayerFailsAfterStartup_DegradesTheApplication` asserts the Indexes cause;
   - a new test: a file layer failing after startup, with the set-aside folder blocked, degrades without
     offering the Reset (row 4).
-- **Core, `tests/Quotinator.Core.Tests/Database/DatabaseInitializerTests.ResetReadiness.cs`** (a new part of
-  the existing partial class, next to `.UnreadableReset.cs`):
+- **Data, `tests/Quotinator.Data.Tests/Database/SetAsideReadinessTests.cs`** (was planned as a Core partial of
+  `DatabaseInitializerTests`; moved with the deviation above):
   `CheckSetAsideReadiness` through `IResetReadiness` reports `SetAsideFolderNotWritable` when the folder
   cannot be created, and nothing in a writable directory.
 - **Api, `DatabaseUnsoundGuidanceTests`:**
@@ -341,18 +371,23 @@ Red first means signatures first: `IResetReadiness`, the new `ForLayer` paramete
 
 ### 7. Expose set-aside readiness as its own interface
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-- Add `Quotinator.Data.Database.IResetReadiness` with `ResetObstacle? CheckSetAsideReadiness()`, and have
-  `DatabaseInitializer` implement it with the method it already has, made public.
-- Register it in `Program.cs` as the same singleton the main `IDatabaseInitializer` resolves to, not a second
-  instance (`CLAUDE.md`, *Dependency injection policy*). `NoOpDatabaseInitializer` implements it returning
-  `null`, so endpoint tests stay database-free.
+**Done 2026-11-18.** As written below. `ResetAsync` and `RebuildAsync` still call the private `CheckSetAsideReadiness()`, now one line delegating to `SetAsideReadiness.Check`. Both `SetAsideReadinessTests` pass, and all 33 `DatabaseInitializerTests.ResetAsync…` tests pass unchanged.
+
+- `Quotinator.Data.Database.IResetReadiness` with `ResetObstacle? CheckSetAsideReadiness()`, implemented by
+  `SetAsideReadiness` (step 6's deviation), which takes over the body of `DatabaseInitializer.CheckSetAsideReadiness()`
+  as its static `Check`. `DatabaseInitializer`'s private method calls it, so a Reset and the degraded reason share one
+  implementation.
+- Registered in `Program.cs` by type (`AddSingleton<IResetReadiness, SetAsideReadiness>`), resolving the
+  `DatabaseOptions` singleton; `DatabaseInitialisationSequence` and the integrity endpoint receive it by DI.
 - Confirm by reading `ResetAsync` and `RebuildAsync` that their existing calls are unchanged.
 
 ### 8. Write the reason and map it
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+**Done 2026-11-18.** `BackupObstacleGuidance`'s `SourceUnreadable` remedies are now `[ResetSetsTheFileAside, RestoreAnOlderBackup]`, which say *the database file* where they said *the unreadable file*; `ResetObstacleGuidance`'s remedy is `FreeTheSetAsideFolder` plus *, then retry the Reset.*, its text unchanged. With an obstacle, the reason replaces the Reset by what stops it and says a Reset will work once that is fixed: it never offers a Reset that would be refused now (decision 3). `ForLayer` asks readiness only for a reason it covers. Every test step 6 wrote passes, with 0 warnings.
 
 - Split the two shared sentences that claim *cannot be read* (see the review above) at their source, so the
   folder obstacle and the Reset remedy can be used alone. One copy each remains.
@@ -366,7 +401,9 @@ Red first means signatures first: `IResetReadiness`, the new `ForLayer` paramete
 
 ### 9. Reword the generic reason
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+**Done 2026-11-18.** It now reads *"Database initialisation failed for a cause this build does not recognise; the application log names the error."*, followed by the same Reset and delete remedies.
 
 Rewrite `StartupDegradationReasons.InitialisationFailed` per decision 4, in place. It stays a constant where
 #490 put it, beside the other two reasons #490 owns there. No `InitialisationFailureGuidance` class is
@@ -374,7 +411,9 @@ created: the rewording is one sentence and two remedies already written as text 
 
 ### 10. Update the tests whose comments or assertions this changes
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+**Done 2026-11-18.** `Startup_DatabaseFileCorrupt_HealthReasonNamesARemedyThatCanWork`'s doc comment now states decision 2's order; its assertion (`deleting the database file`) still holds, as does the truncated one's, which has no doc comment. No other test asserts the generic text: the remaining references are step 6's own.
 
 - The two `…HealthReasonNamesARemedyThatCanWork` tests: rewrite their doc comment, because the question
   it leaves to #457 is now answered, and check that the assertion still matches decision 2's wording.
@@ -383,7 +422,24 @@ created: the rewording is one sentence and two remedies already written as text 
 
 ### 11. Update the automated documents and the Knowledgebase
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+**Done 2026-11-18.**
+
+- `08` and `09`: step 3 asserts the Format and Pages causes with `--contains`, *Traces to* adds #457, and each
+  *Canary* names `quotinator:canary-457` (`a004340f`) and the step that must fail on it. Running the canary is part
+  of step 15, with the run itself. The paragraph handing the misdiagnosis to #457 is removed from `08`.
+- **Also `15`** (#490's broken-index document), which the sweep in step 12 found asserting the old opening words
+  *"Database initialisation failed"* for an Indexes failure: it now asserts the Indexes cause, with the same
+  *Traces to* and *Canary* additions, and joins step 15's run.
+- **Deviation:** the three are not added to the README's *Observed effects awaiting measurement* list. Each already
+  records a `**Measured 2026-11-17**` reading, and `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails a
+  document carrying both. Each says instead, above its measurement, that #457's run records the new reason; step 15
+  replaces that note with the reading.
+- `the-database-file-cannot-be-read.md` is rewritten: retitled *Startup reports that the database file is damaged
+  or cannot be opened* (and in the Knowledgebase README), its Symptom quotes the Format reason and tabulates every
+  cause's opening words, its Cause and Remedy follow decisions B, E, 2 and 3, and the *three conditions* framing is
+  gone. The Knowledgebase and suite guard tests pass (83).
 
 - `startup-and-degradation/08` and `09`:
   - step 3 also asserts the reason, with `TestProbe json --contains reason=<the layer's cause>`
@@ -403,7 +459,14 @@ created: the rewording is one sentence and two remedies already written as text 
 
 ### 12. Leave no contradiction in the documentation
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+**Done 2026-11-18.** Searched outside the milestone plans for the generic text, *schema version doesn't match*,
+*initialisation failed*, *generic reason* and *until #457*. Changed: `15` (step 11). Left as they are, because each
+is a dated reading of an earlier build: the canary records in `01`, `04`, `05`, `08` and `09`, and `16`'s
+measurement. `05`'s mention of the generic reason is about #326's fault, which still does not take it.
+`docs/api-endpoints.md`, `CLAUDE.md`, both add-on `DOCS.md` and `README.md` hold nothing that contradicts the new
+reasons, and no endpoint `[Description]` quotes a reason.
 
 Search `docs/`, `CLAUDE.md`, `addon/DOCS.md` and `addon-beta/DOCS.md` for the generic reason's text and
 for *schema version doesn't match*, and correct each one that describes an unsound file. Endpoint
@@ -411,7 +474,14 @@ for *schema version doesn't match*, and correct each one that describes an unsou
 
 ### 13. Boyscout pass and full build
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+**Done 2026-11-18**, on the uncommitted working tree over `e9987b6b`. The one boyscout finding in the files from
+step 5 was a field assignment in `SetAsideReadinessTests` written as `new TempDirectory(...)`, now `new(...)`.
+`dotnet build --configuration Release`: 0 warnings, 0 errors. `dotnet test --configuration Release --verbosity
+normal -m:1`: 12 projects, 5,282 tests, all passed, 0 warnings. The changelog files were edited during that run,
+so `Quotinator.Changelog.Tests` (42) and the Api changelog and translation guards (49) were run again after: all
+passed.
 
 `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`,
 both 0 warnings and 0 errors. IDE0008/IDE0090 fixes are applied to the files from step 5 only.
@@ -437,7 +507,12 @@ commit.
 
 ### 16. Changelog
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+**Done 2026-11-18.** Issue 457 added to `unreleased.issues` in all three files, with a highlight (the message
+says what is wrong with the file and the fixes in order, and recognises a locked file as possibly intact) and a
+`fixed` entry, each translated into Dutch and German. `CHANGELOG.md` regenerated (`--max-releases 3`); the add-on
+changelogs are left for the release, as the release workflow requires.
 
 Add an `unreleased` entry in `changelog.en.json`, `nl.json` and `de.json`, carrying issue 457. This is a
 user-facing highlight: the health message now says what is wrong with the database file, and what to do.
@@ -477,8 +552,8 @@ the issue's expected behaviour, not its scope.
 | 2 | ❌ | A truncated file's health reason does the same | Unit test | `StartupResilienceTests.Startup_DatabaseFileTruncated_HealthReasonNamesTheFault`, or, if step 6 measures that fixture missing every file layer, `…Startup_DatabaseFileTruncatedWithAValidHeader_HealthReasonNamesTheFault` beside it |
 | 3 | ❌ | *(decision B)* Each file layer has its own cause, followed by the remedies in the decided order and the Knowledgebase link; an Indexes cause never says *cannot be read* | Unit test | `DatabaseUnsoundGuidanceTests.Reason_EachLayer_NamesItsOwnCause`, `…Reason_NamesTheResetThenABackupThenDeletingTheFile`, `…Reason_EndsWithTheKnowledgebaseLink`, `…Reason_Indexes_DoesNotSayTheFileCannotBeRead`; `StartupDegradationReasonsTests.For_FileLayerFailed_IsTheUnsoundReason`; `StartupResilienceTests.Startup_IndexDisagreesWithItsTable_DegradesNamingTheLayer` |
 | 4 | ❌ | *(decision D)* A file layer failing after startup degrades with the same reason, and leaves out the Reset when the set-aside folder is unusable | Unit test | `AdminDatabaseIntegrityEndpointTests.Check_LayerFailsAfterStartup_DegradesTheApplication`, `…Check_LayerFailsAfterStartup_SetAsideFolderBlocked_DoesNotOfferTheReset`; `StartupDegradationReasonsTests.ForCheck_FileLayerFailed_IsTheUnsoundReason` |
-| 5 | ❌ | *(decision 3)* With the set-aside folder unusable, readiness reports the obstacle, and the startup reason leaves out the Reset and names the obstacle | Unit test | `DatabaseInitializerTests.CheckSetAsideReadiness_FolderCannotBeCreated_ReportsTheObstacle`, `…CheckSetAsideReadiness_WritableDirectory_ReportsNone`; `DatabaseUnsoundGuidanceTests.Reason_WithAResetObstacle_LeavesTheResetOut`; `StartupResilienceTests.Startup_DatabaseFileCorrupt_SetAsideFolderCannotBeCreated_HealthReasonDoesNotOfferTheReset` |
-| 6 | ❌ | *(decision 4)* The generic reason no longer claims a schema-version mismatch | Unit test | `StartupResilienceTests.Startup_UnrecognisedInitialisationFailure_HealthReasonDoesNotClaimASchemaMismatch` |
+| 5 | ❌ | *(decision 3)* With the set-aside folder unusable, readiness reports the obstacle, and the startup reason leaves out the Reset and names the obstacle | Unit test | `SetAsideReadinessTests.CheckSetAsideReadiness_FolderCannotBeCreated_ReportsTheObstacle`, `…CheckSetAsideReadiness_WritableDirectory_ReportsNone`; `StartupDegradationReasonsTests.For_FileLayerFailedWithAResetObstacle_PassesTheObstacleToTheReason`, `…For_AsksResetReadinessOnlyForAReasonThatOffersTheReset`; `DatabaseUnsoundGuidanceTests.Reason_WithAResetObstacle_LeavesTheResetOut`; `StartupResilienceTests.Startup_DatabaseFileCorrupt_SetAsideFolderCannotBeCreated_HealthReasonDoesNotOfferTheReset` |
+| 6 | ❌ | *(decision 4)* The generic reason no longer claims a schema-version mismatch | Unit test | `StartupDegradationReasonsTests.InitialisationFailed_DoesNotClaimASchemaMismatch` (step 6 says why not a host test) |
 | 7 | ❌ | *(decision E)* A file the Storage layer cannot open gets its own cause, with access restored first and the Reset last, described as setting aside a file that may be intact | Unit test | `DatabaseUnsoundGuidanceTests.Reason_FileCouldNotBeOpened_RestoresAccessFirstAndResetsLast`; `StartupDegradationReasonsTests.For_StorageFoundTheFileUnreadable_IsTheCouldNotBeOpenedReason`; `StartupResilienceTests.Startup_DatabaseFileCannotBeOpened_HealthReasonRestoresAccessFirst` |
 | 8 | ❌ | The existing refused-migration, overshoot, schema-integrity, data-directory and inconclusive reasons are unchanged | Unit test | Existing #348, #350, #305, #326 and #490 `StartupResilienceTests` and `StartupDegradationReasonsTests` stay green |
 | 9 | ❌ | The Reset the reason names still recovers an unsound file | Unit test | Existing `Startup_DatabaseFileCorrupt_ResetRecoversToHealthy` and `…_RepairActionRecoversToHealthy` stay green |
