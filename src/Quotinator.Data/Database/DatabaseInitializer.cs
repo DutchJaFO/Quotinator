@@ -1025,23 +1025,9 @@ public class DatabaseInitializer(
     /// What would stop an unreadable file being set aside and replaced (#482), checked before anything
     /// moves: the data directory, where the new database is built and placed, and the reserved folder the
     /// file moves into. Writing a probe is the only way to answer either, as in
-    /// <see cref="CheckBackupReadiness"/>.
+    /// <see cref="CheckBackupReadiness"/>. #457: the same answer the degraded reason reads, from one implementation.
     /// </summary>
-    private ResetObstacle? CheckSetAsideReadiness()
-    {
-        if (!DirectoryWriteProbe.CanCreateFileIn(Path.GetDirectoryName(Path.GetFullPath(_options.DbPath))!))
-            return ResetObstacle.DataDirectoryNotWritable;
-
-        string folder = SetAsideFolder;
-        try { Directory.CreateDirectory(folder); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            Logger.LogExceptionHandled(ex, "the reserved folder for unreadable databases could not be created");
-            return ResetObstacle.SetAsideFolderNotWritable;
-        }
-
-        return DirectoryWriteProbe.CanCreateFileIn(folder) ? null : ResetObstacle.SetAsideFolderNotWritable;
-    }
+    private ResetObstacle? CheckSetAsideReadiness() => SetAsideReadiness.Check(_options, Logger);
 
     private string SetAsideFolder => Path.Combine(_options.BackupsPath, BackupFileNames.UnreadableFolderName);
 

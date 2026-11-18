@@ -13,6 +13,14 @@ namespace Quotinator.Api.Startup;
 /// </summary>
 internal static class ResetObstacleGuidance
 {
+    /// <summary>
+    /// The remedy for a reserved folder that cannot be used, without what follows it, so the degraded reason for an
+    /// unsound file (#457) can name it before any Reset has been tried.
+    /// </summary>
+    internal static readonly string FreeTheSetAsideFolder =
+        "Restore write access to the backups folder, and remove anything occupying the "
+        + $"\"{BackupFileNames.UnreadableFolderName}\" name inside it";
+
     /// <summary>What happened, in one sentence an operator can act on.</summary>
     /// <param name="obstacle">What stopped the Reset.</param>
     internal static string Cause(ResetObstacle obstacle) => obstacle switch
@@ -38,11 +46,7 @@ internal static class ResetObstacleGuidance
             "Restore write access to the data directory (remount the volume writable, or correct its "
             + "permissions), then retry the Reset.",
         ],
-        ResetObstacle.SetAsideFolderNotWritable =>
-        [
-            "Restore write access to the backups folder, and remove anything occupying the "
-            + $"\"{BackupFileNames.UnreadableFolderName}\" name inside it, then retry the Reset.",
-        ],
+        ResetObstacle.SetAsideFolderNotWritable => [FreeTheSetAsideFolder + ", then retry the Reset."],
         ResetObstacle.SetAsideMoveFailed =>
         [
             "Retry the Reset once nothing else has the database file open.",

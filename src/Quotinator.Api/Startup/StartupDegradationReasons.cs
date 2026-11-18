@@ -28,13 +28,13 @@ internal static class StartupDegradationReasons
         "and restart. A database Reset cannot resolve this: it writes too.";
 
     /// <summary>
-    /// The generic reason, for a failure no more specific case describes, which includes a failure in the
-    /// layers Format to Indexes.
+    /// The generic reason, for a failure no more specific case describes: the backstop ADR 027 keeps for what no layer
+    /// of the check foresaw. #457: it no longer guesses at a schema-version mismatch, which described none of the cases
+    /// that still reach it, and points to the log, which names the actual error.
     /// </summary>
     internal const string InitialisationFailed =
-        "Database initialisation failed. This often means the database's recorded schema " +
-        "version doesn't match its actual on-disk schema (e.g. after an interrupted upgrade). " +
-        "Resolve with an explicit database Reset (POST " + ApiRoutes.DatabaseReset + ") or by " +
+        "Database initialisation failed for a cause this build does not recognise; the application log names the " +
+        "error. Resolve with an explicit database Reset (POST " + ApiRoutes.DatabaseReset + ") or by " +
         "stopping the app, deleting the database file, and restarting.";
 
     /// <summary>
@@ -55,16 +55,21 @@ internal static class StartupDegradationReasons
     /// <param name="dataSchemaVersion">The recorded version of Quotinator.Data's own migrations.</param>
     /// <param name="appSchemaVersion">The recorded version of this application's own migrations.</param>
     /// <param name="integrity">The schema comparison the initialisation ran (#305), when it ran one.</param>
+    /// <param name="setAsideReadiness">
+    /// What would stop a Reset setting the file aside (#457). Asked only when the reason is about to offer that Reset,
+    /// since asking writes a probe file.
+    /// </param>
     internal static string? For(
         DatabaseOperationResult initialisation,
         bool schemaVersionOvershootDetected,
         int dataSchemaVersion,
         int appSchemaVersion,
-        SchemaIntegrityResult? integrity)
+        SchemaIntegrityResult? integrity,
+        Func<ResetObstacle?> setAsideReadiness)
     {
         // #490: a check that stopped the initialisation stopped it before anything else ran, so it wins.
         if (StoppingLayer(initialisation) is { } stopping)
-            return ForLayer(stopping);
+            return ForLayer(stopping, setAsideReadiness);
 
         // #348: a refused migration leaves the schema behind this build, the stricter fault, so it wins over
         // an overshoot reported in the same initialisation.
@@ -91,21 +96,25 @@ internal static class StartupDegradationReasons
     /// </summary>
     /// <param name="check">What the check found.</param>
     /// <param name="integrity">The schema comparison, when it could run.</param>
-    internal static string? ForCheck(DatabaseCheckResult check, SchemaIntegrityResult? integrity)
+    /// <param name="setAsideReadiness">What would stop a Reset setting the file aside, as for <see cref="For"/>.</param>
+    internal static string? ForCheck(DatabaseCheckResult check, SchemaIntegrityResult? integrity, Func<ResetObstacle?> setAsideReadiness)
     {
         if (check.DegradingFailure is { } failure)
-            return ForLayer(failure);
+            return ForLayer(failure, setAsideReadiness);
 
         return integrity is { IsIntact: false } ? SchemaIntegrityGuidance.Reason(integrity) : null;
     }
 
     /// <summary>The reason for a layer that degrades, at startup and on demand alike.</summary>
     /// <param name="failure">The layer that failed or was inconclusive.</param>
-    private static string ForLayer(DatabaseCheckLayerResult failure) =>
+    /// <param name="setAsideReadiness">What would stop a Reset setting the file aside.</param>
+    private static string ForLayer(DatabaseCheckLayerResult failure, Func<ResetObstacle?> setAsideReadiness) =>
         failure.Status == DatabaseCheckLayerStatus.Inconclusive ? CheckInconclusive
-            : failure.Layer != DatabaseCheckLayer.Storage ? InitialisationFailed
-            : failure.StorageFault == DatabaseStorageFault.FileUnreadable ? InitialisationFailed
-            : DataDirectoryNotWritable;
+            // #457: the file is not a sound copy, or could not be opened. Readiness is asked here only, since asking
+            // writes a probe, and only this reason offers the Reset it answers for.
+            : DatabaseUnsoundGuidance.Covers(failure) ? DatabaseUnsoundGuidance.Reason(failure, setAsideReadiness())
+            : failure.Layer == DatabaseCheckLayer.Storage ? DataDirectoryNotWritable
+            : InitialisationFailed;
 
     /// <summary>
     /// The layer the database check stopped the initialisation at, or <see langword="null"/> when the check did

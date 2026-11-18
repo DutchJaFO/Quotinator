@@ -429,9 +429,9 @@ public class StartupResilienceTests
     }
 
     /// <summary>
-    /// #327: the generic reason names two remedies, a Reset and deleting the file, and must carry the
-    /// second as well as the first. Since #482 the Reset recovers a file SQLite cannot open too; which
-    /// remedy the reason leads with for this fault is #457's.
+    /// #327: the reason must carry deleting the file as a remedy, not only the Reset. Since #457 it is the
+    /// unsound-file reason, which leads with the Reset, since #482 made the Reset recover a file that is not
+    /// a database, then restoring a backup, then deleting the file (decision 2).
     /// </summary>
     [TestMethod]
     public async Task Startup_DatabaseFileCorrupt_HealthReasonNamesARemedyThatCanWork()
@@ -482,6 +482,78 @@ public class StartupResilienceTests
             .Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.Contains("deleting the database file", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #457: a file that is not a database fails the check's Format layer, and the reason says what is wrong with the
+    /// file rather than diagnosing a schema-version mismatch.
+    /// </summary>
+    [TestMethod]
+    public void Startup_DatabaseFileCorrupt_HealthReasonNamesTheFault()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase();
+
+        using HttpClient client = factory.CreateClient();
+        DatabaseHealthState health = factory.Services.GetRequiredService<DatabaseHealthState>();
+
+        Assert.AreEqual(DatabaseCheckLayer.Format, health.StartupCheck?.FirstFailure?.Layer, "precondition: the file fails at Format");
+        Assert.DoesNotContain("schema version", health.FailureReason!, StringComparison.OrdinalIgnoreCase);
+        Assert.AreEqual(DatabaseUnsoundGuidance.Reason(health.StartupCheck!.FirstFailure!, null), health.FailureReason);
+    }
+
+    /// <summary>
+    /// #457: a real database cut in half fails the Pages layer (measured 2026-11-18), and its reason names that fault.
+    /// </summary>
+    [TestMethod]
+    public void Startup_DatabaseFileTruncated_HealthReasonNamesTheFault()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithTruncatedDatabase();
+
+        using HttpClient client = factory.CreateClient();
+        DatabaseHealthState health = factory.Services.GetRequiredService<DatabaseHealthState>();
+
+        Assert.AreEqual(DatabaseCheckLayer.Pages, health.StartupCheck?.FirstFailure?.Layer, "precondition: the file fails at Pages");
+        Assert.DoesNotContain("schema version", health.FailureReason!, StringComparison.OrdinalIgnoreCase);
+        Assert.AreEqual(DatabaseUnsoundGuidance.Reason(health.StartupCheck!.FirstFailure!, null), health.FailureReason);
+    }
+
+    /// <summary>
+    /// #457, decision 3: when the reserved folder cannot be created, a Reset would be refused, so the reason does not
+    /// offer it and names what stops it.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_DatabaseFileCorrupt_SetAsideFolderCannotBeCreated_HealthReasonDoesNotOfferTheReset()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase(blockTheSetAsideFolder: true);
+
+        using HttpClient client = factory.CreateClient();
+        string body = await (await client.GetAsync(HealthRoute, TestContext.CancellationToken))
+            .Content.ReadAsStringAsync(TestContext.CancellationToken);
+        string reason = JsonDocument.Parse(body).RootElement.GetProperty("reason").GetString()!;
+
+        Assert.DoesNotContain(BackupObstacleGuidance.ResetSetsTheFileAside, reason, StringComparison.Ordinal);
+        Assert.Contains(ResetObstacleGuidance.FreeTheSetAsideFolder, reason, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #457, decision E: a database the check cannot open, held by another handle here, may be intact, so the reason
+    /// leads with restoring access rather than with a Reset that would set it aside. The lock is the fixture because it
+    /// fails the open the same way on Windows (a sharing violation) and Linux (.NET's advisory lock), where a directory
+    /// at the path is not a file at all and a permission is ignored by a root test runner.
+    /// </summary>
+    [TestMethod]
+    public void Startup_DatabaseFileCannotBeOpened_HealthReasonRestoresAccessFirst()
+    {
+        string dataDirectory = DataDirectoryWithAMigratedDatabase();
+        using FileStream held = new(Path.Combine(dataDirectory, DataPaths.DatabaseFile), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        using WebApplicationFactory<Program> factory = FactoryFor(dataDirectory);
+
+        using HttpClient client = factory.CreateClient();
+        DatabaseHealthState health = factory.Services.GetRequiredService<DatabaseHealthState>();
+
+        Assert.AreEqual(DatabaseStorageFault.FileUnreadable, health.StartupCheck?.FirstFailure?.StorageFault, "precondition: the check could not open the file");
+        Assert.AreEqual(DatabaseUnsoundGuidance.Reason(health.StartupCheck!.FirstFailure!, null), health.FailureReason);
+        Assert.StartsWith(DatabaseUnsoundGuidance.Cause(health.StartupCheck.FirstFailure!), health.FailureReason!);
     }
 
     /// <summary>
@@ -894,8 +966,7 @@ public class StartupResilienceTests
 
     /// <summary>
     /// #490, row 17: an index that disagrees with its table, which <c>quick_check</c> does not detect, degrades
-    /// startup, and the check startup kept names the layer. The operator's reason is the generic one until
-    /// #457 gives each layer its own (step 8).
+    /// startup, and the check startup kept names the layer. Since #457 the operator's reason names it too.
     /// </summary>
     [TestMethod]
     public void Startup_IndexDisagreesWithItsTable_DegradesNamingTheLayer()
@@ -906,7 +977,7 @@ public class StartupResilienceTests
         DatabaseHealthState health = factory.Services.GetRequiredService<DatabaseHealthState>();
 
         Assert.IsFalse(health.IsHealthy, "Startup was healthy over an index that disagrees with its table.");
-        Assert.AreEqual(StartupDegradationReasons.InitialisationFailed, health.FailureReason);
+        Assert.AreEqual(DatabaseUnsoundGuidance.Reason(health.StartupCheck!.FirstFailure!, null), health.FailureReason);
         Assert.AreEqual(DatabaseCheckLayer.Indexes, health.StartupCheck?.FirstFailure?.Layer, "The startup check does not name the failing layer.");
     }
 

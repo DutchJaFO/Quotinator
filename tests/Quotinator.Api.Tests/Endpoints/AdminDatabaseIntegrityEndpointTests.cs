@@ -152,7 +152,33 @@ public class AdminDatabaseIntegrityEndpointTests
 
         HttpResponseMessage health = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.ServiceUnavailable, health.StatusCode, "a failed check left the application healthy");
-        Assert.Contains(StartupDegradationReasons.InitialisationFailed, await health.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        Assert.AreEqual(
+            DatabaseUnsoundGuidance.Reason(new DatabaseCheckLayerResult { Layer = DatabaseCheckLayer.Indexes, Status = DatabaseCheckLayerStatus.Failed }, null),
+            factory.Services.GetRequiredService<DatabaseHealthState>().FailureReason);
+    }
+
+    /// <summary>
+    /// #457, decision D: a file layer failing after startup, with the reserved folder unusable, degrades without
+    /// offering the Reset that would be refused, as startup does.
+    /// </summary>
+    [TestMethod]
+    public async Task Check_LayerFailsAfterStartup_SetAsideFolderBlocked_DoesNotOfferTheReset()
+    {
+        string dataDirectory = NewDataDirectory();
+        using WebApplicationFactory<Program> factory = FactoryWithSwitchableChecks(dataDirectory, out SwitchableDatabaseCheck main, out _);
+        using HttpClient client = factory.CreateClient();
+        Assert.AreEqual(HttpStatusCode.OK, (await client.GetAsync(HealthRoute, TestContext.CancellationToken)).StatusCode, "precondition: healthy at startup");
+
+        string backups = Path.Combine(dataDirectory, DataPaths.BackupsFolder);
+        Directory.CreateDirectory(backups);
+        File.WriteAllText(Path.Combine(backups, "unreadable"), "not a directory");
+        main.FailAt(DatabaseCheckLayer.Pages, "database disk image is malformed");
+        await GetDatabasesAsync(client);
+
+        string? reason = factory.Services.GetRequiredService<DatabaseHealthState>().FailureReason;
+        Assert.IsNotNull(reason, "a failed check left the application healthy");
+        Assert.DoesNotContain(BackupObstacleGuidance.ResetSetsTheFileAside, reason, StringComparison.Ordinal);
+        Assert.Contains(ResetObstacleGuidance.FreeTheSetAsideFolder, reason, StringComparison.Ordinal);
     }
 
     /// <summary>

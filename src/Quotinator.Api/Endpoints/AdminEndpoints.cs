@@ -90,7 +90,7 @@ internal static class AdminEndpoints
         publicGroup.MapGet("/database/integrity", async (
             IDatabaseInitializer db, ChangelogDatabaseInitializer changelog,
             IDatabaseCheck mainCheck, [FromKeyedServices(DatabaseConnectionKeys.Changelog)] IDatabaseCheck changelogCheck,
-            Quotinator.Api.Startup.DatabaseHealthState dbHealth) =>
+            Quotinator.Api.Startup.DatabaseHealthState dbHealth, IResetReadiness resetReadiness) =>
         {
             List<DatabaseIntegrityDto> databases = [];
             foreach ((IIntegrityCheckedDatabase database, IDatabaseCheck check) in
@@ -103,9 +103,10 @@ internal static class AdminEndpoints
                 databases.Add(ToDto(database.DatabaseName, result, integrity));
 
                 // #490 (developer, 2026-11-15): a failed check degrades the application at any point, not only at
-                // startup. The changelog database never does: it falls back to the JSON files (ADR 018).
+                // startup. The changelog database never does: it falls back to the JSON files (ADR 018). #457: with the
+                // same reason startup gives, so it never offers a Reset that would be refused.
                 if (database.DatabaseName == DatabaseNames.Main
-                    && Quotinator.Api.Startup.StartupDegradationReasons.ForCheck(result, integrity) is string reason)
+                    && Quotinator.Api.Startup.StartupDegradationReasons.ForCheck(result, integrity, resetReadiness.CheckSetAsideReadiness) is string reason)
                     dbHealth.MarkFailed(reason);
             }
 

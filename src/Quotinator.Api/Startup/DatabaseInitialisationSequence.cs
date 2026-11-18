@@ -33,6 +33,7 @@ namespace Quotinator.Api.Startup;
 /// <param name="auditWriter">Records a migration's backup skipped by the operator's confirmation.</param>
 /// <param name="callerContext">Who confirmed it.</param>
 /// <param name="logger">Logs what degraded the application, and each non-fatal failure.</param>
+/// <param name="resetReadiness">Whether a Reset could set the file aside, so the degraded reason never offers one that would be refused (#457).</param>
 internal sealed class DatabaseInitialisationSequence(
     IDatabaseInitializer dbInitializer,
     DatabaseHealthState dbHealth,
@@ -46,7 +47,8 @@ internal sealed class DatabaseInitialisationSequence(
     StartupBackgroundWork backgroundWork,
     IAuditEntryWriter auditWriter,
     ICallerContext callerContext,
-    ILogger<DatabaseInitialisationSequence> logger)
+    ILogger<DatabaseInitialisationSequence> logger,
+    IResetReadiness resetReadiness)
 {
     /// <summary>
     /// Initialises the main database and records on <see cref="DatabaseHealthState"/> whether the application is
@@ -83,7 +85,7 @@ internal sealed class DatabaseInitialisationSequence(
             string? degradedReason = StartupDegradationReasons.For(
                 initialisation, dbInitializer.SchemaVersionOvershootDetected,
                 dbInitializer.DataSchemaVersion, dbInitializer.SchemaVersion,
-                dbInitializer.LastIntegrityResult);
+                dbInitializer.LastIntegrityResult, resetReadiness.CheckSetAsideReadiness);
 
             if (degradedReason is null)
             {

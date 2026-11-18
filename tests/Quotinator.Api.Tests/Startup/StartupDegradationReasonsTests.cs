@@ -92,15 +92,18 @@ public class StartupDegradationReasonsTests
     }
 
     /// <summary>
-    /// #490: a file that cannot be read is no fault of the directory, so it does not get the data directory's
-    /// reason; it keeps the generic one until #457 gives each its own.
+    /// #457, decision E: a file that could not be opened is no fault of the directory, and may be intact, so it gets
+    /// its own reason, neither the data directory's nor the generic one.
     /// </summary>
     [TestMethod]
-    public void For_StorageFoundTheFileUnreadable_IsTheGenericReason()
+    public void For_StorageFoundTheFileUnreadable_IsTheCouldNotBeOpenedReason()
     {
-        string? reason = For(DatabaseOperationResult.StoppedByCheck(CheckFailingAt(DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed, DatabaseStorageFault.FileUnreadable)));
+        DatabaseCheckResult check = CheckFailingAt(DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed, DatabaseStorageFault.FileUnreadable);
 
-        Assert.AreEqual(StartupDegradationReasons.InitialisationFailed, reason);
+        string? reason = For(DatabaseOperationResult.StoppedByCheck(check));
+
+        Assert.AreNotEqual(StartupDegradationReasons.InitialisationFailed, reason);
+        Assert.AreEqual(DatabaseUnsoundGuidance.Reason(check.FirstFailure!, null), reason);
     }
 
     /// <summary>A layer whose test ran and gave neither a pass nor a fail degrades with its own reason, never as a pass.</summary>
@@ -112,18 +115,76 @@ public class StartupDegradationReasonsTests
         Assert.AreEqual(StartupDegradationReasons.CheckInconclusive, reason);
     }
 
-    /// <summary>Layers Format to Indexes keep the generic reason until #457 gives each its own.</summary>
+    /// <summary>#457: layers Format to Indexes each degrade with the reason that names what is wrong with the file.</summary>
     /// <param name="layer">The layer that failed.</param>
     [TestMethod]
     [DataRow(DatabaseCheckLayer.Format)]
     [DataRow(DatabaseCheckLayer.Journal)]
     [DataRow(DatabaseCheckLayer.Pages)]
     [DataRow(DatabaseCheckLayer.Indexes)]
-    public void For_FileLayerFailed_IsTheGenericReason(DatabaseCheckLayer layer)
+    public void For_FileLayerFailed_IsTheUnsoundReason(DatabaseCheckLayer layer)
     {
-        string? reason = For(DatabaseOperationResult.StoppedByCheck(CheckFailingAt(layer, DatabaseCheckLayerStatus.Failed)));
+        DatabaseCheckResult check = CheckFailingAt(layer, DatabaseCheckLayerStatus.Failed);
 
-        Assert.AreEqual(StartupDegradationReasons.InitialisationFailed, reason);
+        string? reason = For(DatabaseOperationResult.StoppedByCheck(check));
+
+        Assert.AreNotEqual(StartupDegradationReasons.InitialisationFailed, reason);
+        Assert.AreEqual(DatabaseUnsoundGuidance.Reason(check.FirstFailure!, null), reason);
+    }
+
+    /// <summary>#457, decision 3: what stops a Reset reaches the reason, so it does not offer one that would be refused.</summary>
+    [TestMethod]
+    public void For_FileLayerFailedWithAResetObstacle_PassesTheObstacleToTheReason()
+    {
+        DatabaseCheckResult check = CheckFailingAt(DatabaseCheckLayer.Pages, DatabaseCheckLayerStatus.Failed);
+
+        string? reason = For(DatabaseOperationResult.StoppedByCheck(check), obstacle: ResetObstacle.SetAsideFolderNotWritable);
+
+        Assert.AreEqual(DatabaseUnsoundGuidance.Reason(check.FirstFailure!, ResetObstacle.SetAsideFolderNotWritable), reason);
+    }
+
+    /// <summary>
+    /// #457, decision D: asking whether a Reset could proceed writes a probe, so it is asked only for a failure whose
+    /// reason offers that Reset, and once.
+    /// </summary>
+    [TestMethod]
+    public void For_AsksResetReadinessOnlyForAReasonThatOffersTheReset()
+    {
+        int asked = 0;
+        ResetObstacle? Readiness()
+        {
+            asked++;
+            return null;
+        }
+
+        StartupDegradationReasons.For(DatabaseOperationResult.StoppedByCheck(CheckFailingAt(DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed, DatabaseStorageFault.DirectoryNotWritable)),
+            false, DataVersion, AppVersion, null, Readiness);
+        StartupDegradationReasons.For(DatabaseOperationResult.StoppedByCheck(CheckFailingAt(DatabaseCheckLayer.Pages, DatabaseCheckLayerStatus.Inconclusive)),
+            false, DataVersion, AppVersion, null, Readiness);
+        Assert.AreEqual(0, asked, "Readiness was asked for a reason that does not offer the Reset.");
+
+        StartupDegradationReasons.For(DatabaseOperationResult.StoppedByCheck(CheckFailingAt(DatabaseCheckLayer.Pages, DatabaseCheckLayerStatus.Failed)),
+            false, DataVersion, AppVersion, null, Readiness);
+        Assert.AreEqual(1, asked, "Readiness was not asked exactly once for a file that is not a sound copy.");
+    }
+
+    /// <summary>#457, decision D: a check after startup gives the same reason startup does, obstacle included.</summary>
+    [TestMethod]
+    public void ForCheck_FileLayerFailed_IsTheUnsoundReason()
+    {
+        DatabaseCheckResult check = CheckFailingAt(DatabaseCheckLayer.Indexes, DatabaseCheckLayerStatus.Failed);
+
+        string? reason = StartupDegradationReasons.ForCheck(check, null, () => ResetObstacle.SetAsideFolderNotWritable);
+
+        Assert.AreEqual(DatabaseUnsoundGuidance.Reason(check.FirstFailure!, ResetObstacle.SetAsideFolderNotWritable), reason);
+    }
+
+    /// <summary>#457, decision 4: the reason for what no layer foresaw no longer claims a schema-version mismatch.</summary>
+    [TestMethod]
+    public void InitialisationFailed_DoesNotClaimASchemaMismatch()
+    {
+        Assert.DoesNotContain("schema version", StartupDegradationReasons.InitialisationFailed, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("deleting the database file", StartupDegradationReasons.InitialisationFailed, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -147,7 +208,12 @@ public class StartupDegradationReasonsTests
     [TestMethod]
     public void For_EveryNewReason_IsDistinct()
     {
-        string[] reasons = [StartupDegradationReasons.DataDirectoryNotWritable, StartupDegradationReasons.InitialisationFailed, StartupDegradationReasons.CheckInconclusive];
+        string[] reasons =
+        [
+            StartupDegradationReasons.DataDirectoryNotWritable, StartupDegradationReasons.InitialisationFailed, StartupDegradationReasons.CheckInconclusive,
+            DatabaseUnsoundGuidance.Reason(CheckFailingAt(DatabaseCheckLayer.Pages, DatabaseCheckLayerStatus.Failed).FirstFailure!, null),
+            DatabaseUnsoundGuidance.Reason(CheckFailingAt(DatabaseCheckLayer.Storage, DatabaseCheckLayerStatus.Failed, DatabaseStorageFault.FileUnreadable).FirstFailure!, null),
+        ];
 
         Assert.HasCount(reasons.Length, reasons.Distinct());
         Assert.IsNotNull(For(DatabaseOperationResult.StoppedByCheck(CheckFailingAt(DatabaseCheckLayer.Format, DatabaseCheckLayerStatus.Failed))),
@@ -192,8 +258,8 @@ public class StartupDegradationReasonsTests
         Assert.AreEqual(StartupDegradationReasons.DataDirectoryNotWritable, reason);
     }
 
-    private static string? For(DatabaseOperationResult initialisation, bool overshoot = false, SchemaIntegrityResult? integrity = null) =>
-        StartupDegradationReasons.For(initialisation, overshoot, DataVersion, AppVersion, integrity);
+    private static string? For(DatabaseOperationResult initialisation, bool overshoot = false, SchemaIntegrityResult? integrity = null, ResetObstacle? obstacle = null) =>
+        StartupDegradationReasons.For(initialisation, overshoot, DataVersion, AppVersion, integrity, () => obstacle);
 
     /// <summary>A check whose layers before <paramref name="failing"/> passed, and none after it ran.</summary>
     private static DatabaseCheckResult CheckFailingAt(DatabaseCheckLayer failing, DatabaseCheckLayerStatus status, DatabaseStorageFault? fault = null) =>

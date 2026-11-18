@@ -382,6 +382,9 @@ builder.Services.AddSingleton(dbOptions);
 builder.Services.AddSingleton<IDatabaseBackupReader>(sp =>
     new DatabaseBackupReader(dbOptions, sp.GetRequiredService<IDiskSpaceProvider>()));
 builder.Services.AddSingleton<IDatabaseBackupWriter>(_ => new DatabaseBackupWriter(dbOptions));
+// #457: whether a Reset could set the database file aside, asked by the degraded reason at startup and by the
+// integrity check alike. It reads only paths, so it answers whichever initializer is registered.
+builder.Services.AddSingleton<IResetReadiness, SetAsideReadiness>();
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 
 // #490 (ADR 028): one check per database. Factory overloads, because the path and the expected schema are

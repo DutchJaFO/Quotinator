@@ -24,6 +24,17 @@ namespace Quotinator.Api.Startup;
 /// </summary>
 internal static class BackupObstacleGuidance
 {
+    /// <summary>
+    /// The Reset as a remedy for a file that is not a sound copy (#482): what it does with the file. One copy, shared
+    /// by <see cref="BackupOutcome.SourceUnreadable"/>'s remedies and the degraded reason for an unsound file (#457).
+    /// </summary>
+    internal static readonly string ResetSetsTheFileAside =
+        $"Reset the database with POST {ApiRoutes.DatabaseReset}: the database file is set aside in the "
+        + $"\"{BackupFileNames.UnreadableFolderName}\" folder inside the backups folder, and a new, empty database replaces it.";
+
+    /// <summary>Restoring a backup as a remedy for a file that is not a sound copy, shared as <see cref="ResetSetsTheFileAside"/> is.</summary>
+    internal const string RestoreAnOlderBackup = "Restore an older backup in place of the database file, then restart.";
+
     /// <summary>What happened, in one sentence an operator can act on.</summary>
     /// <param name="obstacle">The obstacle that stopped the backup.</param>
     internal static string Cause(BackupOutcome obstacle) => obstacle switch
@@ -129,12 +140,7 @@ internal static class BackupObstacleGuidance
         // No allowNoBackup either: a migration or a content load into a file that cannot be read cannot
         // proceed whatever the caller accepts. A Reset can (#482): it needs no backup of a file it cannot
         // read, and sets the file aside instead of deleting it.
-        BackupOutcome.SourceUnreadable =>
-        [
-            $"Reset the database with POST {ApiRoutes.DatabaseReset}: the unreadable file is set aside in the "
-            + $"\"{BackupFileNames.UnreadableFolderName}\" folder inside the backups folder, and a new, empty database replaces it.",
-            "Restore an older backup in place of the unreadable file, then restart.",
-        ],
+        BackupOutcome.SourceUnreadable => [ResetSetsTheFileAside, RestoreAnOlderBackup],
         BackupOutcome.DiskFilledDuringBackup =>
         [
             "Free disk space on the volume holding the data directory, then retry.",

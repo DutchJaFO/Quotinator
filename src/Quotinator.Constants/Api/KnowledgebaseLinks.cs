@@ -17,4 +17,8 @@ public static class KnowledgebaseLinks
     public const string NoBackupCouldBeTaken = Base + "no-backup-could-be-taken.md";
 
     /// <summary>What the backup quota warning means, why a backup is still taken past it, and how to clear it.</summary>
-    public const string BackupsHaveReachedTheirQuota = Base + "backups-have-reached-their-quota.md";}
+    public const string BackupsHaveReachedTheirQuota = Base + "backups-have-reached-their-quota.md";
+
+    /// <summary>What each way the database file can fail the check means, and the remedies that work for it (#457).</summary>
+    public const string TheDatabaseFileCannotBeRead = Base + "the-database-file-cannot-be-read.md";
+}
