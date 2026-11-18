@@ -1,6 +1,6 @@
 # #457: The health reason for an unreadable database file misdiagnoses it as a schema-version mismatch
 
-**Status:** In progress (step 4)
+**Status:** In progress (step 6)
 **GitHub issue:** #457
 **Tiers required:** T1, T2
 **Depends on:** #482, #490
@@ -9,7 +9,7 @@
 
 ## Next action
 
-**Execute from step 4.** No question is open. #490 reached `Waiting for release` on 2026-11-17. The plan
+**Execute from step 6.** No question is open. #490 reached `Waiting for release` on 2026-11-17. The plan
 was reviewed against what it delivered on 2026-11-18 at `a004340f` (*Reviewed against #490's delivery*
 below), and decisions D and E, which that review raised, were accepted as recommended the same day
 (developer, 2026-11-18). Every choice the steps leave to execution is already made in the step itself:
@@ -263,7 +263,10 @@ depends on it and moved to step 6.
 
 ### 4. Record decisions D and E on the issue
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+Posted 2026-11-18, after approval: the comment, and the issue body's *Failing tests* table renamed to
+`…HealthReasonNamesTheFault`.
 
 Draft a comment on #457 covering decisions D and E and the corrected step list, show it, and post it after
 approval. Update the issue's *Failing tests* table to the names in *Verification* rows 1 and 2, which
@@ -272,7 +275,11 @@ replace the issue's `…HealthReasonSaysTheFileCannotBeRead`: decision B means a
 
 ### 5. Add the touched files to the IDE0008/IDE0090 scoped lists
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+Done 2026-11-18. Every existing file below was already in both lists from earlier issues; the four new
+files (`IResetReadiness.cs`, `DatabaseUnsoundGuidance.cs`, `DatabaseInitializerTests.ResetReadiness.cs`,
+`DatabaseUnsoundGuidanceTests.cs`) were added to both, ahead of being created.
 
 Each file this issue creates or edits goes into `.editorconfig`'s scoped sections the moment it is first
 touched (`CLAUDE.md`, *Zero-warnings policy and boyscout rules*). Expected files:
