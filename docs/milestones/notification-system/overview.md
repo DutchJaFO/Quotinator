@@ -107,7 +107,10 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#389](https://github.com/DutchJaFO/Quotinator/issues/389) | A staged review batch cannot be discarded once the planner has staged a no-op in it as Applied | Waiting for release | T1 ✅ T2 ✅ | [389-discard-keeps-plan-time-no-ops-plan.md](389-discard-keeps-plan-time-no-ops-plan.md) |
 | [#390](https://github.com/DutchJaFO/Quotinator/issues/390) | A reseed imports the file list captured at startup, not the files currently in either folder | Planning | T1 ⬜ T2 ⬜ | none |
 | [#482](https://github.com/DutchJaFO/Quotinator/issues/482) | A Reset cannot rebuild a database SQLite cannot read | Waiting for release | T1 ✅ T2 ✅ | [482-reset-rebuilds-an-unreadable-database-plan.md](482-reset-rebuilds-an-unreadable-database-plan.md) |
-| [#490](https://github.com/DutchJaFO/Quotinator/issues/490) | Check every database in layers, cheapest first, at startup, before a Reset, and on demand | Waiting for release | T1 ✅ T2 ✅ | [490-layered-database-check-plan.md](490-layered-database-check-plan.md) |
+| [#503](https://github.com/DutchJaFO/Quotinator/issues/503) | A failing T2 step blocks the issue: remove the "Fully green after" exception and audit the issues it let through | Planning | T1 ⬜ T2 ⬜ | none |
+| [#501](https://github.com/DutchJaFO/Quotinator/issues/501) | notifications-and-changelog/03 prints the database values it expects without asserting them | Planning | T1 ⬜ T2 ⬜ | none |
+| [#502](https://github.com/DutchJaFO/Quotinator/issues/502) | The canaries of backup/03 and backup/04 name readings their canary build does not produce | Planning | T1 ⬜ T2 ⬜ | none |
+| [#490](https://github.com/DutchJaFO/Quotinator/issues/490) | Check every database in layers, cheapest first, at startup, before a Reset, and on demand | In progress | T1 ✅ T2 ⬜ | [490-layered-database-check-plan.md](490-layered-database-check-plan.md) |
 | [#457](https://github.com/DutchJaFO/Quotinator/issues/457) | The health reason for an unreadable database file misdiagnoses it as a schema-version mismatch | In progress | T1 ⬜ T2 ⬜ | [457-unreadable-database-health-reason-plan.md](457-unreadable-database-health-reason-plan.md) |
 | [#493](https://github.com/DutchJaFO/Quotinator/issues/493) | Make foreign key enforcement explicit on every connection, instead of relying on how the SQLite library was compiled | Planning | T1 ⬜ T2 ⬜ | none |
 | [#491](https://github.com/DutchJaFO/Quotinator/issues/491) | A Maintenance page that runs the database check and shows its report | Planning | T1 ⬜ T2 ⬜ | none |
@@ -193,8 +196,11 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #371 ─── (none): Waiting for release
 #368 ─── depends on #303, #304, #390: Planning
 #482 ─── (none); blocks #327, #348, #457: Waiting for release
-#490 ─── (none); blocks #457, #491, #492, #493: Waiting for release
-#457 ─── depends on #482, #490; blocks #327: In progress
+#503 ─── (none); blocks #490, #457: Planning
+#501 ─── (none); blocks #490, #457: Planning
+#502 ─── (none); blocks #490, #457: Planning
+#490 ─── depends on #501, #502, #503, and #468, #469, #472, #400 (v1.9.0), #445 (Startup and degraded experience), whose failing T2 steps are in its scope; blocks #457, #491, #492, #493: In progress
+#457 ─── depends on #482, #490, #501, #502, #503, and #468, #469, #472, #400 (v1.9.0), #445 (Startup and degraded experience), as #490 does; blocks #327: In progress
 #493 ─── depends on #490: Planning
 #491 ─── depends on #490; soft-relates to #492: Planning
 #492 ─── depends on #490; soft-relates to #491: Planning
@@ -255,42 +261,45 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 42 | **#305** ✅ | Waiting for release |
 | 43 | **#482** ✅ | Waiting for release |
 | 44 | **#348** ✅ | Waiting for release |
-| 45 | **#490** ✅ | Waiting for release |
-| 46 | **#457** 🚧 | In progress |
-| 47 | **#493** | Planning |
-| 48 | **#491** | Planning |
-| 49 | **#492** | Planning |
-| 50 | **#454** | Planning |
-| 51 | **#455** | Planning |
-| 52 | **#456** | Planning |
-| 53 | **#453** | Planning |
-| 54 | **#428** | Planning |
-| 55 | **#327** 🚧 | In progress |
-| 56 | **#328** | Planning |
-| 57 | **#329** | Planning |
-| 58 | **#330** | Planning |
-| 59 | **#331** | Planning |
-| 60 | **#324** | Planning |
-| 61 | **#306** | Planning |
-| 62 | **#351** | Planning |
-| 63 | **#381** | Planning |
-| 64 | **#352** | Planning |
-| 65 | **#353** | Planning |
-| 66 | **#360** | Planning |
-| 67 | **#390** | Planning |
-| 68 | **#368** | Planning |
-| 69 | **#416** | Planning |
-| 70 | **#430** | Planning |
-| 71 | **#431** | Planning |
-| 72 | **#438** | Planning |
-| 73 | **#462** | Planning |
-| 74 | **#473** | Planning |
-| 75 | **#475** | Planning |
-| 76 | **#476** | Planning |
-| 77 | **#477** | Planning |
-| 78 | **#478** | Planning |
-| 79 | **#479** | Planning |
-| 80 | **#480** | Planning |
+| 45 | **#503** | Planning: first, so the rule that a failing step blocks the issue is in place before anything else is judged |
+| 46 | **#501** | Planning: blocks #490 and #457 |
+| 47 | **#502** | Planning: blocks #490 and #457 |
+| 48 | **#490** 🚧 | In progress: T2 not passed (2026-11-20), blocked by #501, #502, #503 and the out-of-milestone #468, #469, #472, #400, #445 |
+| 49 | **#457** 🚧 | In progress |
+| 50 | **#493** | Planning |
+| 51 | **#491** | Planning |
+| 52 | **#492** | Planning |
+| 53 | **#454** | Planning |
+| 54 | **#455** | Planning |
+| 55 | **#456** | Planning |
+| 56 | **#453** | Planning |
+| 57 | **#428** | Planning |
+| 58 | **#327** 🚧 | In progress |
+| 59 | **#328** | Planning |
+| 60 | **#329** | Planning |
+| 61 | **#330** | Planning |
+| 62 | **#331** | Planning |
+| 63 | **#324** | Planning |
+| 64 | **#306** | Planning |
+| 65 | **#351** | Planning |
+| 66 | **#381** | Planning |
+| 67 | **#352** | Planning |
+| 68 | **#353** | Planning |
+| 69 | **#360** | Planning |
+| 70 | **#390** | Planning |
+| 71 | **#368** | Planning |
+| 72 | **#416** | Planning |
+| 73 | **#430** | Planning |
+| 74 | **#431** | Planning |
+| 75 | **#438** | Planning |
+| 76 | **#462** | Planning |
+| 77 | **#473** | Planning |
+| 78 | **#475** | Planning |
+| 79 | **#476** | Planning |
+| 80 | **#477** | Planning |
+| 81 | **#478** | Planning |
+| 82 | **#479** | Planning |
+| 83 | **#480** | Planning |
 
 ---
 

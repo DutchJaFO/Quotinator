@@ -1,21 +1,22 @@
 # #457: The health reason for an unreadable database file misdiagnoses it as a schema-version mismatch
 
-**Status:** In progress (step 11)
+**Status:** In progress (step 15)
 **GitHub issue:** #457
 **Tiers required:** T1, T2
-**Depends on:** #482, #490
+**Depends on:** #482, #490, #501, #502, #503, #468, #469, #472, #400, #445
 
 ---
 
 ## Next action
 
-**Execute from step 11.** No question is open. #490 reached `Waiting for release` on 2026-11-17. The plan
-was reviewed against what it delivered on 2026-11-18 at `a004340f` (*Reviewed against #490's delivery*
-below), and decisions D and E, which that review raised, were accepted as recommended the same day
-(developer, 2026-11-18). Every choice the steps leave to execution is already made in the step itself:
-which fixture proves the truncated case is decided by a measurement in step 6, with both outcomes'
-consequences written down (developer, 2026-11-18: *"if that test doesn't get the results we need then we
-add another test"*).
+**Wait for the issues that block T2, then run T2 (step 15); T1 (step 14) is the developer's.** Steps 1 to 13 and
+16 are done and committed. This issue's own documents, `startup-and-degradation/08`, `09` and `15`, pass on
+`411d8e63` and failed on `a004340f` as their canaries state. T2 has not passed: the run of 2026-11-20 found the
+failures #490's plan records (its step 16), each in this issue's scope through the smoke set or #490's
+documents. Developer rule (2026-11-19): a failed test is failed, and a failing test means a bug to fix or a
+dependency not completed, so each owning issue is now a dependency of this one.
+
+Decisions D and E were accepted as recommended on 2026-11-18; no question is open.
 
 ---
 
@@ -499,11 +500,19 @@ This is the developer's step. In Visual Studio, start the app over a data direct
 
 ### 15. T2
 
-**Status:** ⬜ Not started
+**Status:** ❌ Not passed
 
 Run `08` and `09` in full against `quotinator:local` built from this branch, plus the smoke set
 (`docs/automated-testing/README.md`, *end of an issue*). Record *Observed effect* with the date and the
 commit.
+
+- **Canary, 2026-11-18:** `quotinator:canary-457`, built from `a004340f`, steps 1 to 3 of `08`, `09` and `15`:
+  each failed at step 3's `json` command, reading the generic reason. Image and worktree removed.
+- **Run of 2026-11-18, on the working tree over `e9987b6b`:** stopped by the developer, after the runner was
+  found treating a document's expected non-zero exit and a known failure alike as a stop.
+- **Run of 2026-11-20, on `411d8e63`:** the smoke set and #490's documents, 33 in all. `08`, `09` and `15` passed.
+  Not passed overall, for the failures #490's plan records in its step 16 (#468, #469, #472, #400, #445, #501,
+  #502). *Observed effect* in `08`, `09` and `15` is recorded when T2 passes.
 
 ### 16. Changelog
 

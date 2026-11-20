@@ -1,21 +1,30 @@
 # #490: Check every database in layers, cheapest first, at startup, before a Reset, and on demand
 
-**Status:** Waiting for release
+**Status:** In progress (step 16)
 **GitHub issue:** #490
 **Tiers required:** T1, T2
-**Depends on:** none. Blocks #457, #491, #492, #493.
+**Depends on:** #501, #502, #503, #468, #469, #472, #400, #445. Blocks #457, #491, #492, #493.
 
 ---
 
 ## Next action
 
-**Finish the GitHub side of `Waiting for release`, each after the developer approves its drafted text:** post
-the comment matching *Scope changes* below, and tick the issue's Definition of done except *Findings summarised
-in a closing comment*. Then nothing remains until the release; closing follows `checklist.md`'s *Released*
-list.
+**Wait for the issues that block T2, then run T2 again (step 16).** T2 has not passed. The record below
+counted two failing steps as passing, and the run of 2026-11-20 on `411d8e63` read:
 
-Every step and every verification row is ✅: T1 was repeated on 2026-11-17 after the last code change (row 23),
-T2 passed on `3205ba49` (step 16), and the full suite on `98892875` (row 22). Decisions A to E were accepted as
+- `database-lifecycle/03` step 8 failed (#468), and `notifications-and-changelog/01` step 9 failed (#472);
+- `import-and-staged-actions/01` step 8 answered `200` for a batch that does not exist, unasserted (#469);
+- `import-and-staged-actions/14` step 5 runs nothing (#400), and `startup-and-degradation/06` step 6 passes or
+  fails by timing (#445);
+- `notifications-and-changelog/03` asserts none of its database reads (#501), and the canaries of `backup/03`
+  and `backup/04` name readings their build does not produce (#502).
+
+Developer rule (2026-11-19): a failed test is failed, and a failing test means a bug to fix or a dependency
+not completed. #503 records it, and audits the GitHub side of this issue's Definition of done, whose *No
+regression in related tests* box was ticked on the strength of the record below.
+
+T1 was repeated on 2026-11-17 after the last code change (row 23), and the full suite passed on `98892875`
+(row 22). Decisions A to E were accepted as
 recommended on 2026-11-14, and decision E's follow-up is #493. Step 6's deviation was answered on 2026-11-17:
 row 13 is proven with both variants. The plan is built against the code at `342e0cfa` and the sqlite.org
 documentation as read on that date.
@@ -990,7 +999,9 @@ runs them. Folding them into T1 is what the T1 gate rules out.
 
 ### 16. T2
 
-**Status:** ✅ Done 2026-11-17. Restarted from the first document on `2fd67742` after the review below; complete on `3205ba49`.
+**Status:** ❌ Not passed. **Corrected 2026-11-20:** this step was marked done on 2026-11-17 with
+`database-lifecycle/03` step 8 and `notifications-and-changelog/01` step 9 failing, counted as passing because
+the documents named the issues that own them. The run of 2026-11-20 is recorded at the end of this step.
 
 The *end of an issue* scope (`docs/automated-testing/README.md`, *When to run what*): the smoke set, every
 document this issue changed, and every test relevant to what it touched, each against `quotinator:local` built
@@ -1131,6 +1142,23 @@ passing.**
   engine's, and is now recorded for tests in `docs/automated-testing/README.md` and for operators in the
   knowledgebase entry *Files named quotinatordata.db-wal and quotinatordata.db-shm appear beside the
   database*.
+
+**Run of 2026-11-20, on `411d8e63` (developer request): not passed.** The same 33 documents, each executed as
+written, every command judged against its document's own *Expected*, a document stopped at its first failure.
+30 read correctly and two failed; one of the 30 passed only because it does not assert the reading that fails.
+
+- **Failed:** `database-lifecycle/03` step 8, every `/version` count `0` after an API import (#468);
+  `notifications-and-changelog/01` step 9, no reseed recommendation after a Reset from a notification (#472).
+  Each was then run to its end: no other command failed.
+- **Failed, unasserted:** `import-and-staged-actions/01` step 8, applying a batch that does not exist answered
+  `200` (#469).
+- **Cannot prove what it claims:** `import-and-staged-actions/14` step 5 runs nothing (#400);
+  `startup-and-degradation/06` step 6 read `0` today but depends on when the circuit closes (#445);
+  `notifications-and-changelog/03` steps 3 and 5 print their database reads without asserting them (#501),
+  which matched *Expected* by hand.
+- **Canaries never run before, run today:** `backup/03` against `9b59f414` and `notifications-and-changelog/09`
+  against `0ac256f6` failed as their canaries state. `backup/03` and `backup/04` against `4cfe1006` did not read
+  what their canaries state (#502).
 
 ### 17. Let the operator confirm a migration without a backup
 
