@@ -531,7 +531,9 @@ carries no link.
 ### 10. Update the dependency map
 
 **Status:** ✅ Done, 2026-11-21. `1ad395cd` had marked it done when only the blocked issues' lines named their
-owners; the owners' own lines and their place in the order of operations were finished after it.
+owners; the owners' own lines and their place in the order of operations were finished after it. `959070dd`
+marked it done again with two order-of-operations rows still short: #457's named no blocker, and #503's did
+not say that its own T2 waits for owners listed after it. Both rows were completed after it.
 
 **Done 2026-11-21:**
 
@@ -546,7 +548,9 @@ owners; the owners' own lines and their place in the order of operations were fi
   the step it owns and what it blocks.
 - **Order of operations.** #503 and the six owners in this milestone (#438, #469, #472, #501, #502, #462) come
   first, ahead of every issue they block; #469 and #472 were missing from it. Every other row keeps its
-  relative order, renumbered; 83 rows before, 85 after.
+  relative order, renumbered; 83 rows before, 85 after. #503 stays first although #438, #469, #472 and #462
+  block its T2: the rule has to be in place before anything else is judged, so its row says that it runs
+  first and closes after them. Every blocked row names its blockers, #490's and #457's included.
 
 `overview.md`'s order of operations and dependency map gain every owner from step 8 as a blocker of the
 issues it blocks, and the five owners that stay in other milestones (decision C) are named there as

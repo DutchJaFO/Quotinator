@@ -236,7 +236,7 @@ This milestone cannot release before they land.
 
 | # | Issue | Reason |
 |---|-------|--------|
-| 1 | **#503** 🚧 | In progress: first, so the rule that a failing step blocks the issue is in place before anything else is judged |
+| 1 | **#503** 🚧 | In progress: first, so the rule that a failing step blocks the issue is in place before anything else is judged; its own T2 (step 12) is blocked by #438, #469, #472, #462 below and by #347, #400, #404, #445, #468, #505, #506 from outside, so it closes after them |
 | 2 | **#438** | Planning: owns `startup-and-degradation/03`, a smoke document; blocks the 43 issues its dependency-map line lists |
 | 3 | **#469** | Planning: owns `import-and-staged-actions/01` step 8, a smoke step; blocks the 43 issues its dependency-map line lists |
 | 4 | **#472** | Planning: owns `notifications-and-changelog/01` step 9, a smoke step; blocks the 43 issues its dependency-map line lists |
@@ -288,7 +288,7 @@ This milestone cannot release before they land.
 | 50 | **#482** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #502 |
 | 51 | **#348** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #347, #502 |
 | 52 | **#490** 🚧 | In progress: T2 not passed (2026-11-20), blocked by #501, #502, #503, #438, #469, #472 and the out-of-milestone #468, #400, #445 |
-| 53 | **#457** 🚧 | In progress |
+| 53 | **#457** 🚧 | In progress: T2 blocked by #501, #502, #503, #438, #469, #472 and the out-of-milestone #468, #400, #445, as #490's is |
 | 54 | **#493** | Planning |
 | 55 | **#491** | Planning |
 | 56 | **#492** | Planning |
