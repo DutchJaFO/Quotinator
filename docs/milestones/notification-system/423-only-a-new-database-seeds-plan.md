@@ -1,13 +1,21 @@
 # #423: Seeding fills any empty database, so a reset is undone by the next restart
 
-**Status:** Waiting for release
+**Status:** In progress (step 8)
 **GitHub issue:** #423
 **Tiers required:** T1, T2
-**Depends on:** none
+**Depends on:** none. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
 
 ---
 
 ## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 **Tick the Definition of done on the issue, then wait for the release.** Every step and every
 verification row is green.
@@ -264,7 +272,7 @@ The application still starts. Nothing beyond startup.
 
 ### 8. T2
 
-**Status:** ✅ Done, 2026-10-10, against `quotinator:local` built from this working tree. Eleven of
+**Status:** ❌ Not passed under ADR 029 (set back by #503, 2026-11-21; see *Next action*). Recorded before the set-back: ✅ Done, 2026-10-10, against `quotinator:local` built from this working tree. Eleven of
 eleven documents run: the designated smoke set of nine, plus the two this issue changed, plus the
 issue's own live case.
 
@@ -377,4 +385,4 @@ whatever else the baseline itself put there.
 | 17 | ✅ | A refused content load is still reached and still reported | Live | *A startup that cannot take a backup loads nothing*, on its corrected setup |
 | 18 | ✅ | The recommendation's own layout is read on one container | Live | *Every kind renders what its layout promises*, with its second container dropped |
 | 19 | ✅ | The application still starts | Live | T1, Visual Studio, developer's own action: reached *Quotinator ready*, and the restart after a reset logged `0 quotes` with no seed line |
-| 20 | ✅ | T2 scope passes | Live | The smoke set, all nine, plus the two documents named above; the two pre-existing #438 defects met and recorded, not fixed here |
+| 20 | ❌ | T2 scope passes | Live | The smoke set, all nine, plus the two documents named above; the two pre-existing #438 defects met and recorded, not fixed here. **Set back 2026-11-21 (#503):** not passed under ADR 029; see *Next action*. |

@@ -1,13 +1,21 @@
 # #305: Database integrity check: verify every database's full schema against its migration path at startup
 
-**Status:** Waiting for release
+**Status:** In progress (T2)
 **GitHub issue:** #305
 **Tiers required:** T1, T2
-**Depends on:** none
+**Depends on:** none. T2 is blocked by #400, #438, #468, #469, #472, #503, #404, #501 (set back by #503, 2026-11-21).
 
 ---
 
 ## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today, and `database-lifecycle/02` (#404) and `notifications-and-changelog/03` (#501), which it ran.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 **Waiting for release.** Every step is done and every verification row is ✅. The issue stays open until
 the release carrying it ships (`issue-closure.md`'s two-gate rule); then the closing comment reproduces
@@ -761,3 +769,4 @@ in step 6; rows 20 and 21 are written red in step 7.
 | 23 | ✅ | The DbInspector command reports a file's differences and exits non-zero when it is not intact | Unit test | `IntegrityCommandTests.IntactFile_ExitsZero`, `IntegrityCommandTests.MissingTable_ReportsItAndExitsNonZero`, `IntegrityCommandTests.ChangelogFile_ComparedAgainstTheChangelogSchema` |
 | 24 | ✅ | No regression | Build | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: 0 warnings, 0 errors, all green, last run 2026-11-08 after every #305 commit (12 projects, 4,953 tests); T2 per step 13, every failure a known defect #305 did not cause |
 | 25 | ✅ | The application still starts | Manual | T1, 2026-11-08: the developer started `Quotinator.Api` in Visual Studio over an existing database, which migrated Data v3 → v28 and App v5 → v9 after a backup, passed the check and reached *Quotinator ready* healthy; a Reset and a reseed from the page then completed |
+| 26 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |

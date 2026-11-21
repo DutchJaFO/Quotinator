@@ -1,9 +1,19 @@
 # #304 — Notification + action: let the user trigger a reseed
 
-**Status:** Waiting for release
+**Status:** In progress (T2)
 **GitHub issue:** #304
 **Tiers required:** T1, T2
-**Depends on:** #278, #312, #319
+**Depends on:** #278, #312, #319. T2 is blocked by #400, #438, #468, #469, #472, #503, #501 (set back by #503, 2026-11-21).
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today, and `notifications-and-changelog/03` (#501), which its *Expected tests* names.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 > **Next action: none — this issue is done pending release.** All thirteen steps are implemented and all
 > 36 verification rows are ✅, including T1 (twice), the full T2 pass, and the migration verified against
@@ -676,3 +686,4 @@ a reseed to one file later, but `ReseedAsync` has no per-file overload and addin
 | 34 | ✅ | Stored UTC timestamps display in the host's time zone | Unit test + Live (T1) | `NotificationTableTests.Local_UtcValue_IsRenderedInTheHostTimeZone`, `.Local_UnspecifiedKind_IsTreatedAsUtcNotLocal` (SQLite returns unspecified, and assuming local is right only on a UTC host) and `.Local_Null_RendersEmDash`. Confirmed live: the 18:57 run's notifications read `18:57`, matching the log, where the previous run showed a two-hour offset |
 | 35 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — output captured in full: zero lines matching `: warning NNNN` or `: error NNNN`, summary `0 Warning(s) / 0 Error(s)` |
 | 36 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 10 `Test Run Successful.` lines, **3,695 passed / 0 failed** (817, 42, 2, 11, 16, 9, 1468, 1309, 5, 16), zero `Test Run Failed`/`Aborted`, zero warning or error lines anywhere in the captured output |
+| 37 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |

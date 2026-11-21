@@ -1,13 +1,21 @@
 # #350: A schema-version overshoot runs healthy instead of degrading, on a schema whose shape is unknown
 
-**Status:** Waiting for release
+**Status:** In progress (step 10)
 **GitHub issue:** #350
 **Tiers required:** T1, T2
-**Depends on:** none
+**Depends on:** none. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
 
 ---
 
 ## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 **Execute the steps in order; each step section carries its own status.** The contract, where the
 overshoot degrades, where the notification is raised, which components may still query a degraded
@@ -537,7 +545,7 @@ path, so restore stays a named remedy an operator performs by hand.
 
 ### 10. Full suite, T1 and T2
 
-**Status:** ✅ Done, 2026-10-14. Full suite, T2 and T1 all green, re-run after the reversal and the repair control.
+**Status:** ❌ Not passed under ADR 029 (set back by #503, 2026-11-21; see *Next action*). Recorded before the set-back: ✅ Done, 2026-10-14. Full suite, T2 and T1 all green, re-run after the reversal and the repair control.
 
 **T1, 2026-10-14:** a standard migration start in Visual Studio, on a database at data v3 and app v5.
 The pre-migration backup was taken, 25 Data and 4 App migrations applied to v28 and v9, the banner
@@ -613,3 +621,4 @@ rather than the zeros that entry describes.
 | 15 | ✅ | Every degraded page that can carry a control offers the repair, not just the modal | Live | `startup-and-degradation/06` step 7: `resetButtons=1` on `/rest-api`, `/notifications`, `/import-review` and `/stats`; Cancel leaves `quotes` at `795`, Confirm from either surface takes `/health` to `200` with `quotes` at `0` |
 | 16 | ✅ | The live overshoot degrades, explains itself, and the remedy is reachable | Live | The same document, rewritten, confirmed red against a pre-issue build first |
 | 17 | ✅ | T1: the application still starts | Live | Developer started `Quotinator.Api` in Visual Studio, 2026-10-14: a standard migration start, backup taken, Data v3 to v28 and App v5 to v9 applied, ready with no errors |
+| 18 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |

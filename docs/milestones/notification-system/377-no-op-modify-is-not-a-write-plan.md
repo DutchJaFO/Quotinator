@@ -1,9 +1,19 @@
 # #377 — A Modify action whose resolution is a genuine no-op is still counted as Modified
 
-**Status:** Waiting for release
+**Status:** In progress (step 10)
 **GitHub issue:** #377
 **Tiers required:** T1, T2
-**Depends on:** [#373](https://github.com/DutchJaFO/Quotinator/issues/373), [#374](https://github.com/DutchJaFO/Quotinator/issues/374)
+**Depends on:** [#373](https://github.com/DutchJaFO/Quotinator/issues/373), [#374](https://github.com/DutchJaFO/Quotinator/issues/374). T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 **Next action: none — this issue is complete and waiting on a release.** Every step is done and every
 verification row is ✅: the full solution green at 0 warnings, both T2 documents green against real
@@ -657,7 +667,7 @@ rows are still classified `Modify` and the new assertion therefore cannot pass.
 
 ### 10. Run the T2 documents green, then hand T1 to the developer
 
-**Status:** ✅ Done, 2026-09-09 — rows 24–26.
+**Status:** ❌ Not passed under ADR 029 (set back by #503, 2026-11-21; see *Next action*). Recorded before the set-back: ✅ Done, 2026-09-09 — rows 24–26.
 
 `11-clean-reseed-confirmation.md`'s step 2 gained the #377 assertion — `resolvedToExisting` non-zero,
 and each entity type's own parts adding up to its `incoming`. Canary red against the `18418c29` image
@@ -841,6 +851,7 @@ counted as `Modified`", which a planner that classified *everything* as a no-op 
 | 29 | ✅ | Every value the summary states is also in the seed log and the detail table | Unit test | `FormatReport_NamesEveryCountIncludingIncomingAndUnchanged`, driven with ten distinct values so a count is findable only if its own field is printed; `NotificationTableTests.EveryOutcomeTheSummaryStates_HasAColumnInTheDetail` and `.RowThatArrivedButProducedNoOutcome_StillRenders` for the table |
 | 30 | ✅ | The summary names only what happened, and says so in words when nothing did | Unit test | `ComposeForEveryLanguage_OmitsWhatDidNotHappen`, `.SaysSoWhenNothingHappenedToWhatArrived`, `.NamesAFileThatBroughtNothing`, `.JoinsWithEachLanguagesOwnConjunction` — the last being the reason composition exists rather than one template per language |
 | 31 | ✅ | The behaviour is correct on the developer's own machine | Live (T1) | Developer: cold start → reseed → reseed. **Positive:** the reseed reports one modified Source rather than 25 modified rows, and writes no new `Audit_Change` row for the other 24. **Negative:** the quote counts and every entity type are unchanged from the cold start — a reseed that reports nothing modified because it imported nothing would satisfy the positive |
+| 32 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |
 
 **The negative halves are not ceremony; three of them are the only thing standing between this fix and a
 worse defect.** Row 3's would catch a fix that stops applying genuine enrichment. Row 14's would catch

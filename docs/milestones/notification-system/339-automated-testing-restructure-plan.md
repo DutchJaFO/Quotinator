@@ -1,8 +1,19 @@
 # #339: Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** Waiting for release
+**Status:** In progress (T2)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
+**Depends on:** T2 is blocked by #400, #438, #468, #469, #472, #503, #347 (set back by #503, 2026-11-21).
+
+---
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today, and `import-and-staged-actions/16` and `17` (#347), the dependency its own step 1 retired in favour of the header ADR 029 removes.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
 
 ---
 
@@ -631,3 +642,4 @@ pick up, so the two tests asserting "reads nothing" can fail.
 | 32 | ✅ | Every guard states what it does with an empty document set, and asserts it | Unit test | `AutomatedTestingSuiteTests.*_FailsAnEmptyDocumentSet`, one per rule: all eight report the empty set as a failure. Removing the eight contracts turns exactly those tests, and the three empty-template ones, red. See step 13 for why all eight fail rather than seven, and `..._PassesASetInWhichEveryDocumentIsDeterministic` for the legitimate case that row originally meant |
 | 33 | ✅ | One scanner reads fenced code, by the CommonMark rule, so no rule is correct only for its own caller's input | Unit test | `AutomatedTestingSuite.FenceSpans` serves the template reader, the heading reader and the PowerShell guard. `SectionHeadings_IgnoresAHeadingInsideAFenceNestedInAnother` is red under a toggle; `SectionHeadings_IgnoresAHeadingInsideABlockOpenedByABareFence` is red under depth counting |
 | 34 | ✅ | The index's template sample renders as a sample, all the way to its last section | Live | The sample's own PowerShell fence ended a three-backtick block at its closing line, by [CommonMark 0.31.2](https://spec.commonmark.org/0.31.2/#fenced-code-blocks) example 147, leaving `## Observed effect`, `## Canary` and `## Cleanup` rendering as live index headings. It is now a four-backtick block, the index states why, and `DocumentTemplateBlock_ReadsNothingFromASampleThatIsNeverClosed` covers the open-block case |
+| 35 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |

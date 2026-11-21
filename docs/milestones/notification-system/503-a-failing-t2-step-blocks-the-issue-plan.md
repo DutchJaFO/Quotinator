@@ -1,6 +1,6 @@
 # #503: A failing T2 step blocks the issue: remove the "Fully green after" exception and audit the issues it let through
 
-**Status:** In progress (step 8)
+**Status:** In progress (step 11)
 **GitHub issue:** #503
 **Tiers required:** T2
 **Depends on:** #347, #400, #404, #438, #445, #462, #468, #469, #472, #505, #506. Blocks #457, #490.
@@ -9,8 +9,9 @@
 
 ## Next action
 
-**Continue with steps 8 to 10.** Steps 1 to 5 and 9 are done. Steps 6 and 7 are done except
-`startup-and-degradation/06`'s log counts and their three runs, which wait for #505 and #506. Decisions A to G were all answered on 2026-11-21, and no question is
+**Run step 11, the full build and test run; then wait for the owners.** Steps 1 to 5 and 8 to 10 are done.
+Steps 6 and 7 are done except `startup-and-degradation/06`'s log counts and their three runs, which wait for
+#505 and #506. Step 12, this issue's T2, waits for every owner (decision D), and step 13 follows it. Decisions A to G were all answered on 2026-11-21, and no question is
 open. The comment on #438 that decision G calls for was posted the same day. The plan is built against
 `5bfb43f6` (2026-11-21).
 
@@ -453,7 +454,7 @@ is expected to exit `1`, so it was rerun with that exit accepted.
 
 ### 8. Audit the issues at *Waiting for release*
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-11-21
 
 For every issue `overview.md` lists at *Waiting for release* with a T2 tier: read its plan's T2 step and
 Verification row, and list the documents in its scope (the smoke set, plus its own). Under decision B, every
@@ -472,6 +473,47 @@ Every issue set back:
 #490 has its plan and overview set back already (`5bfb43f6`); its GitHub Definition of done is still to be
 corrected. #423's row 20 (*#438 defects met and recorded*) is assessed the same way.
 
+**Done 2026-11-21.** `overview.md` listed 40 issues at *Waiting for release* with `T2 ✅`, plus #490 already
+set back; #313 (no tiers), #83 (`T2 ⬜`) and #383 (T1 only) carry no T2 record and are not in the audit. Every
+one of the 41 is set back: its T2 scope includes the smoke set, and six smoke documents fail today
+(`database-lifecycle/03` #468, `import-and-staged-actions/01` #469 and `14` #400,
+`notifications-and-changelog/01` #472, `startup-and-degradation/03` #438 and `06` #503 after #505 and #506).
+Each plan was read for the documents its own T2 ran beyond the smoke set, by path and by title:
+
+| Issues | Red documents in scope beyond the smoke set | Owners added beyond the smoke set's | Verdict |
+|---|---|---|---|
+| #312, #81, #302, #303, #307, #308, #309, #319, #323, #326, #349, #350, #367, #369, #370, #409, #410, #413, #419, #422, #423, #397, #371, #372, #373, #374, #375, #376, #377, #378, #382, #389 | none | none | set back |
+| #304 | `notifications-and-changelog/03`, named in its *Expected tests* | #501 | set back |
+| #305 | `database-lifecycle/02`, `notifications-and-changelog/03`, both run | #404, #501 | set back |
+| #339 | `import-and-staged-actions/16`, `17`: its step 1 retired the #347 dependency in favour of the header ADR 029 removes | #347 | set back |
+| #348 | `import-and-staged-actions/16`, `17` (step 33), `backup/03`, `04` | #347, #502 | set back |
+| #411 | every document (steps 14 and 15): `import-and-staged-actions/16`, `17`, `database-lifecycle/02`, `notifications-and-changelog/03`, `backup/03`, `04` | #347, #404, #501, #502 | set back |
+| #420 | `import-and-staged-actions/16`; row 17 cites its step 4, which the stop rule never reaches | #347 | set back |
+| #424 | `startup-and-degradation/07`, which it wrote | #462 | set back |
+| #482 | `backup/03`, `04` | #502 | set back |
+| #490 | as recorded in `5bfb43f6`, plus `startup-and-degradation/03` | #438 added today | set back earlier |
+
+What each set-back changed:
+
+- **Plan doc**, all 40: header `In progress (step N)` naming its T2 step, or `In progress (T2)` where the plan
+  has none; `Depends on:` names the owners; the T2 step's status reads ❌, keeping the earlier record after it;
+  a *Next action* block states the wait, with the earlier text kept under *Written at Waiting for release*.
+  A row that claimed the T2 scope passed goes ❌ (#81 row 8, #411 rows 12 and 14, #420 rows 17 and 20, #422
+  row 9, #423 row 20); every other plan gains a ❌ row *T2 passes*.
+- **`overview.md`**: each row reads `In progress` and `T2 ⬜`; its dependency-map line and its order-of-
+  operations row name the owners. #490's and #457's gain #438.
+- **GitHub Definition of done**, run 2026-11-21 after approval, each edit checked to differ in exactly the
+  expected lines and read back: *No regression in related tests* unticked on 33 issues (#312, #302, #304,
+  #307, #308, #309, #305, #319, #323, #326, #339, #348, #349, #350, #369, #370, #409, #410, #411, #413, #419,
+  #420, #422, #423, #397, #371, #374, #376, #378, #382, #389, #482, #490), and on #304 also *All expected tests
+  pass (green)*, since its *Expected tests* names `notifications-and-changelog/03`. #81, #303, #367, #424,
+  #372, #373, #375 and #377 had no ticked box resting on T2. The approved draft headed itself *32 issues*
+  while listing 33; the 33 listed were edited.
+
+**Decision G's two documents, classified:** `api-surface/06` is rewritten deterministic and passes (step 7),
+so it blocks nothing. `startup-and-degradation/03` stays failing until #438 rewrites it, and #438 is an owner of
+every issue above. #423's row 20 is that same allowance, covered by the same owner.
+
 ### 9. Correct #490's step 8
 
 **Status:** ✅ Done
@@ -488,7 +530,8 @@ carries no link.
 
 ### 10. Update the dependency map
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-11-21, in the same pass as step 8: every set-back issue's dependency-map line and
+order-of-operations row name its owners, and a note under the map names the owners outside this milestone.
 
 `overview.md`'s order of operations and dependency map gain every owner from step 8 as a blocker of the
 issues it blocks, and the five owners that stay in other milestones (decision C) are named there as
@@ -527,10 +570,10 @@ Written at *Waiting for release*, after step 12.
 | 4 | ✅ | The README drops the exception and points to ADR 029 | Live | `Select-String -Path docs/automated-testing/README.md -Pattern 'more than one issue before it can be fully green'` returns nothing; `-Pattern '029-a-failing-t2-step-blocks-the-issue'` returns a match |
 | 5 | ✅ | The README names every failing-step shape: no command, unasserted, intermittent | Live | `Select-String -Path docs/automated-testing/README.md -Pattern 'runs no command','without asserting','intermittent'` returns all three |
 | 6 | ❌ | Each changed document fails at its owned step and nowhere else, and `06` step 6 reads the same on three runs | Live | Step 7's record, one line per document |
-| 7 | ❌ | Every issue at *Waiting for release* is audited, and each set back carries the change in its plan, `overview.md` and its GitHub Definition of done | Live | Step 8's table; for each issue set back, `gh issue view <N> --json body -q .body` shows the unticked boxes, and its plan header and overview row agree |
+| 7 | ✅ | Every issue at *Waiting for release* is audited, and each set back carries the change in its plan, `overview.md` and its GitHub Definition of done | Live | Step 8's table; for each issue set back, `gh issue view <N> --json body -q .body` shows the unticked boxes, and its plan header and overview row agree |
 | 8 | ✅ | #490's step 8 records the removal in `86eb15fd` | Live | `Select-String -Path docs/milestones/notification-system/490-layered-database-check-plan.md -Pattern '86eb15fd'` matches inside step 8 |
 | 9 | ❌ | No regression | Unit test | Full `dotnet test --configuration Release --verbosity normal -m:1`, 0 warnings, 0 errors |
-| 10 | ❌ | #469 and #472 are in *Notification system*; the other five owners are named as blockers | Live | `gh issue view 469 --json milestone -q .milestone.title` and the same for 472 print `Notification system`; `overview.md`'s dependency map names #347, #400, #404, #445, #468 |
+| 10 | ✅ | #469 and #472 are in *Notification system*; the other five owners are named as blockers | Live | `gh issue view 469 --json milestone -q .milestone.title` and the same for 472 print `Notification system`; `overview.md`'s dependency map names #347, #400, #404, #445, #468 |
 | 11 | ✅ | `api-surface/06` brings its own cookies and asserts each case on the response's antiforgery cookie: none sent issues one, the same ring's is not replaced, another ring's is replaced and logs the pair once; and it declares itself deterministic | Live | Step 7's record: every step of `api-surface/06` passes; `Select-String -Path docs/automated-testing/api-surface/06-*.md -Pattern '^\*\*Deterministic:\*\* yes'` matches |
 | 12 | ❌ | T2 passes: the smoke set and every changed document, every step green | Live | Step 12's record |
 | 13 | ✅ | Both rules report a document that breaks them and pass one that does not, independently of today's documents | Unit test | `AutomatedTestingSuiteTests.MentionsOfFullyGreenAfter_*` (4) and `.StepsThatExcuseAFailure_*` (8): 12 pass; red with the rule bodies disabled (step 3) |

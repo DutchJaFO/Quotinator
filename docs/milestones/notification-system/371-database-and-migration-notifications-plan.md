@@ -1,13 +1,21 @@
 # #371: Notify that the database was created, and that migrations were applied
 
-**Status:** Waiting for release
+**Status:** In progress (T2)
 **GitHub issue:** #371
 **Tiers required:** T1, T2
-**Depends on:** none
+**Depends on:** none. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
 
 ---
 
 ## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 **Wait for the release.** Every step and every verification row is ✅, T1 and T2 both confirmed, the
 changelog `unreleased` entries are in and the Definition of done is ticked except its closing-comment
@@ -553,3 +561,4 @@ This plan doc and the new T2 document are both added to `Quotinator.slnx`, and t
 | 19 | ✅ | An upgrade from the previous published tag shows one notification per applied migration, each naming what it did | Live | `docs/automated-testing/notifications-and-changelog/16-each-applied-migration-says-what-it-did.md` |
 | 20 | ✅ | The new rule is recorded where a migration author will read it | Unit test | `RepositoryStructureTests.MigrationDocuments_SayEveryMigrationCarriesADescription`, over CLAUDE.md and `docs/database-conventions.md` |
 | 21 | ✅ | T1: the application still starts | Live | Developer starts `Quotinator.Api` in Visual Studio and confirms it starts without error |
+| 22 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |

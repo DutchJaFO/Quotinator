@@ -1,9 +1,19 @@
 # #382 — `ShouldBlock` is evaluated against a pre-rule field set at four of five sites
 
-**Status:** Waiting for release
+**Status:** In progress (T2)
 **GitHub issue:** #382
 **Tiers required:** T1, T2
-**Depends on:** [#377](https://github.com/DutchJaFO/Quotinator/issues/377)
+**Depends on:** [#377](https://github.com/DutchJaFO/Quotinator/issues/377). T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 **Next action: ship it** — every step is complete and every verification row is green.
 
@@ -377,3 +387,4 @@ next tests the ratchet's end state.
 | 20 | ✅ | Build and full suite clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1` — `0 Warning(s)  0 Error(s)`, 4,034 tests across ten projects, 0 failed, run after step 5 so it covers both documents' index and solution entries |
 | 21 | ✅ | T1: the app starts without error | Live | Developer ran it in Visual Studio 2026-09-09 — clean startup at 1.9.0-alpha, then a Reset and two reseeds, no errors |
 | 22 | ✅ | The cross-check finding and the decision are recorded on the issue itself | Live | [#382 comment 5601823156](https://github.com/DutchJaFO/Quotinator/issues/382#issuecomment-5601823156) — the #181 supersession, Season being the deviation, the five-locations count, and the measurement |
+| 23 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |

@@ -1,9 +1,19 @@
 # #374 — A conflict rule cannot tell "already correct" from "cannot apply"
 
-**Status:** Waiting for release
+**Status:** In progress (T2)
 **GitHub issue:** #374
 **Tiers required:** T1, T2
-**Depends on:** [#375](https://github.com/DutchJaFO/Quotinator/issues/375) (done in code, released separately)
+**Depends on:** [#375](https://github.com/DutchJaFO/Quotinator/issues/375) (done in code, released separately). T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
+
+---
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
 
 ---
 
@@ -954,6 +964,7 @@ Warning(s), 0 Error(s); `dotnet test -m:1` → all ten projects green, 0 failure
 | 52 | ✅ | Both of #373's own T2 documents run clean against the fixed build, with the developer-reported duplication actually gone | Automated (T2) | Live Docker, 2026-09-04, rebuilt image: doc 21 steps 1–4/6 pass (step 5 can't execute — no `DELETE /quotes/{id}` endpoint exists, a document defect not a product one); doc 11 steps 1–3/5/6/8 pass, step 4/7 duplication confirmed gone (`4 → 5` fixed to stable) — one distinct, pre-existing no-op-Modify gap found, not fixed, filed as [#377](https://github.com/DutchJaFO/Quotinator/issues/377) |
 | 53 | ✅ | A `Stale` conflict does not double on every reseed | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithAStaleRuleConflict_StaleCountNeverGrows` (minimal reproduction) and the consolidated `NikhilNamal17RealCorpusWithCurrentRuleFile_ResolvesCompletelyAndStaysStable` (real corpus, row 33) — step 12's seventh live-found defect, found by the developer's own T1 run. **Corrected 2026-09-07/08:** the minimal reproduction's fixture was changed from a recorded snapshot that matched one real raw occurrence (`"1991"`) to one that can never match any real value (`"9999"`) — the original shape stopped reproducing Stale at all once [#378](https://github.com/DutchJaFO/Quotinator/issues/378) was fixed (a Keep/Replace decision now correctly controls which Source variant a quote links to), so the fixture needed to become a genuinely, permanently unresolvable conflict, independent of #378, to keep proving the accumulation-dedup mechanism this row exists for |
 | 54 | ✅ | A Keep/Replace decision on a Quote's `date` field actually controls which Source variant the quote links to, not just its reported field | Unit test | Root-caused and fixed as its own issue, [#378](https://github.com/DutchJaFO/Quotinator/issues/378) — `DatabaseInitializerTests.Seed_WithADuplicateQuoteKeepRule_QuoteLinksToTheKeptDateNotTheLastOccurrences`, confirmed red without the fix (`git stash` of `ImportActionPlanner.cs`) and green with it. This is what makes row 33's genuine zero achievable via `Keep` (Auntie Mame) rather than only via `Custom` |
+| 55 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |
 
 **A live T2 run against real data found a sixth defect no unit test caught** (see step 7's own new
 finding above): `GET /import/actions` 500'd on a genuine Pending-Add row. Fixed and reverified live —

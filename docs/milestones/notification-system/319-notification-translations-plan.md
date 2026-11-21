@@ -1,9 +1,19 @@
-﻿# #319 — Notification title and body are not translated
+# #319 — Notification title and body are not translated
 
-**Status:** Waiting for release
+**Status:** In progress (T2)
 **GitHub issue:** #319
 **Tiers required:** T1, T2
-**Depends on:** #278, #312
+**Depends on:** #278, #312. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 > **Next action: execute the Steps.** This plan is ready. Schema, read-side resolution, language
 > selection, the backfill and the producer sources are all settled; nothing here is waiting on a
@@ -549,3 +559,4 @@ All containers and volumes were torn down, none left behind.
 | 26 | ✅ | The application still starts with the new schema and read path in place | Live (T1) | Visual Studio run, 2026-08-29: `applying 11 pending Data migration(s) (version 3 → 14)`, `schema updated (data v14, app v5)`, `Quotinator ready`, no unhandled exception |
 | 27 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 28 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 3,661 passed, 0 failed across all 10 projects |
+| 29 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |

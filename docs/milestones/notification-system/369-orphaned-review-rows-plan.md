@@ -1,9 +1,19 @@
 # #369 — A review row whose batch is gone offers decisions that cannot be carried out
 
-**Status:** Waiting for release
+**Status:** In progress (T2)
 **GitHub issue:** #369
 **Tiers required:** T1, T2
-**Depends on:** #303, #372, #389
+**Depends on:** #303, #372, #389. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
+
+---
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
 
 ---
 
@@ -476,3 +486,4 @@ warning or error line anywhere in the startup log.
 | 23 | ✅ | The availability reports every live batch and no other | Unit test | `NotificationActionExecutorTests.GetAvailabilityAsync_ReportsEveryLiveBatchAndNoOther` — added in step 1 |
 | 24 | ✅ | Reset and Reseed ignore availability | Unit test | `NotificationActionExecutorTests.CanExecute_TriggerWithNoVolatileDependency_IgnoresAvailability` — added in step 1; control |
 | 25 | ✅ | "Action no longer possible" is reported only for an action that exists and cannot run | Unit test | `NotificationTableTests.ActionIsUnavailable_OnlyForAWiredActionThatCannotRun` — added in step 5, red against its stub before implementing |
+| 26 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |

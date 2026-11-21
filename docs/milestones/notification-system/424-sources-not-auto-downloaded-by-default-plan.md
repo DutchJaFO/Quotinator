@@ -1,9 +1,9 @@
 # #424: Bundled sources are not auto-downloaded by default, and are refreshed by hand instead
 
-**Status:** Waiting for release
+**Status:** In progress (T2)
 **GitHub issue:** #424
 **Tiers required:** T1, T2
-**Depends on:** none
+**Depends on:** none. T2 is blocked by #400, #438, #468, #469, #472, #503, #462 (set back by #503, 2026-11-21).
 
 ---
 
@@ -20,6 +20,14 @@ downloads 69 seconds apart held a startup past the factory's 30-second wait. Mov
 from v1.9.0 (developer, 2026-09-27) so the test side is fixed on this branch.
 
 ## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today, and `startup-and-degradation/07` (#462), which it wrote.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 **T1 passed 2026-10-02**, run by the developer: the application reached `Quotinator ready` with both listeners bound, and no `[Runtime - Exception]` line appeared anywhere in the run. Every step is done and every verification row is ✅, so the issue is ready for `Waiting for release`.
 
@@ -217,3 +225,4 @@ PowerShell 7 `??` operator, which Windows PowerShell 5.1 cannot parse.
 | 12 | ✅ | Build clean and the full suite green across three `-m:1` runs | Build | Step 9: 4,393 passed in each of three runs |
 | 13 | ✅ | The refresh is off by default, and turned on explicitly still works end to end | Automated (T2) | `startup-and-degradation/07`, red against `29b55805`, then green |
 | 14 | ✅ | The application still starts | Live (T1) | Step 9: the developer ran it 2026-10-02, reaching `Quotinator ready` with both listeners bound |
+| 15 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |

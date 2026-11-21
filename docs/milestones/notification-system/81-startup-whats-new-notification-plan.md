@@ -1,9 +1,19 @@
 # #81 — Startup notification: what's new after upgrade
 
-**Status:** Waiting for release
+**Status:** In progress (step 4)
 **GitHub issue:** #81
 **Tiers required:** T1, T2
-**Depends on:** #278, #80, #309, #307, #312
+**Depends on:** #278, #80, #309, #307, #312. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
+
+---
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
 
 ---
 
@@ -262,7 +272,7 @@ small internal static helper (matching `NotificationSeeding`'s own shape) rather
 itself as thin as the two existing producers.
 
 ### 4. Live verification (T1, T2)
-**Status:** ✅ Done
+**Status:** ❌ Not passed under ADR 029 (set back by #503, 2026-11-21; see *Next action*). Recorded before the set-back: ✅ Done
 
 **T2 — three real Docker runs, both the negative and positive paths, plus dismissal persistence.**
 
@@ -365,7 +375,7 @@ Verified: full solution `dotnet build --configuration Release` — 0 Warning(s),
 | 5 | ✅ | A version already seeded is not re-seeded on a later restart (dedupe holds across restarts) | Unit test | `WhatsNewNotificationTests.Seed_AlreadySeededVersion_IsNoOp` |
 | 6 | ✅ | Dismissing the what's-new notification persists — it does not reappear on the next restart | Live (T2) | Docker: dismissed the temporarily-flagged v1.8.3 notification, `docker restart`ed the same container, confirmed `isDismissed: true` held and no duplicate was seeded |
 | 7 | ✅ | T1 — app starts in Visual Studio with no error; `StartupSuccessModal` shows the what's-new notification when the running version has flagged changelog highlights | Live | Developer confirmed 2026-08-16: `StartupSuccessModal` shows "Notifications now have their own headline…" (Informatie, no expiry) alongside #279's announcement. Also confirmed at T2 on a fresh container: `title: What's new (unreleased)`, `metadata: {"version":null,"contentHash":"2EE673F9"}` |
-| 8 | ✅ | T2 — Docker build and smoke test | Live | Confirmed both directions: real (unmodified) v1.8.3 content correctly writes nothing (zero flagged highlights); a temporarily-flagged local copy (never committed) correctly writes the notification, visible via `GET /api/v1/notifications` |
+| 8 | ❌ | T2 — Docker build and smoke test | Live | Confirmed both directions: real (unmodified) v1.8.3 content correctly writes nothing (zero flagged highlights); a temporarily-flagged local copy (never committed) correctly writes the notification, visible via `GET /api/v1/notifications`. **Set back 2026-11-21 (#503):** not passed under ADR 029; see *Next action*. |
 | 9 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 10 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` (run twice to rule out the startup-latency flakiness found in Step 2) |
 | 11 | ✅ | `GetLastActiveVersionAsync` returns `null` when `System_AppVersion` doesn't exist or is empty | Unit test | `AppVersionTrackerTests.GetLastActiveVersionAsync_TableMissing_ReturnsNull`, `_TableEmpty_ReturnsNull` |

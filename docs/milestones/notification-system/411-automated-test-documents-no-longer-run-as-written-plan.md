@@ -1,13 +1,21 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** Waiting for release
+**Status:** In progress (step 8)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
-**Depends on:** —
+**Depends on:** —. T2 is blocked by #400, #438, #468, #469, #472, #503, #347, #404, #501, #502 (set back by #503, 2026-11-21).
 
 ---
 
 ## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today, and, because steps 14 and 15 ran every document, `import-and-staged-actions/16` and `17` (#347), `database-lifecycle/02` (#404), `notifications-and-changelog/03` (#501) and `backup/03` and `04` (#502).
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 The Waiting-for-release checklist: changelog entries in all three languages, then the closing comment
 when the release ships.
@@ -188,7 +196,7 @@ The cleanup removes the `-wal`/`-shm` files beside both database copies.
 
 ### 8. T2 pass
 
-**Status:** ✅ Done — against an image built from `7d3f164a`. Every step of every document passes as
+**Status:** ❌ Not passed under ADR 029 (set back by #503, 2026-11-21; see *Next action*). Recorded before the set-back: ✅ Done — against an image built from `7d3f164a`. Every step of every document passes as
 written:
 
 | Document | Result |
@@ -537,6 +545,6 @@ The developer starts the application in Visual Studio.
 | 9 | ✅ | A new test container on the shared ring reads the browser's cookie | Live (T2) | *A cookie from another key ring is replaced on the first page, and logged only then*, step 2: no `[Runtime - Exception]` line; red before step 10 |
 | 10 | ✅ | Provoking the pair is possible on demand, and the remedy restores the browser | Live (T2) | Same document, steps 3 and 4: the pair once, then nothing |
 | 11 | ✅ | The browser-driven documents log no exception they did not cause | Live (T2) | *Notifications list, dismiss, render, and drive their action* before its step 7 stop, and *A file left awaiting review raises an alert, and resolving it retires the alert* before step 3 and step 9: no `[Runtime - Exception]` line |
-| 12 | ✅ | Every document whose environment changed still passes | Live (T2) | Steps 14 and 15: every document in the suite passes as written, or declares the issue it waits on — 67 of 68 pass; *Rule-file override endpoints* fails on the `generate` defect and declares `Fully green after: #420` |
+| 12 | ❌ | Every document whose environment changed still passes | Live (T2) | Steps 14 and 15: every document in the suite passes as written, or declares the issue it waits on — 67 of 68 pass; *Rule-file override endpoints* fails on the `generate` defect and declares `Fully green after: #420`. **Set back 2026-11-21 (#503):** not passed under ADR 029; see *Next action*. |
 | 13 | ✅ | A container's log is read before the application stops | Review | The index's *Read the log before the application stops*, and every document run in steps 14 and 15 read that way |
-| 14 | ✅ | The smoke documents step 8 skipped pass | Live (T2) | Step 9: each of the six passes as written |
+| 14 | ❌ | The smoke documents step 8 skipped pass | Live (T2) | Step 9: each of the six passes as written. **Set back 2026-11-21 (#503):** not passed under ADR 029; see *Next action*. |

@@ -1,11 +1,21 @@
 # #373 — An import that re-states identical content reports it as modified
 
-**Status:** Waiting for release
+**Status:** In progress (step 9)
 **GitHub issue:** #373
 **Tiers required:** T1, T2
-**Depends on:** [#372](https://github.com/DutchJaFO/Quotinator/issues/372) for reproduction — a reseed
+**Depends on:** [#372](https://github.com/DutchJaFO/Quotinator/issues/372) for reproduction — a reseed. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
 that truncates first can never reach this path — and [#374](https://github.com/DutchJaFO/Quotinator/issues/374)
 for the T2 runs, which reseed real content. **Blocks #372's step 6**, and #302 behind it
+
+---
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
 
 ---
 
@@ -372,7 +382,7 @@ what is now true, stating whether the old form was over-broad or the behaviour c
 
 ### 9. Run the T2 documents green
 
-**Status:** In progress. Both documents have been run live, twice, against a freshly rebuilt image, by
+**Status:** ❌ Not passed under ADR 029 (set back by #503, 2026-11-21; see *Next action*). Recorded before the set-back: In progress. Both documents have been run live, twice, against a freshly rebuilt image, by
 [#374](https://github.com/DutchJaFO/Quotinator/issues/374)'s own step 12, and their `**Fully green after:**`
 lines (naming this issue) are removed from both documents in the same commit as this status change.
 Every row in this step's own checklist (rows 21–26) is now ✅ except row 27 (T1) — the only row this
@@ -539,6 +549,7 @@ assertion flipped to pass:
 | 29 | ✅ | That report cannot be satisfied by an entity that was never matched | Unit test | `PlanSeasonsAsync_NoMatchAtAll_StagesAddNotUnchanged` — the positive control row 28 requires. Green throughout, including while row 28's four were red, so it discriminates rather than tracking them |
 | 30 | ✅ | A field change on an id-less entry is applied, not discarded | Unit test | `PlanSeasonsAsync_ExistingByNaturalKey_TitleDiffers_StagesModifyAction`, `PlanSeriesAsync_ExistingByName_UniverseNameDiffers_...`, `PlanPeopleAsync_ExistingByNameOnly_DateOfBirthDiffers_...` — all three red before, green after |
 | 31 | ✅ | Build is clean and no regression, after step 10 | Build + test run | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s); `dotnet test --configuration Release -m:1` → 3949 passed, 0 failed, all 10 projects green, 2026-09-08 |
+| 32 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |
 
 **Rows 4, 5 and 6 exist because "reports unchanged" is satisfied by reporting nothing.** Row 5 is the
 sharpest: a planner classifying *everything* as unchanged would pass rows 3, 4 and 7 perfectly.

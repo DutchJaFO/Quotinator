@@ -1,13 +1,21 @@
 # #370 — An expected import conflict is signalled by throwing, once per conflicted row per render
 
-**Status:** Waiting for release
+**Status:** In progress (step 8)
 **GitHub issue:** #370
 **Tiers required:** T1, T2
-**Depends on:** #397
+**Depends on:** #397. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
 
 ---
 
 ## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 Wait for the release; then the *Released* checklist and the closing comment.
 
@@ -205,7 +213,7 @@ both 0 warnings, 0 errors.
 
 ### 8. T2 pass
 
-**Status:** ✅ Done — 2026-09-18, against an image built from `b3fa0fce`.
+**Status:** ❌ Not passed under ADR 029 (set back by #503, 2026-11-21; see *Next action*). Recorded before the set-back: ✅ Done — 2026-09-18, against an image built from `b3fa0fce`.
 
 | Document | Result |
 |---|---|
@@ -299,6 +307,7 @@ ready, upgrading a Data v3 / App v5 database to Data v22 / App v9.
 | 9 | ✅ | The planner's early-rule invariant throws when violated, and only then | Unit test | `ImportActionPlannerTests.ResolveEarlyRule_FieldLeftUnresolved_ThrowsInvalidOperationException`, `…ResolveEarlyRule_EveryFieldResolved_ReturnsMergedFields` |
 | 10 | ✅ | Listing, exporting, rendering the review page and an undecided decide throw nothing in a running container, while every conflicted row still reports its ambiguous fields | Live (T2) | `automated-testing/import-and-staged-actions/28-review-throws-nothing.md` passes on this branch's build, and fails on the canary from step 3 with one thrown line per conflicted row per read |
 | 11 | ✅ | No regression | Live | `dotnet test --configuration Release --verbosity normal -m:1` — all pass, 0 warnings, 0 errors |
+| 12 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |
 
 ### The automated document
 

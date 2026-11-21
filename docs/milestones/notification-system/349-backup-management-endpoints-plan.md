@@ -1,9 +1,9 @@
 # #349: Admin endpoints to list, delete and report status for database backups
 
-**Status:** Waiting for release
+**Status:** In progress (step 12)
 **GitHub issue:** #349
 **Tiers required:** T1, T2
-**Depends on:** none, pairs with [#348](https://github.com/DutchJaFO/Quotinator/issues/348), either order
+**Depends on:** none, pairs with [#348](https://github.com/DutchJaFO/Quotinator/issues/348), either order. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
 
 ---
 
@@ -28,6 +28,14 @@ from the action (developer direction, 2026-08-27).
 ---
 
 ## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 **Nothing outstanding, ready for release.** All 37 verification rows are green, T1 and T2 are both
 complete, the solution builds at 0 warnings, and the full suite passes.
@@ -276,7 +284,7 @@ rather than only the one being advertised as the remedy.
 
 ### 12. T1 and T2 verification
 
-**Status:** ✅ Done
+**Status:** ❌ Not passed under ADR 029 (set back by #503, 2026-11-21; see *Next action*). Recorded before the set-back: ✅ Done
 
 T1 is the developer's own to run. T2 is a rebuilt image with the smoke set plus this issue's own
 document from step 11.
@@ -324,6 +332,7 @@ document from step 11.
 | 35 | ✅ | The audit trail records what it is documented to record, and nothing more | Unit test | `AdminBackupEndpointsTests.DeleteBackup_WritesAnAuditEntry` and `AdminBackupCreateEndpointTests.Create_WritesAnAuditEntry`, both with `TableName = "Database"` and `RecordId = null` per `docs/logging.md`'s audit schema. A `BackupDownloaded` operation was added and then removed: the document is explicit that reads are not audited, and a download leaves the backup in place (developer decision, 2026-08-29) |
 | 36 | ✅ | `docs/api-endpoints.md` and the `[Description]` attributes describe all five endpoints | Live | Both updated in the implementing commit; the status endpoint's description states what it touches rather than claiming read-only |
 | 37 | ✅ | The Blazor UI still renders and the endpoints answer against a real container | Live | T2 re-run 2026-08-29 after the handle fix, create, download and host-side read all confirmed. T1 in Visual Studio is the developer's own and is what remains |
+| 38 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |
 
 ---
 

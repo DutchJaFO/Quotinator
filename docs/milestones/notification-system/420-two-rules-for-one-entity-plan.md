@@ -1,13 +1,21 @@
 # #420: Generating conflict rules answers an unhandled 500 when a rule file holds two rules for one entity
 
-**Status:** Waiting for release
+**Status:** In progress (step 16)
 **GitHub issue:** #420
 **Tiers required:** T1, T2
-**Depends on:** none
+**Depends on:** none. T2 is blocked by #400, #438, #468, #469, #472, #503, #347 (set back by #503, 2026-11-21).
 
 ---
 
 ## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today, and `import-and-staged-actions/16` (#347), which it ran; under the stop rule its step 4, which row 17 cites, is never reached.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 **All 16 steps are done and all 20 verification rows are ✅.** T1 passed on both the upgraded and the
 fresh path, T2's scope passed with three steps blocked on other issues and recorded as such, and the
@@ -490,7 +498,7 @@ as a negative result: this issue's change to where the recorded value is stored 
 
 ### 16. T2
 
-**Status:** ✅ Done, 2026-10-06 — the smoke set plus the three rule-file documents, every step passing
+**Status:** ❌ Not passed under ADR 029 (set back by #503, 2026-11-21; see *Next action*). Recorded before the set-back: ✅ Done, 2026-10-06 — the smoke set plus the three rule-file documents, every step passing
 except three blocked elsewhere and recorded as such.
 
 *Rule-file override endpoints, and the alias-candidate suggestion endpoint* is the headline: its step 4,
@@ -612,7 +620,7 @@ stated "before" state is unreachable with the tool it names, today, before any o
 | 14 | ✅ | Build and full test run are clean | Live | `dotnet build --configuration Release` then `dotnet test --configuration Release --verbosity normal -m:1`, 2026-10-06 on the developer's own machine: both `0 Warning(s)  0 Error(s)`, 4517 passed, 0 failed, 0 skipped |
 | 15 | ✅ | The collapsed Mr. Robot entry applies both of its fields against a real seeded database | Live | *A fresh seed resolves every bundled file with nothing left pending*, 2026-10-06: `pending=0`, `stale=0`, `blocked=0`, and the quote reads `date 2015` with `character Fernando Vera` under its single collapsed entry |
 | 16 | ✅ | The rule file is still read live and its rules still take effect | Live | *Rule-file live read proof*, 2026-10-06: all 3 steps. Removing the rule returns the conflict as `Pending` with `ambiguousFields` of `date`; restoring it as `Replace` records `"date":"2005"` |
-| 17 | ✅ | Staleness still stages `Stale` after the recorded value moves onto the field | Live | *A rule whose recorded snapshot no longer matches reality stages Stale, not Decided*, 2026-10-06: its new step 4 drives the condition through a registered override and reports `stale=1`, a `Modify` on the curated quote. Step 3's `stale=0` alone could not establish this |
+| 17 | ❌ | Staleness still stages `Stale` after the recorded value moves onto the field | Live | *A rule whose recorded snapshot no longer matches reality stages Stale, not Decided*, 2026-10-06: its new step 4 drives the condition through a registered override and reports `stale=1`, a `Modify` on the curated quote. Step 3's `stale=0` alone could not establish this. **Set back 2026-11-21 (#503):** not passed under ADR 029; see *Next action*. |
 | 18 | ✅ | `generate` runs green end to end, and the merge still drops no existing rule | Live | *Rule-file override endpoints, and the alias-candidate suggestion endpoint*, 2026-10-06: all 7 steps. Step 4 returns `200` with `rulesAdded=1` where it previously answered an unhandled `500`; 22 bundled ids in, 23 out, `dropped=0` |
 | 19 | ✅ | The application still starts | Live | T1, Visual Studio, developer's own action, 2026-10-06, on both paths: an upgraded database applying 24 Data and 4 App migrations (v3 → v27, v5 → v9), and no database at all creating the schema at baseline. Both reached the ready banner |
-| 20 | ✅ | T2 scope passes | Live | The smoke set plus the three rule-file documents, 2026-10-06. Every step passes except three blocked on other issues and recorded as such: the wait page's step 1 (#438), the bundled-converter step (#400), and the staleness evaluation line (#347) |
+| 20 | ❌ | T2 scope passes | Live | The smoke set plus the three rule-file documents, 2026-10-06. Every step passes except three blocked on other issues and recorded as such: the wait page's step 1 (#438), the bundled-converter step (#400), and the staleness evaluation line (#347). **Set back 2026-11-21 (#503):** not passed under ADR 029; see *Next action*. |

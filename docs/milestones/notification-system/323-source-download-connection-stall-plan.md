@@ -1,9 +1,19 @@
 # #323 — Source download: a stalled connection attempt outlives its request and fails every other source on the same host
 
-**Status:** Waiting for release
+**Status:** In progress (T2)
 **GitHub issue:** #323
 **Tiers required:** T1, T2
-**Depends on:** none
+**Depends on:** none. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 > **Next action: the issue's own Definition-of-done checkboxes, then the commit.** Every verification row
 > below is ✅ and the changelog entries are in. The issue body still carries the over-strong claim
@@ -183,6 +193,7 @@ touched (see "Pre-existing warnings" below).
 | 5 | ✅ | `Quotinator:SourceRefreshConnectTimeoutSeconds` overrides the default when set | Unit test | `SourceCacheHttpClientTests.SourceCacheClient_ConnectTimeoutOverride_IsApplied` |
 | 6 | ✅ | No regression: a healthy refresh still downloads, converts, validates and caches | Unit test | Full suite `dotnet test --configuration Release -m:1` — 3,450 passed, 0 failed |
 | 7 | ✅ | T2 — container starts and refreshes sources with no added delay on a healthy network | Live | `docker build -f docker/Dockerfile -t quotinator:local .` + `docker run`; both sources logged `[Database - SourceRefresh] updated`, zero timeout/cancellation lines, startup 32.1 s wall-clock (dominated by the fresh-database seed of 799 quotes). Baseline smoke section 1 also green: `/health` healthy, `/version` `1.8.3` (not `1.0.0`, so `Directory.Build.props` reached the build context), `/quotes/random` served, `search?q=love` 20 items, `Casablanca&field=source` 9, `Churchill&field=author` 1, `Rick&field=character` 0 + `NoResults` as documented |
+| 8 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |
 
 ---
 

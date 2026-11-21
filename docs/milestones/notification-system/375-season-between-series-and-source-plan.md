@@ -1,9 +1,19 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** Waiting for release
+**Status:** In progress (T2)
 **GitHub issue:** #375
 **Tiers required:** T1, T2
-**Depends on:** nothing
+**Depends on:** nothing. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
+
+---
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
 
 ---
 
@@ -679,6 +689,7 @@ covered the Season→Series direction with a real database from the start.
 | 34 | ✅ | The new UI label exists in every locale | Unit test | `TranslationCompletenessTests` — `StartupSummarySeasonsLabel` added to `UI.en-GB.json` ("Seasons"), `UI.de.json` ("Staffeln") and `UI.nl.json` ("Seizoenen") in the same commit, per CLAUDE.md's localisation checklist |
 | 31 | ✅ | A Season matched by natural key reports itself in the import report | Unit test | Owned by #373's step 10, landed 2026-09-08 — `PlanSeasonsAsync_ExistingByNaturalKey_StagesUnchangedAction`, plus `..._TitleDiffers_StagesModifyAction` for the field-drop half. Season's first planner-level tests: `ImportActionPlannerTests` had no `Season` reference at all before this, which is why the site went unnoticed |
 | 32 | ✅ | Build is clean and no regression, after step 12 | Build + test run | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s); `dotnet test --configuration Release -m:1` → 3949 passed, 0 failed, all 10 projects green, 2026-09-08 (re-run after #373's step 10 landed) |
+| 33 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |
 
 **Row 6 is the rejected design asserted as a guard.** Making a quote's parent nullable was considered
 and overruled; a test that fails the moment `SourceId` becomes nullable or the join becomes a `LEFT

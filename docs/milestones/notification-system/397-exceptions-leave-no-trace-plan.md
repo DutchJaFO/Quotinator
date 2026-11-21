@@ -1,13 +1,21 @@
 # #397 — Exceptions the application catches leave no trace outside Visual Studio
 
-**Status:** Waiting for release
+**Status:** In progress (step 8)
 **GitHub issue:** #397
 **Tiers required:** T1, T2
-**Depends on:** none
+**Depends on:** none. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
 
 ---
 
 ## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 Wait for the release. The *Waiting for release* checklist is complete: the Definition of done is ticked
 apart from the closing comment, and the process-gap check is recorded below. Every step and
@@ -212,7 +220,7 @@ both 0 warnings, 0 errors.
 
 ### 8. T2 pass
 
-**Status:** ✅ Done — the full designated smoke set plus this issue's own document
+**Status:** ❌ Not passed under ADR 029 (set back by #503, 2026-11-21; see *Next action*). Recorded before the set-back: ✅ Done — the full designated smoke set plus this issue's own document
 
 Run 2026-09-17 against an image built from this branch.
 
@@ -417,3 +425,4 @@ bundled corpus (#400); observations and unrelated prose across the suite (#401).
 | 8 | ✅ | A thrown exception is logged in a running container | Live (T2) | `automated-testing/api-surface/05-a-thrown-exception-is-logged.md` passes on this branch's build, and fails on the canary from step 2 |
 | 9 | ✅ | `docs/logging.md` registers the prefix and documents every line and its level | Unit test | `LoggingDocumentationTests.RuntimeExceptionLines_AreRegisteredAndDocumentedWithTheirLevels` — an assertion over the document's own text, as #307 established |
 | 10 | ✅ | No regression | Live | `dotnet test --configuration Release --verbosity normal -m:1` — all pass, 0 warnings, 0 errors |
+| 11 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |

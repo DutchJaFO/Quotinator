@@ -1,9 +1,19 @@
 # #312 — Notification schema: title/body, typed metadata, optional expiry, and app-version provenance
 
-**Status:** Waiting for release
+**Status:** In progress (step 9)
 **GitHub issue:** #312
 **Tiers required:** T1, T2
-**Depends on:** #278
+**Depends on:** #278. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 > **Next action: nothing until the release ships.** Every step and every verification row is green, and
 > the changelog entries are written. The issue stays open until the tagged release actually goes out,
@@ -361,7 +371,7 @@ identity, real SQLite), `NotificationMetadataKindsTests` (the kind→type regist
 `NotificationActionExecutorTests` (producers and the action seam).
 
 ### 9. Full verification (T1, T2)
-**Status:** ✅ Done — ran twice, both tiers each time; every pass found real bugs, all fixed and
+**Status:** ❌ Not passed under ADR 029 (set back by #503, 2026-11-21; see *Next action*). Recorded before the set-back: ✅ Done — ran twice, both tiers each time; every pass found real bugs, all fixed and
 re-verified on the final build
 
 **T2 / ADR 009 — migration path from a genuine v1.8.3 database.** `ghcr.io/dutchjafo/quotinator:1.8.3`
@@ -641,6 +651,7 @@ applies.
 | 31 | ✅ | T1 — app starts in Visual Studio with no error; `/notifications` renders migrated rows correctly | Live (T1) | Developer confirmed 2026-08-16 on the final build: `schema is up to date (data v11, app v5)` → `Quotinator ready`, no exception, 799 quotes intact. Re-run was required because this build adds migrations 9, 10 and 11 on top of the chain the earlier pass covered |
 | 32 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 33 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 3,441 passed, 0 failed |
+| 34 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |
 
 ---
 

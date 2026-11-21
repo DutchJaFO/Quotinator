@@ -1,10 +1,20 @@
 # #367 — Notification actions give no feedback while they run
 
-**Status:** Waiting for release
+**Status:** In progress (T2)
 **GitHub issue:** #367
 **Tiers required:** T1, T2
-**Depends on:** #278, #304
+**Depends on:** #278, #304. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
 **Order:** moved up to 16, ahead of #308 (developer, 2026-09-01)
+
+---
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
 
 ---
 
@@ -200,6 +210,7 @@ mid-action. Row 13 is that proof and is not substitutable by a unit test.
 | 24 | ✅ | The same row reads `Active` when not executing — the control for row 6 | Unit test + mutation | `NotificationTableTests.GetDisplayStatus_Executing_ReportsExecuting`'s second assertion; returning `Executing` unconditionally fails it and two pre-existing Active tests |
 | 25 | ✅ | The label check catches an empty value, not only a missing key | Mutation | Blanking `NotificationsExecutingLabel` in `UI.en-GB.json` fails `EveryDisplayStatus_HasATranslationKey` with *"Executing renders with no label"*; restored |
 | 26 | ✅ | The automated document passes end to end on the current build | Live (T2) | All four steps re-run 2026-09-01 after the Dismiss withdrawal landed — see the run table below |
+| 27 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |
 
 **Full T2 run, 2026-09-01 — both halves, both directions.** Re-run whole after the Dismiss withdrawal
 landed, since until then no single run had covered the document end to end on one build:

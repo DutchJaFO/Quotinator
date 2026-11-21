@@ -1,13 +1,21 @@
 # #482: A Reset cannot rebuild a database SQLite cannot read
 
-**Status:** Waiting for release
+**Status:** In progress (step 14)
 **GitHub issue:** #482
 **Tiers required:** T1, T2
-**Depends on:** none
+**Depends on:** none. T2 is blocked by #400, #438, #468, #469, #472, #503, #502 (set back by #503, 2026-11-21).
 
 ---
 
 ## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today, and `backup/03` and `04` (#502), which it ran.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 **Waiting for release.** Every verification row is ✅, step 3's red run is re-checked and corrected, and
 the *Waiting for release* checklist is complete (see *Closing checks*). What remains is the *Released*
@@ -567,7 +575,7 @@ This is the issue's reproduction step 3, which no endpoint test drives.
 
 ### 14. T2
 
-**Status:** ✅ Done, 2026-11-09. 28 documents against `quotinator:local` built from the working tree at
+**Status:** ❌ Not passed under ADR 029 (set back by #503, 2026-11-21; see *Next action*). Recorded before the set-back: ✅ Done, 2026-11-09. 28 documents against `quotinator:local` built from the working tree at
 `271c4c54`; every assertion that belongs to this issue green.
 
 The documents from step 4 against `quotinator:local`, then the issue scope: the smoke set, plus every
@@ -689,3 +697,4 @@ The *Waiting for release* items the Verification table does not carry, done 2026
 | 36 | ✅ | The degraded page's *Reset the database* recovers the application and shows the notification | Manual | Step 13: the developer confirms the page returns healthy and the Notifications page lists the set-aside notification |
 | 37 | ✅ | Every test step 2 classified as *Unchanged*, *Changes* or *Extended* passes, and the full suite is clean | Build | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`: `0 Warning(s)  0 Error(s)`, all tests pass |
 | 38 | ✅ | `capture-page.csx`, which verifies this issue, never waits forever and leaves nothing in the container log | Live (Docker) | 30 captures against a fresh container, all written, 9 after a fresh browser, `[Runtime - Exception]` count `0`; then `notifications-and-changelog/01` and `14` with every `[Runtime - Exception]` check `0` |
+| 39 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |

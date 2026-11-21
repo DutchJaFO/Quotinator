@@ -1,9 +1,19 @@
 # #326 — Startup crashes instead of degrading when the data directory is read-only and a migration is pending
 
-**Status:** Waiting for release
+**Status:** In progress (step 9)
 **GitHub issue:** #326
 **Tiers required:** T1, T2
-**Depends on:** none
+**Depends on:** none. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 > **Next action: step 10 — the changelog entries.** Every verification row is ✅: 9 of 9 in this
 > issue's own class, 3,475 of 3,475 across the solution at 0 warnings, T1 live on a database with 8
@@ -408,7 +418,7 @@ new quotes (unresolved, not chased — see step 11).
 
 ### 9. T2 — Docker pass
 
-**Status:** ✅ Done
+**Status:** ❌ Not passed under ADR 029 (set back by #503, 2026-11-21; see *Next action*). Recorded before the set-back: ✅ Done
 
 Run 2026-08-21 on dedicated throwaway volumes, removed afterward — never a dev or shared database.
 
@@ -471,3 +481,4 @@ doc added to `Quotinator.slnx`. Doc updates commit separately from the code, per
 | 10 | ✅ | T2 — an unwritable data directory degrades instead of crashing | Live | 2026-08-21, volume seeded then stopped with `docker stop -t 30` (sidecars checkpointed away, verified absent), remounted `:ro` → `running exit=0`; `/api/v1/health` → `503` with the data-directory reason; `/openapi/v1.json` → `200`; `/`, `/stats`, `/notifications` → `200`; `/api/v1/quotes/random` → `503` (correctly gated); `grep -c "Unhandled exception"` → `0`; the `LogStartupDatabaseInitFailed` line and the ready banner both present |
 | 11 | ✅ | T2 negative control — a read-only mount that works still works | Live | 2026-08-21, same image, volume stopped with `docker kill` (sidecars verified present), remounted `:ro` → `running exit=0`, `/api/v1/health` → `200` `{"status":"healthy"}`, `/api/v1/quotes/random` → `200`, `grep -c "Unhandled exception"` → `0` |
 | 12 | ✅ | T1 — Visual Studio pass | Live | Developer-run 2026-08-21 against a non-fresh dev database (`applying 8 pending Data migration(s) (version 3 → 11)`); app starts and reaches the ready banner, `GET /api/v1/health` → `200 OK` `{"status":"healthy"}`, Blazor UI renders with styling intact (screenshot) |
+| 13 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |

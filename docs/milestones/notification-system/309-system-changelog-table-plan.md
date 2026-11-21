@@ -1,9 +1,19 @@
 # #309: Move changelog content to database-backed System_Changelog table
 
-**Status:** Waiting for release
+**Status:** In progress (step 10)
 **GitHub issue:** #309
 **Tiers required:** T1, T2
-**Depends on:** #80
+**Depends on:** #80. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
+
+## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 > **Every verification row is green (2026-08-19). Waiting for release.** Every live check on this issue has
 > found a further defect underneath the last: steps 14, 16, 17 and 18. The database did not survive
@@ -551,7 +561,7 @@ remained by the time this step was reached; recorded as its own step in the veri
 rather than folded silently into 6/7's own entries, since it names a distinct requirement.
 
 ### 10. Full verification (T1, T2)
-**Status:** ✅ Done
+**Status:** ❌ Not passed under ADR 029 (set back by #503, 2026-11-21; see *Next action*). Recorded before the set-back: ✅ Done
 
 **Row 12's original plan (a #293-style Docker fault injection) is not meaningfully constructible for
 this database, and the verification method was changed rather than left unmet.** #293's own T2
@@ -1037,6 +1047,7 @@ the previous shape, returning the stale `0.9.0` where `1.0.0` was expected.
 | 32 | ✅ | Live: the startup read and the import report the same entry count, and the read is ordered after the import | Live (T1) | 2026-08-19 22:45, fresh database: `[Changelog - Init] schema created at baseline`, `refreshed 126 entries`, then `served 126 entries` on every read. No fallback line, no "holds no entries" line. Reversed from 22:27:21, where the read preceded the import |
 | 33 | ✅ | Live: on the fast-startup path that previously got it wrong, the read is ordered after the import | Live (T1) | 2026-08-19 22:46, already-populated main database (`v3 → v11`, no seeding delay: the same profile as 22:27): `refreshed 126 entries` then `served 126 entries`, reversed from 22:27:21. **A log cannot distinguish "waited" from "did not need to wait"**: the read now awaits readiness before querying at all, so correct ordering is structurally guaranteed rather than observed. That distinction is unobservable live by construction; `GetDocumentAsync_PreviousRunsContentStillPresent_…` is the conclusive coverage. This row confirms the guarantee holds in the exact conditions that previously failed |
 | 34 | ✅ | Smoke test 44's rewritten assertions hold | Live (T2) | 2026-08-19 against `quotinator:local`. `quotinatorchangelog.db` (970 KB) on disk beside `quotinatordata.db`; `refreshed 126 entries` then `served 126 entries`, counts matching; `/about` 200 with 43 changelog entries; fallback-line count 0 throughout. After restart: `schema is up to date (v1)` (persisted, not re-baselined), `refreshed 126 entries` (idempotent, not 252), `served 126 entries`, still 0 fallbacks |
+| 35 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |
 
 ---
 

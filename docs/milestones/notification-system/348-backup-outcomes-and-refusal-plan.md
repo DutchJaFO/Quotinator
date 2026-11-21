@@ -1,9 +1,9 @@
 # #348: Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable
 
-**Status:** Waiting for release
+**Status:** In progress (T2)
 **GitHub issue:** #348
 **Tiers required:** T1, T2
-**Depends on:** #349, #482
+**Depends on:** #349, #482. T2 is blocked by #400, #438, #468, #469, #472, #503, #347, #502 (set back by #503, 2026-11-21).
 
 ---
 
@@ -19,6 +19,14 @@ Found by [#327](https://github.com/DutchJaFO/Quotinator/issues/327) while measur
 recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
+
+**Set back by #503 (2026-11-21): wait for the issues that block T2, then run T2 again.** Under ADR 029 a
+failing step in an issue's T2 scope blocks the issue until the issue owning that step lands. This issue's
+T2 scope includes the smoke set, in which `database-lifecycle/03` (#468), `import-and-staged-actions/01` (#469) and `14` (#400), `notifications-and-changelog/01` (#472), and `startup-and-degradation/03` (#438) and `06` (#503, after #505 and #506) fail today, and `import-and-staged-actions/16` and `17` (#347) and `backup/03` and `04` (#502), which it ran.
+The T2 record below was written before ADR 029 and stays as the record of that run, not as a pass. The
+GitHub Definition of done was set back to match the same day.
+
+**Written at *Waiting for release*, before the set-back:**
 
 **Waiting for release, since 2026-11-14.** Tick the Definition of done's *Fix implemented* and *All listed
 tests pass*; the closing comment, with the verification table's 43 rows, waits for the release itself. The
@@ -1571,6 +1579,7 @@ The *Waiting for release* items the Verification table does not carry, done 2026
 | 41 | ✅ | Every end result of a Reset or reseed run from the application, refusals included, is recorded as a notification saying what was done and whether a backup was skipped | Unit test + Automated (T2) | Step 31: `DatabaseActionResultRecorderTests` and `NotificationActionExecutorTests` `..._RecordsItsResult`, `..._RecordsTheRefusal`, red first; the storage tests for the new kind, red until migration 30; `backup/06` steps 5 to 7 and `startup-and-degradation/06`'s repair, green, red against `39f6ae94` |
 | 42 | ✅ | The notifications page says why an action it ran was refused | Unit test | Step 32: `NotificationsPageTests.RefusedReseed_NamesTheObstacleThatStoppedIt`, `..._StatesTheObstaclesCause`, `RefusedReset_IsToldAsTheRepairControlTellsIt`, red first. Not reachable live: a refused option is never offered |
 | 43 | ✅ | No T2 document uses the audit trail as proof; each proves from a response or the data | Automated (T2) | Step 33: `backup/06`, `import-and-staged-actions/16` and `17` re-run green 2026-11-13, `16` step 4 reading `staged=1` as the control; the survey's table lists every remaining audit read as the documents' subject |
+| 44 | ❌ | T2 passes: the smoke set and this issue's own documents, every step green (ADR 029) | Live | Added 2026-11-21 by #503's audit: the earlier T2 record was written while the smoke set held failing steps; see *Next action* |
 
 ---
 

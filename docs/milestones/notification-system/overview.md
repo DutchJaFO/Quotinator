@@ -37,50 +37,50 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 
 | # | Title | Status | Tiers | Plan doc |
 |---|-------|--------|-------|----------|
-| [#312](https://github.com/DutchJaFO/Quotinator/issues/312) | Notification schema: title/body, typed metadata, optional expiry, and app-version provenance | Waiting for release | T1 ✅ T2 ✅ | [312-notification-schema-foundation-plan.md](312-notification-schema-foundation-plan.md) |
+| [#312](https://github.com/DutchJaFO/Quotinator/issues/312) | Notification schema: title/body, typed metadata, optional expiry, and app-version provenance | In progress | T1 ✅ T2 ⬜ | [312-notification-schema-foundation-plan.md](312-notification-schema-foundation-plan.md) |
 | [#313](https://github.com/DutchJaFO/Quotinator/issues/313) | Api tests can silently assert against the startup wait page instead of the endpoint under test | Waiting for release | None | [313-api-test-startup-race-plan.md](313-api-test-startup-race-plan.md) |
 | [#83](https://github.com/DutchJaFO/Quotinator/issues/83) | Research: notification system design | Waiting for release | T1 ✅ T2 ⬜ T3 ⬜ | [83-notification-system-design-research-plan.md](83-notification-system-design-research-plan.md) |
-| [#81](https://github.com/DutchJaFO/Quotinator/issues/81) | Startup notification: import warnings and what's new after upgrade | Waiting for release | T1 ✅ T2 ✅ | [81-startup-whats-new-notification-plan.md](81-startup-whats-new-notification-plan.md) |
-| [#302](https://github.com/DutchJaFO/Quotinator/issues/302) | Notification: confirm files that reseed cleanly with no review needed | Waiting for release | T1 ✅ T2 ✅ | [302-clean-reseed-confirmation-notification-plan.md](302-clean-reseed-confirmation-notification-plan.md) |
-| [#303](https://github.com/DutchJaFO/Quotinator/issues/303) | Notification + minimal review page: alert when a reseed leaves import actions pending review | Waiting for release | T1 ⬜ T2 ✅ | [303-pending-review-alert-and-review-page-plan.md](303-pending-review-alert-and-review-page-plan.md) |
-| [#304](https://github.com/DutchJaFO/Quotinator/issues/304) | Notification + action: let the user trigger a reseed (content changed upstream, or after a Reset) | Waiting for release | T1 ✅ T2 ✅ | [304-reseed-notification-action-plan.md](304-reseed-notification-action-plan.md) |
-| [#307](https://github.com/DutchJaFO/Quotinator/issues/307) | Changelog highlights: mark specific entries as notification-worthy | Waiting for release | T1 ✅ T2 ✅ | [307-changelog-notification-audience-key-plan.md](307-changelog-notification-audience-key-plan.md) |
-| [#308](https://github.com/DutchJaFO/Quotinator/issues/308) | Notification: multi-line/rich message layout | Waiting for release | T1 ✅ T2 ✅ | [308-notification-rich-layout-plan.md](308-notification-rich-layout-plan.md) |
-| [#309](https://github.com/DutchJaFO/Quotinator/issues/309) | Move changelog content to database-backed System_Changelog table | Waiting for release | T1 ✅ T2 ✅ | [309-system-changelog-table-plan.md](309-system-changelog-table-plan.md) |
-| [#305](https://github.com/DutchJaFO/Quotinator/issues/305) | Database integrity check: verify every database's full schema against its migration path at startup | Waiting for release | T1 ✅ T2 ✅ | [305-database-integrity-check-plan.md](305-database-integrity-check-plan.md) |
+| [#81](https://github.com/DutchJaFO/Quotinator/issues/81) | Startup notification: import warnings and what's new after upgrade | In progress | T1 ✅ T2 ⬜ | [81-startup-whats-new-notification-plan.md](81-startup-whats-new-notification-plan.md) |
+| [#302](https://github.com/DutchJaFO/Quotinator/issues/302) | Notification: confirm files that reseed cleanly with no review needed | In progress | T1 ✅ T2 ⬜ | [302-clean-reseed-confirmation-notification-plan.md](302-clean-reseed-confirmation-notification-plan.md) |
+| [#303](https://github.com/DutchJaFO/Quotinator/issues/303) | Notification + minimal review page: alert when a reseed leaves import actions pending review | In progress | T1 ⬜ T2 ⬜ | [303-pending-review-alert-and-review-page-plan.md](303-pending-review-alert-and-review-page-plan.md) |
+| [#304](https://github.com/DutchJaFO/Quotinator/issues/304) | Notification + action: let the user trigger a reseed (content changed upstream, or after a Reset) | In progress | T1 ✅ T2 ⬜ | [304-reseed-notification-action-plan.md](304-reseed-notification-action-plan.md) |
+| [#307](https://github.com/DutchJaFO/Quotinator/issues/307) | Changelog highlights: mark specific entries as notification-worthy | In progress | T1 ✅ T2 ⬜ | [307-changelog-notification-audience-key-plan.md](307-changelog-notification-audience-key-plan.md) |
+| [#308](https://github.com/DutchJaFO/Quotinator/issues/308) | Notification: multi-line/rich message layout | In progress | T1 ✅ T2 ⬜ | [308-notification-rich-layout-plan.md](308-notification-rich-layout-plan.md) |
+| [#309](https://github.com/DutchJaFO/Quotinator/issues/309) | Move changelog content to database-backed System_Changelog table | In progress | T1 ✅ T2 ⬜ | [309-system-changelog-table-plan.md](309-system-changelog-table-plan.md) |
+| [#305](https://github.com/DutchJaFO/Quotinator/issues/305) | Database integrity check: verify every database's full schema against its migration path at startup | In progress | T1 ✅ T2 ⬜ | [305-database-integrity-check-plan.md](305-database-integrity-check-plan.md) |
 | [#306](https://github.com/DutchJaFO/Quotinator/issues/306) | Changelog: empty 'Unreleased' section renders on the About page after a release tag | Planning | T1 ⬜ T2 ⬜ | [306-empty-unreleased-section-plan.md](306-empty-unreleased-section-plan.md) |
-| [#319](https://github.com/DutchJaFO/Quotinator/issues/319) | Notification title and body are not translated | Waiting for release | T1 ✅ T2 ✅ | [319-notification-translations-plan.md](319-notification-translations-plan.md) |
-| [#323](https://github.com/DutchJaFO/Quotinator/issues/323) | Source download: a stalled connection attempt outlives its request and fails every other source on the same host | Waiting for release | T1 ✅ T2 ✅ | [323-source-download-connection-stall-plan.md](323-source-download-connection-stall-plan.md) |
+| [#319](https://github.com/DutchJaFO/Quotinator/issues/319) | Notification title and body are not translated | In progress | T1 ✅ T2 ⬜ | [319-notification-translations-plan.md](319-notification-translations-plan.md) |
+| [#323](https://github.com/DutchJaFO/Quotinator/issues/323) | Source download: a stalled connection attempt outlives its request and fails every other source on the same host | In progress | T1 ✅ T2 ⬜ | [323-source-download-connection-stall-plan.md](323-source-download-connection-stall-plan.md) |
 | [#324](https://github.com/DutchJaFO/Quotinator/issues/324) | Notification: report when a source update attempt fails | Planning | T1 ⬜ T2 ⬜ | [324-source-refresh-failure-notification-plan.md](324-source-refresh-failure-notification-plan.md) |
 | [#325](https://github.com/DutchJaFO/Quotinator/issues/325) | Source download: no address-family fallback: a black-holed IPv6 path fails the download even though IPv4 works | Closed as not planned | T1 n/a T2 n/a | [325-address-family-fallback-plan.md](325-address-family-fallback-plan.md) |
-| [#326](https://github.com/DutchJaFO/Quotinator/issues/326) | Startup crashes instead of degrading when the data directory is read-only and a migration is pending | Waiting for release | T1 ✅ T2 ✅ | [326-startup-degrades-on-unwritable-data-directory-plan.md](326-startup-degrades-on-unwritable-data-directory-plan.md) |
+| [#326](https://github.com/DutchJaFO/Quotinator/issues/326) | Startup crashes instead of degrading when the data directory is read-only and a migration is pending | In progress | T1 ✅ T2 ⬜ | [326-startup-degrades-on-unwritable-data-directory-plan.md](326-startup-degrades-on-unwritable-data-directory-plan.md) |
 | [#327](https://github.com/DutchJaFO/Quotinator/issues/327) | Smoke tests: prove startup problems degrade rather than crash | In progress | T1 ⬜ T2 ⬜ | [327-startup-degradation-smoke-coverage-plan.md](327-startup-degradation-smoke-coverage-plan.md) |
 | [#328](https://github.com/DutchJaFO/Quotinator/issues/328) | Smoke tests: verify bundled imports and endpoint behaviour against a real database | Planning | T1 ⬜ T2 ⬜ | [328-bundled-import-and-live-endpoint-coverage-plan.md](328-bundled-import-and-live-endpoint-coverage-plan.md) |
 | [#329](https://github.com/DutchJaFO/Quotinator/issues/329) | Source refresh: no retry on a marginal connect, and sources download sequentially | Planning | T1 ⬜ T2 ⬜ | [329-source-refresh-retry-and-parallelism-plan.md](329-source-refresh-retry-and-parallelism-plan.md) |
 | [#330](https://github.com/DutchJaFO/Quotinator/issues/330) | File metadata: sidecar and database record for every file we create or inspect | Planning | T1 ⬜ T2 ⬜ | [330-file-metadata-sidecar-and-record-plan.md](330-file-metadata-sidecar-and-record-plan.md) |
 | [#331](https://github.com/DutchJaFO/Quotinator/issues/331) | Source refresh: conditional requests so an unchanged source is not re-downloaded | Planning | T1 ⬜ T2 ⬜ | [331-conditional-source-requests-plan.md](331-conditional-source-requests-plan.md) |
-| [#339](https://github.com/DutchJaFO/Quotinator/issues/339) | Restructure the T2 suite into docs/automated-testing/, one document per test | Waiting for release | T1 ✅ T2 ✅ | [339-automated-testing-restructure-plan.md](339-automated-testing-restructure-plan.md) |
-| [#348](https://github.com/DutchJaFO/Quotinator/issues/348) | Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable | Waiting for release | T1 ✅ T2 ✅ | [348-backup-outcomes-and-refusal-plan.md](348-backup-outcomes-and-refusal-plan.md) |
-| [#349](https://github.com/DutchJaFO/Quotinator/issues/349) | Admin endpoints to list, delete and report status for database backups | Waiting for release | T1 ✅ T2 ✅ | [349-backup-management-endpoints-plan.md](349-backup-management-endpoints-plan.md) |
-| [#350](https://github.com/DutchJaFO/Quotinator/issues/350) | A schema-version overshoot runs healthy instead of degrading, on a schema whose shape is unknown | Waiting for release | T1 ✅ T2 ✅ | [350-overshoot-must-degrade-plan.md](350-overshoot-must-degrade-plan.md) |
+| [#339](https://github.com/DutchJaFO/Quotinator/issues/339) | Restructure the T2 suite into docs/automated-testing/, one document per test | In progress | T1 ✅ T2 ⬜ | [339-automated-testing-restructure-plan.md](339-automated-testing-restructure-plan.md) |
+| [#348](https://github.com/DutchJaFO/Quotinator/issues/348) | Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable | In progress | T1 ✅ T2 ⬜ | [348-backup-outcomes-and-refusal-plan.md](348-backup-outcomes-and-refusal-plan.md) |
+| [#349](https://github.com/DutchJaFO/Quotinator/issues/349) | Admin endpoints to list, delete and report status for database backups | In progress | T1 ✅ T2 ⬜ | [349-backup-management-endpoints-plan.md](349-backup-management-endpoints-plan.md) |
+| [#350](https://github.com/DutchJaFO/Quotinator/issues/350) | A schema-version overshoot runs healthy instead of degrading, on a schema whose shape is unknown | In progress | T1 ✅ T2 ⬜ | [350-overshoot-must-degrade-plan.md](350-overshoot-must-degrade-plan.md) |
 | [#351](https://github.com/DutchJaFO/Quotinator/issues/351) | AuditOperation is a string-constant set where the project's convention is an enum | Planning | T1 ⬜ T2 ⬜ | [351-audit-operation-enum-plan.md](351-audit-operation-enum-plan.md) |
 | [#352](https://github.com/DutchJaFO/Quotinator/issues/352) | Restore a stored backup, refusing one taken ahead of this build | Planning | T1 ⬜ T2 ⬜ | [352-restore-a-stored-backup-plan.md](352-restore-a-stored-backup-plan.md) |
 | [#353](https://github.com/DutchJaFO/Quotinator/issues/353) | Upload a backup file | Planning | T1 ⬜ T2 ⬜ | [353-upload-a-backup-file-plan.md](353-upload-a-backup-file-plan.md) |
 | [#360](https://github.com/DutchJaFO/Quotinator/issues/360) | Migration-generated identifiers are not valid UUIDs; route all id creation through one factory | Planning | T1 ⬜ T2 ⬜ | [360-guid-factory-plan.md](360-guid-factory-plan.md) |
-| [#367](https://github.com/DutchJaFO/Quotinator/issues/367) | Notification actions give no feedback while they run | Waiting for release | T1 ✅ T2 ✅ | [367-executing-notification-state-plan.md](367-executing-notification-state-plan.md) |
+| [#367](https://github.com/DutchJaFO/Quotinator/issues/367) | Notification actions give no feedback while they run | In progress | T1 ✅ T2 ⬜ | [367-executing-notification-state-plan.md](367-executing-notification-state-plan.md) |
 | [#368](https://github.com/DutchJaFO/Quotinator/issues/368) | New import files are discovered but never imported, and nothing says so | Planning | T1 ⬜ T2 ⬜ | [368-unimported-files-are-discovered-but-never-imported-plan.md](368-unimported-files-are-discovered-but-never-imported-plan.md) |
-| [#369](https://github.com/DutchJaFO/Quotinator/issues/369) | A review row whose batch is gone offers decisions that cannot be carried out | Waiting for release | T1 ✅ T2 ✅ | [369-orphaned-review-rows-plan.md](369-orphaned-review-rows-plan.md) |
-| [#370](https://github.com/DutchJaFO/Quotinator/issues/370) | An expected import conflict is signalled by throwing, once per conflicted row per render | Waiting for release | T1 ✅ T2 ✅ | [370-conflict-signalled-by-throwing-plan.md](370-conflict-signalled-by-throwing-plan.md) |
-| [#409](https://github.com/DutchJaFO/Quotinator/issues/409) | A quote held for review over a case-only text change shows nothing to decide, and is decided without asking | Waiting for release | T1 ✅ T2 ✅ | [409-case-only-change-shows-nothing-to-decide-plan.md](409-case-only-change-shows-nothing-to-decide-plan.md) |
-| [#410](https://github.com/DutchJaFO/Quotinator/issues/410) | Deciding a Quote Add action answers 500 instead of an outcome | Waiting for release | T1 ✅ T2 ✅ | [410-deciding-an-add-answers-500-plan.md](410-deciding-an-add-answers-500-plan.md) |
-| [#411](https://github.com/DutchJaFO/Quotinator/issues/411) | Automated-test documents no longer run as written | Waiting for release | T1 ✅ T2 ✅ | [411-automated-test-documents-no-longer-run-as-written-plan.md](411-automated-test-documents-no-longer-run-as-written-plan.md) |
-| [#413](https://github.com/DutchJaFO/Quotinator/issues/413) | The operation-ID announcement expires while it still applies, and its text is one unbroken paragraph | Waiting for release | T1 ✅ T2 ✅ | [413-announcement-expiry-and-layout-plan.md](413-announcement-expiry-and-layout-plan.md) |
+| [#369](https://github.com/DutchJaFO/Quotinator/issues/369) | A review row whose batch is gone offers decisions that cannot be carried out | In progress | T1 ✅ T2 ⬜ | [369-orphaned-review-rows-plan.md](369-orphaned-review-rows-plan.md) |
+| [#370](https://github.com/DutchJaFO/Quotinator/issues/370) | An expected import conflict is signalled by throwing, once per conflicted row per render | In progress | T1 ✅ T2 ⬜ | [370-conflict-signalled-by-throwing-plan.md](370-conflict-signalled-by-throwing-plan.md) |
+| [#409](https://github.com/DutchJaFO/Quotinator/issues/409) | A quote held for review over a case-only text change shows nothing to decide, and is decided without asking | In progress | T1 ✅ T2 ⬜ | [409-case-only-change-shows-nothing-to-decide-plan.md](409-case-only-change-shows-nothing-to-decide-plan.md) |
+| [#410](https://github.com/DutchJaFO/Quotinator/issues/410) | Deciding a Quote Add action answers 500 instead of an outcome | In progress | T1 ✅ T2 ⬜ | [410-deciding-an-add-answers-500-plan.md](410-deciding-an-add-answers-500-plan.md) |
+| [#411](https://github.com/DutchJaFO/Quotinator/issues/411) | Automated-test documents no longer run as written | In progress | T1 ✅ T2 ⬜ | [411-automated-test-documents-no-longer-run-as-written-plan.md](411-automated-test-documents-no-longer-run-as-written-plan.md) |
+| [#413](https://github.com/DutchJaFO/Quotinator/issues/413) | The operation-ID announcement expires while it still applies, and its text is one unbroken paragraph | In progress | T1 ✅ T2 ⬜ | [413-announcement-expiry-and-layout-plan.md](413-announcement-expiry-and-layout-plan.md) |
 | [#416](https://github.com/DutchJaFO/Quotinator/issues/416) | Resolving a held import item always creates a rule, and every held item says why it was held | Planning | T1 ⬜ T2 ⬜ | none |
-| [#419](https://github.com/DutchJaFO/Quotinator/issues/419) | A reset in the first moments after startup races the what's-new notification's write | Waiting for release | T1 ✅ T2 ✅ | [419-startup-gate-blocks-writes-plan.md](419-startup-gate-blocks-writes-plan.md) |
-| [#420](https://github.com/DutchJaFO/Quotinator/issues/420) | Generating conflict rules answers an unhandled 500 when a rule file holds two rules for one entity | Waiting for release | T1 ✅ T2 ✅ | [420-two-rules-for-one-entity-plan.md](420-two-rules-for-one-entity-plan.md) |
-| [#422](https://github.com/DutchJaFO/Quotinator/issues/422) | A modal's 95vh height cap never applies; Bootstrap's centred min-height overrides it | Waiting for release | T1 ✅ T2 ✅ | [422-inert-modal-height-cap-plan.md](422-inert-modal-height-cap-plan.md) |
-| [#423](https://github.com/DutchJaFO/Quotinator/issues/423) | Seeding fills any empty database, so a reset is undone by the next restart | Waiting for release | T1 ✅ T2 ✅ | [423-only-a-new-database-seeds-plan.md](423-only-a-new-database-seeds-plan.md) |
-| [#424](https://github.com/DutchJaFO/Quotinator/issues/424) | Bundled sources are not auto-downloaded by default, and are refreshed by hand instead | Waiting for release | T1 ✅ T2 ✅ | [424-sources-not-auto-downloaded-by-default-plan.md](424-sources-not-auto-downloaded-by-default-plan.md) |
+| [#419](https://github.com/DutchJaFO/Quotinator/issues/419) | A reset in the first moments after startup races the what's-new notification's write | In progress | T1 ✅ T2 ⬜ | [419-startup-gate-blocks-writes-plan.md](419-startup-gate-blocks-writes-plan.md) |
+| [#420](https://github.com/DutchJaFO/Quotinator/issues/420) | Generating conflict rules answers an unhandled 500 when a rule file holds two rules for one entity | In progress | T1 ✅ T2 ⬜ | [420-two-rules-for-one-entity-plan.md](420-two-rules-for-one-entity-plan.md) |
+| [#422](https://github.com/DutchJaFO/Quotinator/issues/422) | A modal's 95vh height cap never applies; Bootstrap's centred min-height overrides it | In progress | T1 ✅ T2 ⬜ | [422-inert-modal-height-cap-plan.md](422-inert-modal-height-cap-plan.md) |
+| [#423](https://github.com/DutchJaFO/Quotinator/issues/423) | Seeding fills any empty database, so a reset is undone by the next restart | In progress | T1 ✅ T2 ⬜ | [423-only-a-new-database-seeds-plan.md](423-only-a-new-database-seeds-plan.md) |
+| [#424](https://github.com/DutchJaFO/Quotinator/issues/424) | Bundled sources are not auto-downloaded by default, and are refreshed by hand instead | In progress | T1 ✅ T2 ⬜ | [424-sources-not-auto-downloaded-by-default-plan.md](424-sources-not-auto-downloaded-by-default-plan.md) |
 | [#430](https://github.com/DutchJaFO/Quotinator/issues/430) | A backup's filename version is inconsistent across call sites and cannot identify the schema state it came from | Planning | T1 ⬜ T2 ⬜ | none |
 | [#431](https://github.com/DutchJaFO/Quotinator/issues/431) | Let an operator name a backup they create | Planning | T1 ⬜ T2 ⬜ | none |
 | [#438](https://github.com/DutchJaFO/Quotinator/issues/438) | Two automated-test documents no longer match the product: the wait-page document cannot pass as written | Planning | T1 ⬜ T2 ⬜ | none |
@@ -92,21 +92,21 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#478](https://github.com/DutchJaFO/Quotinator/issues/478) | A reseed recommendation cannot say what a reseed would load, and resolves itself when it loads nothing | Planning | T1 ⬜ T2 ⬜ | none |
 | [#479](https://github.com/DutchJaFO/Quotinator/issues/479) | A duplicate Source spelled differently passes the fresh-seed check | Planning | T1 ⬜ T2 ⬜ | none |
 | [#480](https://github.com/DutchJaFO/Quotinator/issues/480) | `test-env.csx destroy --bind` with no directory is read as no bind at all | Planning | T1 ⬜ T2 ⬜ | none |
-| [#397](https://github.com/DutchJaFO/Quotinator/issues/397) | Exceptions the application catches leave no trace outside Visual Studio | Waiting for release | T1 ✅ T2 ✅ | [397-exceptions-leave-no-trace-plan.md](397-exceptions-leave-no-trace-plan.md) |
-| [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | Waiting for release | T1 ✅ T2 ✅ | [371-database-and-migration-notifications-plan.md](371-database-and-migration-notifications-plan.md) |
-| [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | Waiting for release | T1 ✅ T2 ✅ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
-| [#373](https://github.com/DutchJaFO/Quotinator/issues/373) | An import that re-states identical content reports it as modified | Waiting for release | T1 ✅ T2 ✅ | [373-unchanged-is-not-modified-plan.md](373-unchanged-is-not-modified-plan.md) |
-| [#374](https://github.com/DutchJaFO/Quotinator/issues/374) | A conflict rule cannot tell "already correct" from "cannot apply" | Waiting for release | T1 ✅ T2 ✅ | [374-already-correct-is-not-cannot-apply-plan.md](374-already-correct-is-not-cannot-apply-plan.md) |
-| [#375](https://github.com/DutchJaFO/Quotinator/issues/375) | A quote from a multi-season TV series cannot say which season it is from | Waiting for release | T1 ✅ T2 ✅ | [375-season-between-series-and-source-plan.md](375-season-between-series-and-source-plan.md) |
-| [#376](https://github.com/DutchJaFO/Quotinator/issues/376) | A Source-level Modify conflict stages a new Pending action on every reseed instead of staying stable | Waiting for release | T1 ✅ T2 ✅ | [376-source-modify-conflict-accumulates-plan.md](376-source-modify-conflict-accumulates-plan.md) |
-| [#377](https://github.com/DutchJaFO/Quotinator/issues/377) | A Modify action whose resolution is a genuine no-op is still counted as Modified | Waiting for release | T1 ✅ T2 ✅ | [377-no-op-modify-is-not-a-write-plan.md](377-no-op-modify-is-not-a-write-plan.md) |
-| [#378](https://github.com/DutchJaFO/Quotinator/issues/378) | A "Keep"/"Replace" resolution on a Quote's date field never actually takes effect: the linked Source variant silently wins instead | Waiting for release | T1 ✅ T2 ✅ | [378-keep-replace-source-link-plan.md](378-keep-replace-source-link-plan.md) |
+| [#397](https://github.com/DutchJaFO/Quotinator/issues/397) | Exceptions the application catches leave no trace outside Visual Studio | In progress | T1 ✅ T2 ⬜ | [397-exceptions-leave-no-trace-plan.md](397-exceptions-leave-no-trace-plan.md) |
+| [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | In progress | T1 ✅ T2 ⬜ | [371-database-and-migration-notifications-plan.md](371-database-and-migration-notifications-plan.md) |
+| [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | In progress | T1 ✅ T2 ⬜ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
+| [#373](https://github.com/DutchJaFO/Quotinator/issues/373) | An import that re-states identical content reports it as modified | In progress | T1 ✅ T2 ⬜ | [373-unchanged-is-not-modified-plan.md](373-unchanged-is-not-modified-plan.md) |
+| [#374](https://github.com/DutchJaFO/Quotinator/issues/374) | A conflict rule cannot tell "already correct" from "cannot apply" | In progress | T1 ✅ T2 ⬜ | [374-already-correct-is-not-cannot-apply-plan.md](374-already-correct-is-not-cannot-apply-plan.md) |
+| [#375](https://github.com/DutchJaFO/Quotinator/issues/375) | A quote from a multi-season TV series cannot say which season it is from | In progress | T1 ✅ T2 ⬜ | [375-season-between-series-and-source-plan.md](375-season-between-series-and-source-plan.md) |
+| [#376](https://github.com/DutchJaFO/Quotinator/issues/376) | A Source-level Modify conflict stages a new Pending action on every reseed instead of staying stable | In progress | T1 ✅ T2 ⬜ | [376-source-modify-conflict-accumulates-plan.md](376-source-modify-conflict-accumulates-plan.md) |
+| [#377](https://github.com/DutchJaFO/Quotinator/issues/377) | A Modify action whose resolution is a genuine no-op is still counted as Modified | In progress | T1 ✅ T2 ⬜ | [377-no-op-modify-is-not-a-write-plan.md](377-no-op-modify-is-not-a-write-plan.md) |
+| [#378](https://github.com/DutchJaFO/Quotinator/issues/378) | A "Keep"/"Replace" resolution on a Quote's date field never actually takes effect: the linked Source variant silently wins instead | In progress | T1 ✅ T2 ⬜ | [378-keep-replace-source-link-plan.md](378-keep-replace-source-link-plan.md) |
 | [#381](https://github.com/DutchJaFO/Quotinator/issues/381) | A cross-file duplicate quote's CharacterId/PersonId silently reverts to null on every reseed | Planning | T1 ⬜ T2 ⬜ | [381-character-personid-toggle-plan.md](381-character-personid-toggle-plan.md) |
-| [#382](https://github.com/DutchJaFO/Quotinator/issues/382) | CompletenessGuard.ShouldBlock is evaluated against a pre-rule field set at four of five sites | Waiting for release | T1 ✅ T2 ✅ | [382-shouldblock-reads-a-pre-rule-field-set-plan.md](382-shouldblock-reads-a-pre-rule-field-set-plan.md) |
+| [#382](https://github.com/DutchJaFO/Quotinator/issues/382) | CompletenessGuard.ShouldBlock is evaluated against a pre-rule field set at four of five sites | In progress | T1 ✅ T2 ⬜ | [382-shouldblock-reads-a-pre-rule-field-set-plan.md](382-shouldblock-reads-a-pre-rule-field-set-plan.md) |
 | [#383](https://github.com/DutchJaFO/Quotinator/issues/383) | Notification detail table has no totals line | Waiting for release | T1 ✅ | [383-notification-detail-totals-line-plan.md](383-notification-detail-totals-line-plan.md) |
-| [#389](https://github.com/DutchJaFO/Quotinator/issues/389) | A staged review batch cannot be discarded once the planner has staged a no-op in it as Applied | Waiting for release | T1 ✅ T2 ✅ | [389-discard-keeps-plan-time-no-ops-plan.md](389-discard-keeps-plan-time-no-ops-plan.md) |
+| [#389](https://github.com/DutchJaFO/Quotinator/issues/389) | A staged review batch cannot be discarded once the planner has staged a no-op in it as Applied | In progress | T1 ✅ T2 ⬜ | [389-discard-keeps-plan-time-no-ops-plan.md](389-discard-keeps-plan-time-no-ops-plan.md) |
 | [#390](https://github.com/DutchJaFO/Quotinator/issues/390) | A reseed imports the file list captured at startup, not the files currently in either folder | Planning | T1 ⬜ T2 ⬜ | none |
-| [#482](https://github.com/DutchJaFO/Quotinator/issues/482) | A Reset cannot rebuild a database SQLite cannot read | Waiting for release | T1 ✅ T2 ✅ | [482-reset-rebuilds-an-unreadable-database-plan.md](482-reset-rebuilds-an-unreadable-database-plan.md) |
+| [#482](https://github.com/DutchJaFO/Quotinator/issues/482) | A Reset cannot rebuild a database SQLite cannot read | In progress | T1 ✅ T2 ⬜ | [482-reset-rebuilds-an-unreadable-database-plan.md](482-reset-rebuilds-an-unreadable-database-plan.md) |
 | [#503](https://github.com/DutchJaFO/Quotinator/issues/503) | A failing T2 step blocks the issue: remove the "Fully green after" exception and audit the issues it let through | In progress | T2 ⬜ | [503-a-failing-t2-step-blocks-the-issue-plan.md](503-a-failing-t2-step-blocks-the-issue-plan.md) |
 | [#501](https://github.com/DutchJaFO/Quotinator/issues/501) | notifications-and-changelog/03 prints the database values it expects without asserting them | Planning | T1 ⬜ T2 ⬜ | none |
 | [#502](https://github.com/DutchJaFO/Quotinator/issues/502) | The canaries of backup/03 and backup/04 name readings their canary build does not produce | Planning | T1 ⬜ T2 ⬜ | none |
@@ -128,47 +128,47 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 ## Dependency map
 
 ```
-#312 ─── depends on #278; blocks #81, #302, #303, #304, #308: Waiting for release
+#312 ─── depends on #278; blocks #81, #302, #303, #304, #308; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
 #83  ─── (none): Waiting for release
-#81  ─── depends on #278, #80, #309, #307, #312; soft-depends on #308: Waiting for release
-#304 ─── depends on #278, #312, #319: Waiting for release
-#302 ─── depends on #278, #304, #312, #319, #372: Waiting for release
-#303 ─── depends on #278, #302, #304, #312, #319: Waiting for release
-#307 ─── depends on #80; soft-depends on #309: Waiting for release
-#308 ─── depends on #302, #303, #304, #312, #367: Waiting for release
-#309 ─── depends on #80: Waiting for release
-#305 ─── (none); blocks #327: Waiting for release
+#81  ─── depends on #278, #80, #309, #307, #312; soft-depends on #308; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#304 ─── depends on #278, #312, #319; T2 blocked by #400, #438, #468, #469, #472, #503, #501 (#503's audit): In progress
+#302 ─── depends on #278, #304, #312, #319, #372; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#303 ─── depends on #278, #302, #304, #312, #319; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#307 ─── depends on #80; soft-depends on #309; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#308 ─── depends on #302, #303, #304, #312, #367; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#309 ─── depends on #80; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#305 ─── (none); blocks #327; T2 blocked by #400, #438, #468, #469, #472, #503, #404, #501 (#503's audit): In progress
 #306 ─── (none): Planning
-#319 ─── depends on #278, #312; blocks #304, #302, #303, #308: Waiting for release
-#323 ─── (none); blocks #325, #329: Waiting for release
+#319 ─── depends on #278, #312; blocks #304, #302, #303, #308; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#323 ─── (none); blocks #325, #329; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
 #324 ─── depends on #278, #312, #319; soft-consumes #329: Planning
 #325 ─── depends on #323: Closed as not planned
-#326 ─── (none); blocks #327: Waiting for release
+#326 ─── (none); blocks #327; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
 #327 ─── depends on #326, #339, #350, #305, #482, #457, #454, #455, #456, #453, #428: In progress
 #328 ─── depends on #339: Planning
 #329 ─── depends on #323, #325; blocks #324: Planning
 #330 ─── (none); blocks #331: Planning
 #331 ─── depends on #330: Planning
-#339 ─── (none); blocks #327, #328: Waiting for release
-#348 ─── depends on #349, #482; blocks #327: Waiting for release
-#349 ─── (none); soft-relates to #348: Waiting for release
-#350 ─── (none): Waiting for release
+#339 ─── (none); blocks #327, #328; T2 blocked by #400, #438, #468, #469, #472, #503, #347 (#503's audit): In progress
+#348 ─── depends on #349, #482; blocks #327; T2 blocked by #400, #438, #468, #469, #472, #503, #347, #502 (#503's audit): In progress
+#349 ─── (none); soft-relates to #348; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#350 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
 #352 ─── (none): Planning
 #360 ─── (none): Planning
 #353 ─── (none): Planning
 #351 ─── (none): Planning
 #313 ─── depends on #280: Waiting for release
-#370 ─── depends on #397; blocks #409, #410: Waiting for release
-#409 ─── depends on #370: Waiting for release
-#410 ─── depends on #370: Waiting for release
-#411 ─── (none): Waiting for release
-#413 ─── depends on #312, #319: Waiting for release
+#370 ─── depends on #397; blocks #409, #410; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#409 ─── depends on #370; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#410 ─── depends on #370; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#411 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503, #347, #404, #501, #502 (#503's audit): In progress
+#413 ─── depends on #312, #319; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
 #416 ─── (none): Planning
-#419 ─── (none): Waiting for release
-#420 ─── (none): Waiting for release
-#422 ─── (none): Waiting for release
-#423 ─── (none): Waiting for release
-#424 ─── (none): Waiting for release
+#419 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#420 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503, #347 (#503's audit): In progress
+#422 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#423 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#424 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503, #462 (#503's audit): In progress
 #438 ─── (none): Planning
 #462 ─── (none); soft-relates to #329, #331: Planning
 #473 ─── requires #327, which built the tooling; must land before the milestone-close T2 run, which cannot start until every document can: Planning
@@ -180,29 +180,29 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #480 ─── (none): Planning
 #430 ─── (none): Planning
 #431 ─── (none): Planning
-#397 ─── (none); blocks #370: Waiting for release
-#369 ─── depends on #303, #372, #389: Waiting for release
-#389 ─── depends on #373, #376, #377: Waiting for release
+#397 ─── (none); blocks #370; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#369 ─── depends on #303, #372, #389; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#389 ─── depends on #373, #376, #377; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
 #390 ─── (none); blocks #368: Planning
-#372 ─── depends on #373 for its step 6; blocks #302, #373: Waiting for release
-#373 ─── depends on #372 for reproduction, #374 for its T2 runs; blocks #372's step 6: Waiting for release
-#375 ─── (none); blocks #374: Waiting for release
-#374 ─── depends on #375: Waiting for release
-#376 ─── (none): Waiting for release
-#377 ─── (none); blocks #372: Waiting for release
-#378 ─── (none): Waiting for release
+#372 ─── depends on #373 for its step 6; blocks #302, #373; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#373 ─── depends on #372 for reproduction, #374 for its T2 runs; blocks #372's step 6; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#375 ─── (none); blocks #374; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#374 ─── depends on #375; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#376 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#377 ─── (none); blocks #372; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#378 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
 #381 ─── (none): Planning
-#382 ─── depends on #377: Waiting for release
+#382 ─── depends on #377; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
 #383 ─── depends on #377: Waiting for release
-#367 ─── depends on #278, #304; blocks #308: Waiting for release
-#371 ─── (none): Waiting for release
+#367 ─── depends on #278, #304; blocks #308; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#371 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
 #368 ─── depends on #303, #304, #390: Planning
-#482 ─── (none); blocks #327, #348, #457: Waiting for release
+#482 ─── (none); blocks #327, #348, #457; T2 blocked by #400, #438, #468, #469, #472, #503, #502 (#503's audit): In progress
 #503 ─── depends on #438, #462, #469, #472, and #347, #400, #404, #468, #505, #506 (v1.9.0), #445 (Startup and degraded experience), whose failing T2 steps are in its scope; blocks #490, #457: In progress
 #501 ─── (none); blocks #490, #457: Planning
 #502 ─── (none); blocks #490, #457: Planning
-#490 ─── depends on #501, #502, #503, #469, #472, and #468, #400 (v1.9.0), #445 (Startup and degraded experience), whose failing T2 steps are in its scope; blocks #457, #491, #492, #493: In progress
-#457 ─── depends on #482, #490, #501, #502, #503, #469, #472, and #468, #400 (v1.9.0), #445 (Startup and degraded experience), as #490 does; blocks #327: In progress
+#490 ─── depends on #501, #502, #503, #438, #469, #472, and #468, #400 (v1.9.0), #445 (Startup and degraded experience), whose failing T2 steps are in its scope; blocks #457, #491, #492, #493: In progress
+#457 ─── depends on #482, #490, #501, #502, #503, #438, #469, #472, and #468, #400 (v1.9.0), #445 (Startup and degraded experience), as #490 does; blocks #327: In progress
 #493 ─── depends on #490: Planning
 #491 ─── depends on #490; soft-relates to #492: Planning
 #492 ─── depends on #490; soft-relates to #491: Planning
@@ -213,6 +213,11 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #428 ─── (none); blocks #327: Planning
 ```
 
+**T2 blockers from outside this milestone** (#503's audit, 2026-11-21, under ADR 029): #347, #400, #404, #468,
+#505 and #506 in v1.9.0, and #445 in *Startup and degraded experience*. #400 and #468 own failing smoke steps,
+so they block every issue with a T2 tier; #505 and #506 block every such issue through #503, which converts
+`startup-and-degradation/06` after them. This milestone cannot release before they land.
+
 ---
 
 ## Order of operations
@@ -220,53 +225,53 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | # | Issue | Reason |
 |---|-------|--------|
 | 1 | **#313** ✅ | Waiting for release |
-| 2 | **#323** ✅ | Waiting for release |
+| 2 | **#323** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
 | 3 | **#325** ⛔ | Closed as not planned |
-| 4 | **#312** ✅ | Waiting for release |
-| 5 | **#81** ✅ | Waiting for release |
+| 4 | **#312** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 5 | **#81** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
 | 6 | **#83** ✅ | Waiting for release |
-| 7 | **#309** ✅ | Waiting for release |
-| 8 | **#326** ✅ | Waiting for release |
-| 9 | **#424** ✅ | Waiting for release |
-| 10 | **#349** ✅ | Waiting for release |
-| 11 | **#307** ✅ | Waiting for release |
-| 12 | **#319** ✅ | Waiting for release |
-| 13 | **#304** ✅ | Waiting for release |
-| 14 | **#302** ✅ | Waiting for release |
-| 15 | **#303** ✅ | Waiting for release |
-| 16 | **#367** ✅ | Waiting for release |
-| 17 | **#308** ✅ | Waiting for release |
-| 18 | **#375** ✅ | Waiting for release |
-| 19 | **#374** ✅ | Waiting for release |
-| 20 | **#378** ✅ | Waiting for release |
-| 21 | **#373** ✅ | Waiting for release |
-| 22 | **#372** ✅ | Waiting for release |
-| 23 | **#377** ✅ | Waiting for release |
-| 24 | **#382** ✅ | Waiting for release |
+| 7 | **#309** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 8 | **#326** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 9 | **#424** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #462 |
+| 10 | **#349** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 11 | **#307** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 12 | **#319** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 13 | **#304** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #501 |
+| 14 | **#302** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 15 | **#303** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 16 | **#367** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 17 | **#308** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 18 | **#375** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 19 | **#374** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 20 | **#378** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 21 | **#373** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 22 | **#372** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 23 | **#377** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 24 | **#382** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
 | 25 | **#383** ✅ | Waiting for release |
-| 26 | **#376** ✅ | Waiting for release |
-| 27 | **#389** ✅ | Waiting for release |
-| 28 | **#369** ✅ | Waiting for release |
-| 29 | **#397** ✅ | Waiting for release |
-| 30 | **#370** ✅ | Waiting for release |
-| 31 | **#409** ✅ | Waiting for release |
-| 32 | **#410** ✅ | Waiting for release |
-| 33 | **#411** ✅ | Waiting for release |
-| 34 | **#413** ✅ | Waiting for release |
-| 35 | **#419** ✅ | Waiting for release |
-| 36 | **#420** ✅ | Waiting for release |
-| 37 | **#422** ✅ | Waiting for release |
-| 38 | **#423** ✅ | Waiting for release |
-| 39 | **#371** ✅ | Waiting for release |
-| 40 | **#350** ✅ | Waiting for release |
-| 41 | **#339** ✅ | Waiting for release |
-| 42 | **#305** ✅ | Waiting for release |
-| 43 | **#482** ✅ | Waiting for release |
-| 44 | **#348** ✅ | Waiting for release |
+| 26 | **#376** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 27 | **#389** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 28 | **#369** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 29 | **#397** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 30 | **#370** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 31 | **#409** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 32 | **#410** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 33 | **#411** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #347, #404, #501, #502 |
+| 34 | **#413** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 35 | **#419** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 36 | **#420** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #347 |
+| 37 | **#422** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 38 | **#423** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 39 | **#371** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 40 | **#350** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 41 | **#339** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #347 |
+| 42 | **#305** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #404, #501 |
+| 43 | **#482** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #502 |
+| 44 | **#348** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #347, #502 |
 | 45 | **#503** 🚧 | In progress: first, so the rule that a failing step blocks the issue is in place before anything else is judged |
 | 46 | **#501** | Planning: blocks #490 and #457 |
 | 47 | **#502** | Planning: blocks #490 and #457 |
-| 48 | **#490** 🚧 | In progress: T2 not passed (2026-11-20), blocked by #501, #502, #503, #469, #472 and the out-of-milestone #468, #400, #445 |
+| 48 | **#490** 🚧 | In progress: T2 not passed (2026-11-20), blocked by #501, #502, #503, #438, #469, #472 and the out-of-milestone #468, #400, #445 |
 | 49 | **#457** 🚧 | In progress |
 | 50 | **#493** | Planning |
 | 51 | **#491** | Planning |
