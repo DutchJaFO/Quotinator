@@ -1,6 +1,6 @@
 # #503: A failing T2 step blocks the issue: remove the "Fully green after" exception and audit the issues it let through
 
-**Status:** In progress (step 11)
+**Status:** In progress (step 10)
 **GitHub issue:** #503
 **Tiers required:** T2
 **Depends on:** #347, #400, #404, #438, #445, #462, #468, #469, #472, #505, #506. Blocks #457, #490.
@@ -9,7 +9,9 @@
 
 ## Next action
 
-**Run step 11, the full build and test run; then wait for the owners.** Steps 1 to 5 and 8 to 10 are done.
+**Finish step 10: verification row 14 must pass, and the developer must review it before the step is marked
+done.** Then step 11, the full build and test run, and then the wait for the owners. Steps 1 to 5, 8 and 9
+are done.
 Steps 6 and 7 are done except `startup-and-degradation/06`'s log counts and their three runs, which wait for
 #505 and #506. Step 12, this issue's T2, waits for every owner (decision D), and step 13 follows it. Decisions A to G were all answered on 2026-11-21, and no question is
 open. The comment on #438 that decision G calls for was posted the same day. The plan is built against
@@ -530,38 +532,43 @@ carries no link.
 
 ### 10. Update the dependency map
 
-**Status:** ✅ Done, 2026-11-21. `1ad395cd` had marked it done when only the blocked issues' lines named their
-owners; the owners' own lines and their place in the order of operations were finished after it. `959070dd`
-marked it done again with two order-of-operations rows still short: #457's named no blocker, and #503's did
-not say that its own T2 waits for owners listed after it. Both rows were completed after it.
+**Status:** 🔄 In progress, reopened 2026-11-22. Verification row 14 is the test of this step; the step is done
+only when that row passes and the developer has reviewed it. It was marked done three times before it was
+complete: in `1ad395cd`, when only the blocked issues' lines named their owners; in `959070dd`, with #457's
+and #503's order-of-operations rows naming no blockers; and in `ab29679b`, with no verification row to show
+it was complete and this design still describing five outside owners where seven are listed.
 
-**Done 2026-11-21:**
+`overview.md`'s dependency map and order of operations record every owner from step 8 as a blocker of each
+issue it blocks, in both directions: the owner's line lists the issue, and the issue's map line and order
+row name the owner. Every row in the order of operations comes after each issue it depends on or is
+T2-blocked by; where it cannot, its row says why. The owners outside this milestone, the five decision C
+leaves where they are plus #505 and #506 from decision F, are named under the map as blockers from outside,
+each with the step it owns and what it blocks. #469 and #472 were moved and listed during planning.
+
+**Work done, 2026-11-21 and 2026-11-22:**
 
 - **Dependency map, both directions.** Each of the 40 set-back issues' lines names its owners (step 8). Each
   owner in this milestone has a line naming the failing step it owns and every issue it blocks: #438, #469 and
   #472 (smoke steps) and #503 (`startup-and-degradation/06`) list the same 43 issues, the 40 plus #490, #457
   and #503 (#503's own line omits itself); #501, #502 and #462 list theirs. #469 and #472 had no line before.
-  Cross-checked mechanically: every owner an issue's line names lists that issue, and every issue an owner
-  lists names that owner.
-- **Owners outside this milestone**, which the map does not list, are named in a table under it: #400 and
-  #468 (smoke steps), #347, #404, #505, #506 (v1.9.0) and #445 (*Startup and degraded experience*), each with
-  the step it owns and what it blocks.
+- **Owners outside this milestone** are named in a table under the map: #400 and #468 (smoke steps), #347,
+  #404, #505, #506 (v1.9.0) and #445 (*Startup and degraded experience*).
 - **Order of operations.** #503 and the six owners in this milestone (#438, #469, #472, #501, #502, #462) come
-  first, ahead of every issue they block; #469 and #472 were missing from it. Every other row keeps its
-  relative order, renumbered; 83 rows before, 85 after. #503 stays first although #438, #469, #472 and #462
-  block its T2: the rule has to be in place before anything else is judged, so its row says that it runs
-  first and closes after them. Every blocked row names its blockers, #490's and #457's included.
-- **Older ordering errors, fixed here at the developer's request.** Three rows came before an issue they
-  depend on, out of order since before this issue's first edit: #81 before #309 and #307, #302 before #372,
-  and #373 before #372. #81 now follows #307, and #377 and #372 come before #302 (#372 needs #377). #372 and
-  #373 depend on each other for different steps; #372 comes first, as #373's reproduction needs it, and its
-  row says that its step 6 waits for #373. Checked mechanically in both directions: no row comes before an
-  issue it depends on or is T2-blocked by, and no issue comes after one it blocks, except #503 and that pair,
-  whose rows say why.
+  first; #469 and #472 were missing from it. Every blocked row names its blockers, #490's and #457's
+  included. #503 stays first although #438, #469, #472 and #462 block its T2, because the rule has to be in
+  place before anything else is judged; its row says that it runs first and closes after them.
+- **Rows ahead of what they depend on.** Checking the order found three rows that came before an issue they
+  depend on, out of order before this issue's first edit: #81 before #309 and #307, #302 before #372, and
+  #373 before #372. The developer chose on 2026-11-22 to correct them in this step, so the requirement above
+  covers every row, not only the owners. #81 now follows #307, and #377 and #372 come before #302 (#372 needs
+  #377). #372 and #373 depend on each other for different steps; #372 comes first, as #373's reproduction
+  needs it, and its row says that its step 6 waits for #373.
 
-`overview.md`'s order of operations and dependency map gain every owner from step 8 as a blocker of the
-issues it blocks, and the five owners that stay in other milestones (decision C) are named there as
-blockers from outside. #469 and #472 were moved and listed during planning.
+**Verification row 14, run 2026-11-22 on `ab29679b`'s `overview.md`:** 14 owners, the seven in this milestone
+and the seven outside it. (a) and (b): no issue an owner lists lacks that owner on its map line or in its
+order row, and no owner a line or row names fails to list that issue. (c): the order runs against a
+dependency only at #503 (ahead of #438, #462, #469 and #472) and at #372 (ahead of #373), and both rows say
+why. Row 14 passes; the step waits for the developer's review.
 
 ### 11. Full build and test run
 
@@ -603,3 +610,4 @@ Written at *Waiting for release*, after step 12.
 | 11 | ✅ | `api-surface/06` brings its own cookies and asserts each case on the response's antiforgery cookie: none sent issues one, the same ring's is not replaced, another ring's is replaced and logs the pair once; and it declares itself deterministic | Live | Step 7's record: every step of `api-surface/06` passes; `Select-String -Path docs/automated-testing/api-surface/06-*.md -Pattern '^\*\*Deterministic:\*\* yes'` matches |
 | 12 | ❌ | T2 passes: the smoke set and every changed document, every step green | Live | Step 12's record |
 | 13 | ✅ | Both rules report a document that breaks them and pass one that does not, independently of today's documents | Unit test | `AutomatedTestingSuiteTests.MentionsOfFullyGreenAfter_*` (4) and `.StepsThatExcuseAFailure_*` (8): 12 pass; red with the rule bodies disabled (step 3) |
+| 14 | ✅ | Every owner from step 8 is a blocker in `overview.md` in both directions, and every row of the order of operations comes after what it depends on or is T2-blocked by, or says why | Live | Reading `overview.md`: (a) for each owner's map line and each row of the outside-owner table, every issue listed names that owner on its map line and in its order row (#505 and #506 block the others through #503, which those rows name); (b) every owner a map line or order row names lists that issue; (c) no order row comes before an issue its map line depends on or is T2-blocked by, nor after one it blocks; the only exceptions are #503 and the #372/#373 pair, and their rows say why |
