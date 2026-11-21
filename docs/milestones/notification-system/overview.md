@@ -107,7 +107,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#389](https://github.com/DutchJaFO/Quotinator/issues/389) | A staged review batch cannot be discarded once the planner has staged a no-op in it as Applied | Waiting for release | T1 ✅ T2 ✅ | [389-discard-keeps-plan-time-no-ops-plan.md](389-discard-keeps-plan-time-no-ops-plan.md) |
 | [#390](https://github.com/DutchJaFO/Quotinator/issues/390) | A reseed imports the file list captured at startup, not the files currently in either folder | Planning | T1 ⬜ T2 ⬜ | none |
 | [#482](https://github.com/DutchJaFO/Quotinator/issues/482) | A Reset cannot rebuild a database SQLite cannot read | Waiting for release | T1 ✅ T2 ✅ | [482-reset-rebuilds-an-unreadable-database-plan.md](482-reset-rebuilds-an-unreadable-database-plan.md) |
-| [#503](https://github.com/DutchJaFO/Quotinator/issues/503) | A failing T2 step blocks the issue: remove the "Fully green after" exception and audit the issues it let through | Planning | T1 ⬜ T2 ⬜ | [503-a-failing-t2-step-blocks-the-issue-plan.md](503-a-failing-t2-step-blocks-the-issue-plan.md) |
+| [#503](https://github.com/DutchJaFO/Quotinator/issues/503) | A failing T2 step blocks the issue: remove the "Fully green after" exception and audit the issues it let through | In progress | T2 ⬜ | [503-a-failing-t2-step-blocks-the-issue-plan.md](503-a-failing-t2-step-blocks-the-issue-plan.md) |
 | [#501](https://github.com/DutchJaFO/Quotinator/issues/501) | notifications-and-changelog/03 prints the database values it expects without asserting them | Planning | T1 ⬜ T2 ⬜ | none |
 | [#502](https://github.com/DutchJaFO/Quotinator/issues/502) | The canaries of backup/03 and backup/04 name readings their canary build does not produce | Planning | T1 ⬜ T2 ⬜ | none |
 | [#490](https://github.com/DutchJaFO/Quotinator/issues/490) | Check every database in layers, cheapest first, at startup, before a Reset, and on demand | In progress | T1 ✅ T2 ⬜ | [490-layered-database-check-plan.md](490-layered-database-check-plan.md) |
@@ -198,11 +198,11 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #371 ─── (none): Waiting for release
 #368 ─── depends on #303, #304, #390: Planning
 #482 ─── (none); blocks #327, #348, #457: Waiting for release
-#503 ─── (none); blocks #490, #457: Planning
+#503 ─── depends on #438, #462, #469, #472, and #347, #400, #404, #468, #505, #506 (v1.9.0), #445 (Startup and degraded experience), whose failing T2 steps are in its scope; blocks #490, #457: In progress
 #501 ─── (none); blocks #490, #457: Planning
 #502 ─── (none); blocks #490, #457: Planning
-#490 ─── depends on #501, #502, #503, and #468, #469, #472, #400 (v1.9.0), #445 (Startup and degraded experience), whose failing T2 steps are in its scope; blocks #457, #491, #492, #493: In progress
-#457 ─── depends on #482, #490, #501, #502, #503, and #468, #469, #472, #400 (v1.9.0), #445 (Startup and degraded experience), as #490 does; blocks #327: In progress
+#490 ─── depends on #501, #502, #503, #469, #472, and #468, #400 (v1.9.0), #445 (Startup and degraded experience), whose failing T2 steps are in its scope; blocks #457, #491, #492, #493: In progress
+#457 ─── depends on #482, #490, #501, #502, #503, #469, #472, and #468, #400 (v1.9.0), #445 (Startup and degraded experience), as #490 does; blocks #327: In progress
 #493 ─── depends on #490: Planning
 #491 ─── depends on #490; soft-relates to #492: Planning
 #492 ─── depends on #490; soft-relates to #491: Planning
@@ -263,10 +263,10 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 42 | **#305** ✅ | Waiting for release |
 | 43 | **#482** ✅ | Waiting for release |
 | 44 | **#348** ✅ | Waiting for release |
-| 45 | **#503** | Planning: first, so the rule that a failing step blocks the issue is in place before anything else is judged |
+| 45 | **#503** 🚧 | In progress: first, so the rule that a failing step blocks the issue is in place before anything else is judged |
 | 46 | **#501** | Planning: blocks #490 and #457 |
 | 47 | **#502** | Planning: blocks #490 and #457 |
-| 48 | **#490** 🚧 | In progress: T2 not passed (2026-11-20), blocked by #501, #502, #503 and the out-of-milestone #468, #469, #472, #400, #445 |
+| 48 | **#490** 🚧 | In progress: T2 not passed (2026-11-20), blocked by #501, #502, #503, #469, #472 and the out-of-milestone #468, #400, #445 |
 | 49 | **#457** 🚧 | In progress |
 | 50 | **#493** | Planning |
 | 51 | **#491** | Planning |

@@ -1,15 +1,15 @@
 # #503: A failing T2 step blocks the issue: remove the "Fully green after" exception and audit the issues it let through
 
-**Status:** Planning
+**Status:** In progress (step 4)
 **GitHub issue:** #503
 **Tiers required:** T2
-**Depends on:** #347, #400, #404, #438, #445, #462, #468, #469, #472. Blocks #457, #490.
+**Depends on:** #347, #400, #404, #438, #445, #462, #468, #469, #472, #505, #506. Blocks #457, #490.
 
 ---
 
 ## Next action
 
-**Execute this plan, from step 2.** Decisions A to G were all answered on 2026-11-21, and no question is
+**Continue with step 4: write ADR 029.** Steps 1 to 3 are done and not yet committed. Decisions A to G were all answered on 2026-11-21, and no question is
 open. The comment on #438 that decision G calls for was posted the same day. The plan is built against
 `5bfb43f6` (2026-11-21).
 
@@ -149,10 +149,29 @@ Two documents in the table are intermittent: `startup-and-degradation/06` step 6
 
 ### F. Who improves `startup-and-degradation/06` step 6
 
-**Answered 2026-11-21: #503 does it, in step 6.** #445 fixes the product bug the step reads, not the step's
-timing. Before counting exceptions since Cancel, the step waits until the browser page's circuit has
-finished closing, so #445's `TaskCanceledException` lines are counted on every run: red every time until
-#445, green every time after.
+**Answered 2026-11-21: #503 fixes the document, and does it without the log.** The first answer was to wait
+before counting log lines. It was replaced the same day, once the developer ruled that screenshots, log
+reads and audit-trail reads are secondary evidence, removed from the tests, and that a test relying on one
+points to a missing feature (filed for the rest of the suite as #505, in v1.9.0). For this document:
+
+- Step 5's and step 6's screenshots go; the page scripts already assert what the pages show.
+- Step 6's three log counts go: exceptions since Cancel, the `JsonReaderException` control, and the
+  cleanup's count since the control. *If by removing log counts we can no longer validate the test, we
+  need to replace that validation with something we can prove* (developer). The Reset's own result
+  (`Completed`, a backup taken), the `200`s and the cleared banner already prove the Reset did not fail.
+  What only the count caught, an exception thrown and handled without changing any result, is proven
+  through a new feature: the application counts the exceptions it logs (every one passes through
+  `LogMessages`' *thrown*, *handled* or *not handled* method, ADR 022) and reports the totals through a
+  REST endpoint, which the step reads before and after the repair. That feature is its own issue, and a
+  dependency of this one.
+- **The browser stays open for the whole document** (developer, 2026-11-21: *we should only be closing a
+  page or browser if the test calls for it. Any automation that does this when the test doesn't require it
+  at best risks adding noise, at worst creates a workflow that does not exist in the real world.*). Today
+  every `capture-page.csx` command starts and closes its own browser, and each close makes the application
+  log #445's `WebSocketException`s, which is what made step 6's count depend on timing. With one browser
+  opened in setup and closed in cleanup, no close falls between step 6's two readings, so the totals
+  measure only the repair, and #445 shows only in its own tests. The `capture-page.csx` change belongs to
+  #505, so this document waits for #505 as well as #506.
 
 ### G. The two documents declared non-deterministic
 
@@ -191,16 +210,23 @@ in the browser. Not a dependency of this issue.
 
 ### 2. Add the touched test files to the IDE0008/IDE0090 scoped lists
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `.editorconfig`: the new partial `tests/Quotinator.Api.Tests/Solution/RepositoryStructureTests.FailingSteps.cs`
-and `AutomatedTestingSuiteTests.cs`.
+added to both lists. `AutomatedTestingSuiteTests.cs` was already in both.
 
 ### 3. Write the two guards and confirm them red
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-In `RepositoryStructureTests.FailingSteps.cs`, reading through `AutomatedTestingSuite`'s existing loaders:
+**Both halves, answered 2026-11-21.** The suite's convention (`RepositoryStructureTests.LoadSuiteDocuments`'
+remarks, #339 step 13) gives every guard a rule half beside its live half, and the first draft of this plan
+named only the live half. The rule half: each check is a method on `AutomatedTestingSuite`, proven in
+`AutomatedTestingSuiteTests` against supplied documents, one that breaks the rule and one that does not, so a
+check that matched nothing could not pass. That proof outlives step 6, when the real documents stop being red.
+
+The live half, in `RepositoryStructureTests.FailingSteps.cs`, reading through `AutomatedTestingSuite`'s
+existing loaders:
 
 - `AutomatedTestDocuments_CarryNoFullyGreenAfterHeader`: every `.md` under `docs/automated-testing/`,
   the README included, so the template line is covered. Red today on seven documents and the README.
@@ -208,7 +234,23 @@ In `RepositoryStructureTests.FailingSteps.cs`, reading through `AutomatedTesting
   and `On failure` paragraph. Red today on at
   least `database-lifecycle/03`, `notifications-and-changelog/01` and `import-and-staged-actions/01`.
 
-Each failure message names the document, the step and the matched text. Record both red readings here.
+Each failure message names the document, the step and the matched text.
+
+**Done 2026-11-21.**
+
+- **Rule half:** `AutomatedTestingSuite.MentionsOfFullyGreenAfter` and `.StepsThatExcuseAFailure`, with
+  twelve tests in `AutomatedTestingSuiteTests`. A paragraph runs from its `Expected`/`On failure` label to
+  the next blank line, heading, fence or label; phrases match as whole words. **Red first:** with both rule
+  bodies disabled, the five tests expecting a finding failed and the seven expecting none passed; with the
+  bodies restored, all twelve pass.
+- **Live half, red on today's documents.** `AutomatedTestDocuments_CarryNoFullyGreenAfterHeader`: 13 lines,
+  the README's section and template line and every mention in the seven documents with the header.
+  `AutomatedTestDocuments_NeverExcuseAFailingStep`: 14 lines, the expected excuses in
+  `database-lifecycle/03` step 8, `notifications-and-changelog/01` step 9, `import-and-staged-actions/01`
+  step 8 and `17` step 2, plus six the developer ruled real traps rather than false hits (step 6's further
+  findings).
+- **#503's own *Expected tests* table** was updated through an approved `gh issue edit`: the second test
+  is renamed `AutomatedTestDocuments_NeverExcuseAFailingStep`, and a row names the rule-half tests.
 
 ### 4. Write ADR 029
 
@@ -254,9 +296,27 @@ what the correct behaviour is, so it reads red until its owner lands:
 - `import-and-staged-actions/14` step 5: no command, so red per ADR 029, with its *Canary* note rewritten.
 - `import-and-staged-actions/16` and `17`: the evaluation-line readings are failures until #347, not
   inconclusive.
-- `startup-and-degradation/06` step 6: made deterministic per decision F, reading red on every run until
-  #445. Its `Deterministic:` field then tells the truth.
+- `startup-and-degradation/06` steps 5 and 6 and its cleanup: screenshots and log counts replaced per
+  decision F, step 6 reading the exception totals endpoint before and after the repair. Red on every run
+  until #445. Its `Deterministic:` field then tells the truth.
 - `startup-and-degradation/07` step 2: red until #462 makes it deterministic; its header goes.
+- **The guard's further findings (developer, 2026-11-21: *the guard is doing its job and highlighting
+  problems and potential traps; be more careful and explicit in tests, and prefer scripts when you need to
+  test for conditions*).** The eight phrases stay. Every sentence the guard reports is rewritten so the
+  condition it describes is asserted by a command, or the sentence leaves the `Expected`/`On failure` text:
+  - `api-surface/06` step 4, *Do not continue with the suite until it reads `0`*: a leftover cookie that
+    affects later tests is a dependency between tests. The step stops on failure like any other, and the
+    document's own cleanup removes the cookie.
+  - `startup-and-degradation/03` step 3, *What the database holds is not asserted*: a scope statement,
+    moved under *Explicitly not covered here*.
+  - `startup-and-degradation/06` step 5, *Both screenshots record it*: the screenshot is not the
+    assertion; the sentence goes. Developer, 2026-11-21: *screenshots are the same potential trap that
+    reading logs or audit trails is. They are secondary evidence of actions that we likely can trace in
+    code during unit tests and in REST endpoints.* Answered 2026-11-21: a new issue in this milestone
+    records the principle in an ADR and applies it across the suite. It does not block #503.
+  - `startup-and-degradation/06` step 6, three mentions of the *Continue* button: where the prose restates
+    a value a command asserts, it names the command instead; where it states something no command checks
+    (*`/rest-api` is where the modal's Continue lands*), a page-script assertion is added or the claim goes.
 - `api-surface/06` (decision G): step 1's unasserted first visit becomes two asserted variants, a fresh
   browser expecting `0` lines and a cookie from another key ring expecting `2`. Its `Deterministic:` field
   becomes `yes` and its *Determinism* section loses *What varies*.
@@ -353,3 +413,4 @@ Written at *Waiting for release*, after step 12.
 | 10 | ❌ | #469 and #472 are in *Notification system*; the other five owners are named as blockers | Live | `gh issue view 469 --json milestone -q .milestone.title` and the same for 472 print `Notification system`; `overview.md`'s dependency map names #347, #400, #404, #445, #468 |
 | 11 | ❌ | `api-surface/06` asserts both cookie variants, `0` lines without a prior cookie and `2` with one from another key ring, and declares itself deterministic | Live | Step 7's record shows both variants asserted; `Select-String -Path docs/automated-testing/api-surface/06-*.md -Pattern '^\*\*Deterministic:\*\* yes'` matches |
 | 12 | ❌ | T2 passes: the smoke set and every changed document, every step green | Live | Step 12's record |
+| 13 | ✅ | Both rules report a document that breaks them and pass one that does not, independently of today's documents | Unit test | `AutomatedTestingSuiteTests.MentionsOfFullyGreenAfter_*` (4) and `.StepsThatExcuseAFailure_*` (8): 12 pass; red with the rule bodies disabled (step 3) |
