@@ -65,6 +65,17 @@ internal static partial class AutomatedTestingSuite
     /// <summary>The index heading the document template sits under.</summary>
     internal const string DocumentTemplateHeading = "## Document template";
 
+    /// <summary>The name of the header that once excused a step until another issue landed (#503).</summary>
+    internal const string FullyGreenAfterName = "Fully green after";
+
+    /// <summary>
+    /// The words the suite has used to excuse a failing step, each one found in a document before #503
+    /// removed it: a step told to carry on past a failure, a value printed rather than asserted, a
+    /// reading called inconclusive, a failure expected until another issue lands.
+    /// </summary>
+    internal static readonly string[] ExcusePhrases =
+        ["carry on", "continue", "record it", "known issue", "known failure", "not asserted", "inconclusive", "fails until"];
+
     #region Rules
 
     /// <summary>
@@ -317,6 +328,96 @@ internal static partial class AutomatedTestingSuite
                 else if (block.Language == "powershell")
                 {
                     failures.AddRange(UnixOnlyConstructs(document.Path, block));
+                }
+            }
+        }
+
+        return [.. failures.Order()];
+    }
+
+    /// <summary>
+    /// Every line that names the <c>Fully green after</c> header, in a field, in prose or in a sample.
+    /// </summary>
+    /// <remarks>
+    /// The header excused named steps until another issue landed, and ADR 029 removed it: a red step is
+    /// red. Any mention is reported, not only the field itself, because a document that refers to "the
+    /// field" still describes an excuse, and the index's template carried the field as a sample line.
+    /// </remarks>
+    /// <param name="documents">The documents to check, the index included.</param>
+    /// <returns>One line per mention, ordered.</returns>
+    public static List<string> MentionsOfFullyGreenAfter(IReadOnlyList<SuiteDocument> documents)
+    {
+        if (documents.Count == 0)
+            return [NoDocumentsSupplied];
+
+        List<string> failures = [];
+
+        foreach (SuiteDocument document in documents)
+        {
+            List<string> lines = Lines(document.Text);
+
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (lines[i].Contains(FullyGreenAfterName, StringComparison.OrdinalIgnoreCase))
+                    failures.Add($"{document.Path}:{i + 1}: names '{FullyGreenAfterName}'");
+            }
+        }
+
+        return [.. failures.Order()];
+    }
+
+    /// <summary>
+    /// Every <c>Expected</c> and <c>On failure</c> paragraph that excuses a failing step, by any of
+    /// <see cref="ExcusePhrases"/>.
+    /// </summary>
+    /// <remarks>
+    /// ADR 029: a T2 result is reported as it read. Both paragraphs are read because the suite has
+    /// excused a step in each: an <c>On failure</c> note telling the reader to record a known failure and
+    /// carry on, and an <c>Expected</c> paragraph saying a status is printed rather than asserted. A
+    /// paragraph runs from its label to the next blank line, heading, fence or label. Phrases match as
+    /// whole words, so <c>continues</c> or <c>records its</c> is not read as an excuse.
+    /// </remarks>
+    /// <param name="documents">The documents to check.</param>
+    /// <returns>One line per excuse, ordered.</returns>
+    public static List<string> StepsThatExcuseAFailure(IReadOnlyList<SuiteDocument> documents)
+    {
+        if (documents.Count == 0)
+            return [NoDocumentsSupplied];
+
+        List<string> failures = [];
+
+        foreach (SuiteDocument document in documents)
+        {
+            string step = "?";
+            int previousNumber = 0;
+            bool inParagraph = false;
+
+            foreach ((int number, string text) in ProseLines(Lines(document.Text)))
+            {
+                bool adjacent = number == previousNumber + 1;
+                previousNumber = number;
+
+                Match stepHeading = StepHeading().Match(text);
+
+                if (stepHeading.Success)
+                {
+                    step = stepHeading.Groups["number"].Value;
+                    inParagraph = false;
+                    continue;
+                }
+
+                if (ExcusableLabel().IsMatch(text))
+                    inParagraph = true;
+                else if (!adjacent || text.Trim().Length == 0 || text.StartsWith('#') || ParagraphLabel().IsMatch(text))
+                    inParagraph = false;
+
+                if (!inParagraph)
+                    continue;
+
+                foreach (string phrase in ExcusePhrases)
+                {
+                    if (ContainsWholeWords(text, phrase))
+                        failures.Add($"{document.Path}:{number}: step {step} excuses a failure: '{phrase}'");
                 }
             }
         }
@@ -650,6 +751,32 @@ internal static partial class AutomatedTestingSuite
         return spans;
     }
 
+    /// <summary>
+    /// True when the text holds the phrase, ignoring case, with no letter or digit directly before or
+    /// after it.
+    /// </summary>
+    /// <param name="text">The text to search.</param>
+    /// <param name="phrase">The phrase to find.</param>
+    /// <returns>True on a whole-word match.</returns>
+    private static bool ContainsWholeWords(string text, string phrase)
+    {
+        int start = 0;
+
+        while ((start = text.IndexOf(phrase, start, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            int end = start + phrase.Length;
+            bool openBoundary = start == 0 || !char.IsLetterOrDigit(text[start - 1]);
+            bool closeBoundary = end == text.Length || !char.IsLetterOrDigit(text[end]);
+
+            if (openBoundary && closeBoundary)
+                return true;
+
+            start++;
+        }
+
+        return false;
+    }
+
     /// <summary>The length of a line's opening run of backticks, or 0 where it is not a fence.</summary>
     /// <param name="line">The line to measure.</param>
     /// <returns>Three or more, or 0.</returns>
@@ -719,6 +846,18 @@ internal static partial class AutomatedTestingSuite
         @"^\*\*Deterministic:\*\*\s*(?<answer>yes|no)\s*$",
         RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex DeterminismDeclaration();
+
+    /// <summary>A numbered step heading, such as <c>### 3. Reset the database</c>.</summary>
+    [GeneratedRegex(@"^###\s+(?<number>\d+)\.\s")]
+    private static partial Regex StepHeading();
+
+    /// <summary>A paragraph whose text can excuse a failing step: <c>**Expected…</c> or <c>**On failure…</c>.</summary>
+    [GeneratedRegex(@"^\*\*(Expected|On failure)\b")]
+    private static partial Regex ExcusableLabel();
+
+    /// <summary>Any bold label opening a paragraph, which ends the paragraph before it.</summary>
+    [GeneratedRegex(@"^\*\*[^*]+:\*\*")]
+    private static partial Regex ParagraphLabel();
 
     /// <summary>
     /// The awaiting-measurement section, from its own heading up to the next top-level heading.

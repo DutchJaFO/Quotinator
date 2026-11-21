@@ -718,6 +718,145 @@ public class AutomatedTestingSuiteTests
 
     #endregion
 
+    #region No document names the Fully green after header
+
+    [TestMethod]
+    public void MentionsOfFullyGreenAfter_PassesADocumentThatDoesNotNameIt()
+    {
+        List<string> failures = AutomatedTestingSuite.MentionsOfFullyGreenAfter([Conforming()]);
+
+        Assert.IsEmpty(failures, "The conforming document reports its steps as they read, with no excuse.");
+    }
+
+    [TestMethod]
+    public void MentionsOfFullyGreenAfter_NamesTheHeaderField()
+    {
+        List<string> failures = AutomatedTestingSuite.MentionsOfFullyGreenAfter(
+            [Document(FirstDocument, Title, Fields + "\n**Fully green after:** #400: step 1 runs nothing",
+                Preconditions, Determinism, Steps, MeasuredEffect, Cleanup)]);
+
+        Assert.HasCount(1, failures, "ADR 029: a red step is red, so no header may excuse one until another issue lands.");
+        Assert.Contains($"{FirstDocument}:5: names 'Fully green after'", failures[0]);
+    }
+
+    [TestMethod]
+    public void MentionsOfFullyGreenAfter_NamesAMentionInProse()
+    {
+        List<string> failures = AutomatedTestingSuite.MentionsOfFullyGreenAfter(
+            [Document(FirstDocument, Title, Fields,
+                "## Preconditions\n\nStep 1 has no canary, for the reason the `Fully green after:` field states.")]);
+
+        Assert.HasCount(1, failures,
+            "A document that points at the field still rests a step on the excuse the field made.");
+        Assert.Contains($"{FirstDocument}:8: names 'Fully green after'", failures[0]);
+    }
+
+    [TestMethod]
+    public void MentionsOfFullyGreenAfter_FailsAnEmptyDocumentSet()
+    {
+        List<string> failures = AutomatedTestingSuite.MentionsOfFullyGreenAfter([]);
+
+        Assert.HasCount(1, failures, "The empty set is one failure, not a pass.");
+        Assert.Contains(AutomatedTestingSuite.NoDocumentsSupplied, failures[0]);
+    }
+
+    #endregion
+
+    #region No step excuses its own failure
+
+    [TestMethod]
+    public void StepsThatExcuseAFailure_PassesAStepThatStatesItsExpectationAndStops()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsThatExcuseAFailure(
+            [Document(FirstDocument, Title,
+                "## Steps\n\n### 1. Ask for a quote\n\n**Expected:** a 200, and one quote in the body.\n"
+                + "**On failure:** the import did not run, and stop: do not run step 2.")]);
+
+        Assert.IsEmpty(failures, "A step that says what a pass is, and what a failure means, excuses nothing.");
+    }
+
+    [TestMethod]
+    public void StepsThatExcuseAFailure_NamesAnOnFailureNoteThatSaysToCarryOn()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsThatExcuseAFailure(
+            [Document(FirstDocument, Title,
+                "## Steps\n\n### 1. Read the counts\n\n**Expected:** the counts the list routes read.\n"
+                + "**On failure:** every count reading 0 is #468, a known issue. Record it and carry on.")]);
+
+        Assert.HasCount(3, failures,
+            "Each phrase is reported: the note calls the failure known, says to record it, and says to carry on.");
+        Assert.Contains($"{FirstDocument}:8: step 1 excuses a failure: 'carry on'", failures[0]);
+    }
+
+    [TestMethod]
+    public void StepsThatExcuseAFailure_NamesAnExpectedParagraphThatDoesNotAssert()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsThatExcuseAFailure(
+            [Document(FirstDocument, Title,
+                "## Steps\n\n### 2. Apply a batch that does not exist\n\n"
+                + "**Expected:** that call's status is printed, not asserted.")]);
+
+        Assert.HasCount(1, failures,
+            "An expectation the step prints and never checks is a step that cannot fail.");
+        Assert.Contains($"{FirstDocument}:7: step 2 excuses a failure: 'not asserted'", failures[0]);
+    }
+
+    [TestMethod]
+    public void StepsThatExcuseAFailure_ReadsAParagraphOverMoreThanOneLine()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsThatExcuseAFailure(
+            [Document(FirstDocument, Title,
+                "## Steps\n\n### 1. Read the evaluation line\n\n**On failure:** this reading is\n"
+                + "inconclusive until the line exists.")]);
+
+        Assert.HasCount(1, failures, "A paragraph runs to the next blank line, not to the end of its first line.");
+        Assert.Contains($"{FirstDocument}:8: step 1 excuses a failure: 'inconclusive'", failures[0]);
+    }
+
+    [TestMethod]
+    public void StepsThatExcuseAFailure_IgnoresTheWordsOutsideExpectedAndOnFailure()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsThatExcuseAFailure(
+            [Document(FirstDocument, Title,
+                "## Preconditions\n\nUntil #411 this was a known issue in the curated file.",
+                "## Steps\n\n### 1. Ask for a quote\n\nThe application records the request and the run can carry on.\n\n"
+                + "**Expected:** a 200.")]);
+
+        Assert.IsEmpty(failures,
+            "Only an expectation or a failure note can excuse a step; other prose is a record or an explanation.");
+    }
+
+    [TestMethod]
+    public void StepsThatExcuseAFailure_MatchesWholeWordsOnly()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsThatExcuseAFailure(
+            [Document(FirstDocument, Title,
+                "## Steps\n\n### 1. Degrade\n\n**Expected:** the application continues serving, and records its reason.")]);
+
+        Assert.IsEmpty(failures, "'continues' and 'records its' describe the product, not an excuse.");
+    }
+
+    [TestMethod]
+    public void StepsThatExcuseAFailure_IgnoresAFencedBlock()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsThatExcuseAFailure(
+            [Document(FirstDocument, Title,
+                "## Steps\n\n### 1. Ask for a quote\n\n**Expected:** a 200.\n```powershell\nWrite-Output 'carry on'\n```")]);
+
+        Assert.IsEmpty(failures, "A command is not an expectation, whatever it prints.");
+    }
+
+    [TestMethod]
+    public void StepsThatExcuseAFailure_FailsAnEmptyDocumentSet()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsThatExcuseAFailure([]);
+
+        Assert.HasCount(1, failures, "The empty set is one failure, not a pass.");
+        Assert.Contains(AutomatedTestingSuite.NoDocumentsSupplied, failures[0]);
+    }
+
+    #endregion
+
     #region The example data
 
     private const string FirstDocument = "category/01-serves-a-quote.md";
