@@ -551,6 +551,13 @@ not say that its own T2 waits for owners listed after it. Both rows were complet
   relative order, renumbered; 83 rows before, 85 after. #503 stays first although #438, #469, #472 and #462
   block its T2: the rule has to be in place before anything else is judged, so its row says that it runs
   first and closes after them. Every blocked row names its blockers, #490's and #457's included.
+- **Older ordering errors, fixed here at the developer's request.** Three rows came before an issue they
+  depend on, out of order since before this issue's first edit: #81 before #309 and #307, #302 before #372,
+  and #373 before #372. #81 now follows #307, and #377 and #372 come before #302 (#372 needs #377). #372 and
+  #373 depend on each other for different steps; #372 comes first, as #373's reproduction needs it, and its
+  row says that its step 6 waits for #373. Checked mechanically in both directions: no row comes before an
+  issue it depends on or is T2-blocked by, and no issue comes after one it blocks, except #503 and that pair,
+  whose rows say why.
 
 `overview.md`'s order of operations and dependency map gain every owner from step 8 as a blocker of the
 issues it blocks, and the five owners that stay in other milestones (decision C) are named there as

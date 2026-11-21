@@ -247,25 +247,25 @@ This milestone cannot release before they land.
 | 9 | **#323** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
 | 10 | **#325** ⛔ | Closed as not planned |
 | 11 | **#312** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 12 | **#81** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 13 | **#83** ✅ | Waiting for release |
-| 14 | **#309** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 15 | **#326** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 16 | **#424** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #462 |
-| 17 | **#349** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 18 | **#307** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 12 | **#83** ✅ | Waiting for release |
+| 13 | **#309** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 14 | **#326** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 15 | **#424** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #462 |
+| 16 | **#349** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 17 | **#307** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 18 | **#81** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
 | 19 | **#319** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
 | 20 | **#304** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #501 |
-| 21 | **#302** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 22 | **#303** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 23 | **#367** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 24 | **#308** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 25 | **#375** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 26 | **#374** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 27 | **#378** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 28 | **#373** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 29 | **#372** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 30 | **#377** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 21 | **#377** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 22 | **#372** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503; ahead of #373, whose reproduction needs it, while its own step 6 waits for #373 |
+| 23 | **#302** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 24 | **#303** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 25 | **#367** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 26 | **#308** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 27 | **#375** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 28 | **#374** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 29 | **#378** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 30 | **#373** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
 | 31 | **#382** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
 | 32 | **#383** ✅ | Waiting for release |
 | 33 | **#376** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
