@@ -22,7 +22,7 @@ public class AutomatedTestingSuiteTests
         List<string> elements = [.. AutomatedTestingSuite.TemplateElements(FixtureIndex).Select(e => e.Text)];
 
         Assert.AreEqual(
-            "**Smoke:** | **Deterministic:** | **Fully green after:** | ## Preconditions | "
+            "**Smoke:** | **Deterministic:** | **Needs network:** | ## Preconditions | "
             + "## Determinism | ## Explicitly not covered here | ## Steps | ## Observed effect | "
             + "## Cleanup",
             string.Join(" | ", elements),
@@ -40,7 +40,7 @@ public class AutomatedTestingSuiteTests
         ];
 
         Assert.AreEqual(
-            "**Fully green after:** | ## Explicitly not covered here",
+            "**Needs network:** | ## Explicitly not covered here",
             string.Join(" | ", optional),
             "An element the sample marks 'only when it applies' is optional, and no other is.");
     }
@@ -180,7 +180,7 @@ public class AutomatedTestingSuiteTests
         List<string> failures = AutomatedTestingSuite.MissingTemplateElements([Conforming()], Template);
 
         Assert.IsEmpty(failures,
-            "The conforming document states no exclusions section and no 'Fully green after' field, "
+            "The conforming document states no exclusions section and no 'Needs network' field, "
             + "both of which the template marks as applying only sometimes.");
     }
 
@@ -916,7 +916,7 @@ public class AutomatedTestingSuiteTests
 
         **Smoke:** yes | no
         **Deterministic:** yes | no
-        **Fully green after:** #NNN: <which steps, and what they read as until then>   ← only when it applies
+        **Needs network:** yes   ← only when it applies
 
         ## Preconditions
 

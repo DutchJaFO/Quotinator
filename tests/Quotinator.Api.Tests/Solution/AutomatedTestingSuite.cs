@@ -19,7 +19,7 @@ internal sealed record SuiteDocument(string Path, string Text);
 /// </param>
 /// <param name="Optional">
 /// True where the template marks the element with its "only when it applies" note, as the
-/// <c>Fully green after:</c> field and the exclusions section are.
+/// exclusions section is.
 /// </param>
 internal sealed record TemplateElement(string Text, bool IsSection, bool Optional);
 
