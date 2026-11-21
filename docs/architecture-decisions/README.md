@@ -68,3 +68,4 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 | 026 | [026-notification-content-is-stored-only-when-it-is-static.md](026-notification-content-is-stored-only-when-it-is-static.md) | A notification's text is stored only when it is static; anything that depends on current state is composed from its payload when read |
 | 027 | [027-a-reset-recreates-the-database.md](027-a-reset-recreates-the-database.md) | A Reset recreates the database; a failed migration is restored, never interpreted |
 | 028 | [028-a-database-is-checked-in-layers-cheapest-first.md](028-a-database-is-checked-in-layers-cheapest-first.md) | A database is checked in layers, cheapest first |
+| 029 | [029-a-failing-t2-step-blocks-the-issue.md](029-a-failing-t2-step-blocks-the-issue.md) | A failing T2 step blocks the issue |

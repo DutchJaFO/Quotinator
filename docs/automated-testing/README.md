@@ -525,31 +525,24 @@ its own container and volume.
 Turning such a sentence into a link makes the dependency official rather than removing it: the fix is
 always to give the test its own setup.
 
-### A document may need more than one issue before it can be fully green
+### A failing step is reported as failing
 
-**This is a transient state, not a property of the suite** (developer, 2026-09-02). It arises only
-while a partially-fixed issue is being carried alongside the one that finishes the job, one issue
-splits, or a second is found mid-implementation, and for as long as both are open a document written
-against the finished behaviour has steps that no build yet satisfies. Outside a chain in flight, a red
-step is a red step.
+[ADR 029](../architecture-decisions/029-a-failing-t2-step-blocks-the-issue.md) defines what a T2 result
+is: a step passed or it failed, and a failing step blocks every issue whose T2 scope includes it, until
+the issue that owns the step is fixed. It also defines what counts as failing: a result that does not
+match the step's *Expected*, a step that runs no command, a step that prints a value its *Expected* states
+without asserting it, and a result that varies between runs of the same build.
 
-A test written red-first against issue A can still have steps that stay red after A lands, because a
-second issue B owns part of what they assert. That must not be resolved by weakening the assertion to
-whatever the current build produces: doing so bakes in the very behaviour B exists to correct, and the
-document then has to be changed back.
+Two consequences for how a document is written:
 
-**State it in the header** with `**Fully green after:** #NNN`, naming which steps are affected and what
-they read as until then. A reader running the suite mid-chain then knows a red step is expected rather
-than a regression, and the line disappears when the last issue lands.
+- **A document that cannot be green until another issue lands stays red.** Its step asserts the correct
+  behaviour, so it fails until the owning issue delivers it. It is never weakened to what the current
+  build produces, and it carries nothing that excuses the step.
+- **An intermittent step is made deterministic.** A step that can pass or fail on the same build is
+  failing, and the document is changed until it reads the same on every run.
 
-**Found live (2026-09-02, developer):** `import-and-staged-actions/21` was written for #372 and cannot
-be fully green until #373 as well: its "a second reseed changes nothing" step reads as a rewrite of
-every quote while identical content is still reported as modified. #302's
-`notifications-and-changelog/11` is in the same position for the same reason.
-
-**The line is scaffolding and is deleted when the last named issue lands.** It is not licence to leave
-a step red indefinitely: the header names specific open issues, and if none is open, the step is simply
-failing.
+`AutomatedTestDocuments_CarryNoFullyGreenAfterHeader` and `AutomatedTestDocuments_NeverExcuseAFailingStep`
+hold every document to this.
 
 ### Depending on content is not the same as depending on another test
 
@@ -1430,7 +1423,6 @@ language, which is both the CommonMark rule and how the block renders here. Do n
 **Environment:** Fresh | Constrained | Upgraded
 **Deterministic:** yes | no
 **Traces to:** #NNN[, #NNN]
-**Fully green after:** #NNN: <which steps, and what they read as until then>   ← only when it applies
 
 ## Preconditions
 
@@ -1507,7 +1499,9 @@ How to return the machine to a clean state.
 
 **`On failure:` is not required on every step**: only where a wrong result means something a reader
 would otherwise misread: a precondition that did not take effect, a setup that silently did nothing, an
-error that looks like the assertion it was meant to test.
+error that looks like the assertion it was meant to test. It says what the failure means and stops; it
+never names a failure as known and tells the reader to carry on
+([ADR 029](../architecture-decisions/029-a-failing-t2-step-blocks-the-issue.md)).
 
 **Cross-cutting commentary about an expectation's shape belongs in `Determinism`, not beside a step.**
 "Never assert a total here", "this count moves with the dataset", "assert the relationship rather than

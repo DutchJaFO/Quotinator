@@ -69,6 +69,10 @@ absence it exists for. Marking `T2 ✅` on that basis alone is the error this ta
 found live in #367 (2026-09-01), where a new automated document was written, run green, and recorded
 as verification with no canary run, exactly as #304 had already done before it.
 
+**What a T2 result is, and what a failing step does to an issue, is defined in
+[ADR 029](architecture-decisions/029-a-failing-t2-step-blocks-the-issue.md).** `T2 ✅` is recorded only
+when every step in the issue's scope passed.
+
 **What "runs T2" means is scoped, and the scopes are defined in
 [`docs/automated-testing/`](automated-testing/README.md), not here:**
 

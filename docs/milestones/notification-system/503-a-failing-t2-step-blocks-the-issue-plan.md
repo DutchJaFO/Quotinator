@@ -1,6 +1,6 @@
 # #503: A failing T2 step blocks the issue: remove the "Fully green after" exception and audit the issues it let through
 
-**Status:** In progress (step 4)
+**Status:** In progress (step 6)
 **GitHub issue:** #503
 **Tiers required:** T2
 **Depends on:** #347, #400, #404, #438, #445, #462, #468, #469, #472, #505, #506. Blocks #457, #490.
@@ -9,7 +9,8 @@
 
 ## Next action
 
-**Continue with step 4: write ADR 029.** Steps 1 to 3 are done and not yet committed. Decisions A to G were all answered on 2026-11-21, and no question is
+**Continue with step 6: remove every allowance from the documents.** Steps 1 to 3 are done and committed;
+steps 4 and 5 are done. Decisions A to G were all answered on 2026-11-21, and no question is
 open. The comment on #438 that decision G calls for was posted the same day. The plan is built against
 `5bfb43f6` (2026-11-21).
 
@@ -254,7 +255,7 @@ Each failure message names the document, the step and the matched text.
 
 ### 4. Write ADR 029
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `docs/architecture-decisions/029-a-failing-t2-step-blocks-the-issue.md`, indexed in the ADR README:
 
@@ -271,9 +272,13 @@ Each failure message names the document, the step and the matched text.
 Context: #490's record, and the four documents the issue names. Rejected: the *Fully green after* header
 as a transient state, which in practice lasted from 2026-09-02 to now and grew to seven documents.
 
+**Done 2026-11-21.** Written as planned, indexed in the ADR README and added to `Quotinator.slnx`. Its
+Rejected section also names recording a known failure and carrying on, and its Consequences name the two
+guards and the rule tests. `EveryAdrIsIndexed` passes.
+
 ### 5. Rewrite the README and point the workflow documents to the ADR
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 - `docs/automated-testing/README.md`: remove *A document may need more than one issue before it can be fully
   green* and the template's `Fully green after` line; add a short section naming the failing-step shapes and
@@ -281,6 +286,21 @@ as a transient state, which in practice lasted from 2026-09-02 to now and grew t
 - `testing-policy.md`, `release-verification.md`, `process.md`, `checklist.md` and `CLAUDE.md`: grep each for
   T2 reporting; where one states or contradicts the rule, reduce it to a pointer to ADR 029.
 - `AutomatedTestingSuiteTests`: the four samples named above drop `Fully green after`.
+
+**Done 2026-11-21.**
+
+- **README:** the exception section is replaced by *A failing step is reported as failing*, which points to
+  ADR 029, names the four failing-step shapes, and says a document that cannot be green yet stays red and an
+  intermittent step is made deterministic. The template's `Fully green after` line is gone, and the
+  `On failure:` guidance says it never names a failure as known and tells the reader to carry on.
+- **Workflow documents:** none restated or contradicted the rule; none said where it applies either. One
+  pointer each: `release-verification.md` (T2 is recorded ✅ only when every step in scope passed),
+  `process.md` Implementation step 3, `checklist.md` *Implementing an issue*, and `CLAUDE.md` Pre-Push
+  item 6. `testing-policy.md` names no T2 result rule and is unchanged.
+- **Fixtures:** `AutomatedTestingSuiteTests`' fixture index uses a made-up `**Needs network:**` field as its
+  optional header, so the template reader's coverage of an optional field survives; the three template tests
+  and `TemplateElement`'s doc comment follow it.
+- **Result:** every `Solution` test passes except the two live guards, which stay red until step 6.
 
 ### 6. Remove every allowance from the documents
 
@@ -403,9 +423,9 @@ Written at *Waiting for release*, after step 12.
 |---|--------|-------------|--------|--------------|
 | 1 | ❌ | No document under `docs/automated-testing/`, the README's template included, carries `Fully green after` | Unit test | `RepositoryStructureTests.AutomatedTestDocuments_CarryNoFullyGreenAfterHeader`, red before step 6 |
 | 2 | ❌ | No document excuses a failing step, in its `Expected` or its `On failure` text | Unit test | `RepositoryStructureTests.AutomatedTestDocuments_NeverExcuseAFailingStep`, red before step 6 |
-| 3 | ❌ | ADR 029 records the rule, and is indexed | Unit test + Live | `RepositoryStructureTests.EveryAdrIsIndexed` passes; `Select-String -Path docs/architecture-decisions/029-*.md -Pattern 'blocks every issue'` returns a match |
-| 4 | ❌ | The README drops the exception and points to ADR 029 | Live | `Select-String -Path docs/automated-testing/README.md -Pattern 'more than one issue before it can be fully green'` returns nothing; `-Pattern '029-a-failing-t2-step-blocks-the-issue'` returns a match |
-| 5 | ❌ | The README names every failing-step shape: no command, unasserted, intermittent | Live | `Select-String -Path docs/automated-testing/README.md -Pattern 'runs no command','without asserting','intermittent'` returns all three |
+| 3 | ✅ | ADR 029 records the rule, and is indexed | Unit test + Live | `RepositoryStructureTests.EveryAdrIsIndexed` passes; `Select-String -Path docs/architecture-decisions/029-*.md -Pattern 'blocks every issue'` returns a match |
+| 4 | ✅ | The README drops the exception and points to ADR 029 | Live | `Select-String -Path docs/automated-testing/README.md -Pattern 'more than one issue before it can be fully green'` returns nothing; `-Pattern '029-a-failing-t2-step-blocks-the-issue'` returns a match |
+| 5 | ✅ | The README names every failing-step shape: no command, unasserted, intermittent | Live | `Select-String -Path docs/automated-testing/README.md -Pattern 'runs no command','without asserting','intermittent'` returns all three |
 | 6 | ❌ | Each changed document fails at its owned step and nowhere else, and `06` step 6 reads the same on three runs | Live | Step 7's record, one line per document |
 | 7 | ❌ | Every issue at *Waiting for release* is audited, and each set back carries the change in its plan, `overview.md` and its GitHub Definition of done | Live | Step 8's table; for each issue set back, `gh issue view <N> --json body -q .body` shows the unticked boxes, and its plan header and overview row agree |
 | 8 | ❌ | #490's step 8 records the removal in `86eb15fd` | Live | `Select-String -Path docs/milestones/notification-system/490-layered-database-check-plan.md -Pattern '86eb15fd'` matches inside step 8 |

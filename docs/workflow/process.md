@@ -378,7 +378,9 @@ reason to *delay* writing it until the scope is actually settled, not to write i
 3. Before declaring done: re-read **every requirement** in the GitHub issue spec and execute each
    documented verification step against the actual code. Every row in the plan doc's verification
    table should now be ✅, if it is, the issue has reached the `Waiting for release` phase (see
-   "Completing an issue" below); if any row is still ❌, implementation continues.
+   "Completing an issue" below); if any row is still ❌, implementation continues. A T2 row is ✅ only
+   when every step in the issue's T2 scope passed; a failing step, and the issue that owns it, are handled
+   as [ADR 029](../architecture-decisions/029-a-failing-t2-step-blocks-the-issue.md) defines.
 
 An issue is done only when every requirement in its GitHub spec is met and verified against actual code. Partial implementation means the issue stays open.
 

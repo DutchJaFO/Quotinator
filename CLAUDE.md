@@ -1397,7 +1397,8 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
    **What runs depends on the scope**, defined in that index: at the end of an issue, the smoke set
    plus whatever tests are relevant to that issue; at the end of a milestone and at release, every
-   test with no exceptions. **It is a living suite**: whenever a pass surfaces a new bug or edge case,
+   test with no exceptions. A result is reported as it read, and a failing step blocks every issue
+   whose scope includes it: see [ADR 029](docs/architecture-decisions/029-a-failing-t2-step-blocks-the-issue.md). **It is a living suite**: whenever a pass surfaces a new bug or edge case,
    add its verification there in the same commit that fixes it — the list only grows, never shrinks.
 
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.

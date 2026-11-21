@@ -142,6 +142,7 @@
     <File Path="docs/architecture-decisions/026-notification-content-is-stored-only-when-it-is-static.md" />
     <File Path="docs/architecture-decisions/027-a-reset-recreates-the-database.md" />
     <File Path="docs/architecture-decisions/028-a-database-is-checked-in-layers-cheapest-first.md" />
+    <File Path="docs/architecture-decisions/029-a-failing-t2-step-blocks-the-issue.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />

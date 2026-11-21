@@ -150,6 +150,7 @@ full detail behind each item.
 - [ ] **A question raised during execution is asked at once, and no later step starts until it is answered**: recording it in the plan is not asking it. Until answered it is the *Next action*'s first line, its step is not `✅ Done`, and every row it concerns stays ❌
 - [ ] Implementation makes each red test green, without weakening the test to pass
 - [ ] Before considering implementation done: re-read every requirement in the GitHub issue spec and execute each documented verification step against the actual code, not just the tests, the live commands too
+- [ ] **T2 is recorded as it read** ([ADR 029](../architecture-decisions/029-a-failing-t2-step-blocks-the-issue.md)): a failing step in the issue's T2 scope keeps its T2 row ❌, and the issue that owns the step is added to `Depends on:` and to `overview.md`'s dependency map
 - [ ] Once every verification-table row is ✅, move to `checklist.md` → "Before closing an issue" → "Waiting for release"; do not leave these items for later
 
 ---
