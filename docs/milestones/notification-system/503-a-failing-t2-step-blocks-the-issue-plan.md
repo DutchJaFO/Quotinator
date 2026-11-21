@@ -9,8 +9,8 @@
 
 ## Next action
 
-**Continue with step 6: remove every allowance from the documents.** Steps 1 to 3 are done and committed;
-steps 4 and 5 are done. Decisions A to G were all answered on 2026-11-21, and no question is
+**Continue with the unblocked steps: 7 (run the changed documents), then 8 to 10.** Steps 1 to 5 are done and
+committed; step 6 is done except `startup-and-degradation/06`'s log counts, which wait for #505 and #506. Decisions A to G were all answered on 2026-11-21, and no question is
 open. The comment on #438 that decision G calls for was posted the same day. The plan is built against
 `5bfb43f6` (2026-11-21).
 
@@ -304,7 +304,53 @@ guards and the rule tests. `EveryAdrIsIndexed` passes.
 
 ### 6. Remove every allowance from the documents
 
-**Status:** ⬜ Not started
+**Status:** 🔄 In progress: every part is done except `startup-and-degradation/06`'s log counts, which wait for
+#505 and #506.
+
+**Done 2026-11-21, except that part.**
+
+- **Headers and carry-on notes removed**, each *On failure* now stating what the failure means and stopping:
+  `database-lifecycle/03` step 8 (#468), `notifications-and-changelog/01` step 9 (#472),
+  `import-and-staged-actions/14` (#400), `16` and `17` (#347), `startup-and-degradation/06` (#445) and
+  `07` (#462).
+- **`import-and-staged-actions/01` step 8** asserts `--expect 404` for the batch that does not exist.
+- **`import-and-staged-actions/14` step 5** says it runs no command and so fails; its owner is #400.
+- **`import-and-staged-actions/16` and `17`**: a missing evaluation line fails the step. `17` gains step 4,
+  which renames the Source the `Star Wars` alias resolves to through a `sources[]` correction and requires
+  the reseed to report the alias stale; its *Canary* names step 4 as the control.
+- **`startup-and-degradation/07`**: *wait and run it again* is gone; step 2's dependence on GitHub makes it
+  failing until #462.
+- **Three excuses the word list could not see**, found while editing: `database-lifecycle/02` step 7 (*The
+  exception count fails today, and is tracked*, with later steps run past it), `startup-and-degradation/03`
+  step 1 (*Destroy the container and re-run*), and `startup-and-degradation/06` step 6 (*`/about` reading `1`
+  is not a failure*, against a command asserting `0`). Each now states the failure and stops.
+- **The guard's further findings**: `startup-and-degradation/03` step 3's scope sentence moved to a new
+  *Explicitly not covered here*; `startup-and-degradation/06` step 5's screenshot sentence gone, step 6's
+  unasserted *Continue* claim removed and its button readings pointed at the command that asserts them.
+- **`startup-and-degradation/06`** now declares `Deterministic: no` and names step 6's log count as what
+  varies, until #503 converts it.
+- **`api-surface/06` rewritten** to the answered design: five steps over three containers, every request made
+  by `http.csx` with a cookie the test saved itself, each asserted on the response's antiforgery cookie, the
+  log read only for the pair (#505's exception). `scripts/testing/http.csx` gains `--cookies-out` and
+  `--cookie-file`, turning the handler's own cookie store off when either is used, since that store ignores a
+  hand-set `Cookie` header.
+- **Result:** both guards pass, and every `Solution` test passes (141).
+- **Still to do:** `startup-and-degradation/06`'s three log counts, replaced by #506's exception totals read
+  with one browser kept open (#505), once both land.
+
+**`api-surface/06`, answered 2026-11-21:** decision G's variants were counted from the log, which #505
+classes as secondary evidence. Developer: *if it has to validate a cookie then it needs a cookie to
+validate.* The document is rewritten so the test brings its own cookies, with no browser:
+
+- It requests a page from a container on the shared key ring and one with its own key ring, saving each
+  response's cookie with `http.csx --headers-out`.
+- Three cases, each one request with a cookie the test chose, asserted on the response's `Set-Cookie`: no
+  cookie issues a new one; the shared-ring cookie is not replaced; the own-ring cookie is replaced.
+- The log count stays only for *logged only then*, which is this document's subject and so #505's
+  exception: `2` lines in the third case, `0` in the other two.
+- `scripts/testing/http.csx` gains `--cookie-file`, sending a cookie saved by an earlier request.
+- With no browser, nothing is left behind for another test, so step 4's *Do not continue with the suite*
+  goes with it.
 
 For each row of the table above: delete the header, delete the carry-on text, and leave the step asserting
 what the correct behaviour is, so it reads red until its owner lands:
@@ -332,8 +378,8 @@ what the correct behaviour is, so it reads red until its owner lands:
   - `startup-and-degradation/06` step 5, *Both screenshots record it*: the screenshot is not the
     assertion; the sentence goes. Developer, 2026-11-21: *screenshots are the same potential trap that
     reading logs or audit trails is. They are secondary evidence of actions that we likely can trace in
-    code during unit tests and in REST endpoints.* Answered 2026-11-21: a new issue in this milestone
-    records the principle in an ADR and applies it across the suite. It does not block #503.
+    code during unit tests and in REST endpoints.* Answered 2026-11-21: #505, in v1.9.0, records the
+    principle in an ADR and applies it across the suite.
   - `startup-and-degradation/06` step 6, three mentions of the *Continue* button: where the prose restates
     a value a command asserts, it names the command instead; where it states something no command checks
     (*`/rest-api` is where the modal's Continue lands*), a page-script assertion is added or the claim goes.
@@ -345,6 +391,21 @@ what the correct behaviour is, so it reads red until its owner lands:
 
 Each document's Knowledgebase links stay; they describe the bug, not an excuse. The two guards turn green
 here.
+
+**`import-and-staged-actions/17`'s missing positive step: #503 adds it, answered 2026-11-21.** Its *Canary*
+says no step makes an alias genuinely stale, so a correct build and a staleness check that never runs read
+the same, and the removed header was what excused that. No open issue owned it (#347 makes the evaluation
+observable but adds no such step). A new step 4, modelled on `16`'s step 4, renames the Source an alias
+resolves to, reseeds, and requires the alias to be reported stale; the document's *Canary* then names it as
+the control. Under the stop rule it runs only once steps 2 and 3 pass, after #347.
+
+**A failing step stops the run, answered 2026-11-21.** With the excuses gone, `database-lifecycle/03`,
+`notifications-and-changelog/01`, `import-and-staged-actions/01` and `14` stop at their failing step on every
+run until the owner lands. Developer: *steps in a test tend to rely on the outcomes of a previous step, so we
+cannot continue such a test past the failing step. If we could continue, those steps can't possibly be relevant
+to the test.* The README's stop rule stands, and each rewritten *On failure* says stop. The old *nothing below
+reads this step* was wrong where it was checked: `database-lifecycle/03` step 8 proves `/version` counted the
+import before the Reset, which is what gives the later `0` after the Reset its meaning.
 
 ### 7. Confirm the changed documents read red where they should
 
@@ -421,8 +482,8 @@ Written at *Waiting for release*, after step 12.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | No document under `docs/automated-testing/`, the README's template included, carries `Fully green after` | Unit test | `RepositoryStructureTests.AutomatedTestDocuments_CarryNoFullyGreenAfterHeader`, red before step 6 |
-| 2 | ❌ | No document excuses a failing step, in its `Expected` or its `On failure` text | Unit test | `RepositoryStructureTests.AutomatedTestDocuments_NeverExcuseAFailingStep`, red before step 6 |
+| 1 | ✅ | No document under `docs/automated-testing/`, the README's template included, carries `Fully green after` | Unit test | `RepositoryStructureTests.AutomatedTestDocuments_CarryNoFullyGreenAfterHeader`, red before step 6 |
+| 2 | ✅ | No document excuses a failing step, in its `Expected` or its `On failure` text | Unit test | `RepositoryStructureTests.AutomatedTestDocuments_NeverExcuseAFailingStep`, red before step 6 |
 | 3 | ✅ | ADR 029 records the rule, and is indexed | Unit test + Live | `RepositoryStructureTests.EveryAdrIsIndexed` passes; `Select-String -Path docs/architecture-decisions/029-*.md -Pattern 'blocks every issue'` returns a match |
 | 4 | ✅ | The README drops the exception and points to ADR 029 | Live | `Select-String -Path docs/automated-testing/README.md -Pattern 'more than one issue before it can be fully green'` returns nothing; `-Pattern '029-a-failing-t2-step-blocks-the-issue'` returns a match |
 | 5 | ✅ | The README names every failing-step shape: no command, unasserted, intermittent | Live | `Select-String -Path docs/automated-testing/README.md -Pattern 'runs no command','without asserting','intermittent'` returns all three |
