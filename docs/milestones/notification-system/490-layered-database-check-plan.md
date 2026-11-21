@@ -730,9 +730,12 @@ and E. Register it in DI per database through the keyed connection factories tha
   and #305 in their old order. `Program.cs` calls it once, records the check on `DatabaseHealthState`, and
   logs the reason through one `LogStartupDegraded`, which replaces three log methods that rendered the same
   `[Server] {Reason}` line. `Program.cs` no longer holds its own copies of the two reason texts.
-- **Knowledgebase:** `the-database-could-not-be-checked.md`, linked as
-  `KnowledgebaseLinks.TheDatabaseCouldNotBeChecked` from the end of `CheckInconclusive`. Storage reuses #326's
-  text and its existing entry.
+- **Knowledgebase:** this step added `the-database-could-not-be-checked.md`, linked as
+  `KnowledgebaseLinks.TheDatabaseCouldNotBeChecked` from the end of a `NotEnoughSpace` reason for a Storage
+  layer that found too little room for a working copy. `86eb15fd` removed all three, the reason, the constant
+  and the entry, when the check began reading a database whose `-wal` holds data in memory and so stopped
+  needing a copy (#503 corrected this record). `CheckInconclusive` carries no Knowledgebase link. Storage reuses
+  #326's text and its existing entry.
 - **Fixture fix:** `DocumentedFormatFixtures`' root page lookup now opens `immutable`. Read-only alone
   created a `-wal` beside a WAL database it could not remove, which row 13's test found.
 - **The changelog's check was implemented before its tests**, the trap *Red first means signatures first*

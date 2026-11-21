@@ -1,6 +1,6 @@
 # #503: A failing T2 step blocks the issue: remove the "Fully green after" exception and audit the issues it let through
 
-**Status:** In progress (step 6)
+**Status:** In progress (step 8)
 **GitHub issue:** #503
 **Tiers required:** T2
 **Depends on:** #347, #400, #404, #438, #445, #462, #468, #469, #472, #505, #506. Blocks #457, #490.
@@ -9,8 +9,8 @@
 
 ## Next action
 
-**Continue with the unblocked steps: 7 (run the changed documents), then 8 to 10.** Steps 1 to 5 are done and
-committed; step 6 is done except `startup-and-degradation/06`'s log counts, which wait for #505 and #506. Decisions A to G were all answered on 2026-11-21, and no question is
+**Continue with steps 8 to 10.** Steps 1 to 5 and 9 are done. Steps 6 and 7 are done except
+`startup-and-degradation/06`'s log counts and their three runs, which wait for #505 and #506. Decisions A to G were all answered on 2026-11-21, and no question is
 open. The comment on #438 that decision G calls for was posted the same day. The plan is built against
 `5bfb43f6` (2026-11-21).
 
@@ -409,7 +409,8 @@ import before the Reset, which is what gives the later `0` after the Reset its m
 
 ### 7. Confirm the changed documents read red where they should
 
-**Status:** ⬜ Not started
+**Status:** 🔄 In progress: every document is run except `startup-and-degradation/06`'s three runs, which wait
+for step 6's conversion (#505, #506).
 
 The red-first run of this issue's change (`process.md` → Implementation, step 1): each document from step 6
 against a build of this branch, under `test-env.csx`. Recorded per document: the step it fails at, and that
@@ -417,6 +418,38 @@ no other step fails. A failure anywhere else is reported in its own right. `06` 
 show its reading no longer varies.
 
 This is not this issue's T2. That is step 12, and it cannot pass before the owners land (decision D).
+
+**Run 2026-11-21** against `quotinator:local` built from `4e051906`, every document as written, stopping at its
+first failing step:
+
+| Document | Reading | Owner |
+|---|---|---|
+| `api-surface/06` | every step passes; cleanup leaves no container | none |
+| `database-lifecycle/02` | steps 1 to 6 pass; step 7 fails, `2` exceptions where `0` is asserted | #404 |
+| `database-lifecycle/03` | steps 1 to 7 pass; step 8 fails, every `/version` count `0` | #468 |
+| `import-and-staged-actions/01` | steps 1 to 7 pass; step 8 fails, the unknown batch answers `200` where `404` is asserted | #469 |
+| `import-and-staged-actions/14` | steps 1 to 4 pass; step 5 fails, it runs no command | #400 |
+| `import-and-staged-actions/16` | steps 1 and 2 pass; step 3 fails, no evaluation line (`reportFiles=5 staged=0`, `stale=0`) | #347 |
+| `import-and-staged-actions/17` | step 1 passes; step 2 fails, no evaluation line (`5` report lines, `5` seed batches applied, `795` records, `pending=0`, `stale=0`) | #347 |
+| `notifications-and-changelog/01` | steps 1 to 8 pass; step 9's Reset result passes and its reseed recommendation fails | #472 |
+| `startup-and-degradation/03` | every step passes on this run: the requests landed inside the window, by chance | #438 |
+| `startup-and-degradation/06` | every step passes on this run, including the timing-dependent count | conversion by #503 after #505, #506 |
+| `startup-and-degradation/07` | every step passes on this run: GitHub answered | #462 |
+
+`startup-and-degradation/03`, `06` and `07` each passed by chance on this run, and each stays a failing step
+under ADR 029 until its owner makes it deterministic. No document failed anywhere but its owned step.
+
+**`import-and-staged-actions/17`'s new step 4, run on its own** (steps 1 then 4, outside the stop rule, to
+prove the step itself works): the first draft failed twice, both now fixed in the document. An import with no
+quotes is refused (`File contained no quotes`), although the schema allows an empty list, so the fixture
+carries one new quote on `Airplane!`. A Source's title is decided as `sourceTitle`, not as the `title` its
+`ambiguousFields` names. As written, it then read `canonicalSources=1`, `sourceActions=1 ambiguous=title`, the
+renamed title, `reportedStale=6` and `stale=6`, six quote `Modify` actions `Stale`.
+
+**Runner limit, recorded so it is not misread:** the loop that ran the single-command documents runs fenced
+commands and checks exit codes. It found nothing to run in `14`'s step 5 and continued; under the stop rule
+that step fails and the reading ends there, as the table states. `startup-and-degradation/03`'s first command
+is expected to exit `1`, so it was rerun with that exit accepted.
 
 ### 8. Audit the issues at *Waiting for release*
 
@@ -441,11 +474,17 @@ corrected. #423's row 20 (*#438 defects met and recorded*) is assessed the same 
 
 ### 9. Correct #490's step 8
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Its *Knowledgebase* bullet records adding `the-database-could-not-be-checked.md` and
 `KnowledgebaseLinks.TheDatabaseCouldNotBeChecked`. Both were removed in `86eb15fd`; the bullet says so, and
 names the commit.
+
+**Done 2026-11-21**, while step 7's image built. The bullet was wrong in a second way: it said the entry was
+linked from `CheckInconclusive`, which `86eb15fd`'s parent shows carried no link; it was linked from a
+`NotEnoughSpace` reason. The bullet now records that this step added the entry, the constant and that reason,
+that `86eb15fd` removed all three when the check stopped needing a working copy, and that `CheckInconclusive`
+carries no link.
 
 ### 10. Update the dependency map
 
@@ -489,9 +528,9 @@ Written at *Waiting for release*, after step 12.
 | 5 | ✅ | The README names every failing-step shape: no command, unasserted, intermittent | Live | `Select-String -Path docs/automated-testing/README.md -Pattern 'runs no command','without asserting','intermittent'` returns all three |
 | 6 | ❌ | Each changed document fails at its owned step and nowhere else, and `06` step 6 reads the same on three runs | Live | Step 7's record, one line per document |
 | 7 | ❌ | Every issue at *Waiting for release* is audited, and each set back carries the change in its plan, `overview.md` and its GitHub Definition of done | Live | Step 8's table; for each issue set back, `gh issue view <N> --json body -q .body` shows the unticked boxes, and its plan header and overview row agree |
-| 8 | ❌ | #490's step 8 records the removal in `86eb15fd` | Live | `Select-String -Path docs/milestones/notification-system/490-layered-database-check-plan.md -Pattern '86eb15fd'` matches inside step 8 |
+| 8 | ✅ | #490's step 8 records the removal in `86eb15fd` | Live | `Select-String -Path docs/milestones/notification-system/490-layered-database-check-plan.md -Pattern '86eb15fd'` matches inside step 8 |
 | 9 | ❌ | No regression | Unit test | Full `dotnet test --configuration Release --verbosity normal -m:1`, 0 warnings, 0 errors |
 | 10 | ❌ | #469 and #472 are in *Notification system*; the other five owners are named as blockers | Live | `gh issue view 469 --json milestone -q .milestone.title` and the same for 472 print `Notification system`; `overview.md`'s dependency map names #347, #400, #404, #445, #468 |
-| 11 | ❌ | `api-surface/06` asserts both cookie variants, `0` lines without a prior cookie and `2` with one from another key ring, and declares itself deterministic | Live | Step 7's record shows both variants asserted; `Select-String -Path docs/automated-testing/api-surface/06-*.md -Pattern '^\*\*Deterministic:\*\* yes'` matches |
+| 11 | ✅ | `api-surface/06` brings its own cookies and asserts each case on the response's antiforgery cookie: none sent issues one, the same ring's is not replaced, another ring's is replaced and logs the pair once; and it declares itself deterministic | Live | Step 7's record: every step of `api-surface/06` passes; `Select-String -Path docs/automated-testing/api-surface/06-*.md -Pattern '^\*\*Deterministic:\*\* yes'` matches |
 | 12 | ❌ | T2 passes: the smoke set and every changed document, every step green | Live | Step 12's record |
 | 13 | ✅ | Both rules report a document that breaks them and pass one that does not, independently of today's documents | Unit test | `AutomatedTestingSuiteTests.MentionsOfFullyGreenAfter_*` (4) and `.StepsThatExcuseAFailure_*` (8): 12 pass; red with the rule bodies disabled (step 3) |
