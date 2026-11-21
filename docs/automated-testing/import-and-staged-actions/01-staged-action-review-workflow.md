@@ -134,17 +134,19 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 dotnet run --project tools/Quotinator.Tools.TestProbe -- url --template "http://localhost:18601/api/v1/import/actions/apply?batchId={batchId}" --lower-value batchId=C:\repos\Quotinator\.claude\temp\qt-import-01-out\conflict.json#batchId --out C:\repos\Quotinator\.claude\temp\qt-import-01-out\apply-lower-url.txt
 dotnet script scripts/testing/http.csx -- --method POST --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\apply-lower-url.txt --expect 422 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-01-out\apply-refused-lower.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\apply-refused-lower.json --length-equals pendingActionIds=1
-dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18601/api/v1/import/actions/apply?batchId=00000000-0000-4000-8000-000000000000" --status
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18601/api/v1/import/actions/apply?batchId=00000000-0000-4000-8000-000000000000" --expect 404 --status
 dotnet script scripts/testing/http.csx -- --url-file C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-url.txt --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-after-other-apply.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-01-out\pending-after-other-apply.json --equals totalCount=1 --equals items.0.status=Pending
 ```
 
 **Expected:** `422` in both cases, naming the one undecided action. That is the batch-apply-atomicity contract working as
-designed. Applying a batch that does not exist touches nothing: this batch's action is still `Pending`. That call's
-status is printed, not asserted: it answers `200` where it should answer with a clear error, which is
-[#469](https://github.com/DutchJaFO/Quotinator/issues/469), a known issue described in the
-[Knowledgebase](../../knowledgebase/applying-a-batch-that-does-not-exist-answers-200.md). When #469 is fixed, this step
-asserts that error.
+designed. Applying a batch that does not exist answers `404`, as its alias does, and touches nothing: this batch's
+action is still `Pending`.
+
+**On failure:** a `200` from the batch that does not exist is the bug
+[#469](https://github.com/DutchJaFO/Quotinator/issues/469) owns and the
+[Knowledgebase](../../knowledgebase/applying-a-batch-that-does-not-exist-answers-200.md) describes. Stop: do not run
+step 9.
 
 ### 9. Decide it again
 

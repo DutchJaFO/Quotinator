@@ -4,8 +4,6 @@
 **Environment:** Fresh
 **Deterministic:** no
 **Traces to:** #424
-**Fully green after:** #462: step 2 depends on GitHub answering until this document is rewritten against a
-source server under this project's control; it reads as a failure whenever GitHub does not answer.
 
 ## Preconditions
 
@@ -22,13 +20,16 @@ off, and that turning it on still reaches the network.
 
 ## Determinism
 
-**This is the one document allowed to depend on the network, and only in step 2.** A test depends on
-nothing outside the project unless that is what it tests (`docs/testing-policy.md`); the refresh reaching
-GitHub is what step 2 tests. Step 1 depends on nothing outside: its point is that nothing is fetched.
+**Step 2 depends on the network, and that makes it a failing step.** It downloads from GitHub, so its
+result depends on whether GitHub answers, and a step whose result varies between runs of the same build is
+failing whatever a given run reads
+([ADR 029](../../architecture-decisions/029-a-failing-t2-step-blocks-the-issue.md)). Running it again until it
+passes does not change that. [#462](https://github.com/DutchJaFO/Quotinator/issues/462) replaces GitHub with a
+source server under this project's control, which makes the step deterministic. Step 1 depends on nothing
+outside: its point is that nothing is fetched.
 
 **What varies:** whether GitHub answers during step 2. When it does not, the step fails, because a refresh
-that could not download cannot show that it would have. That is the index's *A test that cannot be
-confirmed has failed*: wait and run it again, and do not read a `failed` outcome as a pass.
+that could not download cannot show that it would have.
 
 **Step 1 needs the setting absent, not `false`.** The Fresh profile pins it to `false`, which would pass
 step 1 whatever the default was. `--unset` leaves the pin out, and the step confirms from inside the

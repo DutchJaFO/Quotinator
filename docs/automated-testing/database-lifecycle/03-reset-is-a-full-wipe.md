@@ -4,7 +4,6 @@
 **Environment:** Fresh
 **Deterministic:** yes
 **Traces to:** #156
-**Fully green after:** [#468](https://github.com/DutchJaFO/Quotinator/issues/468): step 8 reads every `/version` count as `0` until then, because an API import does not refresh them. See the [Knowledgebase entry](../../knowledgebase/version-counts-are-stale-after-an-import.md)
 
 ## Preconditions
 
@@ -250,9 +249,10 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 
 **Expected:** the same counts step 7 read from the list endpoints.
 
-**On failure:** every count reading `0` is [#468](https://github.com/DutchJaFO/Quotinator/issues/468), a known issue
-described in the [Knowledgebase](../../knowledgebase/version-counts-are-stale-after-an-import.md). Record it and carry
-on, since nothing below reads this step. Any other reading is not #468 and is reported in its own right.
+**On failure:** every count reading `0` means `/version` did not refresh its counts after the API import, the bug
+[#468](https://github.com/DutchJaFO/Quotinator/issues/468) owns and the
+[Knowledgebase](../../knowledgebase/version-counts-are-stale-after-an-import.md) describes. Any other reading is a
+different fault. Either way, stop: do not run step 9.
 
 ### 9. Reset the database
 

@@ -2,159 +2,154 @@
 
 **Smoke:** no
 **Environment:** Fresh
-**Deterministic:** no
-**Traces to:** [#411](https://github.com/DutchJaFO/Quotinator/issues/411)
+**Deterministic:** yes
+**Traces to:** [#411](https://github.com/DutchJaFO/Quotinator/issues/411), [#503](https://github.com/DutchJaFO/Quotinator/issues/503)
 
 ## Preconditions
 
-**Beyond the profile.** Four containers of this test's own, one after another on their own ports, and
-the browser pane. Three use the suite's shared key ring, which `test-env.csx` mounts at `/data/keys` by
-default; one uses `--own-keys`.
+**Beyond the profile.** Three containers of this test's own, one after another on their own ports. Two use
+the suite's shared key ring, which `test-env.csx` mounts at `/data/keys` by default; one uses `--own-keys`.
 
-A browser holding a cookie protected by a key the application does not have sends it with the next
-page request. The application cannot read it, logs a `CryptographicException` /
-`AntiforgeryValidationException` pair, and issues a new cookie in the same response. This is the
-Knowledgebase entry *The log reports that an antiforgery token could not be decrypted*, provoked on
-purpose. Every other browser-driven test must never see it, which is what the shared key ring is for,
-and what step 2 proves.
+A request carrying an antiforgery cookie protected by a key the application does not have cannot be read.
+The application logs a `CryptographicException` / `AntiforgeryValidationException` pair and issues a new
+cookie in the same response. This is the Knowledgebase entry *The log reports that an antiforgery token
+could not be decrypted*, provoked on purpose. Every browser-driven test must never see it, which is what
+the shared key ring is for, and what step 3 proves.
+
+**The test brings the cookie it validates** (developer, 2026-11-21: *if it has to validate a cookie then it
+needs a cookie to validate*). Every request is made by `http.csx`, which saves the cookies a response sets
+(`--cookies-out`) and sends a saved cookie with a later request (`--cookie-file`). No browser is involved,
+so nothing is left behind for another test, and no page is closed that the test did not ask to close.
 
 ## Determinism
 
-- **Close the tab before every container change, and open the next page in a new one.** A page left
-  open reconnects to whatever answers on its port next, and that reconnect logs lines of its own:
-  measured 2026-09-19, the same provocation read 5 lines with the old page open and exactly 2 with it
-  closed.
-- **Step 1's first visit is not asserted.** Whether it logs the pair depends on what the browser held
-  before this test began: nothing in a fresh pane, since the cookie lives only for the browser session.
-  Step 1's second visit is what pins the browser to a cookie from the shared ring.
-
-**What varies:** step 1's first reading, which is `0` in a fresh browser pane and `2` where the pane
-already held a cookie from an earlier container. It cannot be pinned without owning the browser's
-whole session, so the step accepts either value and step 1's second visit establishes the state
-everything after it depends on. Every other reading in this document is deterministic once that
-cookie is pinned.
-- **Each count is the lines added since the previous read**, so one visit's result cannot absorb
-  another's.
-- **Each log is read before its container is stopped**, per the index's *Read the log before the
+- **Every cookie a request sends is one the test saved itself.** Step 1's request sends none; every later
+  request sends a cookie an earlier step of this test was issued. Nothing depends on what a browser held
+  before the test began.
+- **Each exception count is the lines logged since a mark taken just before the request**, so one request's
+  lines cannot absorb another's.
+- **Each log is read before its container is destroyed**, per the index's *Read the log before the
   application stops*.
-- **This test must end with step 4.** Step 3 leaves the browser holding a cookie the shared ring cannot
-  read, and the next browser-driven test would report it as its own failure.
+- **Only the antiforgery cookie is read.** It is what this document's subject issues and replaces; any
+  other cookie a response sets is not counted.
 
 ## Steps
 
-### 1. Pin the browser to a cookie from the shared key ring
+### 1. With no cookie, the shared-ring container issues one and logs nothing
 
-```powershell
-$seen = @{}
-function New-Thrown($name) {
-  $total = @(docker logs $name 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count
-  $new = $total - [int]$seen[$name]
-  $seen[$name] = $total
-  $new
-}
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-api-06-out
 dotnet script scripts/testing/test-env.csx -- create --name qt-api-06-a --port 18106
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-06-a --mark C:\repos\Quotinator\.claude\temp\qt-api-06-out\a-first.mark
+dotnet script scripts/testing/http.csx -- --url http://localhost:18106/notifications --no-key --accept text/html --expect 200 --status --cookies-out C:\repos\Quotinator\.claude\temp\qt-api-06-out\a.cookies
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-text C:\repos\Quotinator\.claude\temp\qt-api-06-out\a.cookies "\.AspNetCore\.Antiforgery\."
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-06-a --since-mark C:\repos\Quotinator\.claude\temp\qt-api-06-out\a-first.mark --pattern "\[Runtime - Exception\]" --exactly 0
 ```
 
-In the browser, in a new tab (closing any other): open `http://localhost:18106/notifications`, then
-`New-Thrown qt-api-06-a`. Open the same address again, then `New-Thrown qt-api-06-a`.
+**Expected:** every command exits `0`: the page answers `200`, the response sets an antiforgery cookie, as any
+first visit does, and nothing is logged as thrown.
 
-```powershell
+**On failure:** no antiforgery cookie means the page did not issue one, so every later step would send an
+empty file and prove nothing. Stop: do not run step 2.
+
+### 2. The same container does not replace its own cookie
+
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-06-a --mark C:\repos\Quotinator\.claude\temp\qt-api-06-out\a-again.mark
+dotnet script scripts/testing/http.csx -- --url http://localhost:18106/notifications --no-key --accept text/html --expect 200 --status --cookie-file C:\repos\Quotinator\.claude\temp\qt-api-06-out\a.cookies --cookies-out C:\repos\Quotinator\.claude\temp\qt-api-06-out\a-again.cookies
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-no-text C:\repos\Quotinator\.claude\temp\qt-api-06-out\a-again.cookies "\.AspNetCore\.Antiforgery\."
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-06-a --since-mark C:\repos\Quotinator\.claude\temp\qt-api-06-out\a-again.mark --pattern "\[Runtime - Exception\]" --exactly 0
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-06-a
 ```
 
-**Expected:** the first count is either `0` or `2`, per Determinism. The second is `0`.
+**Expected:** every command exits `0`: the container reads the cookie it issued, sets no new one, and logs
+nothing.
 
-**On failure:** a non-zero second count means the application failed to replace the cookie it could not
-read. Stop: every later step depends on the browser holding one it can.
+**On failure:** a new antiforgery cookie, or an exception, means the container could not read a cookie it
+issued itself, so the comparison in steps 3 and 4 would mean nothing. Stop: do not run step 3.
 
-### 2. A new container on the shared ring reads that cookie
+### 3. A new container on the shared ring reads that cookie
 
-```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-api-06-b --port 18107
 ```
-
-In the browser, close the tab and open `http://localhost:18107/notifications` in a new one, then
-`New-Thrown qt-api-06-b`.
-
-```powershell
+dotnet script scripts/testing/test-env.csx -- create --name qt-api-06-b --port 18107
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-06-b --mark C:\repos\Quotinator\.claude\temp\qt-api-06-out\b.mark
+dotnet script scripts/testing/http.csx -- --url http://localhost:18107/notifications --no-key --accept text/html --expect 200 --status --cookie-file C:\repos\Quotinator\.claude\temp\qt-api-06-out\a.cookies --cookies-out C:\repos\Quotinator\.claude\temp\qt-api-06-out\b.cookies
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-no-text C:\repos\Quotinator\.claude\temp\qt-api-06-out\b.cookies "\.AspNetCore\.Antiforgery\."
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-06-b --since-mark C:\repos\Quotinator\.claude\temp\qt-api-06-out\b.mark --pattern "\[Runtime - Exception\]" --exactly 0
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-06-b
 ```
 
-**Expected:** `0`. The container has a new volume and a new database, and still reads the cookie step 1's
-container issued, because both read one key ring.
+**Expected:** every command exits `0`. The container has a new volume and a new database, and still reads the
+cookie step 1's container issued, because both read one key ring: no new cookie, nothing logged.
 
-**On failure:** `2` means the new container had keys of its own: `test-env.csx` did not mount the shared
-ring. That is this test's red case: before #411 every test container started with its own keys, and this
-step read `2`.
+**On failure:** a new antiforgery cookie, or the exception pair, means the new container had keys of its own:
+`test-env.csx` did not mount the shared ring. That is this test's red case: before #411 every test container
+started with its own keys. Stop: do not run step 4.
 
-### 3. A container with its own key ring cannot, and logs it once
+### 4. A container with its own key ring replaces the cookie, and logs it
 
-```powershell
+```
 dotnet script scripts/testing/test-env.csx -- create --name qt-api-06-c --port 18108 --own-keys
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-06-c --mark C:\repos\Quotinator\.claude\temp\qt-api-06-out\c-first.mark
+dotnet script scripts/testing/http.csx -- --url http://localhost:18108/notifications --no-key --accept text/html --expect 200 --status --cookie-file C:\repos\Quotinator\.claude\temp\qt-api-06-out\a.cookies --cookies-out C:\repos\Quotinator\.claude\temp\qt-api-06-out\c.cookies
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-text C:\repos\Quotinator\.claude\temp\qt-api-06-out\c.cookies "\.AspNetCore\.Antiforgery\."
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-06-c --since-mark C:\repos\Quotinator\.claude\temp\qt-api-06-out\c-first.mark --pattern "\[Runtime - Exception\]" --exactly 2
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-06-c --since-mark C:\repos\Quotinator\.claude\temp\qt-api-06-out\c-first.mark --pattern "thrown: CryptographicException" --exactly 1
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-06-c --since-mark C:\repos\Quotinator\.claude\temp\qt-api-06-out\c-first.mark --pattern "thrown: AntiforgeryValidationException" --exactly 1
 ```
 
-In the browser, close the tab and open `http://localhost:18108/notifications` in a new one, then
-`New-Thrown qt-api-06-c`. Open the same address again, then `New-Thrown qt-api-06-c`. Then:
+**Expected:** every command exits `0`: the page still answers `200`, the response sets a replacement
+antiforgery cookie, and exactly two lines are logged as thrown, one `CryptographicException` and one
+`AntiforgeryValidationException`.
 
-```powershell
-docker logs qt-api-06-c 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]' |
-  ForEach-Object { ($_.Line -split 'thrown: ')[1] }
+**On failure:** no replacement cookie means the application kept a cookie it cannot read. A count other than
+two, or a different pair, is a change in how the unreadable cookie is reported. Either way, stop: do not run
+step 5.
+
+### 5. The replacement is read, and nothing more is logged
+
+```
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-06-c --mark C:\repos\Quotinator\.claude\temp\qt-api-06-out\c-again.mark
+dotnet script scripts/testing/http.csx -- --url http://localhost:18108/notifications --no-key --accept text/html --expect 200 --status --cookie-file C:\repos\Quotinator\.claude\temp\qt-api-06-out\c.cookies --cookies-out C:\repos\Quotinator\.claude\temp\qt-api-06-out\c-again.cookies
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --expect-no-text C:\repos\Quotinator\.claude\temp\qt-api-06-out\c-again.cookies "\.AspNetCore\.Antiforgery\."
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-api-06-c --since-mark C:\repos\Quotinator\.claude\temp\qt-api-06-out\c-again.mark --pattern "\[Runtime - Exception\]" --exactly 0
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-06-c
 ```
 
-**Expected:** `2`, then `0`, and the two lines are `CryptographicException` and
-`AntiforgeryValidationException`. The page renders both times.
+**Expected:** every command exits `0`: the container reads the cookie it issued in step 4, sets no new one,
+and logs nothing. The pair is logged on the first page only, which is this document's title.
 
-**On failure:** `0` on the first visit means the browser sent no cookie, so step 2's `0` proved nothing
-either: rerun from step 1. A non-zero second count means the cookie was not replaced.
-
-### 4. Restore the browser to the shared key ring
-
-This step is the remedy the Knowledgebase entry names, exercised: nothing needs doing, and the next page
-replaces the cookie.
-
-```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-api-06-d --port 18109
-```
-
-In the browser, close the tab and open `http://localhost:18109/notifications` in a new one, then
-`New-Thrown qt-api-06-d`. Open the same address again, then `New-Thrown qt-api-06-d`.
-
-```powershell
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-06-d
-```
-
-**Expected:** `2`, then `0`. The browser now holds a cookie from the shared key ring again, as it did
-before step 3.
-
-**On failure:** a non-zero second count means the browser still holds step 3's cookie, and every
-browser-driven test after this one will log a pair it did not cause. Do not continue with the suite
-until it reads `0`.
+**On failure:** a new cookie, or another exception, means the replacement was not accepted, so a browser would
+log the pair on every page rather than once. Stop.
 
 ## Observed effect
 
-**Measured 2026-09-19** while designing #411's shared key ring. A container with its own keys, visited by a
-browser holding a cookie from any other, logs exactly one pair: `CryptographicException: The key {…}
-was not found in the key ring` and `AntiforgeryValidationException: The antiforgery token could not be
-decrypted`, with frames ending in `DefaultAntiforgery.GetCookieTokenDoesNotThrow`. The page renders
-normally, and the next visit logs nothing. The browser does not separate cookies by port, nor by a
-`*.localhost` host name, so no browser-side isolation keeps a provoking test from affecting the others:
-restoring the cookie in step 4 is the only way.
+**Measured 2026-09-19** while designing #411's shared key ring, against the browser-driven form this document
+had before #503. A container with its own keys, visited by a browser holding a cookie from any other, logged
+exactly one pair: `CryptographicException: The key {…} was not found in the key ring` and
+`AntiforgeryValidationException: The antiforgery token could not be decrypted`, with frames ending in
+`DefaultAntiforgery.GetCookieTokenDoesNotThrow`. The page rendered normally, and the next visit logged
+nothing. The browser does not separate cookies by port, nor by a `*.localhost` host name, which is why that
+form had to restore the browser's cookie afterwards, and why this one uses no browser.
 
 ## Canary
 
-The control is inside the run. Steps 2 and 3 differ only in whether the container shares the key ring:
-step 2 must read `0` and step 3 must read `2`. If sharing had no effect, step 2 would read `2` as well,
-and the document fails.
+The control is inside the run. Steps 3 and 4 differ only in whether the container shares the key ring, and
+send the same cookie: step 3 must read no new cookie and no exception, and step 4 must read a replacement and
+the pair. If sharing had no effect, step 3 would read what step 4 reads, and the document fails.
 
-A build before [#411](https://github.com/DutchJaFO/Quotinator/issues/411) is the pre-fix form, where
-every container generated a key ring of its own and step 2 reads `2`.
-
-**Step 4 is not a third reading of the same thing.** It is what the suite requires of any test that
-provokes the pair: end by restoring a cookie the shared ring can read, so the next browser-driven
-document does not log it and report it as its own.
+A build before [#411](https://github.com/DutchJaFO/Quotinator/issues/411) is the pre-fix form, where every
+container generated a key ring of its own and step 3 reads a replacement cookie and the pair.
 
 ## Cleanup
 
-Each step destroys its own container. The shared key ring, `.claude/temp/qt-keys`, stays: removing it
-makes the next browser-driven test log the pair once.
+```
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-06-a
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-06-b
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-06-c
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-api-06-out
+```
+
+**Expected:** every command exits `0`. Each step destroys its own container already; these catch a run that
+stopped early. The shared key ring, `.claude/temp/qt-keys`, stays: removing it makes the next browser-driven
+test log the pair once.

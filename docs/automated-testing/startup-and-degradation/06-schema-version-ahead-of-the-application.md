@@ -2,12 +2,8 @@
 
 **Smoke:** yes
 **Environment:** Fresh
-**Deterministic:** yes
+**Deterministic:** no
 **Traces to:** #350, #327, #289, #490
-**Fully green after:** [#445](https://github.com/DutchJaFO/Quotinator/issues/445): step 6's
-*nothing thrown since Cancel* `log` command reads `TaskCanceledException` lines logged after the page
-that confirmed the Reset closes, until the application stops logging a circuit the client closed as an
-error.
 
 ## Preconditions
 
@@ -24,6 +20,15 @@ altered or removed anything. Since #490 the schema is compared against this buil
 known, but what those migrations meant for the data is not, and serving quote content from it is a foot gun.
 
 ## Determinism
+
+**What varies:** step 6's exception count since Cancel. Each `capture-page.csx` command closes its own
+browser, and each close makes the application log
+[#445](https://github.com/DutchJaFO/Quotinator/issues/445)'s errors, which land before or after the count
+depending on timing. So the step can read either way on the same build, which makes it a failing step
+([ADR 029](../../architecture-decisions/029-a-failing-t2-step-blocks-the-issue.md)). #503 replaces the log
+count with the exception totals [#506](https://github.com/DutchJaFO/Quotinator/issues/506) reports, read with
+one browser kept open for the whole document as [#505](https://github.com/DutchJaFO/Quotinator/issues/505)
+provides, after which nothing here varies.
 
 - **The unknown meaning of the migrations is the fault; the stale counter is only its symptom.** That is
   why `503` is the expected answer here, even though the schema compares as intact, and not an
@@ -172,7 +177,7 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 
 **Expected:** both `json` commands exit `0`. The modal renders, its reason names the overshoot and both
 remedies, and it carries no notification row. The notifications page has no rows and no body cells, and
-shows its empty state (*No notifications yet.*). Both screenshots record it.
+shows its empty state (*No notifications yet.*).
 
 **The reason is the only channel that can be relied on here, and that is the point of this step.** An
 overshot database holds data of unknown meaning, so every row read from it is untrusted content, the notification
@@ -214,12 +219,11 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 
 **Expected:** every `json` command exits `0`: one Reset button and the reason shown on `/rest-api`,
 `/notifications`, `/import-review` and `/stats`; neither on `/about`, which is static SSR and carries no
-interactive control. `/rest-api` is where the modal's Continue lands and is reachable from the nav
-anywhere, so no degraded page is more than one click from the repair.
+interactive control.
 
 **On failure:** a `0` on any of the first four means that page is back to naming a remedy the operator
-cannot run from it. `/about` reading `1` is not a failure, but it means that page became interactive,
-which is a change worth knowing about.
+cannot run from it. A `1` on `/about` means that page became interactive, which its command asserts it is
+not. Either way, stop.
 
 ```
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/health --expect 503 --status
@@ -242,9 +246,9 @@ dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/he
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-cancel.mark
 ```
 
-**Expected:** the `json` command exits `0`: the buttons read `Reset the database, Continue`, then
-`Confirm, Cancel, Continue` once armed, and return to the first after Cancel. `/health` still reads
-`503`: Cancel called nothing, so the overshoot is still there. The mark records where the log stands, so
+**Expected:** the `json` command exits `0` on the three button readings it names: before arming, once
+armed, and after Cancel, which returns to the first. `/health` still reads `503`: Cancel called nothing, so
+the overshoot is still there. The mark records where the log stands, so
 the repair below is counted on its own.
 
 Then arm it again and confirm. The banner clears itself, in place, with no page reload:

@@ -4,8 +4,6 @@
 **Environment:** Fresh
 **Deterministic:** yes
 **Traces to:** #153
-**Fully green after:** [#347](https://github.com/DutchJaFO/Quotinator/issues/347): step 3's
-evaluation line does not exist until then, so that reading is inconclusive; every other reading passes
 
 ## Preconditions
 
@@ -106,10 +104,11 @@ that something looked.
 
 **On failure:** `reportFiles=0` means the reseed did not re-plan, a setup failure, not a staleness
 result; stop. `staged` above `0` means the bundled corpus itself now conflicts with the stored data, and
-`stale=0` no longer stands for anything: read which file and entity carry the count. A missing evaluation line means the mechanism's own execution is unobservable, so neither
-the report nor the empty list can establish whether it ran. That is the application's gap rather than
-this document's; see the index's *When the expected situation does not occur*, cause 3, and
-[#347](https://github.com/DutchJaFO/Quotinator/issues/347), which this test remains blocked on.
+`stale=0` no longer stands for anything: read which file and entity carry the count. A missing evaluation
+line fails this step: nothing then shows that the rules were compared, so neither the report nor the empty
+list establishes that the mechanism ran. The application does not yet say so, which is
+[#347](https://github.com/DutchJaFO/Quotinator/issues/347)'s to fix; see the index's *When the expected
+situation does not occur*, cause 3. In every case, stop: do not run step 4.
 
 ### 4. Make staleness fire, and confirm it does
 
@@ -221,9 +220,9 @@ For the pre-fix form, build the commit before
 and run step 4 against it: a rule whose recorded snapshot no longer matches reality is applied there
 rather than staged `Stale`, which is the defect.
 
-**Step 3's own reading stays inconclusive until [#347](https://github.com/DutchJaFO/Quotinator/issues/347)**,
-for the reason the `Fully green after:` field states: `stale=0` is produced identically by *compared
-the rules, none drifted* and by *never compared anything*, and nothing yet says which happened.
+**Step 3 fails on every build until [#347](https://github.com/DutchJaFO/Quotinator/issues/347)** makes the
+evaluation observable: `stale=0` is produced identically by *compared the rules, none drifted* and by
+*never compared anything*, and nothing yet says which happened.
 
 Pin `Quotinator__AutoPurgeBundledImportActions` for every run. An empty list produced by auto-purge
 cannot be told from one produced by the behaviour under test.

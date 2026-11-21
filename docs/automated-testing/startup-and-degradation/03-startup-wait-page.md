@@ -39,6 +39,12 @@ a longer limit.
 
 The wait in step 3 is an ordinary readiness wait and polls.
 
+## Explicitly not covered here
+
+What the database holds once seeding completes. It depends on the bundled sources, and the documents under
+`import-and-staged-actions/` that own the seed check it; step 3 reads only that `/version` carries a
+`database` block at all.
+
 ## Steps
 
 ### 1. Send the requests during initialisation, before seeding completes
@@ -55,8 +61,11 @@ of `health`, `version`, `page`, `reset` and `random`. Never a hang, never a raw 
 a page the caller did not ask for.
 
 **On failure:** a `200` means seeding finished before the requests landed: the window was missed rather
-than the wait page being broken (see Determinism). Destroy the container and re-run; do not lengthen the
-limit.
+than the wait page being broken (see Determinism). Re-running until the window is hit does not make a pass:
+a result that varies between runs of the same build is failing
+([ADR 029](../../architecture-decisions/029-a-failing-t2-step-blocks-the-issue.md)), and
+[#438](https://github.com/DutchJaFO/Quotinator/issues/438) rewrites this document so it checks only what is
+guaranteed. Stop: do not run step 2.
 
 ### 2. Read what the window answered
 
@@ -103,8 +112,7 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 ```
 
 **Expected:** `/health` returns `200` and `healthy`; `/version` returns `200`, `status=ready`, with a
-`database` block: the fields absent in step 1, now populated. What the database holds is not asserted, since
-that depends on the bundled sources.
+`database` block: the fields absent in step 1, now populated.
 
 ## Observed effect
 

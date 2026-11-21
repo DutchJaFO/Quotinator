@@ -143,11 +143,13 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-db-0
 most recent batch, is refused `422` because there is nothing left to reverse, and the refusal throws
 nothing ([ADR 022](../../architecture-decisions/022-exceptions-only-for-undetectable-conditions.md)).
 
-**The exception count fails today, and is tracked.** The refusal is reached by throwing
-`ImportBatchStateException` for a condition the service has just checked, which ADR 022 forbids;
-[#404](https://github.com/DutchJaFO/Quotinator/issues/404) converts it to a reported refusal, and
-[#475](https://github.com/DutchJaFO/Quotinator/issues/475) is why the one exception is counted twice.
-The mark taken after it lets step 10 assert that nothing *else* throws.
+**On failure:** an exception count above `0` means the refusal was reached by throwing
+`ImportBatchStateException` for a condition the service had just checked, which ADR 022 forbids. That is
+the bug [#404](https://github.com/DutchJaFO/Quotinator/issues/404) owns, converting it to a reported
+refusal; [#475](https://github.com/DutchJaFO/Quotinator/issues/475) is why the one exception is counted
+twice. Stop: do not run step 8.
+
+The mark taken at the end lets step 10 assert that nothing throws after this point.
 
 ### 8. Positive control: the same import without the purge can be reversed
 
@@ -223,7 +225,8 @@ applying it is a real change.
 ## Observed effect
 
 **Measured 2026-11-08** on `feature/notification-system` (1.9.0-alpha), as written, every command
-exiting `0` except step 7's exception count, the known failure tracked by #404:
+exiting `0` except step 7's exception count, which failed (#404). That run went on past the failure, which
+the stop rule no longer allows, so steps 8 to 10 below are a reading from before that rule:
 
 | Step | Observed |
 |---|---|
@@ -247,7 +250,7 @@ than asserting on them:
   `ImportBatchStateException`, which reaches the response as `422` and is logged twice as a thrown
   exception. ADR 022 forbids throwing for a condition just checked;
   [#404](https://github.com/DutchJaFO/Quotinator/issues/404) and
-  [#475](https://github.com/DutchJaFO/Quotinator/issues/475) track it, and step 7 fails until #404 lands.
+  [#475](https://github.com/DutchJaFO/Quotinator/issues/475) own it, so step 7 fails on every build before #404.
 - **The earlier scoped clear could not have done anything.** It cleared `Quotinator_Quote`, where the
   conflict import writes no `Audit_Entry` row at all, so "the change rows are unchanged" held whether or
   not a scoped clear works. Step 10 now clears `Import_Batch`, where the import's entries are.

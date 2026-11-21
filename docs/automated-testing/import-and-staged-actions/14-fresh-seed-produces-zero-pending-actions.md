@@ -4,7 +4,6 @@
 **Environment:** Fresh
 **Deterministic:** yes
 **Traces to:** #181
-**Fully green after:** [#400](https://github.com/DutchJaFO/Quotinator/issues/400): step 5 has nothing to run until then, because the regeneration it needs is reached through the source refresh #400 builds its step on
 
 ## Preconditions
 
@@ -106,7 +105,12 @@ anybody: it looped over a manifest property that does not exist, and called a `-
 have. #400 item 6 replaces it with a runnable step, reached through the source refresh. `Quotinator:AutoUpdateSources` is
 off by default (#424), so a container seeds the checked-in copy and that step will have to turn the refresh on for its run.
 
-**Expected:** no command, and nothing to record. This is not a pass: the comparison has not been made.
+**Expected:** a command comparing each bundled file with what its converter produces, and every file matching.
+There is no such command, so this step fails
+([ADR 029](../../architecture-decisions/029-a-failing-t2-step-blocks-the-issue.md): a step that runs no command
+fails). The issue that owns the missing command is [#400](https://github.com/DutchJaFO/Quotinator/issues/400).
+
+**On failure:** stop: do not run step 6.
 
 ### 6. Confirm every no-op resolution is one somebody has accounted for
 
@@ -185,7 +189,7 @@ Wall Street` and `The Wolf of Wall Street`, and `Spiderman` and `Spider Man`. It
 duplicates spelled differently are invisible to it, and those are what a `SourceAliasRule` exists to merge. Until step 4 can
 see them, which is [#479](https://github.com/DutchJaFO/Quotinator/issues/479), step 3 alone proves this document able to fail.
 
-**Step 5 has no canary**, for the reason the `Fully green after:` field states. Pin
+**Step 5 has no canary**: it runs no command, so it fails on every build until #400 gives it one. Pin
 `Quotinator__AutoPurgeBundledImportActions` for every run: an empty list produced by auto-purge is indistinguishable from an
 empty list produced by the behaviour under test.
 

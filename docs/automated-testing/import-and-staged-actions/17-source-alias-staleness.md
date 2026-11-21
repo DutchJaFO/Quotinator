@@ -4,9 +4,6 @@
 **Environment:** Fresh
 **Deterministic:** yes
 **Traces to:** #153
-**Fully green after:** [#347](https://github.com/DutchJaFO/Quotinator/issues/347): the evaluation
-line in steps 2 and 3 does not exist until then, so those readings are inconclusive; every other
-reading passes
 
 ## Preconditions
 
@@ -83,10 +80,10 @@ aliases; `applied` equals `seedBatches` and `records` is above `0`; and both `pe
 | Every seed batch `applied`, with records above `0` | Pending or stale actions were left and then removed, leaving empty lists behind: a batch is marked `applied`, and purged, only when none of its actions is pending, blocked or stale |
 | Evaluation line present | The mechanism never compared the aliases at all |
 
-**On failure:** a missing evaluation line makes this step inconclusive rather than passing: `stale=0`
-in the report and an empty list are both produced equally by a mechanism that ran and found none and by
-one that never ran. See the index's *When the expected situation does not occur*, cause 3, and
-[#347](https://github.com/DutchJaFO/Quotinator/issues/347), which this test remains blocked on.
+**On failure:** a missing evaluation line fails this step: `stale=0` in the report and an empty list are
+both produced equally by a mechanism that ran and found none and by one that never ran. The application
+does not yet say whether it ran, which is [#347](https://github.com/DutchJaFO/Quotinator/issues/347)'s to
+fix; see the index's *When the expected situation does not occur*, cause 3. Stop: do not run step 3.
 
 ### 3. Reseed and repeat, which is the second of the two paths
 
@@ -122,7 +119,64 @@ is the correct result here, and why the log line rather than the zero is what pr
 looked.
 
 **On failure:** as in step 2: an unobservable evaluation makes both readings meaningless, and the
-reseed's own status code is what separates "nothing was stale" from "the reseed never ran".
+reseed's own status code is what separates "nothing was stale" from "the reseed never ran". Stop: do not
+run step 4.
+
+### 4. Rename an alias's canonical Source, and confirm the alias is reported stale
+
+Steps 2 and 3 can only show an absence. This step produces the presence in the same run: it renames the
+Source a real bundled alias resolves to, which is exactly the genuine rename the Preconditions define, and
+requires the reseed to report the alias stale. `vilaboim-source-aliases.json` maps `Star Wars` onto
+`Star Wars: Episode IV - A New Hope`, and `vilaboim_movie-quotes.json` carries a quote whose source is
+`Star Wars`, so the reseed consults that alias.
+
+The rename is an import of a Source correction: a `sources[]` entry carrying the Source's own id, which
+matches by id so the title becomes correctable (`schemas/source-extended.schema.json`). A seeded Source is
+never `Complete`, which is human-set only, so the correction stages `Pending` rather than `Blocked`.
+
+```powershell
+$fixture   = Join-Path $env:TEMP "qt-import-17-fixture"
+$canonical = 'Star Wars: Episode IV - A New Hope'
+$renamed   = "$canonical (renamed by import-and-staged-actions/17)"
+New-Item -ItemType Directory -Force $fixture | Out-Null
+
+$source = @((Invoke-RestMethod "$base/masterdata/sources?pageSize=0").items |
+  Where-Object { $_.title -eq $canonical -and $_.type -eq 'movie' })
+"canonicalSources=$($source.Count)"
+
+$correction = @{ quotes = @(); sources = @(@{ id = $source[0].id; title = $renamed; type = 'movie' }) }
+$correction | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $fixture "rename.json") -Encoding utf8
+$batch = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
+            --file (Join-Path $fixture "rename.json") --duplicate-resolution review --expect 202 `
+          | ConvertFrom-Json).batchId
+$action = @((Invoke-RestMethod "$base/import/actions?status=pending&batchId=$batch&pageSize=0").items |
+  Where-Object { $_.entityType -eq 'Source' })
+"sourceActions=$($action.Count) ambiguous=$($action[0].ambiguousFields -join ',')"
+$decision = @{}; foreach ($field in $action[0].ambiguousFields) { $decision[$field] = @{ choice = 'replace' } }
+Invoke-RestMethod -Method Post -Uri "$base/import/actions/$($action[0].id)/decide" -Headers $key `
+  -ContentType 'application/json' -Body ($decision | ConvertTo-Json -Depth 3) | Out-Null
+dotnet script scripts/testing/http.csx -- --method POST --url "$base/import/actions/apply?batchId=$batch" --expect 200 --status | Out-Null
+"title=$((Invoke-RestMethod "$base/masterdata/sources/$($source[0].id)").title)"
+
+$reseedBody = Join-Path $env:TEMP "qt-import-17-reseed-renamed.json"
+dotnet script scripts/testing/http.csx -- --method POST --url "$base/admin/database/reseed" --expect 200 --body-out $reseedBody | Out-Null
+$counts = @(@((Get-Content $reseedBody -Raw | ConvertFrom-Json).reports) | ForEach-Object { $_.entityTypes.PSObject.Properties.Value })
+"reportedStale=$(($counts | Measure-Object -Property stale -Sum).Sum)"
+Remove-Item $reseedBody -ErrorAction SilentlyContinue
+"stale=$((Invoke-RestMethod "$base/import/actions?status=stale&pageSize=0").totalCount)"
+```
+
+**Expected:** `canonicalSources=1`; `sourceActions=1` with `ambiguous=title`; `title` reads the renamed
+title once the batch is applied; and after the reseed, `reportedStale` and `stale` both above `0`. The
+alias still names `Star Wars: Episode IV - A New Hope` as canonical, the Source that title hashes to now
+carries another, so the alias no longer describes it and the quote it governs stages `Stale` rather than
+being linked by an alias that has gone out of date.
+
+**On failure:** `canonicalSources=0` means the seed did not create the alias's canonical Source, so there
+is nothing to rename and the step proves nothing. `sourceActions=0` or a `title` that still reads the
+canonical one means the rename did not take effect. Either is a setup failure, not a staleness result: stop.
+`stale=0` with the rename in place means the staleness check did not fire on a genuine rename, the defect
+this document exists to catch.
 
 ## Observed effect
 
@@ -130,7 +184,7 @@ reseed's own status code is what separates "nothing was stale" from "the reseed 
 off the audit trail (#348). Step 2: `5` report lines; `5` seed batches, all `applied`, `795` records;
 `pending=0` and `stale=0`. Step 3: the reseed's response carried `5` file reports and `staged=0`; report
 lines `5 -> 10`; `pending=0` and `stale=0`. `aliasEvaluations=0` in both: the evaluation line does not
-exist yet, the #347 gap the `Fully green after:` field names.
+exist yet, the #347 gap, so step 2 failed.
 
 **Two false-positive bugs were found and fixed live via this exact check, neither catchable by unit
 tests alone.**
@@ -150,15 +204,12 @@ change, under a distinct tag, and run steps 2 and 3 against it. An alias is stal
 rename and never on first creation, which is the distinction #153 drew, so that build reports
 staleness on creation too.
 
-**This document needs a step that makes an alias genuinely stale, and does not have one.** Steps 2 and
-3 both read lists that must be empty, on a fresh seed and after a reseed, so between them they cover
-two paths to the same absence and no path to the presence. Its sibling
-[`16-conflict-rule-staleness.md`](16-conflict-rule-staleness.md) gained exactly that case, and until
-this one does, a correct build and a staleness check that never runs read the same here.
-
-So the canary is the rename itself: rename the Source the alias resolves to, reseed, and require the
-alias to be reported stale. Until that step exists the document is run and reported as it stands,
-which is what the `Fully green after:` field means by inconclusive.
+**Step 4 is the control.** Steps 2 and 3 both read lists that must be empty, on a fresh seed and after a
+reseed, so between them they cover two paths to the same absence. Step 4 renames the Source an alias
+resolves to and requires the alias to be reported stale, the presence, as its sibling
+[`16-conflict-rule-staleness.md`](16-conflict-rule-staleness.md)'s step 4 does for conflict rules. Without
+it, a correct build and a staleness check that never runs would read the same here. Step 4 was added by
+#503 and has no recorded canary reading yet.
 
 Pin `Quotinator__AutoPurgeBundledImportActions` for every run, for the same reason step 2's emptiness
 needs it.
@@ -167,4 +218,5 @@ needs it.
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-17
+Remove-Item (Join-Path $env:TEMP "qt-import-17-fixture") -Recurse -Force -ErrorAction SilentlyContinue
 ```

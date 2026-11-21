@@ -65,6 +65,11 @@
 //                         corrupt it. Prints the status code instead of the body
 //   --headers-out <path>  Also write the response headers to this file as a JSON object, name to value,
 //                         so a following command can assert on them with TestProbe json
+//   --cookies-out <path>  Write each cookie the response sets as name=value, one per line, attributes
+//                         dropped; an empty file when it sets none. Read back by --cookie-file, and
+//                         asserted on with TestProbe file
+//   --cookie-file <path>  Send the cookies in this file, written by --cookies-out, as the Cookie header,
+//                         so a test brings the exact cookie it means to validate
 //   --timeout <seconds>   Request timeout (default: 100)
 
 using System.Net;
@@ -87,8 +92,10 @@ List<string> Values(string flag)
 string? url = Value("--url");
 string? urlFile = Value("--url-file");
 string? jsonFile = Value("--json-file");
+string? cookieFile = Value("--cookie-file");
+string? cookiesOut = Value("--cookies-out");
 
-foreach (string? named in new[] { urlFile, jsonFile })
+foreach (string? named in new[] { urlFile, jsonFile, cookieFile })
 {
     if (named is not null && !File.Exists(named))
     {
@@ -197,7 +204,15 @@ if (waitFor is not null && content is not null)
 
 // Not a `using` declaration: a C# script's top level does not accept them, and wrapping the rest of the
 // file in a block to get one would buy nothing here — the process ends a few lines below.
-HttpClient client = new() { Timeout = TimeSpan.FromSeconds(timeoutSeconds) };
+// A handler that keeps its own cookie store ignores a Cookie header set by hand, and absorbs the cookies a
+// response sets into that store. A test that names its cookies needs neither, so the store is off then.
+HttpClient client = cookieFile is null && cookiesOut is null
+    ? new() { Timeout = TimeSpan.FromSeconds(timeoutSeconds) }
+    : new(new SocketsHttpHandler { UseCookies = false }) { Timeout = TimeSpan.FromSeconds(timeoutSeconds) };
+
+string? cookieHeader = cookieFile is null
+    ? null
+    : string.Join("; ", File.ReadAllLines(cookieFile).Select(line => line.Trim()).Where(line => line.Length > 0));
 
 HttpRequestMessage Build()
 {
@@ -208,6 +223,9 @@ HttpRequestMessage Build()
 
     if (Value("--accept") is string accept)
         built.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(accept));
+
+    if (!string.IsNullOrEmpty(cookieHeader))
+        built.Headers.Add("Cookie", cookieHeader);
 
     return built;
 }
@@ -297,6 +315,18 @@ if (Value("--headers-out") is string headersOut)
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(headersOut))!);
     File.WriteAllText(headersOut, System.Text.Json.JsonSerializer.Serialize(headers), new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     Console.Error.WriteLine($"Wrote the headers to {headersOut}");
+}
+
+if (cookiesOut is not null)
+{
+    // Each Set-Cookie value is one cookie: its name=value pair comes before the first ';', and the
+    // attributes after it (path, expiry, flags) are not part of what a browser sends back.
+    IEnumerable<string> setCookies = response.Headers.TryGetValues("Set-Cookie", out IEnumerable<string>? values) ? values : [];
+    string[] pairs = [.. setCookies.Select(value => value.Split(';')[0].Trim()).Where(pair => pair.Length > 0)];
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(cookiesOut))!);
+    File.WriteAllLines(cookiesOut, pairs, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    Console.Error.WriteLine($"Wrote {pairs.Length} cookie(s) to {cookiesOut}");
 }
 
 if (expect is not null && status != int.Parse(expect))

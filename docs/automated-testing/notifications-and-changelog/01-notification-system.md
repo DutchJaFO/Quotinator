@@ -4,7 +4,6 @@
 **Environment:** Fresh
 **Deterministic:** yes
 **Traces to:** #278
-**Fully green after:** [#472](https://github.com/DutchJaFO/Quotinator/issues/472): step 9 finds no reseed recommendation until then, because a Reset from a notification's action writes none. See the [Knowledgebase entry](../../knowledgebase/a-reset-from-a-notification-leaves-no-reseed-recommendation.md)
 
 ## Preconditions
 
@@ -184,9 +183,10 @@ application records how it ended (#348 step 31). The second finds the reseed rec
 Until 2026-11-15 this step asserted exactly one notification, from before the result record existed; each is
 now read by its kind, so neither one's presence can stand in for the other's.
 
-**On failure:** the second command failing, with the first passing, is [#472](https://github.com/DutchJaFO/Quotinator/issues/472), a known issue described in the
-[Knowledgebase](../../knowledgebase/a-reset-from-a-notification-leaves-no-reseed-recommendation.md). Record it and carry on, since
-nothing below reads this step. Any other reading is not #472 and is reported in its own right.
+**On failure:** the second command failing, with the first passing, means a Reset run from a notification's action
+left no reseed recommendation, the bug [#472](https://github.com/DutchJaFO/Quotinator/issues/472) owns and the
+[Knowledgebase](../../knowledgebase/a-reset-from-a-notification-leaves-no-reseed-recommendation.md) describes. Any
+other reading is a different fault. Either way, stop: do not run step 10.
 
 ### 10. Nothing unexpected was thrown since the restart
 
