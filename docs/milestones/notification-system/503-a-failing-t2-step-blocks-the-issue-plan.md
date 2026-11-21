@@ -530,8 +530,23 @@ carries no link.
 
 ### 10. Update the dependency map
 
-**Status:** ✅ Done, 2026-11-21, in the same pass as step 8: every set-back issue's dependency-map line and
-order-of-operations row name its owners, and a note under the map names the owners outside this milestone.
+**Status:** ✅ Done, 2026-11-21. `1ad395cd` had marked it done when only the blocked issues' lines named their
+owners; the owners' own lines and their place in the order of operations were finished after it.
+
+**Done 2026-11-21:**
+
+- **Dependency map, both directions.** Each of the 40 set-back issues' lines names its owners (step 8). Each
+  owner in this milestone has a line naming the failing step it owns and every issue it blocks: #438, #469 and
+  #472 (smoke steps) and #503 (`startup-and-degradation/06`) list the same 43 issues, the 40 plus #490, #457
+  and #503 (#503's own line omits itself); #501, #502 and #462 list theirs. #469 and #472 had no line before.
+  Cross-checked mechanically: every owner an issue's line names lists that issue, and every issue an owner
+  lists names that owner.
+- **Owners outside this milestone**, which the map does not list, are named in a table under it: #400 and
+  #468 (smoke steps), #347, #404, #505, #506 (v1.9.0) and #445 (*Startup and degraded experience*), each with
+  the step it owns and what it blocks.
+- **Order of operations.** #503 and the six owners in this milestone (#438, #469, #472, #501, #502, #462) come
+  first, ahead of every issue they block; #469 and #472 were missing from it. Every other row keeps its
+  relative order, renumbered; 83 rows before, 85 after.
 
 `overview.md`'s order of operations and dependency map gain every owner from step 8 as a blocker of the
 issues it blocks, and the five owners that stay in other milestones (decision C) are named there as
