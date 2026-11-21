@@ -132,7 +132,13 @@ requires the reseed to report the alias stale. `vilaboim-source-aliases.json` ma
 
 The rename is an import of a Source correction: a `sources[]` entry carrying the Source's own id, which
 matches by id so the title becomes correctable (`schemas/source-extended.schema.json`). A seeded Source is
-never `Complete`, which is human-set only, so the correction stages `Pending` rather than `Blocked`.
+never `Complete`, which is human-set only, so the correction stages `Pending` rather than `Blocked`, and a
+Source's title is decided as `sourceTitle`.
+
+**The file carries one quote of its own.** An import with no quotes is refused (`File contained no quotes`),
+although the schema allows an empty list. The quote is new and names `Airplane!`, a seeded title unrelated to
+the rename: a quote naming the canonical title could resolve to, or recreate, a Source under it and hide the
+rename.
 
 ```powershell
 $fixture   = Join-Path $env:TEMP "qt-import-17-fixture"
@@ -144,7 +150,10 @@ $source = @((Invoke-RestMethod "$base/masterdata/sources?pageSize=0").items |
   Where-Object { $_.title -eq $canonical -and $_.type -eq 'movie' })
 "canonicalSources=$($source.Count)"
 
-$correction = @{ quotes = @(); sources = @(@{ id = $source[0].id; title = $renamed; type = 'movie' }) }
+$correction = @{
+  quotes  = @(@{ id = 'a1111117-0000-4000-8000-000000000001'; quote = 'A quote that carries the import-and-staged-actions/17 rename.'; originalLanguage = 'en'; source = 'Airplane!'; date = '1980'; type = 'movie'; genres = @(); translations = @{} })
+  sources = @(@{ id = $source[0].id; title = $renamed; type = 'movie' })
+}
 $correction | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $fixture "rename.json") -Encoding utf8
 $batch = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
             --file (Join-Path $fixture "rename.json") --duplicate-resolution review --expect 202 `
@@ -152,9 +161,8 @@ $batch = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/i
 $action = @((Invoke-RestMethod "$base/import/actions?status=pending&batchId=$batch&pageSize=0").items |
   Where-Object { $_.entityType -eq 'Source' })
 "sourceActions=$($action.Count) ambiguous=$($action[0].ambiguousFields -join ',')"
-$decision = @{}; foreach ($field in $action[0].ambiguousFields) { $decision[$field] = @{ choice = 'replace' } }
 Invoke-RestMethod -Method Post -Uri "$base/import/actions/$($action[0].id)/decide" -Headers $key `
-  -ContentType 'application/json' -Body ($decision | ConvertTo-Json -Depth 3) | Out-Null
+  -ContentType 'application/json' -Body '{"sourceTitle":{"choice":"replace"}}' | Out-Null
 dotnet script scripts/testing/http.csx -- --method POST --url "$base/import/actions/apply?batchId=$batch" --expect 200 --status | Out-Null
 "title=$((Invoke-RestMethod "$base/masterdata/sources/$($source[0].id)").title)"
 
