@@ -107,7 +107,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#389](https://github.com/DutchJaFO/Quotinator/issues/389) | A staged review batch cannot be discarded once the planner has staged a no-op in it as Applied | Waiting for release | T1 ✅ T2 ✅ | [389-discard-keeps-plan-time-no-ops-plan.md](389-discard-keeps-plan-time-no-ops-plan.md) |
 | [#390](https://github.com/DutchJaFO/Quotinator/issues/390) | A reseed imports the file list captured at startup, not the files currently in either folder | Planning | T1 ⬜ T2 ⬜ | none |
 | [#482](https://github.com/DutchJaFO/Quotinator/issues/482) | A Reset cannot rebuild a database SQLite cannot read | Waiting for release | T1 ✅ T2 ✅ | [482-reset-rebuilds-an-unreadable-database-plan.md](482-reset-rebuilds-an-unreadable-database-plan.md) |
-| [#503](https://github.com/DutchJaFO/Quotinator/issues/503) | A failing T2 step blocks the issue: remove the "Fully green after" exception and audit the issues it let through | Planning | T1 ⬜ T2 ⬜ | none |
+| [#503](https://github.com/DutchJaFO/Quotinator/issues/503) | A failing T2 step blocks the issue: remove the "Fully green after" exception and audit the issues it let through | Planning | T1 ⬜ T2 ⬜ | [503-a-failing-t2-step-blocks-the-issue-plan.md](503-a-failing-t2-step-blocks-the-issue-plan.md) |
 | [#501](https://github.com/DutchJaFO/Quotinator/issues/501) | notifications-and-changelog/03 prints the database values it expects without asserting them | Planning | T1 ⬜ T2 ⬜ | none |
 | [#502](https://github.com/DutchJaFO/Quotinator/issues/502) | The canaries of backup/03 and backup/04 name readings their canary build does not produce | Planning | T1 ⬜ T2 ⬜ | none |
 | [#490](https://github.com/DutchJaFO/Quotinator/issues/490) | Check every database in layers, cheapest first, at startup, before a Reset, and on demand | In progress | T1 ✅ T2 ⬜ | [490-layered-database-check-plan.md](490-layered-database-check-plan.md) |
@@ -118,6 +118,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#454](https://github.com/DutchJaFO/Quotinator/issues/454) | The pages answer a bare 500 when the key ring cannot be used, though /health reports the fault | Planning | T1 ⬜ T2 ⬜ | none |
 | [#455](https://github.com/DutchJaFO/Quotinator/issues/455) | An unusable keys directory is reported as an unwritable data directory, and a Reset clears it from /health while it remains | Planning | T1 ⬜ T2 ⬜ | none |
 | [#456](https://github.com/DutchJaFO/Quotinator/issues/456) | A degraded start on an unwritable data directory offers remedies that cannot fix it | Planning | T1 ⬜ T2 ⬜ | none |
+| [#469](https://github.com/DutchJaFO/Quotinator/issues/469) | Applying a batch that does not exist answers 200 and dismisses a live notification | Planning | T1 ⬜ T2 ⬜ | none |
+| [#472](https://github.com/DutchJaFO/Quotinator/issues/472) | A Reset run from a notification's action leaves no reseed recommendation | Planning | T1 ⬜ T2 ⬜ | none |
 | [#453](https://github.com/DutchJaFO/Quotinator/issues/453) | Six admin endpoints return an unhandled 500 while the database is degraded | Planning | T1 ⬜ T2 ⬜ | none |
 | [#428](https://github.com/DutchJaFO/Quotinator/issues/428) | Degraded startup shows database counts as 0 instead of withholding them | Planning | T1 ⬜ T2 ⬜ | none |
 

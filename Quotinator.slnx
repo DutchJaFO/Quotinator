@@ -357,6 +357,7 @@
     <File Path="docs/milestones/notification-system/482-reset-rebuilds-an-unreadable-database-plan.md" />
     <File Path="docs/milestones/notification-system/457-unreadable-database-health-reason-plan.md" />
     <File Path="docs/milestones/notification-system/490-layered-database-check-plan.md" />
+    <File Path="docs/milestones/notification-system/503-a-failing-t2-step-blocks-the-issue-plan.md" />
     <File Path="docs/milestones/notification-system/371-database-and-migration-notifications-plan.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/">
