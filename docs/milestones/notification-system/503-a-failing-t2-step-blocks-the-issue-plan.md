@@ -1,6 +1,6 @@
 # #503: A failing T2 step blocks the issue: remove the "Fully green after" exception and audit the issues it let through
 
-**Status:** In progress (step 10)
+**Status:** In progress (steps 6 and 7, waiting for #505 and #506)
 **GitHub issue:** #503
 **Tiers required:** T2
 **Depends on:** #347, #400, #404, #438, #445, #462, #468, #469, #472, #505, #506. Blocks #457, #490.
@@ -9,12 +9,15 @@
 
 ## Next action
 
-**Finish step 10: verification row 14 must pass, and the developer must review it before the step is marked
-done.** Then step 11, the full build and test run, and then the wait for the owners. Steps 1 to 5, 8 and 9
-are done.
-Steps 6 and 7 are done except `startup-and-degradation/06`'s log counts and their three runs, which wait for
-#505 and #506. Step 12, this issue's T2, waits for every owner (decision D), and step 13 follows it. Decisions A to G were all answered on 2026-11-21, and no question is
-open. The comment on #438 that decision G calls for was posted the same day. The plan is built against
+**Wait for #505 and #506, then finish steps 6 and 7. No later step is worked on until both are done**
+(developer, 2026-11-22). Steps 6 and 7 are in progress: everything is done except
+`startup-and-degradation/06`'s log counts (step 6) and that document's three runs (step 7), which need #505
+and #506. Steps 1 to 5 are done. Steps 8, 9 and 10 are not started: they should not have been begun while
+steps 6 and 7 were open, but changes were made under them on 2026-11-21 and 2026-11-22, and those stay in
+place. Each step, when it starts, reviews them against its requirement and finishes them; step 10 then goes
+to the developer's review. Then step 11, the full build and test run. Step 12, this issue's
+T2, waits for every owner (decision D), and step 13 follows it. Decisions A to G were all answered on
+2026-11-21, and no question is open. The comment on #438 that decision G calls for was posted the same day. The plan is built against
 `5bfb43f6` (2026-11-21).
 
 ---
@@ -456,7 +459,10 @@ is expected to exit `1`, so it was rerun with that exit accepted.
 
 ### 8. Audit the issues at *Waiting for release*
 
-**Status:** ✅ Done, 2026-11-21
+**Status:** ⬜ Not started. It cannot start before steps 6 and 7 are done (developer, 2026-11-22). The audit
+was carried out before then, on 2026-11-21, and its changes stay in place: the 40 plan docs, `overview.md` and
+33 GitHub Definitions of done, recorded below. This step starts by reviewing them against the documents as
+they read once step 6 is finished, which can change which are red, and corrects what no longer holds.
 
 For every issue `overview.md` lists at *Waiting for release* with a T2 tier: read its plan's T2 step and
 Verification row, and list the documents in its scope (the smoke set, plus its own). Under decision B, every
@@ -475,7 +481,7 @@ Every issue set back:
 #490 has its plan and overview set back already (`5bfb43f6`); its GitHub Definition of done is still to be
 corrected. #423's row 20 (*#438 defects met and recorded*) is assessed the same way.
 
-**Done 2026-11-21.** `overview.md` listed 40 issues at *Waiting for release* with `T2 ✅`, plus #490 already
+**Changes already in place, made 2026-11-21 before this step could start.** `overview.md` listed 40 issues at *Waiting for release* with `T2 ✅`, plus #490 already
 set back; #313 (no tiers), #83 (`T2 ⬜`) and #383 (T1 only) carry no T2 record and are not in the audit. Every
 one of the 41 is set back: its T2 scope includes the smoke set, and six smoke documents fail today
 (`database-lifecycle/03` #468, `import-and-staged-actions/01` #469 and `14` #400,
@@ -518,13 +524,15 @@ every issue above. #423's row 20 is that same allowance, covered by the same own
 
 ### 9. Correct #490's step 8
 
-**Status:** ✅ Done
+**Status:** ⬜ Not started. It cannot start before steps 6 and 7 are done (developer, 2026-11-22). #490's plan
+was corrected before then, on 2026-11-21, and the correction stays in place, recorded below; this step
+starts by reviewing it.
 
 Its *Knowledgebase* bullet records adding `the-database-could-not-be-checked.md` and
 `KnowledgebaseLinks.TheDatabaseCouldNotBeChecked`. Both were removed in `86eb15fd`; the bullet says so, and
 names the commit.
 
-**Done 2026-11-21**, while step 7's image built. The bullet was wrong in a second way: it said the entry was
+**Change already in place, made 2026-11-21 before this step could start**, while step 7's image built. The bullet was wrong in a second way: it said the entry was
 linked from `CheckInconclusive`, which `86eb15fd`'s parent shows carried no link; it was linked from a
 `NotEnoughSpace` reason. The bullet now records that this step added the entry, the constant and that reason,
 that `86eb15fd` removed all three when the check stopped needing a working copy, and that `CheckInconclusive`
@@ -532,11 +540,13 @@ carries no link.
 
 ### 10. Update the dependency map
 
-**Status:** 🔄 In progress, reopened 2026-11-22. Verification row 14 is the test of this step; the step is done
-only when that row passes and the developer has reviewed it. It was marked done three times before it was
-complete: in `1ad395cd`, when only the blocked issues' lines named their owners; in `959070dd`, with #457's
-and #503's order-of-operations rows naming no blockers; and in `ab29679b`, with no verification row to show
-it was complete and this design still describing five outside owners where seven are listed.
+**Status:** ⬜ Not started. It cannot start before steps 6 and 7 are done (developer, 2026-11-22). Changes were
+made to `overview.md` before then, and they stay in place, listed below; this step starts by reviewing them
+against the requirement, finishes them, and runs verification row 14. It is done only when that row passes
+and the developer has reviewed it. Those early changes were marked done three times without being complete:
+in `1ad395cd`, when only the blocked issues' lines named their owners; in `959070dd`, with #457's and #503's
+order-of-operations rows naming no blockers; and in `ab29679b`, with no verification row and this design
+still describing five outside owners where seven are listed.
 
 `overview.md`'s dependency map and order of operations record every owner from step 8 as a blocker of each
 issue it blocks, in both directions: the owner's line lists the issue, and the issue's map line and order
@@ -545,7 +555,7 @@ T2-blocked by; where it cannot, its row says why. The owners outside this milest
 leaves where they are plus #505 and #506 from decision F, are named under the map as blockers from outside,
 each with the step it owns and what it blocks. #469 and #472 were moved and listed during planning.
 
-**Work done, 2026-11-21 and 2026-11-22:**
+**Changes already in place, made 2026-11-21 and 2026-11-22 before this step could start:**
 
 - **Dependency map, both directions.** Each of the 40 set-back issues' lines names its owners (step 8). Each
   owner in this milestone has a line naming the failing step it owns and every issue it blocks: #438, #469 and
@@ -559,16 +569,16 @@ each with the step it owns and what it blocks. #469 and #472 were moved and list
   place before anything else is judged; its row says that it runs first and closes after them.
 - **Rows ahead of what they depend on.** Checking the order found three rows that came before an issue they
   depend on, out of order before this issue's first edit: #81 before #309 and #307, #302 before #372, and
-  #373 before #372. The developer chose on 2026-11-22 to correct them in this step, so the requirement above
+  #373 before #372. The developer chose on 2026-11-22 to correct them under this step, so the requirement above
   covers every row, not only the owners. #81 now follows #307, and #377 and #372 come before #302 (#372 needs
   #377). #372 and #373 depend on each other for different steps; #372 comes first, as #373's reproduction
   needs it, and its row says that its step 6 waits for #373.
 
-**Verification row 14, run 2026-11-22 on `ab29679b`'s `overview.md`:** 14 owners, the seven in this milestone
-and the seven outside it. (a) and (b): no issue an owner lists lacks that owner on its map line or in its
-order row, and no owner a line or row names fails to list that issue. (c): the order runs against a
-dependency only at #503 (ahead of #438, #462, #469 and #472) and at #372 (ahead of #373), and both rows say
-why. Row 14 passes; the step waits for the developer's review.
+**A check of those changes, 2026-11-22 on `ab29679b`'s `overview.md`, before this step could start:** 14
+owners, the seven in this milestone and the seven outside it. (a) and (b): no issue an owner lists lacks
+that owner on its map line or in its order row, and no owner a line or row names fails to list that issue.
+(c): the order runs against a dependency only at #503 (ahead of #438, #462, #469 and #472) and at #372 (ahead
+of #373), and both rows say why. It is not this step's verification: row 14 is run when the step does.
 
 ### 11. Full build and test run
 
@@ -603,11 +613,11 @@ Written at *Waiting for release*, after step 12.
 | 4 | ✅ | The README drops the exception and points to ADR 029 | Live | `Select-String -Path docs/automated-testing/README.md -Pattern 'more than one issue before it can be fully green'` returns nothing; `-Pattern '029-a-failing-t2-step-blocks-the-issue'` returns a match |
 | 5 | ✅ | The README names every failing-step shape: no command, unasserted, intermittent | Live | `Select-String -Path docs/automated-testing/README.md -Pattern 'runs no command','without asserting','intermittent'` returns all three |
 | 6 | ❌ | Each changed document fails at its owned step and nowhere else, and `06` step 6 reads the same on three runs | Live | Step 7's record, one line per document |
-| 7 | ✅ | Every issue at *Waiting for release* is audited, and each set back carries the change in its plan, `overview.md` and its GitHub Definition of done | Live | Step 8's table; for each issue set back, `gh issue view <N> --json body -q .body` shows the unticked boxes, and its plan header and overview row agree |
-| 8 | ✅ | #490's step 8 records the removal in `86eb15fd` | Live | `Select-String -Path docs/milestones/notification-system/490-layered-database-check-plan.md -Pattern '86eb15fd'` matches inside step 8 |
+| 7 | ❌ | Every issue at *Waiting for release* is audited, and each set back carries the change in its plan, `overview.md` and its GitHub Definition of done | Live | Step 8's table; for each issue set back, `gh issue view <N> --json body -q .body` shows the unticked boxes, and its plan header and overview row agree |
+| 8 | ❌ | #490's step 8 records the removal in `86eb15fd` | Live | `Select-String -Path docs/milestones/notification-system/490-layered-database-check-plan.md -Pattern '86eb15fd'` matches inside step 8 |
 | 9 | ❌ | No regression | Unit test | Full `dotnet test --configuration Release --verbosity normal -m:1`, 0 warnings, 0 errors |
-| 10 | ✅ | #469 and #472 are in *Notification system*; the other five owners are named as blockers | Live | `gh issue view 469 --json milestone -q .milestone.title` and the same for 472 print `Notification system`; `overview.md`'s dependency map names #347, #400, #404, #445, #468 |
+| 10 | ❌ | #469 and #472 are in *Notification system*; the other five owners are named as blockers | Live | `gh issue view 469 --json milestone -q .milestone.title` and the same for 472 print `Notification system`; `overview.md`'s dependency map names #347, #400, #404, #445, #468 |
 | 11 | ✅ | `api-surface/06` brings its own cookies and asserts each case on the response's antiforgery cookie: none sent issues one, the same ring's is not replaced, another ring's is replaced and logs the pair once; and it declares itself deterministic | Live | Step 7's record: every step of `api-surface/06` passes; `Select-String -Path docs/automated-testing/api-surface/06-*.md -Pattern '^\*\*Deterministic:\*\* yes'` matches |
 | 12 | ❌ | T2 passes: the smoke set and every changed document, every step green | Live | Step 12's record |
 | 13 | ✅ | Both rules report a document that breaks them and pass one that does not, independently of today's documents | Unit test | `AutomatedTestingSuiteTests.MentionsOfFullyGreenAfter_*` (4) and `.StepsThatExcuseAFailure_*` (8): 12 pass; red with the rule bodies disabled (step 3) |
-| 14 | ✅ | Every owner from step 8 is a blocker in `overview.md` in both directions, and every row of the order of operations comes after what it depends on or is T2-blocked by, or says why | Live | Reading `overview.md`: (a) for each owner's map line and each row of the outside-owner table, every issue listed names that owner on its map line and in its order row (#505 and #506 block the others through #503, which those rows name); (b) every owner a map line or order row names lists that issue; (c) no order row comes before an issue its map line depends on or is T2-blocked by, nor after one it blocks; the only exceptions are #503 and the #372/#373 pair, and their rows say why |
+| 14 | ❌ | Every owner from step 8 is a blocker in `overview.md` in both directions, and every row of the order of operations comes after what it depends on or is T2-blocked by, or says why | Live | Reading `overview.md`: (a) for each owner's map line and each row of the outside-owner table, every issue listed names that owner on its map line and in its order row (#505 and #506 block the others through #503, which those rows name); (b) every owner a map line or order row names lists that issue; (c) no order row comes before an issue its map line depends on or is T2-blocked by, nor after one it blocks; the only exceptions are #503 and the #372/#373 pair, and their rows say why |
