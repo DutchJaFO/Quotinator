@@ -54,6 +54,18 @@
 //   --browser <name>      edge (default) or chrome
 //   --full-page           Capture the whole scrollable page rather than the viewport. Ignored when the
 //                         script returns a region
+//   --session <path>      Use one browser across commands rather than one per command (#503). With --open
+//                         it starts a headless browser that outlives the command and records it in <path>;
+//                         with --close it closes that browser and removes <path>; with neither it opens a new
+//                         tab in that browser for this capture and leaves the tab open. No page then closes or
+//                         navigates away until the document's cleanup, so the server never sees a circuit end
+//                         mid-document (#445's errors land on either side of a log mark otherwise)
+//   --open                With --session: start the browser. Takes no --url or --out
+//   --close               With --session: close the browser. Takes no --url or --out
+//
+//   dotnet-script scripts/testing/capture-page.csx -- --session <file> --open [--browser edge|chrome]
+//   dotnet-script scripts/testing/capture-page.csx -- --session <file> --url <url> --out <path.png> [options]
+//   dotnet-script scripts/testing/capture-page.csx -- --session <file> --close
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -63,15 +75,35 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 string? Value(string flag) => Args.SkipWhile(a => a != flag).Skip(1).FirstOrDefault();
 bool Flag(string flag) => Args.Contains(flag);
 
+const string Usage = "usage: capture-page.csx -- [--session <file>] --url <url> --out <path.png> [--width N] [--height N] [--wait-ms N] [--script-stdin | --script-file <path>] [--result-out <path>] [--browser edge|chrome] [--full-page]"
+    + "\n       capture-page.csx -- --session <file> --open [--browser edge|chrome]"
+    + "\n       capture-page.csx -- --session <file> --close";
+
 string? url = Value("--url");
 string? outPath = Value("--out");
-if (url is null || outPath is null)
+string? sessionPath = Value("--session");
+bool openSession = Flag("--open");
+bool closeSession = Flag("--close");
+
+if ((openSession || closeSession) && (sessionPath is null || (openSession && closeSession)))
 {
-    Console.Error.WriteLine("usage: capture-page.csx -- --url <url> --out <path.png> [--width N] [--height N] [--wait-ms N] [--script-stdin | --script-file <path>] [--result-out <path>] [--browser edge|chrome] [--full-page]");
+    Console.Error.WriteLine(Usage);
+    return 1;
+}
+
+if (closeSession)
+{
+    return await CloseSessionAsync(sessionPath!);
+}
+
+if (!openSession && (url is null || outPath is null))
+{
+    Console.Error.WriteLine(Usage);
     return 1;
 }
 
@@ -101,6 +133,11 @@ if (browser is null)
     return 1;
 }
 string browserPath = browser;
+
+if (openSession)
+{
+    return await OpenSessionAsync(sessionPath!);
+}
 
 string? script = null;
 if (Value("--script-file") is string scriptFile)
@@ -149,33 +186,61 @@ async Task<JsonNode?> Call(string method, object? parameters = null, int timeout
     return node?["result"];
 }
 
-// Starts a browser, opens the page and waits for it to settle. Returns false when the browser never
-// offered a page to drive.
-async Task<bool> LaunchAsync()
+// Starts a headless browser on the given port. A session's browser is started through the shell, so it
+// inherits none of this command's handles: a browser holding the command's stdout or stderr keeps the
+// caller's pipe open, and the command never returns (measured 2026-11-22: the --open step hung).
+Process StartBrowser(int port, string profileDir, bool detached)
 {
-    // A port the caller did not choose, so two captures in the same document never collide.
-    int port = new Random().Next(9500, 9899);
-    profile = Path.Combine(Path.GetTempPath(), $"qt-capture-{port}");
-
     var startInfo = new ProcessStartInfo(browserPath)
     {
-        UseShellExecute = false,
-        RedirectStandardError = true,
-        RedirectStandardOutput = true
+        UseShellExecute = detached,
+        WindowStyle = detached ? ProcessWindowStyle.Hidden : ProcessWindowStyle.Normal,
+        RedirectStandardError = !detached,
+        RedirectStandardOutput = !detached
     };
     foreach (string arg in new[]
     {
         "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
         "--no-default-browser-check", "--disable-extensions", "--disable-background-networking",
-        $"--remote-debugging-port={port}", $"--user-data-dir={profile}",
+        $"--remote-debugging-port={port}", $"--user-data-dir={profileDir}",
         $"--window-size={width},{height}", "about:blank"
     })
     {
         startInfo.ArgumentList.Add(arg);
     }
 
-    Console.Error.WriteLine($"$ {Path.GetFileName(browserPath)} --headless --remote-debugging-port={port} {url}");
-    proc = Process.Start(startInfo)!;
+    Console.Error.WriteLine($"$ {Path.GetFileName(browserPath)} --headless --remote-debugging-port={port}");
+    return Process.Start(startInfo)!;
+}
+
+// Starts a browser, or opens a tab in the session's browser, then opens the page and waits for it to
+// settle. Returns false when no page was offered to drive.
+async Task<bool> LaunchAsync()
+{
+    if (sessionPath is not null)
+    {
+        SessionRecord? session = ReadSession(sessionPath);
+        if (session is null)
+        {
+            Console.Error.WriteLine($"No open browser session in {sessionPath}: run --session {sessionPath} --open first.");
+            return false;
+        }
+
+        string? tabSocket = await NewTabAsync(session.Port);
+        if (tabSocket is null)
+        {
+            Console.Error.WriteLine($"The session's browser on port {session.Port} opened no tab.");
+            return false;
+        }
+
+        Console.Error.WriteLine($"New tab in the session's browser on port {session.Port}: {url}");
+        return await ConnectAsync(tabSocket);
+    }
+
+    // A port the caller did not choose, so two captures in the same document never collide.
+    int port = new Random().Next(9500, 9899);
+    profile = Path.Combine(Path.GetTempPath(), $"qt-capture-{port}");
+    proc = StartBrowser(port, profile, detached: false);
 
     using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
     string? pageSocket = null;
@@ -197,6 +262,12 @@ async Task<bool> LaunchAsync()
         return false;
     }
 
+    return await ConnectAsync(pageSocket);
+}
+
+// Connects to one page, opens the capture's URL in it and waits for it to settle.
+async Task<bool> ConnectAsync(string pageSocket)
+{
     ClientWebSocket socket = new();
     await socket.ConnectAsync(new Uri(pageSocket), CancellationToken.None);
     ws = socket;
@@ -274,6 +345,16 @@ async Task<bool> ProducesFramesAsync()
 // itself, and it would sit in the middle of the same log the document reads for real exceptions.
 async Task ShutdownAsync()
 {
+    if (sessionPath is not null)
+    {
+        // A session's tab stays open until --close: only this command's DevTools connection ends, which
+        // leaves the page, and its circuit, exactly as they were.
+        try { if (ws is { State: WebSocketState.Open }) await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)); } catch (Exception) { }
+        ws?.Dispose();
+        ws = null;
+        return;
+    }
+
     if (ws is { State: WebSocketState.Open })
     {
         try { await Call("Browser.close", timeoutSeconds: 5); } catch (Exception) { }
@@ -292,6 +373,119 @@ async Task ShutdownAsync()
     try { if (profile is not null && Directory.Exists(profile)) Directory.Delete(profile, recursive: true); } catch { }
 }
 
+// The session file's shape: which browser a document's captures share.
+SessionRecord? ReadSession(string path)
+{
+    if (!File.Exists(path)) return null;
+    return JsonSerializer.Deserialize<SessionRecord>(File.ReadAllText(path));
+}
+
+// Opens a tab in a running browser and returns its DevTools socket. Recent Chromium builds accept only
+// PUT on /json/new.
+async Task<string?> NewTabAsync(int port)
+{
+    using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+    try
+    {
+        using HttpResponseMessage response = await http.PutAsync($"http://127.0.0.1:{port}/json/new?about:blank", null);
+        if (!response.IsSuccessStatusCode) return null;
+        return JsonSerializer.Deserialize<DevToolsTarget>(await response.Content.ReadAsStringAsync())?.WebSocketDebuggerUrl;
+    }
+    catch (HttpRequestException)
+    {
+        return null;
+    }
+}
+
+// The browser-level DevTools socket, which Browser.close is sent on.
+async Task<string?> BrowserSocketAsync(int port, int attempts)
+{
+    using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+    for (int attempt = 0; attempt < attempts; attempt++)
+    {
+        try
+        {
+            string? socket = JsonSerializer.Deserialize<DevToolsVersion>(await http.GetStringAsync($"http://127.0.0.1:{port}/json/version"))?.WebSocketDebuggerUrl;
+            if (socket is not null) return socket;
+        }
+        catch (HttpRequestException) { }
+        await Task.Delay(250);
+    }
+    return null;
+}
+
+// Starts the session's browser and records it, then leaves it running for the document's captures.
+async Task<int> OpenSessionAsync(string path)
+{
+    if (ReadSession(path) is SessionRecord existing)
+    {
+        Console.Error.WriteLine($"{path} already records a browser on port {existing.Port}: close it first.");
+        return 1;
+    }
+
+    int port = new Random().Next(9500, 9899);
+    string profileDir = Path.Combine(Path.GetTempPath(), $"qt-capture-session-{port}");
+    Process browserProcess = StartBrowser(port, profileDir, detached: true);
+
+    if (await BrowserSocketAsync(port, attempts: 60) is null)
+    {
+        Console.Error.WriteLine($"The browser never answered on port {port}.");
+        try { browserProcess.Kill(entireProcessTree: true); } catch { }
+        return 1;
+    }
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+    File.WriteAllText(path, JsonSerializer.Serialize(new SessionRecord(port, browserProcess.Id, profileDir)), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    Console.Error.WriteLine($"Opened a browser session on port {port}, recorded in {path}");
+    return 0;
+}
+
+// Asks the session's browser to close, then removes its profile and the session file. Closing the
+// browser ends every tab's circuit at once, at the point the document chose: its cleanup.
+async Task<int> CloseSessionAsync(string path)
+{
+    SessionRecord? session = ReadSession(path);
+    if (session is null)
+    {
+        Console.Error.WriteLine($"No open browser session in {path}.");
+        return 1;
+    }
+
+    if (await BrowserSocketAsync(session.Port, attempts: 4) is string socketUrl)
+    {
+        try
+        {
+            using ClientWebSocket socket = new();
+            await socket.ConnectAsync(new Uri(socketUrl), CancellationToken.None);
+            byte[] request = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { id = 1, method = "Browser.close" }));
+            await socket.SendAsync(request, WebSocketMessageType.Text, true, CancellationToken.None);
+        }
+        catch (Exception) { }
+    }
+
+    try
+    {
+        using Process browserProcess = Process.GetProcessById(session.ProcessId);
+        if (!browserProcess.WaitForExit(5000)) browserProcess.Kill(entireProcessTree: true);
+    }
+    catch (ArgumentException) { }
+    catch (InvalidOperationException) { }
+
+    try { if (Directory.Exists(session.Profile)) Directory.Delete(session.Profile, recursive: true); } catch { }
+    File.Delete(path);
+    Console.Error.WriteLine($"Closed the browser session on port {session.Port}");
+    return 0;
+}
+
+record SessionRecord(
+    [property: JsonPropertyName("port")] int Port,
+    [property: JsonPropertyName("processId")] int ProcessId,
+    [property: JsonPropertyName("profile")] string Profile);
+
+record DevToolsTarget([property: JsonPropertyName("webSocketDebuggerUrl")] string? WebSocketDebuggerUrl);
+
+record DevToolsVersion([property: JsonPropertyName("webSocketDebuggerUrl")] string? WebSocketDebuggerUrl);
+
 int exitCode = 0;
 try
 {
@@ -308,7 +502,9 @@ try
             Console.Error.WriteLine($"The page produced no frames in {launchAttempts} browsers; a screenshot would never be answered.");
             return 1;
         }
-        Console.Error.WriteLine($"The page produced no frames; starting a fresh browser ({launch + 1} of {launchAttempts}).");
+        Console.Error.WriteLine(sessionPath is null
+            ? $"The page produced no frames; starting a fresh browser ({launch + 1} of {launchAttempts})."
+            : $"The page produced no frames; opening another tab, and leaving that one open ({launch + 1} of {launchAttempts}).");
         await ShutdownAsync();
     }
 
@@ -370,7 +566,7 @@ try
         return 1;
     }
 
-    string full = Path.GetFullPath(outPath);
+    string full = Path.GetFullPath(outPath!);
     Directory.CreateDirectory(Path.GetDirectoryName(full)!);
     File.WriteAllBytes(full, Convert.FromBase64String(encoded));
     Console.Error.WriteLine($"Wrote {full} ({new FileInfo(full).Length:n0} bytes)");

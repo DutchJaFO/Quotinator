@@ -3,15 +3,15 @@
 **Status:** In progress (step 6)
 **GitHub issue:** #503
 **Tiers required:** T2
-**Depends on:** #347, #400, #404, #438, #445, #462, #468, #469, #472, #505, #506. Blocks #457, #490.
+**Depends on:** #347, #400, #404, #438, #445, #462, #468, #469, #472, #506. Blocks #457, #490.
 
 ---
 
 ## Next action
 
-**Wait for #505 and #506. Step 6 is blocked by them, and nothing after step 6 is worked on until it is done,
+**Wait for #506. Step 6 is blocked by it, and nothing after step 6 is worked on until it is done,
 step 7 included** (developer, 2026-11-22). Decision H's move is done (`81423d97`). What is left of step 6 is
-`startup-and-degradation/06`'s log counts, which need #505 and #506. Once step 6 is done, step 7 runs every
+`startup-and-degradation/06`'s log counts, which need #506; the browser they needed from #505 is done here. Once step 6 is done, step 7 runs every
 document still to run: the six decision H changed or added, and `06` three times. Steps 1 to 5 are done. Steps 8, 9 and 10 are not started: they should not have been begun while
 steps 6 and 7 were open, but changes were made under them on 2026-11-21 and 2026-11-22, and those stay in
 place. Each step, when it starts, reviews them against its requirement and finishes them; step 10 then goes
@@ -370,7 +370,7 @@ guards and the rule tests. `EveryAdrIsIndexed` passes.
 ### 6. Remove every allowance from the documents
 
 **Status:** 🔄 In progress. Decision H's move is done. Still to do:
-`startup-and-degradation/06`'s log counts, which wait for #505 and #506.
+`startup-and-degradation/06`'s log counts, which wait for #506.
 
 **Done 2026-11-21, except that part.**
 
@@ -516,6 +516,26 @@ and red at that step until its owner lands, and two smoke documents that lose it
 
 The records that name doc 14 step 5 or doc 03 step 8 as a smoke step (`overview.md`, the set-back plans) are
 corrected by steps 8 and 10, which have not started.
+
+**One browser for the whole document, done 2026-11-22** (developer: *we fix that tool now*). `06` step 6's
+log count varies because every `capture-page.csx` command starts and closes its own browser, and each close
+logs #445's errors on either side of the count's mark. Decision F gave the fix to #505; it is made here instead,
+so `06` no longer waits for #505:
+
+- `capture-page.csx -- --session <file> --open` starts a headless browser that outlives the command and
+  records its port, process and profile in the file. `--session <file> --close` asks it to close, removes its
+  profile and the file.
+- A capture given `--session <file>` opens a new tab in that browser and leaves it open: no page closes, and
+  no page navigates away, until the document's cleanup. A tab that produces no frames is left open and another
+  tab is opened, never a new browser.
+- `06` opens the session in its setup, passes it to every capture, and closes it in its cleanup.
+- Proved by step 7: `06` step 6 reads the same on three runs. #505's issue body records that #503 made the
+  change, through an approved edit.
+- **Done:** the three options, run against headless Edge: `--open` returned in 2 s; two captures each opened a
+  tab and left it open; `--close` ended the browser and removed its profile and the session file; a capture
+  without `--session` still starts and closes its own browser. `06` opens the session in step 1, gives it to all
+  ten captures, and closes it in the cleanup after the last count. Every `Solution` test passes (140). #503 no
+  longer depends on #505; #445 stays until step 7's three runs show its errors no longer reach the count.
 
 **Decision H's move, done 2026-11-22** (`81423d97`):
 
