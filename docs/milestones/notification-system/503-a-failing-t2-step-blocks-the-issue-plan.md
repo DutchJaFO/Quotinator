@@ -228,9 +228,9 @@ issue's T2:
   The `/version` reads, step 8 included, move to their own document, owned by #468. This replaces the reason
   step 6 records under *A failing step stops the run* for keeping step 8 in doc 03.
 
-**Raised in the same answer, to be filed as its own issue:** `/version` reports content statistics, which is
-not its primary function; the statistics get their own endpoint. Drafted for approval with a label and a
-milestone; not a dependency of this issue.
+**Raised in the same answer, filed as #512** (*Blazor: Dashboard & Statistics*, 2026-11-22): `/version`
+reports content statistics, which is not its primary function; the statistics get their own endpoint. Not a
+dependency of this issue.
 
 **What it does not change:** a full run, at the close of a milestone and at release, runs every document, so
 the two new documents still hold this milestone's release until #400 and #468 land. They stop blocking each
