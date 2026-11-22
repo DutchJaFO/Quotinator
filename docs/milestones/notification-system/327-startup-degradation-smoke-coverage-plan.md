@@ -1,9 +1,17 @@
 # #327: Smoke tests that prove startup problems degrade rather than crash
 
-**Status:** In progress, stopped: blocked. Next action: rewrite the issue body, then this plan's contract and checklist, to the requirement below. Do not run this plan or start T1 until the blockers are resolved.
+**Status:** In progress
 **GitHub issue:** #327
 **Tiers required:** T1, T2
-**Depends on:** #326, #339, #350. **Blocked by:** #482, #454, #453, #455, #456 (in part), #305, #428, #457
+**Depends on:** #326, #339, #350. **Blocked by:** #482, #454, #453, #455, #456, #305, #428, #457
+
+---
+
+## Next action
+
+**Stopped: blocked.** Rewrite the issue body, then this plan's contract and checklist, to the requirement below.
+Do not run this plan or start T1 (step 20) until the blockers are resolved. No numbered step is active: steps 1
+to 19 are done, and the rewrite is not one of them.
 
 ---
 

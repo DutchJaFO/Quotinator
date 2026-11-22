@@ -1,11 +1,11 @@
 # #325 — Source download: no address-family fallback — a black-holed IPv6 path fails the download even though IPv4 works
 
-**Status:** Closed as not planned — closed on GitHub 2026-08-20, reason `NOT_PLANNED`; see *Reverted* below
+**Status:** Closed as not planned
 **GitHub issue:** #325
 **Tiers required:** T1, T2
 **Depends on:** #323
 
-> **Next action: close the issue, recording that the fix was reverted as over-engineered.** The steps
+> **Next action: none. Closed on GitHub 2026-08-20, reason `NOT_PLANNED`, recording that the fix was reverted as over-engineered.** The steps
 > below describe a `ConnectCallback`-based address-family race that was built, shipped to this branch,
 > and then removed again on 2026-08-20 without ever being released. **Read "Reverted" below before
 > anything else in this document** — the Design, Steps and Verification sections are retained as the

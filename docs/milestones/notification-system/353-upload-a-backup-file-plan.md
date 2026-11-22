@@ -3,7 +3,13 @@
 **Status:** Planning
 **GitHub issue:** #353
 **Tiers required:** T1, T2
-**Depends on:** none — pairs with [#349](https://github.com/DutchJaFO/Quotinator/issues/349) and [#352](https://github.com/DutchJaFO/Quotinator/issues/352), any order
+**Depends on:** none
+
+---
+
+## Dependency notes
+
+Pairs with [#349](https://github.com/DutchJaFO/Quotinator/issues/349) and [#352](https://github.com/DutchJaFO/Quotinator/issues/352), in any order.
 
 ---
 

@@ -173,7 +173,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #469 ─── (none); blocks the T2 of #312, #81, #302, #303, #304, #307, #308, #309, #305, #319, #323, #326, #339, #348, #349, #350, #367, #369, #370, #409, #410, #411, #413, #419, #420, #422, #423, #424, #397, #371, #372, #373, #374, #375, #376, #377, #378, #382, #389, #482, #490, #457, #503: Planning
 #472 ─── (none); blocks the T2 of #312, #81, #302, #303, #304, #307, #308, #309, #305, #319, #323, #326, #339, #348, #349, #350, #367, #369, #370, #409, #410, #411, #413, #419, #420, #422, #423, #424, #397, #371, #372, #373, #374, #375, #376, #377, #378, #382, #389, #482, #490, #457, #503: Planning
 #462 ─── (none); soft-relates to #329, #331; blocks the T2 of #424, #503: Planning
-#473 ─── requires #327, which built the tooling; must land before the milestone-close T2 run, which cannot start until every document can: Planning
+#473 ─── depends on #327: Planning
 #475 ─── (none); soft-relates to #406, #445: Planning
 #476 ─── (none): Planning
 #477 ─── (none): Planning
@@ -186,8 +186,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #369 ─── depends on #303, #372, #389; T2 blocked by #438, #469, #472, #503: In progress
 #389 ─── depends on #373, #376, #377; T2 blocked by #438, #469, #472, #503: In progress
 #390 ─── (none); blocks #368: Planning
-#372 ─── depends on #373 for its step 6; blocks #302, #373; T2 blocked by #438, #469, #472, #503: In progress
-#373 ─── depends on #372 for reproduction, #374 for its T2 runs; blocks #372's step 6; T2 blocked by #438, #469, #472, #503: In progress
+#372 ─── depends on #373; blocks #302, #373; T2 blocked by #438, #469, #472, #503: In progress
+#373 ─── depends on #372, #374; blocks #372, #302; T2 blocked by #438, #469, #472, #503: In progress
 #375 ─── (none); blocks #374; T2 blocked by #438, #469, #472, #503: In progress
 #374 ─── depends on #375; T2 blocked by #438, #469, #472, #503: In progress
 #376 ─── (none); T2 blocked by #438, #469, #472, #503: In progress

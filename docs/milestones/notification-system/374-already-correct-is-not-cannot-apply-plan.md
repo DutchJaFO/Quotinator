@@ -3,7 +3,13 @@
 **Status:** In progress (T2)
 **GitHub issue:** #374
 **Tiers required:** T1, T2
-**Depends on:** [#375](https://github.com/DutchJaFO/Quotinator/issues/375) (done in code, released separately). T2 is blocked by #438, #469, #472, #503.
+**Depends on:** [#375](https://github.com/DutchJaFO/Quotinator/issues/375). T2 is blocked by #438, #469, #472, #503.
+
+---
+
+## Dependency notes
+
+#375 is done in code and released separately.
 
 ---
 

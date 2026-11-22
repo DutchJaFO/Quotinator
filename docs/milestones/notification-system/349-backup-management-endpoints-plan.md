@@ -3,7 +3,13 @@
 **Status:** In progress (step 12)
 **GitHub issue:** #349
 **Tiers required:** T1, T2
-**Depends on:** none, pairs with [#348](https://github.com/DutchJaFO/Quotinator/issues/348), either order. T2 is blocked by #438, #469, #472, #503.
+**Depends on:** none. T2 is blocked by #438, #469, #472, #503.
+
+---
+
+## Dependency notes
+
+Pairs with [#348](https://github.com/DutchJaFO/Quotinator/issues/348), in either order.
 
 ---
 

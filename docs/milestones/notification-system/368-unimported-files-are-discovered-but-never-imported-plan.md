@@ -3,8 +3,13 @@
 **Status:** Planning
 **GitHub issue:** #368
 **Tiers required:** T1, T2
-**Depends on:** #303 (its `/import-review` page is where a remedy would point), #304 (the reseed
-action), #390 (a reseed must see the current files before it can be a remedy at all)
+**Depends on:** #303, #304, #390
+
+---
+
+## Dependency notes
+
+#303: its `/import-review` page is where a remedy would point. #304: the reseed action. #390: a reseed must see the current files before it can be a remedy at all.
 
 ---
 

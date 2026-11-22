@@ -3,7 +3,13 @@
 **Status:** Planning
 **GitHub issue:** #351
 **Tiers required:** T1, T2
-**Depends on:** none — takes `BackupDeleted` from [#349](https://github.com/DutchJaFO/Quotinator/issues/349) if that lands first
+**Depends on:** none
+
+---
+
+## Dependency notes
+
+Takes `BackupDeleted` from [#349](https://github.com/DutchJaFO/Quotinator/issues/349) if that lands first.
 
 ---
 

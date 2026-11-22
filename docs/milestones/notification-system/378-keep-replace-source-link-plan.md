@@ -3,7 +3,13 @@
 **Status:** In progress (T2)
 **GitHub issue:** #378
 **Tiers required:** T1, T2
-**Depends on:** none — found live while verifying [#374](https://github.com/DutchJaFO/Quotinator/issues/374)'s own conflict-rule mechanism against the real bundled corpus. T2 is blocked by #438, #469, #472, #503.
+**Depends on:** none. T2 is blocked by #438, #469, #472, #503.
+
+---
+
+## Dependency notes
+
+Found live while verifying [#374](https://github.com/DutchJaFO/Quotinator/issues/374)'s own conflict-rule mechanism against the real bundled corpus.
 
 ---
 
