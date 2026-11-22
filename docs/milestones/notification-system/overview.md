@@ -128,83 +128,83 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 ## Dependency map
 
 ```
-#312 ─── depends on #278; blocks #81, #302, #303, #304, #308; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#312 ─── depends on #278; blocks #81, #302, #303, #304, #308; T2 blocked by #438, #469, #472, #503: In progress
 #83  ─── (none): Waiting for release
-#81  ─── depends on #278, #80, #309, #307, #312; soft-depends on #308; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#304 ─── depends on #278, #312, #319; T2 blocked by #400, #438, #468, #469, #472, #503, #501 (#503's audit): In progress
-#302 ─── depends on #278, #304, #312, #319, #372; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#303 ─── depends on #278, #302, #304, #312, #319; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#307 ─── depends on #80; soft-depends on #309; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#308 ─── depends on #302, #303, #304, #312, #367; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#309 ─── depends on #80; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#305 ─── (none); blocks #327; T2 blocked by #400, #438, #468, #469, #472, #503, #404, #501 (#503's audit): In progress
+#81  ─── depends on #278, #80, #309, #307, #312; soft-depends on #308; T2 blocked by #438, #469, #472, #503: In progress
+#304 ─── depends on #278, #312, #319; T2 blocked by #438, #469, #472, #503, #501: In progress
+#302 ─── depends on #278, #304, #312, #319, #372; T2 blocked by #438, #469, #472, #503: In progress
+#303 ─── depends on #278, #302, #304, #312, #319; T2 blocked by #438, #469, #472, #503: In progress
+#307 ─── depends on #80; soft-depends on #309; T2 blocked by #438, #469, #472, #503: In progress
+#308 ─── depends on #302, #303, #304, #312, #367; T2 blocked by #438, #469, #472, #503: In progress
+#309 ─── depends on #80; T2 blocked by #438, #469, #472, #503: In progress
+#305 ─── (none); blocks #327; T2 blocked by #438, #469, #472, #503, #404, #501: In progress
 #306 ─── (none): Planning
-#319 ─── depends on #278, #312; blocks #304, #302, #303, #308; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#323 ─── (none); blocks #325, #329; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#319 ─── depends on #278, #312; blocks #304, #302, #303, #308; T2 blocked by #438, #469, #472, #503: In progress
+#323 ─── (none); blocks #325, #329; T2 blocked by #438, #469, #472, #503: In progress
 #324 ─── depends on #278, #312, #319; soft-consumes #329: Planning
 #325 ─── depends on #323: Closed as not planned
-#326 ─── (none); blocks #327; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#326 ─── (none); blocks #327; T2 blocked by #438, #469, #472, #503: In progress
 #327 ─── depends on #326, #339, #350, #305, #482, #457, #454, #455, #456, #453, #428: In progress
 #328 ─── depends on #339: Planning
 #329 ─── depends on #323, #325; blocks #324: Planning
 #330 ─── (none); blocks #331: Planning
 #331 ─── depends on #330: Planning
-#339 ─── (none); blocks #327, #328; T2 blocked by #400, #438, #468, #469, #472, #503, #347 (#503's audit): In progress
-#348 ─── depends on #349, #482; blocks #327; T2 blocked by #400, #438, #468, #469, #472, #503, #347, #502 (#503's audit): In progress
-#349 ─── (none); soft-relates to #348; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#350 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#339 ─── (none); blocks #327, #328; T2 blocked by #438, #469, #472, #503, #347: In progress
+#348 ─── depends on #349, #482; blocks #327; T2 blocked by #438, #469, #472, #503, #347, #502: In progress
+#349 ─── (none); soft-relates to #348; T2 blocked by #438, #469, #472, #503: In progress
+#350 ─── (none); T2 blocked by #438, #469, #472, #503: In progress
 #352 ─── (none): Planning
 #360 ─── (none): Planning
 #353 ─── (none): Planning
 #351 ─── (none): Planning
 #313 ─── depends on #280: Waiting for release
-#370 ─── depends on #397; blocks #409, #410; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#409 ─── depends on #370; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#410 ─── depends on #370; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#411 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503, #347, #404, #501, #502 (#503's audit): In progress
-#413 ─── depends on #312, #319; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#370 ─── depends on #397; blocks #409, #410; T2 blocked by #438, #469, #472, #503: In progress
+#409 ─── depends on #370; T2 blocked by #438, #469, #472, #503: In progress
+#410 ─── depends on #370; T2 blocked by #438, #469, #472, #503: In progress
+#411 ─── (none); T2 blocked by #438, #469, #472, #503, #347, #404, #501, #502: In progress
+#413 ─── depends on #312, #319; T2 blocked by #438, #469, #472, #503: In progress
 #416 ─── (none): Planning
-#419 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#420 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503, #347 (#503's audit): In progress
-#422 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#423 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#424 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503, #462 (#503's audit): In progress
-#438 ─── (none); owns `startup-and-degradation/03`, a smoke document, so blocks #312, #81, #302, #303, #304, #307, #308, #309, #305, #319, #323, #326, #339, #348, #349, #350, #367, #369, #370, #409, #410, #411, #413, #419, #420, #422, #423, #424, #397, #371, #372, #373, #374, #375, #376, #377, #378, #382, #389, #482, #490, #457, #503: Planning
-#469 ─── (none); owns `import-and-staged-actions/01` step 8, a smoke step, so blocks #312, #81, #302, #303, #304, #307, #308, #309, #305, #319, #323, #326, #339, #348, #349, #350, #367, #369, #370, #409, #410, #411, #413, #419, #420, #422, #423, #424, #397, #371, #372, #373, #374, #375, #376, #377, #378, #382, #389, #482, #490, #457, #503: Planning
-#472 ─── (none); owns `notifications-and-changelog/01` step 9, a smoke step, so blocks #312, #81, #302, #303, #304, #307, #308, #309, #305, #319, #323, #326, #339, #348, #349, #350, #367, #369, #370, #409, #410, #411, #413, #419, #420, #422, #423, #424, #397, #371, #372, #373, #374, #375, #376, #377, #378, #382, #389, #482, #490, #457, #503: Planning
-#462 ─── (none); soft-relates to #329, #331; owns `startup-and-degradation/07` step 2, so blocks #424, #503: Planning
+#419 ─── (none); T2 blocked by #438, #469, #472, #503: In progress
+#420 ─── (none); T2 blocked by #438, #469, #472, #503, #347: In progress
+#422 ─── (none); T2 blocked by #438, #469, #472, #503: In progress
+#423 ─── (none); T2 blocked by #438, #469, #472, #503: In progress
+#424 ─── (none); T2 blocked by #438, #469, #472, #503, #462: In progress
+#438 ─── (none); blocks the T2 of #312, #81, #302, #303, #304, #307, #308, #309, #305, #319, #323, #326, #339, #348, #349, #350, #367, #369, #370, #409, #410, #411, #413, #419, #420, #422, #423, #424, #397, #371, #372, #373, #374, #375, #376, #377, #378, #382, #389, #482, #490, #457, #503: Planning
+#469 ─── (none); blocks the T2 of #312, #81, #302, #303, #304, #307, #308, #309, #305, #319, #323, #326, #339, #348, #349, #350, #367, #369, #370, #409, #410, #411, #413, #419, #420, #422, #423, #424, #397, #371, #372, #373, #374, #375, #376, #377, #378, #382, #389, #482, #490, #457, #503: Planning
+#472 ─── (none); blocks the T2 of #312, #81, #302, #303, #304, #307, #308, #309, #305, #319, #323, #326, #339, #348, #349, #350, #367, #369, #370, #409, #410, #411, #413, #419, #420, #422, #423, #424, #397, #371, #372, #373, #374, #375, #376, #377, #378, #382, #389, #482, #490, #457, #503: Planning
+#462 ─── (none); soft-relates to #329, #331; blocks the T2 of #424, #503: Planning
 #473 ─── requires #327, which built the tooling; must land before the milestone-close T2 run, which cannot start until every document can: Planning
 #475 ─── (none); soft-relates to #406, #445: Planning
-#476 ─── (none); must land before release, since correcting a shipped payload needs a migration: Planning
+#476 ─── (none): Planning
 #477 ─── (none): Planning
 #478 ─── (none); soft-relates to #390, #476: Planning
 #479 ─── (none); soft-relates to #400, #441: Planning
 #480 ─── (none): Planning
 #430 ─── (none): Planning
 #431 ─── (none): Planning
-#397 ─── (none); blocks #370; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#369 ─── depends on #303, #372, #389; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#389 ─── depends on #373, #376, #377; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#397 ─── (none); blocks #370; T2 blocked by #438, #469, #472, #503: In progress
+#369 ─── depends on #303, #372, #389; T2 blocked by #438, #469, #472, #503: In progress
+#389 ─── depends on #373, #376, #377; T2 blocked by #438, #469, #472, #503: In progress
 #390 ─── (none); blocks #368: Planning
-#372 ─── depends on #373 for its step 6; blocks #302, #373; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#373 ─── depends on #372 for reproduction, #374 for its T2 runs; blocks #372's step 6; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#375 ─── (none); blocks #374; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#374 ─── depends on #375; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#376 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#377 ─── (none); blocks #372; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#378 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#372 ─── depends on #373 for its step 6; blocks #302, #373; T2 blocked by #438, #469, #472, #503: In progress
+#373 ─── depends on #372 for reproduction, #374 for its T2 runs; blocks #372's step 6; T2 blocked by #438, #469, #472, #503: In progress
+#375 ─── (none); blocks #374; T2 blocked by #438, #469, #472, #503: In progress
+#374 ─── depends on #375; T2 blocked by #438, #469, #472, #503: In progress
+#376 ─── (none); T2 blocked by #438, #469, #472, #503: In progress
+#377 ─── (none); blocks #372; T2 blocked by #438, #469, #472, #503: In progress
+#378 ─── (none); T2 blocked by #438, #469, #472, #503: In progress
 #381 ─── (none): Planning
-#382 ─── depends on #377; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#382 ─── depends on #377; T2 blocked by #438, #469, #472, #503: In progress
 #383 ─── depends on #377: Waiting for release
-#367 ─── depends on #278, #304; blocks #308; T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
-#371 ─── (none); T2 blocked by #400, #438, #468, #469, #472, #503 (#503's audit): In progress
+#367 ─── depends on #278, #304; blocks #308; T2 blocked by #438, #469, #472, #503: In progress
+#371 ─── (none); T2 blocked by #438, #469, #472, #503: In progress
 #368 ─── depends on #303, #304, #390: Planning
-#482 ─── (none); blocks #327, #348, #457; T2 blocked by #400, #438, #468, #469, #472, #503, #502 (#503's audit): In progress
-#503 ─── depends on #438, #462, #469, #472, and #347, #400, #404, #468, #505, #506 (v1.9.0), #445 (Startup and degraded experience), whose failing T2 steps are in its scope; converts `startup-and-degradation/06`, a smoke document, so blocks #312, #81, #302, #303, #304, #307, #308, #309, #305, #319, #323, #326, #339, #348, #349, #350, #367, #369, #370, #409, #410, #411, #413, #419, #420, #422, #423, #424, #397, #371, #372, #373, #374, #375, #376, #377, #378, #382, #389, #482, #490, #457: In progress
-#501 ─── (none); owns `notifications-and-changelog/03`, so blocks #304, #305, #411, #490, #457: Planning
-#502 ─── (none); owns the canaries of `backup/03` and `backup/04`, so blocks #348, #411, #482, #490, #457: Planning
-#490 ─── depends on #501, #502, #503, #438, #469, #472, and #468, #400 (v1.9.0), #445 (Startup and degraded experience), whose failing T2 steps are in its scope; blocks #457, #491, #492, #493: In progress
-#457 ─── depends on #482, #490, #501, #502, #503, #438, #469, #472, and #468, #400 (v1.9.0), #445 (Startup and degraded experience), as #490 does; blocks #327: In progress
+#482 ─── (none); blocks #327, #348, #457; T2 blocked by #438, #469, #472, #503, #502: In progress
+#503 ─── depends on #347, #400, #404, #438, #445, #462, #468, #469, #472, #505, #506; blocks the T2 of #312, #81, #302, #303, #304, #307, #308, #309, #305, #319, #323, #326, #339, #348, #349, #350, #367, #369, #370, #409, #410, #411, #413, #419, #420, #422, #423, #424, #397, #371, #372, #373, #374, #375, #376, #377, #378, #382, #389, #482, #490, #457: In progress
+#501 ─── (none); blocks the T2 of #304, #305, #411, #490, #457: Planning
+#502 ─── (none); blocks the T2 of #348, #411, #482, #490, #457: Planning
+#490 ─── depends on #501, #502, #503, #469, #472, #445, #438; blocks #457, #491, #492, #493: In progress
+#457 ─── depends on #482, #490, #501, #502, #503, #469, #472, #445, #438; blocks #327: In progress
 #493 ─── depends on #490: Planning
 #491 ─── depends on #490; soft-relates to #492: Planning
 #492 ─── depends on #490; soft-relates to #491: Planning
@@ -215,20 +215,17 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #428 ─── (none); blocks #327: Planning
 ```
 
-**T2 blockers from outside this milestone** (#503's audit, 2026-11-21, under ADR 029). They have no line in
-the map above, which lists this milestone's issues only:
+**T2 blockers from outside this milestone:**
 
-| Owner | Milestone | Failing step it owns | Blocks |
-|---|---|---|---|
-| #400 | v1.9.0 | `import-and-staged-actions/14` step 5, a smoke step | every issue #438 blocks above |
-| #468 | v1.9.0 | `database-lifecycle/03` step 8, a smoke step | every issue #438 blocks above |
-| #347 | v1.9.0 | `import-and-staged-actions/16` step 3, `17` step 2 | #339, #348, #411, #420, #503 |
-| #404 | v1.9.0 | `database-lifecycle/02` step 7 | #305, #411, #503 |
-| #505 | v1.9.0 | none; `startup-and-degradation/06`'s conversion needs it | #503, and through it every issue #503 blocks above |
-| #506 | v1.9.0 | none; `startup-and-degradation/06`'s conversion needs it | #503, and through it every issue #503 blocks above |
-| #445 | Startup and degraded experience | recorded against `startup-and-degradation/06` before #503's decision F | #490, #457, #503 |
-
-This milestone cannot release before they land.
+| Owner | Milestone | Blocks the T2 of |
+|---|---|---|
+| #347 | v1.9.0 | #339, #348, #411, #420, #503 |
+| #400 | v1.9.0 | #503 |
+| #404 | v1.9.0 | #305, #411, #503 |
+| #445 | Startup and degraded experience | #490, #457, #503 |
+| #468 | v1.9.0 | #503 |
+| #505 | v1.9.0 | #503 |
+| #506 | v1.9.0 | #503 |
 
 ---
 
@@ -236,59 +233,59 @@ This milestone cannot release before they land.
 
 | # | Issue | Reason |
 |---|-------|--------|
-| 1 | **#503** 🚧 | In progress: first, so the rule that a failing step blocks the issue is in place before anything else is judged; its own T2 (step 12) is blocked by #438, #469, #472, #462 below and by #347, #400, #404, #445, #468, #505, #506 from outside, so it closes after them |
-| 2 | **#438** | Planning: owns `startup-and-degradation/03`, a smoke document; blocks the 43 issues its dependency-map line lists |
-| 3 | **#469** | Planning: owns `import-and-staged-actions/01` step 8, a smoke step; blocks the 43 issues its dependency-map line lists |
-| 4 | **#472** | Planning: owns `notifications-and-changelog/01` step 9, a smoke step; blocks the 43 issues its dependency-map line lists |
-| 5 | **#501** | Planning: owns `notifications-and-changelog/03`; blocks #304, #305, #411, #490 and #457 |
-| 6 | **#502** | Planning: owns the canaries of `backup/03` and `backup/04`; blocks #348, #411, #482, #490 and #457 |
-| 7 | **#462** | Planning: owns `startup-and-degradation/07` step 2; blocks #424 and #503 |
+| 1 | **#503** 🚧 | In progress |
+| 2 | **#438** | Planning |
+| 3 | **#469** | Planning |
+| 4 | **#472** | Planning |
+| 5 | **#501** | Planning |
+| 6 | **#502** | Planning |
+| 7 | **#462** | Planning |
 | 8 | **#313** ✅ | Waiting for release |
-| 9 | **#323** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 9 | **#323** 🚧 | In progress |
 | 10 | **#325** ⛔ | Closed as not planned |
-| 11 | **#312** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 11 | **#312** 🚧 | In progress |
 | 12 | **#83** ✅ | Waiting for release |
-| 13 | **#309** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 14 | **#326** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 15 | **#424** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #462 |
-| 16 | **#349** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 17 | **#307** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 18 | **#81** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 19 | **#319** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 20 | **#304** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #501 |
-| 21 | **#377** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 22 | **#372** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503; ahead of #373, whose reproduction needs it, while its own step 6 waits for #373 |
-| 23 | **#302** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 24 | **#303** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 25 | **#367** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 26 | **#308** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 27 | **#375** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 28 | **#374** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 29 | **#378** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 30 | **#373** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 31 | **#382** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
+| 13 | **#309** 🚧 | In progress |
+| 14 | **#326** 🚧 | In progress |
+| 15 | **#424** 🚧 | In progress |
+| 16 | **#349** 🚧 | In progress |
+| 17 | **#307** 🚧 | In progress |
+| 18 | **#81** 🚧 | In progress |
+| 19 | **#319** 🚧 | In progress |
+| 20 | **#304** 🚧 | In progress |
+| 21 | **#377** 🚧 | In progress |
+| 22 | **#372** 🚧 | In progress |
+| 23 | **#302** 🚧 | In progress |
+| 24 | **#303** 🚧 | In progress |
+| 25 | **#367** 🚧 | In progress |
+| 26 | **#308** 🚧 | In progress |
+| 27 | **#375** 🚧 | In progress |
+| 28 | **#374** 🚧 | In progress |
+| 29 | **#378** 🚧 | In progress |
+| 30 | **#373** 🚧 | In progress |
+| 31 | **#382** 🚧 | In progress |
 | 32 | **#383** ✅ | Waiting for release |
-| 33 | **#376** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 34 | **#389** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 35 | **#369** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 36 | **#397** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 37 | **#370** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 38 | **#409** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 39 | **#410** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 40 | **#411** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #347, #404, #501, #502 |
-| 41 | **#413** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 42 | **#419** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 43 | **#420** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #347 |
-| 44 | **#422** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 45 | **#423** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 46 | **#371** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 47 | **#350** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503 |
-| 48 | **#339** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #347 |
-| 49 | **#305** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #404, #501 |
-| 50 | **#482** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #502 |
-| 51 | **#348** 🚧 | In progress: T2 blocked by #400, #438, #468, #469, #472, #503, #347, #502 |
-| 52 | **#490** 🚧 | In progress: T2 not passed (2026-11-20), blocked by #501, #502, #503, #438, #469, #472 and the out-of-milestone #468, #400, #445 |
-| 53 | **#457** 🚧 | In progress: T2 blocked by #501, #502, #503, #438, #469, #472 and the out-of-milestone #468, #400, #445, as #490's is |
+| 33 | **#376** 🚧 | In progress |
+| 34 | **#389** 🚧 | In progress |
+| 35 | **#369** 🚧 | In progress |
+| 36 | **#397** 🚧 | In progress |
+| 37 | **#370** 🚧 | In progress |
+| 38 | **#409** 🚧 | In progress |
+| 39 | **#410** 🚧 | In progress |
+| 40 | **#411** 🚧 | In progress |
+| 41 | **#413** 🚧 | In progress |
+| 42 | **#419** 🚧 | In progress |
+| 43 | **#420** 🚧 | In progress |
+| 44 | **#422** 🚧 | In progress |
+| 45 | **#423** 🚧 | In progress |
+| 46 | **#371** 🚧 | In progress |
+| 47 | **#350** 🚧 | In progress |
+| 48 | **#339** 🚧 | In progress |
+| 49 | **#305** 🚧 | In progress |
+| 50 | **#482** 🚧 | In progress |
+| 51 | **#348** 🚧 | In progress |
+| 52 | **#490** 🚧 | In progress |
+| 53 | **#457** 🚧 | In progress |
 | 54 | **#493** | Planning |
 | 55 | **#491** | Planning |
 | 56 | **#492** | Planning |

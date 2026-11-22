@@ -1,6 +1,6 @@
 # #503: A failing T2 step blocks the issue: remove the "Fully green after" exception and audit the issues it let through
 
-**Status:** In progress (step 6, blocked by #505 and #506)
+**Status:** In progress (step 6)
 **GitHub issue:** #503
 **Tiers required:** T2
 **Depends on:** #347, #400, #404, #438, #445, #462, #468, #469, #472, #505, #506. Blocks #457, #490.
@@ -691,7 +691,7 @@ still describing five outside owners where seven are listed.
 `overview.md`'s dependency map and order of operations record every owner from step 8 as a blocker of each
 issue it blocks, in both directions: the owner's line lists the issue, and the issue's map line and order
 row name the owner. Every row in the order of operations comes after each issue it depends on or is
-T2-blocked by; where it cannot, its row says why. The owners outside this milestone, the five decision C
+T2-blocked by; where it cannot, this step records why, since `overview.md` carries status only. The owners outside this milestone, the five decision C
 leaves where they are plus #505 and #506 from decision F, are named under the map as blockers from outside,
 each with the step it owns and what it blocks. #469 and #472 were moved and listed during planning.
 
@@ -712,7 +712,12 @@ each with the step it owns and what it blocks. #469 and #472 were moved and list
   #373 before #372. The developer chose on 2026-11-22 to correct them under this step, so the requirement above
   covers every row, not only the owners. #81 now follows #307, and #377 and #372 come before #302 (#372 needs
   #377). #372 and #373 depend on each other for different steps; #372 comes first, as #373's reproduction
-  needs it, and its row says that its step 6 waits for #373.
+  needs it, and its step 6 waits for #373.
+- **Synced 2026-11-22 after decision H, and made status-only** (developer: *keep plan and overview in sync*):
+  #400 and #468 no longer own a smoke step, so they leave the T2 blockers of the 42 plans and their map lines and
+  remain blockers of #503 alone. The map lines lost their `(#503's audit)` notes and their explanations; the
+  outside-owner table keeps only owner, milestone and whose T2 it blocks; every order row's reason is the issue's
+  status. The 42 plans' `Depends on:` headers lost their `(set back by #503, 2026-11-21)` parentheticals.
 
 **A check of those changes, 2026-11-22 on `ab29679b`'s `overview.md`, before this step could start:** 14
 owners, the seven in this milestone and the seven outside it. (a) and (b): no issue an owner lists lacks
@@ -760,6 +765,6 @@ Written at *Waiting for release*, after step 12.
 | 11 | ✅ | `api-surface/06` brings its own cookies and asserts each case on the response's antiforgery cookie: none sent issues one, the same ring's is not replaced, another ring's is replaced and logs the pair once; and it declares itself deterministic | Live | Step 7's record: every step of `api-surface/06` passes; `Select-String -Path docs/automated-testing/api-surface/06-*.md -Pattern '^\*\*Deterministic:\*\* yes'` matches |
 | 12 | ❌ | T2 passes: the smoke set and every changed document, every step green | Live | Step 12's record |
 | 13 | ✅ | Both rules report a document that breaks them and pass one that does not, independently of today's documents | Unit test | `AutomatedTestingSuiteTests.MentionsOfFullyGreenAfter_*` (4) and `.StepsThatExcuseAFailure_*` (8): 12 pass; red with the rule bodies disabled (step 3) |
-| 14 | ❌ | Every owner from step 8 is a blocker in `overview.md` in both directions, and every row of the order of operations comes after what it depends on or is T2-blocked by, or says why | Live | Reading `overview.md`: (a) for each owner's map line and each row of the outside-owner table, every issue listed names that owner on its map line and in its order row (#505 and #506 block the others through #503, which those rows name); (b) every owner a map line or order row names lists that issue; (c) no order row comes before an issue its map line depends on or is T2-blocked by, nor after one it blocks; the only exceptions are #503 and the #372/#373 pair, and their rows say why |
+| 14 | ❌ | Every owner from step 8 is a blocker in `overview.md` in both directions, and every row of the order of operations comes after what it depends on or is T2-blocked by, or says why | Live | Reading `overview.md`: (a) for each owner's map line and each row of the outside-owner table, every issue listed names that owner on its map line and in its order row (#505 and #506 block the others through #503, which those rows name); (b) every owner a map line or order row names lists that issue; (c) no order row comes before an issue its map line depends on or is T2-blocked by, nor after one it blocks; the only exceptions are #503 and the #372/#373 pair, and step 10 records why |
 | 15 | ❌ | No smoke document checks another feature or reads a secondary source: doc 14 compares no bundled file with its converter, and docs 03, 14, 19 and 06 read no `/version` content count | Unit test + Live | `TheResetDocument_CoversEveryContentCategory` and `SourceRefreshDocuments_SayTheRefreshIsOffByDefault` pass, each red before its change; `Select-String -Path docs/automated-testing/database-lifecycle/03-*.md, docs/automated-testing/import-and-staged-actions/14-*.md, docs/automated-testing/import-and-staged-actions/19-*.md, docs/automated-testing/startup-and-degradation/06-*.md -Pattern '^dotnet.*--(equals|greater-than) database\.'` returns nothing, and `Select-String -Path docs/automated-testing/import-and-staged-actions/14-*.md -Pattern 'converter produces'` return nothing |
 | 16 | ❌ | `import-and-staged-actions/31` and `database-lifecycle/05` exist, are not smoke, are indexed and in the solution, and each fails only at the step its owner holds; `import-and-staged-actions/32` exists, is smoke, is indexed and in the solution, and passes | Unit test + Live | `RepositoryStructureTests` passes (index, smoke set, solution); step 7's record shows doc 31 failing at its only step (#400) and doc 05 at the imported `/version` read (#468), and docs 14, 19, 32 and 03 passing every step |

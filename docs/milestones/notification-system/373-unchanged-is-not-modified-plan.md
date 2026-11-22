@@ -3,7 +3,7 @@
 **Status:** In progress (step 9)
 **GitHub issue:** #373
 **Tiers required:** T1, T2
-**Depends on:** [#372](https://github.com/DutchJaFO/Quotinator/issues/372) for reproduction — a reseed. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
+**Depends on:** [#372](https://github.com/DutchJaFO/Quotinator/issues/372) for reproduction — a reseed. T2 is blocked by #438, #469, #472, #503.
 that truncates first can never reach this path — and [#374](https://github.com/DutchJaFO/Quotinator/issues/374)
 for the T2 runs, which reseed real content. **Blocks #372's step 6**, and #302 behind it
 

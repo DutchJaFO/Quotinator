@@ -3,7 +3,7 @@
 **Status:** In progress (step 10)
 **GitHub issue:** #309
 **Tiers required:** T1, T2
-**Depends on:** #80. T2 is blocked by #400, #438, #468, #469, #472, #503 (set back by #503, 2026-11-21).
+**Depends on:** #80. T2 is blocked by #438, #469, #472, #503.
 
 ## Next action
 

@@ -3,7 +3,7 @@
 **Status:** In progress (step 15)
 **GitHub issue:** #457
 **Tiers required:** T1, T2
-**Depends on:** #482, #490, #501, #502, #503, #468, #469, #472, #400, #445, and #438 (owner of `startup-and-degradation/03` since #503's decision G)
+**Depends on:** #482, #490, #501, #502, #503, #469, #472, #445, #438
 
 ---
 
