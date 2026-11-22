@@ -32,4 +32,10 @@ internal enum JsonExpectationKind
 
     /// <summary>The field is an array with exactly the expected number of elements (<c>--length-equals</c>).</summary>
     LengthEquals,
+
+    /// <summary>
+    /// The path is <c>array:field</c>, and that field takes exactly the expected number of distinct values
+    /// across the array's elements, every element carrying it (<c>--distinct-length-equals-json</c>).
+    /// </summary>
+    DistinctLengthEquals,
 }

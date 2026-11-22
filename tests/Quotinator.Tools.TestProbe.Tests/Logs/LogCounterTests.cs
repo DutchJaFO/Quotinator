@@ -67,6 +67,22 @@ public sealed class LogCounterTests
         => Assert.IsFalse(LogCounter.Check(1, atLeast: 1, exactly: 1).Holds);
 
     [TestMethod]
+    public void Sum_AddsTheFirstGroupOfEveryMatch()
+        => Assert.AreEqual(new LogSumDto(2, 34), LogCounter.Sum("applying 29 pending Data\nok\napplying 5 pending App", @"applying (\d+) pending"));
+
+    [TestMethod]
+    public void Sum_NoMatch_IsZeroOfZero()
+        => Assert.AreEqual(new LogSumDto(0, 0), LogCounter.Sum("all fine", @"applying (\d+) pending"));
+
+    [TestMethod]
+    public void Sum_PatternWithoutAGroup_IsNull()
+        => Assert.IsNull(LogCounter.Sum("applying 29 pending", "applying"));
+
+    [TestMethod]
+    public void Sum_GroupThatIsNotANumber_IsNull()
+        => Assert.IsNull(LogCounter.Sum("applying many pending", @"applying (\w+) pending"));
+
+    [TestMethod]
     public void Check_ObservesTheCount()
         => Assert.Contains(line => line.Contains('7'), LogCounter.Check(7, atLeast: 1, exactly: null).Observations);
 }

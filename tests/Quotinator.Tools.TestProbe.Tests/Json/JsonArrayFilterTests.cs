@@ -83,6 +83,25 @@ public sealed class JsonArrayFilterTests
     }
 
     [TestMethod]
+    public void Parse_EmptyValue_ReadsAnEmptyValueRatherThanAPresenceCondition()
+    {
+        IReadOnlyList<JsonArrayCondition> parsed = JsonArrayFilter.Parse(["--where", "items:body="], out _, out _);
+
+        Assert.AreEqual(new JsonArrayCondition("items", "body", string.Empty), parsed[0]);
+    }
+
+    [TestMethod]
+    public void Apply_EmptyValue_KeepsOnlyTheElementsWhoseFieldIsEmpty()
+    {
+        string? filtered = JsonArrayFilter.Apply(
+            """{"items": [{"body": ""}, {"body": "says what it did"}, {"other": "x"}]}""",
+            [new JsonArrayCondition("items", "body", string.Empty)],
+            out _);
+
+        Assert.AreEqual(1, Count(filtered));
+    }
+
+    [TestMethod]
     public void Apply_NoElementMatching_LeavesAnEmptyArray()
     {
         string? filtered = JsonArrayFilter.Apply(Notifications, [new JsonArrayCondition("items", "kind", "Quota")], out _);

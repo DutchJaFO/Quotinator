@@ -171,6 +171,23 @@ public sealed class JsonExpectationParserTests
     }
 
     [TestMethod]
+    public void Parse_DistinctLengthEqualsJson_ExpectsADistinctCountOfTheValueFromTheOtherFile()
+    {
+        string file = WriteTempFile("{\"matches\": 2, \"sum\": 31}");
+
+        try
+        {
+            IReadOnlyList<JsonExpectation> parsed = JsonExpectationParser.Parse(["--distinct-length-equals-json", $"items:body={file}#sum"], out _);
+
+            Assert.AreEqual(new JsonExpectation(JsonExpectationKind.DistinctLengthEquals, "items:body", "31"), parsed[0]);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [TestMethod]
     public void Parse_EqualsJsonWithAPathTheFileDoesNotHave_IsAnError()
     {
         string file = WriteTempFile("{}");

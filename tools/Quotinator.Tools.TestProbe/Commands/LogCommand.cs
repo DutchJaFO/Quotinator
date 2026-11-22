@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using Quotinator.Tools.TestProbe.Arguments;
 using Quotinator.Tools.TestProbe.Files;
 using Quotinator.Tools.TestProbe.Logs;
@@ -12,7 +13,9 @@ namespace Quotinator.Tools.TestProbe.Commands;
 /// <c>log</c>: counts a pattern in <c>docker logs</c> of a container, stdout and stderr both. With
 /// <c>--mark</c> it instead records the newest line's timestamp, and with <c>--since-mark</c> it counts
 /// only lines stamped after a recorded one, so a document can count what was logged since its previous
-/// read without holding anything in a shell variable.
+/// read without holding anything in a shell variable. With <c>--sum-out</c> it writes how many times the
+/// pattern matched and the sum of the number its first group captured, for a later <c>json</c> command to
+/// compare against.
 /// </summary>
 internal sealed class LogCommand : IProbeCommand
 {
@@ -54,6 +57,21 @@ internal sealed class LogCommand : IProbeCommand
         if (pattern is null)
         {
             return ExpectationResult.Failed("log needs --pattern, or --mark");
+        }
+
+        string? sumOut = OptionReader.Single(args, "--sum-out");
+
+        if (sumOut is not null)
+        {
+            LogSumDto? total = LogCounter.Sum(LogCounter.LinesAfter(logs, since), pattern);
+
+            if (total is null)
+            {
+                return ExpectationResult.Failed("--sum-out needs a --pattern whose first group captures a whole number in every match");
+            }
+
+            FileOperations.WriteText(sumOut, JsonSerializer.Serialize(total));
+            return ExpectationResult.Passed($"matches: {total.Matches}, sum: {total.Sum}, written to {sumOut}");
         }
 
         if (!TryReadBound(args, "--at-least", out int? atLeast) || !TryReadBound(args, "--exactly", out int? exactly))

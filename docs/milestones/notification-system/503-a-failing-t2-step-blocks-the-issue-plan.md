@@ -11,8 +11,8 @@
 
 **Finish step 6. Nothing after step 6 is worked on until it is done,
 step 7 included** (developer, 2026-11-22). Decision H's move is done (`81423d97`). What is left of step 6 is
-a full run of `backup/08` as written and the approved edit to #505's requirement 3, then the developer's
-review of the step: decision F's screenshots are
+running every document it changed that has not run since, listed at the end of the step, then the
+developer's review of the step: decision F's screenshots are
 gone, and its log counts stay as the workaround its amendment accepts. Once step 6 is done, step 7 runs every
 document still to run: the six decision H changed or added, and `06` three times. Steps 1 to 5 are done. Steps 8, 9 and 10 are not started: they should not have been begun while
 steps 6 and 7 were open, but changes were made under them on 2026-11-21 and 2026-11-22, and those stay in
@@ -376,8 +376,8 @@ guards and the rule tests. `EveryAdrIsIndexed` passes.
 
 ### 6. Remove every allowance from the documents
 
-**Status:** 🔄 In progress. Still to do: a full run of `backup/08` as written, and the approved edit to #505's
-requirement 3; then the step goes to the developer's review before it is marked done.
+**Status:** 🔄 In progress. The edits are done; the documents they changed are not all run. Still to do: run
+each one not run since its change, listed at the end of this step, then the developer's review.
 
 **Done 2026-11-21, except that part.**
 
@@ -576,7 +576,10 @@ what the pages show, but `capture-page.csx` always writes one:
     behaviour than expected, which contaminates results*), so each document is run again in full.
   - **Run again in full, as written, 2026-11-22:** `startup-and-degradation/06` and `05` pass every step and
     their cleanups, with no deviation. `backup/08`, after its renumbering below, passed steps 1 to 10 and was
-    stopped after step 11's first command, its cleanup run; that run is incomplete and is not a reading.
+    stopped after step 11's first command, its cleanup run; that run is incomplete and is not a reading. A
+    further start was abandoned after step 2, when two of its commands were sent in one message, so might not
+    have run in order. Run again from step 1, 2026-11-22, each command alone: `backup/08` passes every step and
+    its cleanup, with no deviation.
   - **Seen, not failures.** `capture-page.csx` started a second browser twice in `14`'s step 2, after the
     first produced no frames, its built-in retry. `notifications-and-changelog/01`'s cleanup passes `--bind`
     with no path, so `destroy` runs `docker volume rm` against a volume that container never had.
@@ -588,8 +591,27 @@ what the pages show, but `capture-page.csx` always writes one:
   `AutomatedTestingSuite.StepsNotNumberedConsecutively`, with seven rule tests, and the live guard
   `EveryAutomatedTestingDocument_NumbersItsStepsConsecutively`, which failed on `backup/08` alone before the
   renumbering and passes after it. Every `Solution` test passes (148).
-- **Still to do:** a full run of `backup/08` as written, then the approved edit recording in #505's
-  requirement 3 that #503 made `--out` optional.
+- **#505's requirement 3** now records that #503 made `--out` optional and that what remains there is
+  removing the other documents' screenshots, an approved edit applied 2026-11-22 and read back.
+- **`notifications-and-changelog/15` and `16` converted to single commands, 2026-11-22** (developer: *we
+  convert now, but we do not tamper with 473*). They use `capture-page.csx`, which this step changed, so this
+  step cannot be done until they run; and they could not run while written in PowerShell. Listing #473,
+  which converts them, as a dependency would have closed a cycle: #473 depends on #327, #327 on #482 and
+  #457, whose T2 #503 blocks. #503 converts these two itself, and #473 is left as it is, since editing it
+  would claim part of an issue done before it starts.
+  - **Tooling, red first:** TestProbe gains `log --sum-out`, the sum of a number the log reports, and
+    `json --distinct-length-equals-json`, a count of distinct values; ten tests failed to compile before
+    either existed, and pass after. Two further tests pin `--where <array>:<field>=` matching an empty value,
+    behaviour that already existed, so they were green from the start; they are the positive control for
+    `16`'s empty-body reading. `notification-rows-by-kind.js` adds `innerHeight` and a per-kind `emptyTitle`,
+    fields no earlier reading uses.
+  - **Run as written, 2026-11-22:** `15` passes every step and its cleanup. `16`'s first run was abandoned at
+    its cleanup, two independent commands having been sent in one message; run again from step 1, each
+    command alone, it passes every step and its cleanup. Every `Solution` test (148), every TestProbe test
+    (230) and the full `dotnet test --configuration Release -m:1` pass, 0 warnings.
+- **Still to do:** run, each command as written, every other document this step changed and has not run
+  since: `database-lifecycle/02`, `03` and `05`; `import-and-staged-actions/01`, `14`, `16`, `17`, `19`, `31`
+  and `32`; `startup-and-degradation/03` and `07`; and `api-surface/06`.
 
 **Decision H's move, done 2026-11-22** (`81423d97`):
 

@@ -78,6 +78,32 @@ public sealed class JsonExpectationEvaluatorTests
     public void LengthEquals_ArrayOfAnotherLength_Fails()
         => Assert.IsFalse(JsonExpectationEvaluator.Evaluate(Page, [new JsonExpectation(JsonExpectationKind.LengthEquals, "items", "3")]).Holds);
 
+    private const string Bodies = """{"items":[{"body":"one"},{"body":"two"},{"body":"one"}]}""";
+
+    [TestMethod]
+    public void DistinctLengthEquals_CountsEachValueOnce_Holds()
+        => Assert.IsTrue(JsonExpectationEvaluator.Evaluate(Bodies, [new JsonExpectation(JsonExpectationKind.DistinctLengthEquals, "items:body", "2")]).Holds);
+
+    [TestMethod]
+    public void DistinctLengthEquals_RepeatedValueCountedAsTwo_Fails()
+        => Assert.IsFalse(JsonExpectationEvaluator.Evaluate(Bodies, [new JsonExpectation(JsonExpectationKind.DistinctLengthEquals, "items:body", "3")]).Holds);
+
+    [TestMethod]
+    public void DistinctLengthEquals_ObservesTheDistinctCount()
+    {
+        ExpectationResult result = JsonExpectationEvaluator.Evaluate(Bodies, [new JsonExpectation(JsonExpectationKind.DistinctLengthEquals, "items:body", "2")]);
+
+        Assert.AreEqual("items:body has 2 distinct values", result.Observations[0]);
+    }
+
+    [TestMethod]
+    public void DistinctLengthEquals_NotAnArray_Fails()
+        => Assert.IsFalse(JsonExpectationEvaluator.Evaluate(Page, [new JsonExpectation(JsonExpectationKind.DistinctLengthEquals, "pageSize:body", "1")]).Holds);
+
+    [TestMethod]
+    public void DistinctLengthEquals_ElementWithoutTheField_Fails()
+        => Assert.IsFalse(JsonExpectationEvaluator.Evaluate("""{"items":[{"body":"one"},{"other":"x"}]}""", [new JsonExpectation(JsonExpectationKind.DistinctLengthEquals, "items:body", "1")]).Holds);
+
     [TestMethod]
     public void Contains_StringContainingText_Holds()
         => Assert.IsTrue(Evaluate(JsonExpectationKind.Contains, "reason", "lock").Holds);

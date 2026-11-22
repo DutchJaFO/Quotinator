@@ -64,6 +64,7 @@ uses, since a pipe is shell logic.
 | `--equals-json <path>=<file>#<path>` | the field's value is exactly the value at `<path>` in another JSON file, so two readings saved at different moments are compared without copying either into a document (`0.Recorded=before.json#0.Recorded`) |
 | `--greater-than-json <path>=<file>#<path>` | the field is a number greater than the value at `<path>` in another JSON file |
 | `--length-equals-json <path>=<file>#<path>` | the field is an array with as many elements as the number at `<path>` in another JSON file (`files=capture.json#0.DataFiles`) |
+| `--distinct-length-equals-json <array>:<field>=<file>#<path>` | `<field>` takes as many distinct values across the elements of `<array>` as the number at `<path>` in another JSON file, and every element carries it: two rows saying the same thing are counted once (`items:body=sum.json#sum`) |
 | `--equals-xml <path>=<file>#<element>` | the field's value is exactly the text of the first `<element>` in the XML file, read now, so a value the repository owns is not copied into a document (`version=Directory.Build.props#Version`) |
 
 **Narrowing an array before asserting on it**, for a list endpoint with no filter of its own:
@@ -124,6 +125,18 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-star
 `--mark <file>` records the newest line's timestamp; `--since-mark <file>` counts only lines stamped
 after it. The timestamps are the Docker daemon's own (`docker logs --timestamps`), so the host clock
 plays no part.
+
+**Summing a number the log reports**, so a document compares a count against what the log says happened
+without writing a figure down:
+
+```bash
+dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-notif-16 --pattern "applying (\d+) pending" --sum-out C:\repos\Quotinator\.claude\temp\qt-notif-16\applied.json
+```
+
+`--sum-out <file>` writes `{"matches":<n>,"sum":<s>}`: how many times the pattern matched, and the sum of
+the whole number its first group captured each time. A pattern with no group, or a capture that is not a
+whole number, fails rather than writing a sum that means something else. It combines with
+`--since-mark`, and replaces `--at-least` and `--exactly`, which a later `json` command takes the place of.
 
 ### `url`: use a value from a saved response in a later request's URL
 

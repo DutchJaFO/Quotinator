@@ -40,7 +40,7 @@ internal static class JsonExpectationEvaluator
 
             foreach (JsonExpectation expectation in expectations)
             {
-                bool found = JsonPathReader.TryRead(document.RootElement, expectation.Path, out JsonElement value);
+                bool found = JsonPathReader.TryRead(document.RootElement, ReadPath(expectation), out JsonElement value);
                 observations.Add(found ? Observe(expectation, value) : $"{expectation.Path} is absent");
 
                 string? failure = Check(document.RootElement, expectation, found, value);
@@ -77,6 +77,7 @@ internal static class JsonExpectationEvaluator
             JsonExpectationKind.EqualToField => ReadOther(root, expectation) == JsonPathReader.Render(value),
             JsonExpectationKind.LengthEqualToField => LengthText(value) == ReadOther(root, expectation),
             JsonExpectationKind.LengthEquals => LengthText(value) == expectation.Value,
+            JsonExpectationKind.DistinctLengthEquals => DistinctText(value, FieldOf(expectation)) == expectation.Value,
             _ => false,
         };
 
@@ -84,9 +85,54 @@ internal static class JsonExpectationEvaluator
     }
 
     private static string Observe(JsonExpectation expectation, JsonElement value)
-        => expectation.Kind is JsonExpectationKind.LengthEqualToField or JsonExpectationKind.LengthEquals && LengthText(value) is string length
+    {
+        if (expectation.Kind == JsonExpectationKind.DistinctLengthEquals)
+        {
+            return DistinctText(value, FieldOf(expectation)) is string distinct
+                ? $"{expectation.Path} has {distinct} distinct values"
+                : $"{expectation.Path}: not an array whose every element carries the field";
+        }
+
+        return expectation.Kind is JsonExpectationKind.LengthEqualToField or JsonExpectationKind.LengthEquals && LengthText(value) is string length
             ? $"{expectation.Path} has {length} elements"
             : $"{expectation.Path} = {JsonPathReader.Render(value)}";
+    }
+
+    /// <summary>The path to read: the array part of an <c>array:field</c> path, or the path itself.</summary>
+    private static string ReadPath(JsonExpectation expectation)
+        => expectation.Kind == JsonExpectationKind.DistinctLengthEquals && expectation.Path.IndexOf(':') is int colon and > 0
+            ? expectation.Path[..colon]
+            : expectation.Path;
+
+    /// <summary>The field part of an <c>array:field</c> path; empty when the path names none.</summary>
+    private static string FieldOf(JsonExpectation expectation)
+        => expectation.Path.IndexOf(':') is int colon and > 0 ? expectation.Path[(colon + 1)..] : string.Empty;
+
+    /// <summary>
+    /// How many distinct values <paramref name="field"/> takes across the array's elements; null when the
+    /// value is not an array, no field is named, or an element does not carry it.
+    /// </summary>
+    private static string? DistinctText(JsonElement value, string field)
+    {
+        if (value.ValueKind != JsonValueKind.Array || field.Length == 0)
+        {
+            return null;
+        }
+
+        HashSet<string> distinct = [];
+
+        foreach (JsonElement element in value.EnumerateArray())
+        {
+            if (!JsonPathReader.TryRead(element, field, out JsonElement fieldValue))
+            {
+                return null;
+            }
+
+            distinct.Add(JsonPathReader.Render(fieldValue));
+        }
+
+        return distinct.Count.ToString(CultureInfo.InvariantCulture);
+    }
 
     private static string? ReadOther(JsonElement root, JsonExpectation expectation)
         => JsonPathReader.TryRead(root, expectation.Value ?? string.Empty, out JsonElement other) ? JsonPathReader.Render(other) : null;
@@ -124,6 +170,7 @@ internal static class JsonExpectationEvaluator
         JsonExpectationKind.EqualToField => $"the value of {expectation.Value}",
         JsonExpectationKind.LengthEqualToField => $"an array as long as the value of {expectation.Value}",
         JsonExpectationKind.LengthEquals => $"an array of {expectation.Value} elements",
+        JsonExpectationKind.DistinctLengthEquals => $"{expectation.Value} distinct values",
         _ => "to be not empty",
     };
 }

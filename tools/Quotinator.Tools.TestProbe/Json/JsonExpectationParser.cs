@@ -16,6 +16,7 @@ internal static class JsonExpectationParser
         ["--equals-json"] = JsonExpectationKind.EqualTo,
         ["--greater-than-json"] = JsonExpectationKind.GreaterThan,
         ["--length-equals-json"] = JsonExpectationKind.LengthEquals,
+        ["--distinct-length-equals-json"] = JsonExpectationKind.DistinctLengthEquals,
     };
 
     private static readonly Dictionary<string, JsonExpectationKind> KindsByOption = new()
@@ -34,9 +35,10 @@ internal static class JsonExpectationParser
     /// <summary>
     /// The expectations named by <c>--equals</c>, <c>--contains</c>, <c>--present</c>, <c>--absent</c>,
     /// <c>--not-empty</c>, <c>--greater-than</c>, <c>--equals-field</c>, <c>--length-equals-field</c>,
-    /// <c>--length-equals</c>, <c>--equals-xml</c>, <c>--equals-json</c>, <c>--greater-than-json</c> and
-    /// <c>--length-equals-json</c>, in no particular order, and one error per option that could not be read.
-    /// <c>--equals-xml</c> and the three <c>-json</c> forms compare against a value read from the named file
+    /// <c>--length-equals</c>, <c>--equals-xml</c>, <c>--equals-json</c>, <c>--greater-than-json</c>,
+    /// <c>--length-equals-json</c> and <c>--distinct-length-equals-json</c>, in no particular order, and one
+    /// error per option that could not be read.
+    /// <c>--equals-xml</c> and the four <c>-json</c> forms compare against a value read from the named file
     /// now, so a value the repository owns, or one an earlier step saved, is never copied into a document.
     /// </summary>
     /// <param name="args">The command's arguments, without the command name.</param>
@@ -108,7 +110,7 @@ internal static class JsonExpectationParser
                 value = expected;
             }
 
-            if (kind is JsonExpectationKind.GreaterThan or JsonExpectationKind.LengthEquals && !decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
+            if (kind is JsonExpectationKind.GreaterThan or JsonExpectationKind.LengthEquals or JsonExpectationKind.DistinctLengthEquals && !decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
             {
                 problems.Add($"{option} needs a number after '=', got '{value}'");
                 continue;

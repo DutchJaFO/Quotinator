@@ -59,6 +59,37 @@ internal static partial class LogCounter
     internal static int Count(string text, string pattern) => Regex.Count(text, pattern);
 
     /// <summary>
+    /// The matches of <paramref name="pattern"/> in <paramref name="text"/>, and the sum of the whole number
+    /// its first group captured in each; null when the pattern has no group, or a capture is not a number,
+    /// since either would make the sum mean something other than what the pattern says.
+    /// </summary>
+    internal static LogSumDto? Sum(string text, string pattern)
+    {
+        Regex expression = new(pattern);
+
+        if (expression.GetGroupNumbers().Length < 2)
+        {
+            return null;
+        }
+
+        int matches = 0;
+        int sum = 0;
+
+        foreach (Match match in expression.Matches(text))
+        {
+            if (!int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int value))
+            {
+                return null;
+            }
+
+            matches++;
+            sum += value;
+        }
+
+        return new LogSumDto(matches, sum);
+    }
+
+    /// <summary>
     /// Holds when <paramref name="count"/> is at least <paramref name="atLeast"/> or exactly
     /// <paramref name="exactly"/>, whichever is given; observes the count. Neither, or both, is a failure.
     /// </summary>
