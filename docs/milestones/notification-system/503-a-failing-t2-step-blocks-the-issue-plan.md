@@ -369,7 +369,7 @@ guards and the rule tests. `EveryAdrIsIndexed` passes.
 
 ### 6. Remove every allowance from the documents
 
-**Status:** 🔄 In progress. Still to do: the edits to #400 and #468 that decision H's move needs, and
+**Status:** 🔄 In progress. Decision H's move is done. Still to do:
 `startup-and-degradation/06`'s log counts, which wait for #505 and #506.
 
 **Done 2026-11-21, except that part.**
@@ -517,7 +517,7 @@ and red at that step until its owner lands, and two smoke documents that lose it
 The records that name doc 14 step 5 or doc 03 step 8 as a smoke step (`overview.md`, the set-back plans) are
 corrected by steps 8 and 10, which have not started.
 
-**Decision H's move, done 2026-11-22**, except the edits to #400 and #468, which wait for approval:
+**Decision H's move, done 2026-11-22** (`81423d97`):
 
 - **New documents.** `import-and-staged-actions/31` (not smoke; doc 14's step 5 as it stood, red at its only
   step, #400). `import-and-staged-actions/32` (smoke; the fixture seeded at first boot, step 2 reading the
@@ -546,6 +546,7 @@ corrected by steps 8 and 10, which have not started.
   the bundled-content rule names doc 31; the awaiting-measurement list gains 31 and 32 (37 of 88); all three are
   in `Quotinator.slnx`.
 - **Result:** every `Solution` test passes (140).
+- **#400 and #468**, edited after approval and read back: #400's ruling that doc 14 keeps its steps is marked superseded for step 5, its item 6 and test row name doc 31; #468's test row names doc 05's step 5.
 
 ### 7. Confirm the changed documents read red where they should
 
