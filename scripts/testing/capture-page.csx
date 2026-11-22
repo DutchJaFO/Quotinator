@@ -39,7 +39,9 @@
 //
 // Options:
 //   --url     <url>       Page to capture, including the host port (required)
-//   --out     <path>      Where to write the PNG; parent directories are created (required)
+//   --out     <path>      Where to write the PNG; parent directories are created. Optional when a page
+//                         script is given: without it no screenshot is taken, and the script's result is the
+//                         command's whole output (#503)
 //   --width   <px>        Viewport width (default: 1280)
 //   --height  <px>        Viewport height (default: 900)
 //   --wait-ms <ms>        Settle time after load before the script runs (default: 2000). Blazor Server
@@ -80,7 +82,7 @@ using System.Text.Json.Serialization;
 string? Value(string flag) => Args.SkipWhile(a => a != flag).Skip(1).FirstOrDefault();
 bool Flag(string flag) => Args.Contains(flag);
 
-const string Usage = "usage: capture-page.csx -- [--session <file>] --url <url> --out <path.png> [--width N] [--height N] [--wait-ms N] [--script-stdin | --script-file <path>] [--result-out <path>] [--browser edge|chrome] [--full-page]"
+const string Usage = "usage: capture-page.csx -- [--session <file>] --url <url> [--out <path.png>] [--width N] [--height N] [--wait-ms N] [--script-stdin | --script-file <path>] [--result-out <path>] [--browser edge|chrome] [--full-page]"
     + "\n       capture-page.csx -- --session <file> --open [--browser edge|chrome]"
     + "\n       capture-page.csx -- --session <file> --close";
 
@@ -101,8 +103,10 @@ if (closeSession)
     return await CloseSessionAsync(sessionPath!);
 }
 
-if (!openSession && (url is null || outPath is null))
+bool hasScript = Value("--script-file") is not null || Flag("--script-stdin");
+if (!openSession && (url is null || (outPath is null && !hasScript)))
 {
+    // Without --out the command takes no screenshot (#503), so it needs a page script to have anything to do.
     Console.Error.WriteLine(Usage);
     return 1;
 }
@@ -553,6 +557,12 @@ try
                 scale = 1
             };
         }
+    }
+
+    if (outPath is null)
+    {
+        // No --out: the page script's result is the whole output, and no screenshot is taken.
+        return 0;
     }
 
     JsonNode? shot = clip is not null

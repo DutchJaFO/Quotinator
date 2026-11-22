@@ -852,6 +852,27 @@ public partial class RepositoryStructureTests
             + $"section:\n{string.Join("\n", failures)}");
     }
 
+    /// <summary>
+    /// Every test document numbers its steps with whole numbers counting up from 1, as the index's
+    /// template does.
+    /// </summary>
+    /// <remarks>
+    /// #503 found <c>backup/08</c>'s step <c>6b</c>, inserted without renumbering the steps after it, so the
+    /// document read as though a step 6a had been skipped.
+    /// </remarks>
+    [TestMethod]
+    public void EveryAutomatedTestingDocument_NumbersItsStepsConsecutively()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        List<string> failures = AutomatedTestingSuite.StepsNotNumberedConsecutively(LoadSuiteDocuments());
+
+        Assert.IsEmpty(failures,
+            "A document's steps are numbered 1, 2, 3 and on, never lettered or skipped, so a reader can "
+            + $"tell that every step is there:\n{string.Join("\n", failures)}");
+    }
+
     private const string AutomatedTestingRelativePath = "docs/automated-testing";
 
     private static readonly string AutomatedTestingDir =

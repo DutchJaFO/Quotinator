@@ -3,15 +3,17 @@
 **Status:** In progress (step 6)
 **GitHub issue:** #503
 **Tiers required:** T2
-**Depends on:** #347, #400, #404, #438, #445, #462, #468, #469, #472, #506. Blocks #457, #490.
+**Depends on:** #347, #400, #404, #438, #445, #462, #468, #469, #472. Blocks #457, #490.
 
 ---
 
 ## Next action
 
-**Wait for #506. Step 6 is blocked by it, and nothing after step 6 is worked on until it is done,
+**Finish step 6. Nothing after step 6 is worked on until it is done,
 step 7 included** (developer, 2026-11-22). Decision H's move is done (`81423d97`). What is left of step 6 is
-`startup-and-degradation/06`'s log counts, which need #506; the browser they needed from #505 is done here. Once step 6 is done, step 7 runs every
+a full run of `backup/08` as written and the approved edit to #505's requirement 3, then the developer's
+review of the step: decision F's screenshots are
+gone, and its log counts stay as the workaround its amendment accepts. Once step 6 is done, step 7 runs every
 document still to run: the six decision H changed or added, and `06` three times. Steps 1 to 5 are done. Steps 8, 9 and 10 are not started: they should not have been begun while
 steps 6 and 7 were open, but changes were made under them on 2026-11-21 and 2026-11-22, and those stay in
 place. Each step, when it starts, reviews them against its requirement and finishes them; step 10 then goes
@@ -179,6 +181,11 @@ points to a missing feature (filed for the rest of the suite as #505, in v1.9.0)
   opened in setup and closed in cleanup, no close falls between step 6's two readings, so the totals
   measure only the repair, and #445 shows only in its own tests. The `capture-page.csx` change belongs to
   #505, so this document waits for #505 as well as #506.
+
+**Amended 2026-11-22.** #503 made the `capture-page.csx` change itself (`c683381c`), so `06` no longer waits for
+#505. And the log count stays: *given that we have a fix planned we can accept this as a current work-around*
+(developer). #506 replaces it with the exception totals when it lands; until then `06` reads the log, and #503
+no longer waits for #506 either.
 
 ### G. The two documents declared non-deterministic
 
@@ -369,8 +376,8 @@ guards and the rule tests. `EveryAdrIsIndexed` passes.
 
 ### 6. Remove every allowance from the documents
 
-**Status:** 🔄 In progress. Decision H's move is done. Still to do:
-`startup-and-degradation/06`'s log counts, which wait for #506.
+**Status:** 🔄 In progress. Still to do: a full run of `backup/08` as written, and the approved edit to #505's
+requirement 3; then the step goes to the developer's review before it is marked done.
 
 **Done 2026-11-21, except that part.**
 
@@ -400,7 +407,7 @@ guards and the rule tests. `EveryAdrIsIndexed` passes.
   `--cookie-file`, turning the handler's own cookie store off when either is used, since that store ignores a
   hand-set `Cookie` header.
 - **Result:** both guards pass, and every `Solution` test passes (141).
-- **Still to do:** `startup-and-degradation/06`'s three log counts, replaced by #506's exception totals read
+- **Since amended:** `startup-and-degradation/06`'s three log counts, to be replaced by #506's exception totals read
   with one browser kept open (#505), once both land.
 
 **`api-surface/06`, answered 2026-11-21:** decision G's variants were counted from the log, which #505
@@ -536,6 +543,53 @@ so `06` no longer waits for #505:
   without `--session` still starts and closes its own browser. `06` opens the session in step 1, gives it to all
   ten captures, and closes it in the cleanup after the last count. Every `Solution` test passes (140). #503 no
   longer depends on #505; #445 stays until step 7's three runs show its errors no longer reach the count.
+
+**A capture without a screenshot, done 2026-11-22** (developer: *we fix that tool now; do verify that the
+tests that use the tool keep working*). Decision F removes `06`'s screenshots, since its page scripts assert
+what the pages show, but `capture-page.csx` always writes one:
+
+- `--out` becomes optional. Without it the command runs its page script, prints and writes the result, and
+  takes no screenshot; with neither `--out` nor a page script it refuses, having nothing to do.
+- `06`'s ten captures lose `--out`.
+- Every test document that uses the tool and can be run as written is run against a build of this branch, and
+  each reads as it did before the change.
+- **Done:** `capture-page.csx` takes `--out` as optional, and `06`'s ten captures lose it.
+- **Not verified.** Two runs of these documents on 2026-11-22 are withdrawn: both went through a PowerShell
+  runner of the assistant's own, which [ADR 010](../../architecture-decisions/010-repository-is-csharp-only.md)
+  rules out and the T2 README's *never worked around at run time with a wrapper or a runner of one's own*
+  forbids. It also changed every command, by redirecting its stderr, and the first run's logs held none. The
+  documents are run again, each command as written: `startup-and-degradation/06`, `01` and `05`,
+  `notifications-and-changelog/14` and `01`, and `backup/06`, `07` and `08`. `notifications-and-changelog/15` and
+  `16` use the tool but carry PowerShell blocks, so they are not run until #473 converts them.
+- **Run again, 2026-11-22**, against `quotinator:local` built from the working tree on `c683381c`, each
+  command as written, one at a time, reading each result before the next:
+  - `startup-and-degradation/06` passes every step and its cleanup. Its log names one browser, opened in
+    step 1, every capture a new tab in it, and its close in the cleanup; no PNG is written.
+  - `startup-and-degradation/01` and `05`, `notifications-and-changelog/14` and `backup/06`, `07` and `08`
+    pass every step and their cleanups.
+  - `notifications-and-changelog/01` fails at step 9's second command, `reseedrecommended` missing, #472's
+    failure; step 10 is not run, as the step says, and the cleanup is.
+  - **Deviations, so those three runs are withdrawn.** `06`'s step 3 seven reads were sent in one batch, so
+    may have run concurrently rather than in order. Two read-only commands were changed by a pipe the
+    assistant added (`05`'s step 6 `json --contains`, `backup/08`'s step 5 notifications read). Running the
+    changed command again is not enough (developer: *any changes could result in tests that have different
+    behaviour than expected, which contaminates results*), so each document is run again in full.
+  - **Run again in full, as written, 2026-11-22:** `startup-and-degradation/06` and `05` pass every step and
+    their cleanups, with no deviation. `backup/08`, after its renumbering below, passed steps 1 to 10 and was
+    stopped after step 11's first command, its cleanup run; that run is incomplete and is not a reading.
+  - **Seen, not failures.** `capture-page.csx` started a second browser twice in `14`'s step 2, after the
+    first produced no frames, its built-in retry. `notifications-and-changelog/01`'s cleanup passes `--bind`
+    with no path, so `destroy` runs `docker volume rm` against a volume that container never had.
+    `backup/08` numbers a step `6b`, against the README's template of whole-number steps.
+- **`backup/08`'s step 6b, fixed 2026-11-22** (developer: *Yes, under #503*). It came in with `d8ba09da`
+  (#348), inserted after step 6 without renumbering. Steps `6b` and `7` to `10` become `7` to `11`, with every
+  reference inside the document; the Observed effect table notes the rows were measured under the old numbers.
+  The #348 plan's records citing `backup/08` step 9 are left as written. New rule
+  `AutomatedTestingSuite.StepsNotNumberedConsecutively`, with seven rule tests, and the live guard
+  `EveryAutomatedTestingDocument_NumbersItsStepsConsecutively`, which failed on `backup/08` alone before the
+  renumbering and passes after it. Every `Solution` test passes (148).
+- **Still to do:** a full run of `backup/08` as written, then the approved edit recording in #505's
+  requirement 3 that #503 made `--out` optional.
 
 **Decision H's move, done 2026-11-22** (`81423d97`):
 

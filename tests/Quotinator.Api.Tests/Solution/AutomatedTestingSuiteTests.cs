@@ -639,6 +639,84 @@ public class AutomatedTestingSuiteTests
 
     #endregion
 
+    #region Steps are numbered consecutively
+
+    [TestMethod]
+    public void StepsNotNumberedConsecutively_PassesStepsCountingUpFromOne()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsNotNumberedConsecutively(
+            [Document(FirstDocument, Title, Fields, Preconditions, Determinism,
+                "## Steps\n\n### 1. Ask for a quote\n\nA 200.\n\n### 2. Ask again\n\nA 200.", MeasuredEffect, Cleanup)]);
+
+        Assert.IsEmpty(failures, "Steps 1 and 2 count up from one.");
+    }
+
+    [TestMethod]
+    public void StepsNotNumberedConsecutively_NamesALetteredStep()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsNotNumberedConsecutively(
+            [Document(FirstDocument, Title, Fields, Preconditions, Determinism,
+                "## Steps\n\n### 1. Ask for a quote\n\nA 200.\n\n### 1b. Ask again\n\nA 200.\n\n### 2. Clean up\n\nGone.",
+                MeasuredEffect, Cleanup)]);
+
+        Assert.HasCount(1, failures,
+            "A lettered step reads as though a step 1a existed and was skipped (#503, backup/08's 6b).");
+        Assert.Contains("'### 1b. Ask again' is not numbered", failures[0]);
+    }
+
+    [TestMethod]
+    public void StepsNotNumberedConsecutively_NamesAGapInTheNumbering()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsNotNumberedConsecutively(
+            [Document(FirstDocument, Title, Fields, Preconditions, Determinism,
+                "## Steps\n\n### 1. Ask for a quote\n\nA 200.\n\n### 3. Ask again\n\nA 200.", MeasuredEffect, Cleanup)]);
+
+        Assert.HasCount(1, failures, "Step 3 follows step 1, so step 2 is missing.");
+        Assert.Contains("step 3 where step 2 belongs", failures[0]);
+    }
+
+    [TestMethod]
+    public void StepsNotNumberedConsecutively_NamesAFirstStepThatIsNotOne()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsNotNumberedConsecutively(
+            [Document(FirstDocument, Title, Fields, Preconditions, Determinism,
+                "## Steps\n\n### 0. Ask for a quote\n\nA 200.", MeasuredEffect, Cleanup)]);
+
+        Assert.HasCount(1, failures, "The template numbers the first step 1.");
+        Assert.Contains("step 0 where step 1 belongs", failures[0]);
+    }
+
+    [TestMethod]
+    public void StepsNotNumberedConsecutively_IgnoresHeadingsOutsideTheStepsSection()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsNotNumberedConsecutively(
+            [Document(FirstDocument, Title, Fields, Preconditions,
+                "## Determinism\n\n### A. The seed\n\nFixed.", Steps, MeasuredEffect, Cleanup)]);
+
+        Assert.IsEmpty(failures, "Only the Steps section holds steps; other sections may use their own headings.");
+    }
+
+    [TestMethod]
+    public void StepsNotNumberedConsecutively_IgnoresAHeadingInsideAFence()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsNotNumberedConsecutively(
+            [Document(FirstDocument, Title, Fields, Preconditions, Determinism,
+                "## Steps\n\n### 1. Read the page\n\n```\n### 9. sample output\n```", MeasuredEffect, Cleanup)]);
+
+        Assert.IsEmpty(failures, "A heading in sample output is not a step of the document.");
+    }
+
+    [TestMethod]
+    public void StepsNotNumberedConsecutively_FailsAnEmptyDocumentSet()
+    {
+        List<string> failures = AutomatedTestingSuite.StepsNotNumberedConsecutively([]);
+
+        Assert.HasCount(1, failures, "The empty set is one failure, not a pass.");
+        Assert.Contains(AutomatedTestingSuite.NoDocumentsSupplied, failures[0]);
+    }
+
+    #endregion
+
     #region Every command is PowerShell
 
     [TestMethod]

@@ -19,7 +19,7 @@ force:
 - **Past the ceiling**, where a backup is refused.
 
 Step 3 confirms the reserve was actually reached rather than inferring it from the filler having been
-written, and step 9 does the same for the ceiling.
+written, and step 10 does the same for the ceiling.
 
 ## Determinism
 
@@ -85,7 +85,7 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 below the ceiling exceeds what step 2's backup cost.
 
 **On failure:** `canBackUp=false` has two causes, and the room below the ceiling tells them apart. With
-too little room the fill overshot the ceiling, so steps 4 to 8 would be measuring refusals rather than the
+too little room the fill overshot the ceiling, so steps 4 to 9 would be measuring refusals rather than the
 reserve. With room to spare the build is refusing at the *quota*: the pre-#348 model, where the reserve
 could not be used without the caller opting in. Either way, stop: the band below is not the one being
 measured.
@@ -105,7 +105,7 @@ has passed, and the ceiling it has not.
 
 **Open is asserted on two fields, not one.** `--where items:isDismissed=false` only chooses which rows
 are counted; `--absent items.0.resolution` asserts the row has not been resolved. A resolved row carries
-the field, as step 7 reads (`underquota`), so its absence here is a reading and not a field the API never
+the field, as step 8 reads (`underquota`), so its absence here is a reading and not a field the API never
 sends. The field is omitted rather than sent as `null`, which is why `--absent` and not `--equals ...=null`.
 
 **Both halves matter and neither implies the other.** A build that refused the backup would fail the
@@ -151,7 +151,7 @@ and finds a row.**
 
 **On failure:** a `409` means the reserve is refusing a Reset, which is the model #348 replaced.
 
-### 6b. The page shows the caution beside the option that takes the backup
+### 7. The page shows the caution beside the option that takes the backup
 
 ```
 dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18388/notifications --out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\reserve-caution.png --height 1100 --script-file scripts/testing/page-scripts/reserve-caution.js --result-out C:\repos\Quotinator\.claude\temp\qt-backup-08-out\reserve-caution.json
@@ -165,7 +165,7 @@ REST. `reserve-caution.png` is the artefact to look at.
 **On failure:** `cautioned=0` with step 6 passing means the response and the page disagree, which is the
 specific drift `NotificationActionOptions.TakesABackup` exists to prevent.
 
-### 7. Removing a backup through the application clears the warning, with no restart
+### 8. Removing a backup through the application clears the warning, with no restart
 
 ```
 dotnet script scripts/testing/http.csx -- --method DELETE --url http://localhost:18388/api/v1/admin/backups/filler.db --expect 204 --status
@@ -182,7 +182,7 @@ use, no quota warning is open, and the newest resolved one is resolved as `under
 **The container was not restarted between the deletion and the read**, which is the point: the deletion
 itself re-checked the condition.
 
-### 8. A removal the application never saw is picked up on request, still with no restart
+### 9. A removal the application never saw is picked up on request, still with no restart
 
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --sparse C:\repos\Quotinator\.claude\temp\qt-backup-08\backups\filler.db 987842478
@@ -209,7 +209,7 @@ host, so no application path observed either; nothing but the refresh could have
 **On failure:** an `unchanged` on the first refresh means the fill did not reach the quota; on the second,
 it means the check is reading a cached figure rather than the folder.
 
-### 9. Past the ceiling, a backup is refused
+### 10. Past the ceiling, a backup is refused
 
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --sparse C:\repos\Quotinator\.claude\temp\qt-backup-08\backups\filler.db 1073741824
@@ -233,7 +233,7 @@ anything attempted a backup.
 unbounded. An open quota warning means the warning is kept outside the band it describes. No error means
 the state that stops every backup is showing the operator nothing.
 
-### 10. The remedy the warning names actually works
+### 11. The remedy the warning names actually works
 
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-backup-08\backups\filler.db
@@ -254,7 +254,7 @@ quota warning is open, and nothing was thrown.
 **This closes the loop the warning promises.** Its body tells the operator to delete older backups or
 raise the quota, and says the notice clears itself once the folder is back under. This step performs the
 first of those and checks both halves: the notices are gone and a backup is possible again. The error's
-`0` is evidence because step 9 read the same filter and found it.
+`0` is evidence because step 10 read the same filter and found it.
 
 ## Observed effect
 
@@ -268,18 +268,21 @@ exiting `0`:
 | 4 | a second backup of `4718592` bytes; `1` open `warning`, `resolution` absent, body *The backups folder holds 951.1 MB, past its operating quota of 921.6 MB. Backups are still being taken, from the reserve below the ceiling of 1.00 GB, …* |
 | 5 | `0` exceptions; `1` open warning after the restart, `resolution` absent |
 | 6 | reset `200`; `1` open warning, `resolution` absent; the reseed row *The database holds no quotes* with `backupCaution = true` and `["backupthenreseed"]`; `0` rows offering an action without the caution |
-| 6b | `innerHeight = 1100`, `cautioned = 1`, buttons *Back up, then reseed* and *Dismiss* |
-| 7 | `reserveInUse = false`; `0` open, the newest resolved one `underquota` |
-| 8 | refresh `raised`, `1` open, `resolution` absent; refresh `cleared`, `0` open |
-| 9 | `409 BudgetExceeded`; `0` open quota warnings; `1` open `error`, `resolution` absent |
-| 10 | `canBackUp = true`, a backup taken; `0` open errors, `0` open quota warnings; `0` exceptions |
+| 7 | `innerHeight = 1100`, `cautioned = 1`, buttons *Back up, then reseed* and *Dismiss* |
+| 8 | `reserveInUse = false`; `0` open, the newest resolved one `underquota` |
+| 9 | refresh `raised`, `1` open, `resolution` absent; refresh `cleared`, `0` open |
+| 10 | `409 BudgetExceeded`; `0` open quota warnings; `1` open `error`, `resolution` absent |
+| 11 | `canBackUp = true`, a backup taken; `0` open errors, `0` open quota warnings; `0` exceptions |
+
+The steps were numbered `6b` and `7` to `10` when this was measured; #503 renumbered them `7` to `11`, so the
+rows above carry the current numbers. No command changed.
 
 **The conversion corrected one assertion of its own.** Its first run asserted the open warning's
 `resolution` as `null` and failed: the response omits the field rather than sending it as `null`. The
 assertion was then wrongly dropped, on the reasoning that `isDismissed` already showed the row open; but
 that filter only selects rows and asserts nothing about them, so the document no longer checked that an
 open notice is unresolved. TestProbe gained `--absent` for it, and every open warning and error the
-document reads now asserts `resolution` absent, against step 7's resolved row that carries one.
+document reads now asserts `resolution` absent, against step 8's resolved row that carries one.
 
 **Measured 2026-09-27** against `quotinator:local`, and first run red against an image built from
 `7f83e92a`, the model #348 replaced.
@@ -303,7 +306,7 @@ answers `409 BudgetExceeded`, and removing the filler restores `canBackUp=True` 
 answered `404`. Step 3's *On failure* text was wrong before that run and is corrected: it blamed
 `canBackUp=False` on overshooting the ceiling alone, which `fits=True` disproves.
 
-**This pass found one defect, and step 9's quota-warning count of `0` is the assertion added for it.** On
+**This pass found one defect, and step 10's quota-warning count of `0` is the assertion added for it.** On
 the day of the run, past the *ceiling* the check raised the same body it raises inside the reserve: at
 1.02 GB against a 1.00 GB ceiling, with `canBackUp=False`, the warning read *"Backups are still being
 taken, from the reserve below the ceiling of 1.00 GB, but once the folder reaches the ceiling a backup
@@ -316,7 +319,7 @@ change since it is only ever shown inside the reserve.
 **Step 2 is the control and says so in its own title.** Below the quota a backup is taken,
 `reserveInUse` is `false` and nothing is warned about. Every later step asserts a change against that
 reading, so a build that warned about everything or about nothing fails step 2 before it can
-accidentally satisfy steps 4 to 10.
+accidentally satisfy steps 4 to 11.
 
 For the pre-fix form, build `4cfe1006`, the commit before step 8 of
 [#348](https://github.com/DutchJaFO/Quotinator/issues/348)'s plan, as `quotinator:canary348`, and run
@@ -324,7 +327,7 @@ steps 3 to 6 against it. The reserve band is what #348 introduced, so `reserveIn
 there: step 3 cannot report the band it names, and step 4's warning does not exist, which is what
 makes the band observable rather than merely configured.
 
-Steps 7 to 10 were reworked after the reserve bands were first measured and found wrong, so run them
+Steps 8 to 11 were reworked after the reserve bands were first measured and found wrong, so run them
 against the current build only; a pre-fix reading of a band that did not exist yet is not evidence
 about them.
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace Quotinator.Api.Tests.Solution;
@@ -419,6 +420,62 @@ internal static partial class AutomatedTestingSuite
                     if (ContainsWholeWords(text, phrase))
                         failures.Add($"{document.Path}:{number}: step {step} excuses a failure: '{phrase}'");
                 }
+            }
+        }
+
+        return [.. failures.Order()];
+    }
+
+    /// <summary>
+    /// The step headings in a document's <c>## Steps</c> section that are not whole numbers counting up
+    /// from 1, as the index's template numbers them.
+    /// </summary>
+    /// <remarks>
+    /// #503 found <c>### 6b.</c> in <c>backup/08</c>: a step inserted after step 6 without renumbering the
+    /// steps after it, which reads as though a step 6a existed and was skipped. A heading the step pattern
+    /// cannot read is reported as written, once, and does not count as a step, so the step after it is
+    /// not reported a second time; a readable one is reported when its number is not one more than the
+    /// step before it.
+    /// </remarks>
+    /// <param name="documents">The documents to check.</param>
+    /// <returns>One line per heading out of sequence, ordered.</returns>
+    public static List<string> StepsNotNumberedConsecutively(IReadOnlyList<SuiteDocument> documents)
+    {
+        if (documents.Count == 0)
+            return [NoDocumentsSupplied];
+
+        List<string> failures = [];
+
+        foreach (SuiteDocument document in documents)
+        {
+            bool inSteps = false;
+            int expected = 1;
+
+            foreach ((int number, string text) in ProseLines(Lines(document.Text)))
+            {
+                if (SectionHeading().IsMatch(text))
+                {
+                    inSteps = text.TrimEnd() == "## Steps";
+                    continue;
+                }
+
+                if (!inSteps || !text.StartsWith("### ", StringComparison.Ordinal))
+                    continue;
+
+                Match stepHeading = StepHeading().Match(text);
+
+                if (!stepHeading.Success)
+                {
+                    failures.Add($"{document.Path}:{number}: '{text.TrimEnd()}' is not numbered '### <n>. '");
+                    continue;
+                }
+
+                int stepNumber = int.Parse(stepHeading.Groups["number"].Value, CultureInfo.InvariantCulture);
+
+                if (stepNumber != expected)
+                    failures.Add($"{document.Path}:{number}: step {stepNumber} where step {expected} belongs");
+
+                expected = stepNumber + 1;
             }
         }
 

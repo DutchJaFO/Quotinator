@@ -28,9 +28,9 @@ browser, and each close made the application log
 depending on timing. So the step could read either way on the same build, which makes it a failing step
 ([ADR 029](../../architecture-decisions/029-a-failing-t2-step-blocks-the-issue.md)). Every capture now opens
 its own tab in one browser session, opened in step 1 and closed in the cleanup after the last count (#503), so
-no page closes between step 6's readings. This field stays `no` until three runs read the same. #503 still
-replaces the log count with the exception totals [#506](https://github.com/DutchJaFO/Quotinator/issues/506)
-reports.
+no page closes between step 6's readings. This field stays `no` until three runs read the same. The count
+reads the log as a workaround until [#506](https://github.com/DutchJaFO/Quotinator/issues/506)'s exception
+totals replace it.
 
 - **The unknown meaning of the migrations is the fault; the stale counter is only its symptom.** That is
   why `503` is the expected answer here, even though the schema compares as intact, and not an
@@ -173,9 +173,9 @@ The page scripts are committed files:
 [`notifications-page-rows.js`](../../../scripts/testing/page-scripts/notifications-page-rows.js).
 
 ```
-dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/ --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-home.png --width 1280 --height 1100 --script-file scripts/testing/page-scripts/overshoot-modal.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-home.json
+dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/ --width 1280 --height 1100 --script-file scripts/testing/page-scripts/overshoot-modal.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-home.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-home.json --equals modal=true --equals namesTheOvershoot=true --equals namesReset=true --equals namesRestore=true --equals notificationRows=0
-dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/notifications --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-notifications.png --height 1100 --script-file scripts/testing/page-scripts/notifications-page-rows.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-notifications.json
+dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/notifications --height 1100 --script-file scripts/testing/page-scripts/notifications-page-rows.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-notifications.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-notifications.json --equals rows=0 --equals bodyCells=0 --equals emptyState=true
 ```
 
@@ -209,15 +209,15 @@ Each page is read by the same committed page script,
 [`overshoot-reset-control.js`](../../../scripts/testing/page-scripts/overshoot-reset-control.js):
 
 ```
-dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/rest-api --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-rest-api.png --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-rest-api.json
+dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/rest-api --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-rest-api.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-rest-api.json --equals resetButtons=1 --equals reasonShown=true
-dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/notifications --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-notifications-page.png --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-notifications-page.json
+dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/notifications --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-notifications-page.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-notifications-page.json --equals resetButtons=1 --equals reasonShown=true
-dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/import-review --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-import-review.png --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-import-review.json
+dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/import-review --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-import-review.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-import-review.json --equals resetButtons=1 --equals reasonShown=true
-dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/stats --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-stats.png --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-stats.json
+dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/stats --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-stats.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-stats.json --equals resetButtons=1 --equals reasonShown=true
-dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/about --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-about.png --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-about.json
+dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/about --width 1280 --height 900 --script-file scripts/testing/page-scripts/overshoot-reset-control.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-about.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\degraded-about.json --equals resetButtons=0 --equals reasonShown=false
 ```
 
@@ -244,7 +244,7 @@ separates the two outcomes below: still `503` after Cancel, `200` after Confirm.
 Then, against the home page's modal, arm the Reset and cancel it:
 
 ```
-dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/ --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\modal-after-cancel.png --width 1280 --height 1100 --script-file scripts/testing/page-scripts/overshoot-modal-cancel.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\modal-after-cancel.json
+dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/ --width 1280 --height 1100 --script-file scripts/testing/page-scripts/overshoot-modal-cancel.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\modal-after-cancel.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\modal-after-cancel.json --equals "before=Reset the database, Continue" --equals "armed=Confirm, Cancel, Continue" --equals "afterCancel=Reset the database, Continue"
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/health --expect 503 --status
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-cancel.mark
@@ -258,7 +258,7 @@ the repair below is counted on its own.
 Then arm it again and confirm. The banner clears itself, in place, with no page reload:
 
 ```
-dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/ --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-confirm.png --width 1280 --height 1100 --script-file scripts/testing/page-scripts/overshoot-modal-confirm.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-confirm.json
+dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/ --width 1280 --height 1100 --script-file scripts/testing/page-scripts/overshoot-modal-confirm.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-confirm.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-confirm.json --equals reasonGone=true
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/health --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/quotes --expect 200 --status
@@ -267,7 +267,7 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/q
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/conversations --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/notifications --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/masterdata/sources --expect 200 --status
-dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/notifications --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\reset-result.png --script-file scripts/testing/page-scripts/database-action-results.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\reset-result.json
+dotnet script scripts/testing/capture-page.csx -- --session C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\browser-session.json --url http://localhost:18406/notifications --script-file scripts/testing/page-scripts/database-action-results.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\reset-result.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\reset-result.json --equals count=1 --equals type=success --equals action=Reset --equals outcome=Completed --equals restorePoint=Succeeded --equals "title=The database was reset"
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-cancel.mark --pattern "\[Runtime - Exception\]" --exactly 0
 dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:18406/api/v1/import --file docs/automated-testing/startup-and-degradation/fixtures/malformed-import.json --duplicate-resolution review --expect 422
