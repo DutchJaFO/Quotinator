@@ -1,6 +1,6 @@
 # #503: A failing T2 step blocks the issue: remove the "Fully green after" exception and audit the issues it let through
 
-**Status:** In progress (steps 6 and 7, waiting for #505 and #506)
+**Status:** In progress (step 6, blocked by #505 and #506)
 **GitHub issue:** #503
 **Tiers required:** T2
 **Depends on:** #347, #400, #404, #438, #445, #462, #468, #469, #472, #505, #506. Blocks #457, #490.
@@ -9,10 +9,10 @@
 
 ## Next action
 
-**Make decision H's move (step 6) and run its four documents (step 7); then wait for #505 and #506 to finish
-steps 6 and 7. No later step is worked on until both are done** (developer, 2026-11-22). Besides the move,
-what is left is `startup-and-degradation/06`'s log counts (step 6) and that document's three runs (step 7),
-which need #505 and #506. Steps 1 to 5 are done. Steps 8, 9 and 10 are not started: they should not have been begun while
+**Wait for #505 and #506. Step 6 is blocked by them, and nothing after step 6 is worked on until it is done,
+step 7 included** (developer, 2026-11-22). Decision H's move is done (`81423d97`). What is left of step 6 is
+`startup-and-degradation/06`'s log counts, which need #505 and #506. Once step 6 is done, step 7 runs every
+document still to run: the six decision H changed or added, and `06` three times. Steps 1 to 5 are done. Steps 8, 9 and 10 are not started: they should not have been begun while
 steps 6 and 7 were open, but changes were made under them on 2026-11-21 and 2026-11-22, and those stay in
 place. Each step, when it starts, reviews them against its requirement and finishes them; step 10 then goes
 to the developer's review. Then step 11, the full build and test run. Step 12, this issue's
@@ -550,8 +550,8 @@ corrected by steps 8 and 10, which have not started.
 
 ### 7. Confirm the changed documents read red where they should
 
-**Status:** 🔄 In progress. Still to run: the four documents decision H's move touches, once step 6 has made
-it, and `startup-and-degradation/06`'s three runs, which wait for step 6's conversion (#505, #506).
+**Status:** 🔄 In progress, and waiting: nothing more is run until step 6 is done (developer, 2026-11-22). Then
+the six documents decision H changed or added are run, and `startup-and-degradation/06` three times.
 
 The red-first run of this issue's change (`process.md` → Implementation, step 1): each document from step 6
 against a build of this branch, under `test-env.csx`. Recorded per document: the step it fails at, and that
