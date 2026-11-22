@@ -8,13 +8,17 @@
 ## Preconditions
 
 This replaces the old flat `duplicates` count everywhere a seed or import operation reports back, and every surface it
-checks (the counts after the seed, seed preview, reseed, reset, import and import preview) is reachable on one container.
+checks (seed preview, reseed, reset, import and import preview) is reachable on one container. Each step reads the
+response of the endpoint it calls, which is the primary result of that call (#503, decision H).
 
-**Beyond the profile.** The container runs with `Quotinator__IncludeDefaultSources=false` and seeds one file of its own at
-first boot, from `{dataDir}/imports/`: the [fixture](../database-lifecycle/fixtures/reset-content.json) that holds rows in
-every content category, so every entity type has something to report. Step 5 uploads the same file, so a broken seed or a
-broken import blocks this document. That is the index's second honest resolution for a precondition, and it is named here
-so a blocked run reads as that.
+**Beyond the profile.** The container runs with `Quotinator__IncludeDefaultSources=false` and starts on an empty database
+with nothing in `{dataDir}/imports/`. Once it is healthy, step 1 copies in the
+[fixture](../database-lifecycle/fixtures/reset-content.json) that holds rows in every content category, so every entity type
+has something to report, and the endpoints seed it from there. That is the same file and the same empty database
+[`32`](32-a-first-boot-seed-reports-what-it-loaded.md) starts from, so the first-boot seed and the seed endpoints are proven
+on the same input. Whether the first-boot seed works is `32`'s question, not this document's. Step 5 uploads the same file,
+so a broken import blocks this document; that is the index's second honest resolution for a precondition, named here so a
+blocked run reads as that.
 
 ## Determinism
 
@@ -33,23 +37,16 @@ so a blocked run reads as that.
 ### 1. Create this test's own environment
 
 ```
-dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-import-19-data --delete C:\repos\Quotinator\.claude\temp\qt-import-19-out --copy C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-content.json C:\repos\Quotinator\.claude\temp\qt-import-19-data\imports\reset-content.json --copy C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-imports-manifest.json C:\repos\Quotinator\.claude\temp\qt-import-19-data\imports\manifest.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --delete C:\repos\Quotinator\.claude\temp\qt-import-19-data --delete C:\repos\Quotinator\.claude\temp\qt-import-19-out
 dotnet script scripts/testing/test-env.csx -- create --name qt-import-19 --port 18619 --image quotinator:local --bind C:\repos\Quotinator\.claude\temp\qt-import-19-data --env Quotinator__IncludeDefaultSources=false
-dotnet script scripts/testing/http.csx -- --url http://localhost:18619/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-import-19-out\version-seeded.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-19-out\version-seeded.json --equals database.quotes=4 --equals database.sources=3 --equals database.characters=3 --equals database.people=2 --equals database.series=2 --equals database.seasons=2 --equals database.universes=2 --equals database.stageDirections=2 --equals database.soundCues=2 --equals database.conversations=2
+dotnet run --project tools/Quotinator.Tools.TestProbe -- file --copy C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-content.json C:\repos\Quotinator\.claude\temp\qt-import-19-data\imports\reset-content.json --copy C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-imports-manifest.json C:\repos\Quotinator\.claude\temp\qt-import-19-data\imports\manifest.json
 ```
 
-**Expected:** the app reports healthy, so the seed has finished, and the `json` command exits `0`: the version
-endpoint reports every entity type with the count the fixture gives it. Each type is named in its own assertion,
-so a missing one fails naming itself.
-
-**Read here, straight after the first boot**, because every later step changes the counts: the reseed, the
-Reset and the import. These are the counts the seed left. They were read from the `[Database - Stats]` startup
-line until 2026-11-16; the log is not evidence (#490's T2 review, developer), and the version endpoint reports
-the same counts from the same source.
+**Expected:** the app reports healthy on an empty database, and the fixture and its manifest are in place for the
+endpoints to seed from.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
-never became healthy. A count other than the fixture's means the seed did not load what the file holds.
+never became healthy.
 
 ### 2. Read the seed preview
 
@@ -68,7 +65,8 @@ dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:1
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-19-out\reseed.json --equals quotes=4 --equals sources=3 --equals characters=3 --equals people=2 --equals series=2 --equals seasons=2 --equals universes=2 --equals stageDirections=2 --equals soundCues=2 --equals conversations=2 --length-equals reports=1 --equals reports.0.fileName=reset-content.json --present reports.0.entityTypes.Quote
 ```
 
-**Expected:** `200`, with a row count for each category and one entry in the same per-file shape.
+**Expected:** `200`, with a row count for each category and one entry in the same per-file shape. The database was
+empty, so the counts are the fixture's own.
 
 ### 4. Repeat against `POST /admin/database/reset`
 
@@ -133,7 +131,8 @@ line that names it.
 
 ## Observed effect
 
-**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`.
+**Measured 2026-11-17** against `quotinator:local` built from `2fd67742`, when the container seeded the fixture at first
+boot; the reseed then ran on a seeded database. It is measured again from the empty start when step 7 of #503 runs it.
 
 | Surface | Answer | What it reported |
 |---|---|---|
@@ -142,7 +141,6 @@ line that names it.
 | `POST /admin/database/reset` | `200` | Every count `0`, no reports |
 | `POST /import` | `200` | `summary.imported=4`, and a singular `report` with `Quote.new=4` |
 | `POST /import/preview` | `200` | `preview=true`, and the same `report` shape |
-| `GET /api/v1/version` after the seed | `200` | 4 quotes, 3 sources, 3 characters, and 2 of each other type |
 
 The seed preview holds none of `totalQuotes`, `uniqueQuotes` and `crossFileDuplicates`, and holds both `fileName` and
 `entityTypes`.
@@ -162,8 +160,8 @@ unchanged, since that build seeded it. Step 2 fails: no `reports`. Step 3 fails:
 `people=2`, with no other counts and no `reports`. Step 4 fails: the reset reimports and reads those same counts, which is
 #156's defect rather than this one. Steps 5 and 6 fail: no `report`. Step 7 fails: the preview still holds the removed fields.
 Step 8 of that form, which read the `[Database - Stats]` line, fails: it names quotes, sources, characters and people, and
-none of the other six. That reading is step 1's counts today; whether that build's version endpoint reports the other six is
-not yet read.
+none of the other six. Since #503 no step of this document reads a count outside an endpoint's own response; the canary
+is run again in that form when it is next run.
 
 Remove the container, image and worktree afterwards.
 

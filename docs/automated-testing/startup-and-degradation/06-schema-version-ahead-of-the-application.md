@@ -263,8 +263,6 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/q
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/conversations --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/notifications --expect 200 --status
 dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/masterdata/sources --expect 200 --status
-dotnet script scripts/testing/http.csx -- --url http://localhost:18406/api/v1/version --expect 200 --body-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\version-after.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\version-after.json --equals database.quotes=0
 dotnet script scripts/testing/capture-page.csx -- --url http://localhost:18406/notifications --out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\reset-result.png --script-file scripts/testing/page-scripts/database-action-results.js --result-out C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\reset-result.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\reset-result.json --equals count=1 --equals type=success --equals action=Reset --equals outcome=Completed --equals restorePoint=Succeeded --equals "title=The database was reset"
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-startup-06 --since-mark C:\repos\Quotinator\.claude\temp\qt-startup-06-shots\after-cancel.mark --pattern "\[Runtime - Exception\]" --exactly 0
@@ -320,7 +318,7 @@ no notification row, and the notifications page shows its empty state.
 `/notifications`, `/import-review` and `/stats`, and neither on `/about`. The modal offers
 `Reset the database, Continue`, arming to `Confirm, Cancel, Continue`. Cancel returns to the first and
 leaves `/health` at `503`. Confirm clears the reason in place, `/health` and all seven reads answer `200`,
-`database.quotes` reads `0`, and the Notifications page shows one `Reset` result, `Completed`, with a
+`database.quotes` read `0` (a count read #503 has since removed, decision H), and the Notifications page shows one `Reset` result, `Completed`, with a
 backup taken first.
 
 **No exception was logged since the mark taken after Cancel.** This run read `0` there, where earlier runs

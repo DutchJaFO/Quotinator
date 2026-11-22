@@ -43,10 +43,12 @@ route is not caught by it, and still belongs here.
 - **Waits for health, not a duration.**
 - **Every category's count is exact, and every one is read before Reset.** Asserting a table becomes empty proves
   nothing if it already was. The fixture decides the counts, so a bundled file cannot change them.
-- **Each category is read from its own endpoint, and `/api/v1/version` must agree with them.** Both are held to the
-  fixture's counts before Reset and to `0` after it. They are separate sources: the list endpoints query the rows, and
-  `/version` and Reset's response report held counters, so a counter reading `0` does not by itself show the rows have
-  gone, and a list reading rows does not show the counters are right.
+- **Reset's own response is the primary result, and each category's own endpoint confirms it.** The response's
+  counters are held to `0`; the list endpoints, which query the rows, are held to the fixture's counts before Reset and
+  to `0` after it, so a counter reading `0` is never taken to show the rows have gone. Whether `/version` reports
+  counts that agree is that endpoint's behaviour, not Reset's, and
+  [`05`](05-version-counts-follow-the-content.md) reads it in a full run (#503, decision H). Status after Reset is read
+  from `/health`.
 - **Reset's own notification is exact.** Every earlier notification goes with the wipe, and the only one left is the
   reseed recommendation Reset writes afterwards, so a count of `1` also shows the earlier ones were removed.
 - **The fixture's counts are not one per entry.** Its quotes bring a source and a person the fixture does not list,
@@ -114,12 +116,10 @@ dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/im
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-actions-before.json --greater-than totalCount=0
 dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/notifications --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-notifications-before.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-notifications-before.json --greater-than totalCount=0
-dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/version --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-version-before.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-version-before.json --equals database.quotes=4 --equals database.sources=3 --equals database.characters=3 --equals database.people=2 --equals database.series=2 --equals database.seasons=2 --equals database.universes=2 --equals database.stageDirections=2 --equals database.soundCues=2 --equals database.conversations=2
 ```
 
-**Expected:** every category holds exactly what the fixture gives it, `/version` reports the same counts, and the
-audit trail, import actions and notifications hold something for Reset to remove.
+**Expected:** every category holds exactly what the fixture gives it, and the audit trail, import actions and
+notifications hold something for Reset to remove.
 
 **On failure:** the seed did not establish the content, so this variant is blocked. Run its cleanup and go to
 variant B.
@@ -165,14 +165,13 @@ dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/qu
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-random.json --equals status=NoResults --length-equals items=0
 dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/notifications --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-notifications-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-notifications-after.json --equals totalCount=1 --equals items.0.metadataKind=reseedrecommended --equals items.0.type=actionrequired --equals items.0.isDismissed=false
-dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/version --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-version-after.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\a-version-after.json --equals status=ready --equals database.quotes=0 --equals database.sources=0 --equals database.characters=0 --equals database.people=0 --equals database.series=0 --equals database.seasons=0 --equals database.universes=0 --equals database.stageDirections=0 --equals database.soundCues=0 --equals database.conversations=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18303/api/v1/health --expect 200 --status
 ```
 
-**Expected:** the imports file is still on disk, and nothing was read back from it: every category reads `0`, on its
-own endpoint and on `/version`, with no import action. The audit trail holds only Reset's own trace, the only
-notification is Reset's undismissed reseed recommendation, and the empty database answers `200` with
-`status=NoResults` rather than `503`.
+**Expected:** the imports file is still on disk, and nothing was read back from it: every category reads `0` on its
+own endpoint, with no import action. The audit trail holds only Reset's own trace, the only notification is Reset's
+undismissed reseed recommendation, the empty database answers `200` with `status=NoResults` rather than `503`, and
+`/health` answers `200`.
 
 ### 5. Nothing unexpected was thrown
 
@@ -191,7 +190,7 @@ exception, so the zero means something.
 **On failure:** a count above zero is an issue, unless a Knowledgebase entry says otherwise. Report it with the
 line that names it.
 
-**Variant B, steps 6 to 12: the content is imported through the API.**
+**Variant B, steps 6 to 11: the content is imported through the API.**
 
 ### 6. Create the environment and import the content
 
@@ -240,21 +239,7 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 **On failure:** the import did not establish the content, so this variant is blocked. Run its cleanup and report
 which route blocked it.
 
-### 8. `/version` agrees with what the import added
-
-```
-dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/version --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-version-before.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-version-before.json --equals database.quotes=4 --equals database.sources=3 --equals database.characters=3 --equals database.people=2 --equals database.series=2 --equals database.seasons=2 --equals database.universes=2 --equals database.stageDirections=2 --equals database.soundCues=2 --equals database.conversations=2
-```
-
-**Expected:** the same counts step 7 read from the list endpoints.
-
-**On failure:** every count reading `0` means `/version` did not refresh its counts after the API import, the bug
-[#468](https://github.com/DutchJaFO/Quotinator/issues/468) owns and the
-[Knowledgebase](../../knowledgebase/version-counts-are-stale-after-an-import.md) describes. Any other reading is a
-different fault. Either way, stop: do not run step 9.
-
-### 9. Reset the database
+### 8. Reset the database
 
 ```
 dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:19303/api/v1/admin/database/reset --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-reset.json
@@ -263,7 +248,7 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 
 **Expected:** `200` with every row count `0` and no import reports.
 
-### 10. Confirm every category was wiped
+### 9. Confirm every category was wiped
 
 ```
 dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/quotes --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-quotes-after.json
@@ -292,17 +277,16 @@ dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/im
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-actions-after.json --equals totalCount=0
 dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/notifications --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-notifications-after.json
 dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-notifications-after.json --equals totalCount=1 --equals items.0.metadataKind=reseedrecommended --equals items.0.type=actionrequired --equals items.0.isDismissed=false
-dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/version --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-version-after.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-db-03-out\b-version-after.json --equals status=ready --equals database.quotes=0 --equals database.sources=0 --equals database.characters=0 --equals database.people=0 --equals database.series=0 --equals database.seasons=0 --equals database.universes=0 --equals database.stageDirections=0 --equals database.soundCues=0 --equals database.conversations=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:19303/api/v1/health --expect 200 --status
 ```
 
-**Expected:** every category reads `0`, on its own endpoint and on `/version`, with no import action, only Reset's
-own audit trace, and Reset's undismissed reseed recommendation as the only notification.
+**Expected:** every category reads `0` on its own endpoint, with no import action, only Reset's own audit trace,
+Reset's undismissed reseed recommendation as the only notification, and `/health` answering `200`.
 
-### 11. Reset again with `preserveSchemaVersion=true`
+### 10. Reset again with `preserveSchemaVersion=true`
 
 A second import puts content back, so this Reset has something to wipe. This step reads the two ends of the
-fixture's dependency chain, quotes and the conversations built from them: steps 7 and 10 are what cover each category.
+fixture's dependency chain, quotes and the conversations built from them: steps 7 and 9 are what cover each category.
 
 ```
 dotnet script scripts/testing/http.csx -- --method POST --url http://localhost:19303/api/v1/import --file C:\repos\Quotinator\docs\automated-testing\database-lifecycle\fixtures\reset-content.json --expect 200 --status
@@ -318,7 +302,7 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Qu
 
 **Expected:** the quotes are back after the import, and the flag still wipes them and the conversations.
 
-### 12. Nothing unexpected was thrown
+### 11. Nothing unexpected was thrown
 
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-db-03b --pattern "\[Runtime - Exception\]" --exactly 0
@@ -347,10 +331,9 @@ dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-db-0
 | `/admin/audit` | `7` | `1`, `operation=Reset` | `5` | `1`, `operation=Reset` |
 | `/import/actions` | `24` | `0` | `24` | `0` |
 | `/notifications` | `4` | `1`, `metadataKind=reseedrecommended` | `3` | `1`, `metadataKind=reseedrecommended` |
-| `/version`, all ten counts | same as the list reads above | `0` | **`0`, not the list reads above** | `0` |
 
-**Step 8 failed as #468 describes:** straight after the import, `/version` read `0` for all ten counts while the list
-endpoints returned the rows. Every other step passed.
+That run also read `/version`, in a step that has since moved to
+[`05`](05-version-counts-follow-the-content.md), which records that reading. Every step this document still holds passed.
 
 Both Resets answered `200`, with all ten row counts `0` and no reports. In variant A the imports file was still on
 disk afterwards, nothing had been read back from it, and `quotes/random` answered `200` with `status=NoResults` and
@@ -379,8 +362,8 @@ what the container started with.
 **Measured 2026-11-01** on `quotinator:canary-156`, built from `3ae1c3d5`, variant A's steps 1 to 4 in order, with the
 fixture unchanged, since that build seeded it. Step 2 reads every count it can: `4` quotes, `3` sources, `3` characters,
 `2` each of people, series, universes, stage directions, sound cues and conversations, `7` audit rows and `22` import
-actions. It fails only where that build has nothing to read: `/masterdata/seasons` and `/notifications` answer `404`, and
-`/version` has no `seasons`. Step 3 fails: the reset answers every count as before, with one entry in `reports`. Step 4
+actions. It fails only where that build has nothing to read: `/masterdata/seasons` and `/notifications` answer `404` (step
+2 then also read `/version`, which had no `seasons`). Step 3 fails: the reset answers every count as before, with one entry in `reports`. Step 4
 fails: the file is still there, and every category reads what step 2 read rather than `0`, with `15` audit rows rather than
 `1`, `44` import actions rather than `0`, and `/quotes/random` returning a quote.
 

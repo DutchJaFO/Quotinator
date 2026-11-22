@@ -9,6 +9,8 @@ internal static class JsonPathReader
     /// <summary>
     /// Resolves <paramref name="path"/>, segments joined by dots, from <paramref name="root"/>. A segment
     /// is a property name, matched exactly as written, or a zero-based index when the element is an array.
+    /// A path continues into a string that holds a JSON object or array, such as a notification's
+    /// <c>metadata</c> (#503); a string ending the path is returned as the string.
     /// </summary>
     /// <param name="root">The document's root element.</param>
     /// <param name="path">The dotted path.</param>
@@ -35,6 +37,11 @@ internal static class JsonPathReader
     {
         next = default;
 
+        if (element.ValueKind == JsonValueKind.String && !TryParseEmbedded(element, out element))
+        {
+            return false;
+        }
+
         if (element.ValueKind == JsonValueKind.Object)
         {
             return element.TryGetProperty(segment, out next);
@@ -49,6 +56,28 @@ internal static class JsonPathReader
 
         next = element[index];
         return true;
+    }
+
+    private static bool TryParseEmbedded(JsonElement text, out JsonElement parsed)
+    {
+        parsed = default;
+        string content = (text.GetString() ?? string.Empty).TrimStart();
+
+        if (content.Length == 0 || (content[0] != '{' && content[0] != '['))
+        {
+            return false;
+        }
+
+        try
+        {
+            using JsonDocument embedded = JsonDocument.Parse(content);
+            parsed = embedded.RootElement.Clone();
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     /// <summary>The element's value as plain text: a string unquoted, anything else as its JSON text.</summary>

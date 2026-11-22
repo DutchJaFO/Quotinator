@@ -18,22 +18,25 @@ first place.
 **A `ConflictResolutionRule` alone cannot do that**: it only ever corrects what a Quote's own field
 *displays*, never which Source row it links to.
 
-**This is the one document permitted to read bundled content**, per the index's second rule and #400. The seed it
-inspects is the profile's own first boot, and step 6 adds one setting of its own in a second container.
+**This document reads bundled content**, per the index's second rule and #400, to warn when upstream content has made
+the import fail or a rule stale. The bundled files are a moving target, so it asserts no figure they happen to produce.
+Whether each bundled file still matches what its converter makes of the upstream source is
+[`31`](31-bundled-files-match-their-converters.md)'s question. The seed it inspects is the profile's own first boot, and
+step 5 adds one setting of its own in a second container.
 
 ## Determinism
 
 - **This is the zero-failures assertion for the bundled dataset.** Nothing staged awaiting review is
   the fact; the number of quotes seeded is not asserted, only that content exists.
-- **Every count is checked for being above `0`, never against a figure**: what matters is that seeding produced
-  content, and a source's size changes whenever a source or a correction does.
+- **Step 2 counts files, never rows**: it holds the seed's notifications to the number of files the seed preview lists,
+  read in the same run, so a source added or removed moves both sides together, and a source's size never enters it.
 - **Sources are read through the REST server**, so nothing stops the container or copies its database. Titles compare
   ignoring case, so a case-only difference counts as a duplicate: that is the point, since the alias mechanism exists to
   prevent exactly that.
 - **`seed-sources` and `seed-noops` are proven able to fail by their own unit tests**, `BundledSeedCommandTests`, which
   supply a row of each shape they must flag. A check that reads an empty list fails, since an empty list would satisfy
   it, so a pass here means real rows were read and none was flagged.
-- **Step 6 needs its own container with the bundled batch auto-purge off.** The profile's setting deletes a cleanly applied
+- **Step 5 needs its own container with the bundled batch auto-purge off.** The profile's setting deletes a cleanly applied
   batch's `Import_Action` rows the moment it applies, which is correct behaviour and exactly what makes them unreadable.
 
 ## Steps
@@ -50,15 +53,22 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-import-14 --port 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
 
-### 2. Read what the first boot seeded
+### 2. Read what the first boot reported seeding
 
 ```
-dotnet script scripts/testing/http.csx -- --url http://localhost:18614/api/v1/version --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-14-out\version.json
-dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-14-out\version.json --greater-than database.quotes=0 --greater-than database.sources=0 --greater-than database.characters=0 --greater-than database.people=0 --greater-than database.series=0 --greater-than database.seasons=0 --greater-than database.universes=0 --greater-than database.stageDirections=0 --greater-than database.soundCues=0 --greater-than database.conversations=0
+dotnet script scripts/testing/http.csx -- --url http://localhost:18614/api/v1/admin/database/seed/preview --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-14-out\preview.json
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18614/api/v1/notifications?pageSize=0" --expect 200 --status --body-out C:\repos\Quotinator\.claude\temp\qt-import-14-out\notifications.json
+dotnet run --project tools/Quotinator.Tools.TestProbe -- json --file C:\repos\Quotinator\.claude\temp\qt-import-14-out\notifications.json --where items:metadataKind=reseedfileapplied --length-equals-json items=C:\repos\Quotinator\.claude\temp\qt-import-14-out\preview.json#reports
 ```
 
-**Expected:** every entity count is above `0`, each named on its own, so a type that seeds nothing reads as its own name
-rather than shifting a total.
+**Expected:** one `reseedFileApplied` notification for every file the seed preview lists: each bundled file reported
+itself applied with nothing left to review. That is the seed's own report of what it did, written as it ran. A first-boot
+seed runs at startup rather than through an endpoint, so it has no response to read, and this is its primary result
+(#503, decision H). The counts other endpoints report afterwards are a secondary source, read by
+[`database-lifecycle/05`](../database-lifecycle/05-version-counts-follow-the-content.md) in a full run.
+
+**On failure:** a file with no notification either left something to review, which
+`GET /import/actions?status=pending` names, or was not seeded. Stop: do not run step 3.
 
 ### 3. Confirm nothing is left staged awaiting review
 
@@ -96,23 +106,7 @@ spelling (`ResolveSourceAsync_DateVariantOfDifferentlyCasedTitle_KeepsBothSpelli
 check reports them, and a reviewed `SourceAliasRule` is what resolves it
 (`ResolveSourceAsync_DifferentlyCasedTitle_WithAliasDeclared_ResolvesToTheCanonicalSpelling`).
 
-### 5. Confirm each bundled file still matches what its own converter produces
-
-**There is nothing to run here until [#400](https://github.com/DutchJaFO/Quotinator/issues/400) delivers this step.** It
-is this document's watch on external data, the only place in the project allowed to go red because the outside world
-changed rather than because this project broke (developer rule, 2026-09-08). What it was written to run could not run for
-anybody: it looped over a manifest property that does not exist, and called a `--convert` option the application does not
-have. #400 item 6 replaces it with a runnable step, reached through the source refresh. `Quotinator:AutoUpdateSources` is
-off by default (#424), so a container seeds the checked-in copy and that step will have to turn the refresh on for its run.
-
-**Expected:** a command comparing each bundled file with what its converter produces, and every file matching.
-There is no such command, so this step fails
-([ADR 029](../../architecture-decisions/029-a-failing-t2-step-blocks-the-issue.md): a step that runs no command
-fails). The issue that owns the missing command is [#400](https://github.com/DutchJaFO/Quotinator/issues/400).
-
-**On failure:** stop: do not run step 6.
-
-### 6. Confirm every no-op resolution is one somebody has accounted for
+### 5. Confirm every no-op resolution is one somebody has accounted for
 
 **This is the step that makes a missing rule visible.** Since [#377](https://github.com/DutchJaFO/Quotinator/issues/377)
 an import action whose resolution settles on the values already stored is classified `ResolvedToExisting` rather than
@@ -133,7 +127,7 @@ does not carry the field and the stored value legitimately wins, so no rule is w
 cover. Read that row's `existingFields` and `incomingFields`, and decide whether it wants a `ConflictResolutionRule`, a
 `SourceAliasRule`, or nothing at all. Deciding "nothing at all" is a legitimate outcome; leaving it undecided is not.
 
-### 7. Nothing unexpected was thrown
+### 6. Nothing unexpected was thrown
 
 ```
 dotnet run --project tools/Quotinator.Tools.TestProbe -- log --container qt-import-14 --pattern "\[Runtime - Exception\]" --exactly 0
@@ -158,12 +152,9 @@ they stood, and only the checks above are asserted.
 
 | Reading | Value |
 |---|---|
-| `/version` after first boot | 795 quotes, 473 sources, 15 characters, 3 people, 31 series, 3 seasons, 8 universes, 2 stage directions, 1 sound cue, 4 conversations |
 | `status=pending`, and `status=PENDING` | `0` both ways |
 | `seed-sources` | 473 sources, 6 titles carrying more than one row, nothing flagged |
 | `seed-noops` after a reseed | 25 no-ops, 24 `Quote` and 1 `Source`, every one accounted for |
-
-Step 5 ran nothing, so the bundled files have not been compared with their converters.
 
 **No exception was logged by either container before the malformed upload**, the seed and the reseed included. That
 upload's `JsonReaderException` was then logged once.
@@ -172,16 +163,17 @@ upload's `JsonReaderException` was then logged once.
 
 **Step 3 asserts an absence, and on its own it is the weakest shape this suite has.** Nothing left staged awaiting review
 is what a clean seed produces, and also what a seed that imported nothing, a broken staging path and a regressed status
-filter all produce. Steps 2 and 6 are what give it meaning: step 2 reads what the boot actually seeded, and step 6 requires
+filter all produce. Steps 2 and 5 are what give it meaning: step 2 reads what the boot reported seeding, and step 5 requires
 at least one no-op and every no-op accounted for, so an empty list is not accepted as self-explanatory.
 
 For the pre-fix form, build the commit before [#181](https://github.com/DutchJaFO/Quotinator/issues/181)'s first code
 change, under a distinct tag, and run steps 2 to 4 against it: the bundled files do not all resolve cleanly there, so step 3
 finds rows awaiting review and step 4 finds the duplicate Sources that went with them.
 
-**Measured 2026-11-01** on `quotinator:canary-181`, built from `bcace5f6`, steps 2 to 4 in order after step 1. Step 2 fails:
-quotes, sources, characters and people read above `0`, and the other six counts do not exist on that build. Step 3 fails:
-`75` pending, with `status` in either case.
+**Measured 2026-11-01** on `quotinator:canary-181`, built from `bcace5f6`, steps 2 to 4 in order after step 1, when step 2
+still read `/version`'s counts: quotes, sources, characters and people read above `0`, and the other six counts did not
+exist on that build. Step 3 fails: `75` pending, with `status` in either case. Step 2 now reads the seed's own
+notifications, which that build predates; its reading there is taken when the canary is next run.
 
 **Step 4 passes there, and it should not.** `seed-sources` exits `0`, reading `482` sources and no title on more than one row,
 while the list it read holds `Matrix` and `The Matrix`, `Shawshank Redemption` and `The Shawshank Redemption`, `Wolf of the
@@ -189,8 +181,7 @@ Wall Street` and `The Wolf of Wall Street`, and `Spiderman` and `Spider Man`. It
 duplicates spelled differently are invisible to it, and those are what a `SourceAliasRule` exists to merge. Until step 4 can
 see them, which is [#479](https://github.com/DutchJaFO/Quotinator/issues/479), step 3 alone proves this document able to fail.
 
-**Step 5 has no canary**: it runs no command, so it fails on every build until #400 gives it one. Pin
-`Quotinator__AutoPurgeBundledImportActions` for every run: an empty list produced by auto-purge is indistinguishable from an
+Pin `Quotinator__AutoPurgeBundledImportActions` for every run: an empty list produced by auto-purge is indistinguishable from an
 empty list produced by the behaviour under test.
 
 Remove the container, image and worktree afterwards.

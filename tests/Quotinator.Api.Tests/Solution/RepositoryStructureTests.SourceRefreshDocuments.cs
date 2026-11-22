@@ -21,7 +21,7 @@ public partial class RepositoryStructureTests
             "docs/api-endpoints.md",
             "docs/knowledgebase/transport-connection-cancelled-during-a-request.md",
             "docs/automated-testing/README.md",
-            "docs/automated-testing/import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md",
+            "docs/automated-testing/import-and-staged-actions/31-bundled-files-match-their-converters.md",
             "CLAUDE.md",
             "scripts/SOURCES.md",
         ];

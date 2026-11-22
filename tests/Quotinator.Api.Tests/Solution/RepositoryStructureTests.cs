@@ -859,8 +859,9 @@ public partial class RepositoryStructureTests
 
     private static readonly string[] ResetDocumentPorts = ["18303", "19303"];
 
-    // /version must agree with the list routes, and Reset's own notification is part of what it does.
-    private static readonly string[] ResetDocumentOtherReads = ["/api/v1/version", "/api/v1/notifications"];
+    // Reset's own notification is part of what it does. /version is not read here: whether its counts agree is
+    // that endpoint's behaviour, read by database-lifecycle/05 in a full run (#503, decision H).
+    private static readonly string[] ResetDocumentOtherReads = ["/api/v1/notifications"];
 
     /// <summary>
     /// Test documents live in category subfolders; the index itself sits at the folder root and is not

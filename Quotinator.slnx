@@ -416,6 +416,7 @@
     <File Path="docs/automated-testing/database-lifecycle/02-audit-export-and-conflict-data-purge.md" />
     <File Path="docs/automated-testing/database-lifecycle/03-reset-is-a-full-wipe.md" />
     <File Path="docs/automated-testing/database-lifecycle/04-a-database-is-complete-for-its-schema-version.md" />
+    <File Path="docs/automated-testing/database-lifecycle/05-version-counts-follow-the-content.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/backup/">
     <File Path="docs/automated-testing/backup/01-a-reset-sets-aside-a-database-it-cannot-read.md" />
@@ -518,6 +519,8 @@
     <File Path="docs/automated-testing/import-and-staged-actions/28-review-throws-nothing.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/29-a-case-only-change-is-shown-for-review.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/30-deciding-an-add-answers-an-outcome.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/31-bundled-files-match-their-converters.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/32-a-first-boot-seed-reports-what-it-loaded.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

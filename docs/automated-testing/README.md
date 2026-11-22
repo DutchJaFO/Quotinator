@@ -27,10 +27,10 @@ job, recorded in its plan doc; the smoke set is the floor underneath it, never a
 
 ## The designated smoke set
 
-Twenty tests. The question this set answers is *does this container fundamentally work*, and a test
+Twenty-one tests. The question this set answers is *does this container fundamentally work*, and a test
 is in it for one of two reasons.
 
-**Its failure would invalidate most other results.** That is the reason for the nine outside
+**Its failure would invalidate most other results.** That is the reason for the ten outside
 `startup-and-degradation/`'s degraded scenarios, and it is not a measure of importance in its own right.
 
 **It proves a degraded startup does not crash** (developer direction, 2026-10-22). The application must
@@ -53,6 +53,7 @@ not asserted: the contract is that the application says it is degraded instead o
 | [Import and staged-action review workflow](import-and-staged-actions/01-staged-action-review-workflow.md) | `import-and-staged-actions/` |
 | [Fresh seed produces zero pending actions](import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md) | `import-and-staged-actions/` |
 | [Per-file, per-entity-type import/seed report](import-and-staged-actions/19-per-file-import-report.md) | `import-and-staged-actions/` |
+| [A first-boot seed reports what it loaded](import-and-staged-actions/32-a-first-boot-seed-reports-what-it-loaded.md) | `import-and-staged-actions/` |
 | [Reset is a full wipe with no reseed](database-lifecycle/03-reset-is-a-full-wipe.md) | `database-lifecycle/` |
 | [Startup wait page during database initialisation](startup-and-degradation/03-startup-wait-page.md) | `startup-and-degradation/` |
 | [Only a risky start takes a backup, a broken schema degrades, and Reset recovers](startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md) | `startup-and-degradation/` |
@@ -158,7 +159,10 @@ where it breaks one** (developer direction, 2026-10-24; the third, 2026-10-31):
    a variable, a loop or a function, breaks it.
 2. **The test supplies its own data.** The only test permitted against bundled content is the one
    confirming zero pending issues after a reseed or import of that set on an empty database
-   (developer rule, 2026-09-17, recorded in #400). A step asserting on what the bundled sources happen
+   (developer rule, 2026-09-17, recorded in #400), and the one confirming each bundled file still
+   matches what its converter produces, which was that test's step until #503. Bundled files are a
+   moving target: they are read only to verify that they still work, never by a test that has to be
+   repeatable. A step asserting on what the bundled sources happen
    to contain, a count of seeded quotes included, breaks it: that content changes whenever a source or
    a correction does.
 3. **It refers to no outdated result.** A reader compares a run against what the document says, so a
@@ -1141,7 +1145,7 @@ an entry needs; a happy-path-only test has nothing to contribute.
 
 ## Observed effects awaiting measurement
 
-**35 of 85 documents describe their effect without having measured it.** Each row below names the
+**37 of 88 documents describe their effect without having measured it.** Each row below names the
 quantity its next run must read, so the measurement is a specific act rather than a vague intention to
 look. A document leaves this list by recording `**Measured <date>**` in its own section, and
 `TheAwaitingMeasurementList_MatchesTheUnmeasuredDocuments` fails if it does so while its row is still
@@ -1181,6 +1185,8 @@ asserts what it should; what is missing is a reading an entry can quote.
 | [import-and-staged-actions/28-review-throws-nothing.md](import-and-staged-actions/28-review-throws-nothing.md) | The exception line count before the reads and after them |
 | [import-and-staged-actions/29-a-case-only-change-is-shown-for-review.md](import-and-staged-actions/29-a-case-only-change-is-shown-for-review.md) | The refusal body, and the text stored after taking the incoming value |
 | [import-and-staged-actions/30-deciding-an-add-answers-an-outcome.md](import-and-staged-actions/30-deciding-an-add-answers-an-outcome.md) | The held reason each Add reports, and each refusal body |
+| [import-and-staged-actions/31-bundled-files-match-their-converters.md](import-and-staged-actions/31-bundled-files-match-their-converters.md) | Each bundled file compared with what its converter produces, once #400 gives the step a command |
+| [import-and-staged-actions/32-a-first-boot-seed-reports-what-it-loaded.md](import-and-staged-actions/32-a-first-boot-seed-reports-what-it-loaded.md) | The `reseedFileApplied` notification the first boot writes, with its count per entity type |
 | [notifications-and-changelog/02-notification-metadata-and-provenance.md](notifications-and-changelog/02-notification-metadata-and-provenance.md) | The stored payload and its provenance, as read, with the date of the reading |
 | [notifications-and-changelog/05-legacy-notification-provenance.md](notifications-and-changelog/05-legacy-notification-provenance.md) | The order of the version-history rows, and the fresh database's absence of a released row |
 | [notifications-and-changelog/08-notification-text-resolves-per-language.md](notifications-and-changelog/08-notification-text-resolves-per-language.md) | The text each language returns for the same notification |
@@ -1247,6 +1253,7 @@ The tools this suite runs on:
 | 02 | [Audit export, date-range discovery, and conflict-data auto-purge](database-lifecycle/02-audit-export-and-conflict-data-purge.md) | no |
 | 03 | [Reset wipes the entire database and does not reseed](database-lifecycle/03-reset-is-a-full-wipe.md) | yes |
 | 04 | [A database is complete for its schema version, fresh or upgraded, and an extra object is reported](database-lifecycle/04-a-database-is-complete-for-its-schema-version.md) | no |
+| 05 | [`/version`'s content counts follow what a seed, an import and a Reset did](database-lifecycle/05-version-counts-follow-the-content.md) | no |
 
 ### `startup-and-degradation/`
 
@@ -1346,6 +1353,8 @@ different question in each.
 | 28 | [Reviewing conflicted import actions throws nothing](import-and-staged-actions/28-review-throws-nothing.md) | no |
 | 29 | [A case-only change is shown for review, and needs a decision](import-and-staged-actions/29-a-case-only-change-is-shown-for-review.md) | no |
 | 30 | [Deciding an import Add answers an outcome, never a server error](import-and-staged-actions/30-deciding-an-add-answers-an-outcome.md) | no |
+| 31 | [Each bundled file still matches what its own converter produces](import-and-staged-actions/31-bundled-files-match-their-converters.md) | no |
+| 32 | [A first-boot seed reports what it loaded](import-and-staged-actions/32-a-first-boot-seed-reports-what-it-loaded.md) | yes |
 
 ---
 

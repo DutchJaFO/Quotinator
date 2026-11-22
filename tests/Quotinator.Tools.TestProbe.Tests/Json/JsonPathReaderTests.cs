@@ -40,6 +40,39 @@ public sealed class JsonPathReaderTests
         Assert.IsFalse(JsonPathReader.TryRead(document.RootElement, "status.inner", out _));
     }
 
+    /// <summary>
+    /// A notification's <c>metadata</c> is JSON returned as text (#503): a path continues into a string
+    /// holding a JSON object or array, so a test can read a field of it instead of matching its text.
+    /// </summary>
+    [TestMethod]
+    public void TryRead_PathIntoAStringHoldingJson_ReturnsTheInnerField()
+    {
+        using JsonDocument document = JsonDocument.Parse("""{"metadata":"{\"counts\":[{\"entityType\":\"Quote\",\"added\":4}]}"}""");
+
+        bool found = JsonPathReader.TryRead(document.RootElement, "metadata.counts.0.added", out JsonElement value);
+
+        Assert.IsTrue(found);
+        Assert.AreEqual(4, value.GetInt32());
+    }
+
+    [TestMethod]
+    public void TryRead_PathIntoAStringHoldingAJsonScalar_IsNotFound()
+    {
+        using JsonDocument document = JsonDocument.Parse("""{"metadata":"42"}""");
+
+        Assert.IsFalse(JsonPathReader.TryRead(document.RootElement, "metadata.inner", out _));
+    }
+
+    [TestMethod]
+    public void TryRead_StringHoldingJson_EndingThePath_IsTheStringItself()
+    {
+        using JsonDocument document = JsonDocument.Parse("""{"metadata":"{\"a\":1}"}""");
+
+        JsonPathReader.TryRead(document.RootElement, "metadata", out JsonElement value);
+
+        Assert.AreEqual(JsonValueKind.String, value.ValueKind);
+    }
+
     [TestMethod]
     public void TryRead_DifferentlyCasedName_IsNotFound()
     {

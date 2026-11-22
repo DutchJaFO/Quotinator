@@ -236,22 +236,27 @@ issue's T2:
   - **Doc 14, first-boot seeding.** A first-boot seed runs at startup, not through an endpoint, so it has no
     response to read; what it reports as it runs, one `reseedFileApplied` notification per file with counts
     per entity type, is the only result it has. Step 2 reads that in place of `/version`.
-  - **Doc 19, the seed endpoints.** Its first-boot seed is setup, not its subject; each later step already
-    reads the response of the endpoint it calls. Step 1 keeps waiting for health and loses its `/version`
-    read, which checked the first-boot seed, doc 14's question.
+  - **Doc 19, the seed endpoints.** Each step reads the response of the endpoint it calls. *We simply need
+    the same files and same database state before we start either test* (developer, 2026-11-22), so the
+    first-boot test and this one start alike: an empty database, and the same fixture. Doc 14 reads the
+    bundled files, a moving target, so the first-boot test on owned data is a new document,
+    `import-and-staged-actions/32`: a container starts on an empty database with the fixture in its imports
+    folder, and the test reads the seed's own notification. Doc 19's container starts on an empty database
+    with no files, the same fixture is copied in afterwards, and its steps call the seed endpoints. Its step 1
+    loses the `/version` read, and the first-boot seed with it.
   - The `/version` reads go to the same document as doc 03's.
 - **Every smoke document was then searched for the same pattern** (2026-11-22). Four read `/version`'s
   content counts: `database-lifecycle/03`, `import-and-staged-actions/14` and `19`, and
   `startup-and-degradation/06` step 6, whose `database.quotes=0` after the Reset is secondary to the Reset's
   own result notification, which the step already asserts. That read goes too.
 - **Status is read from `/health`** (developer, 2026-11-22: *we should be using the health endpoint for
-  status*). Of the other smoke documents' `/version` reads, only `api-surface/01`'s checks the version itself,
-  which is that endpoint's function, and it stays. The rest check status: `database-lifecycle/03`'s
-  `status=ready`, `startup-and-degradation/03`'s `status=ready` with a `database` block, and the `503` while
-  degraded and `200` once recovered in `startup-and-degradation/01`, `05`, `06` and `08` to `14`. Each reads
-  `/health` instead, or goes where the document already asserts the same state on `/health`. Whether
-  `/version` itself withholds its counts while degraded (#428) is that endpoint's behaviour, not a status
-  check, and belongs to a full-run document of its own.
+  status*), **and `/version` belongs in a test only where it tells the degraded state from the regular one, or
+  where the version itself matters to the test** (developer, 2026-11-22). So `api-surface/01`'s version check
+  stays, and so do the `503` while degraded and `200` once recovered in `startup-and-degradation/01`, `05`,
+  `06` and `08` to `14`, and `startup-and-degradation/03`'s ready reading. `database-lifecycle/03`'s
+  `status=ready` after Reset rode on its count reads and goes with them; that document reads `/health` there
+  instead. An earlier reading of this bullet moved every one of those reads to `/health`; it was corrected
+  the same day, before any document was changed but `06`, which was restored.
 
 **Raised in the same answer, filed as #512** (*Blazor: Dashboard & Statistics*, 2026-11-22): `/version`
 reports content statistics, which is not its primary function; the statistics get their own endpoint. Not a
@@ -364,7 +369,7 @@ guards and the rule tests. `EveryAdrIsIndexed` passes.
 
 ### 6. Remove every allowance from the documents
 
-**Status:** 🔄 In progress. Still to do: decision H's move, which can be done now, and
+**Status:** 🔄 In progress. Still to do: the edits to #400 and #468 that decision H's move needs, and
 `startup-and-degradation/06`'s log counts, which wait for #505 and #506.
 
 **Done 2026-11-21, except that part.**
@@ -480,15 +485,19 @@ and red at that step until its owner lands, and two smoke documents that lose it
   note, and its opening says it reads the bundled files to warn when upstream content makes the import fail or
   a rule stale. Step 2 reads the seed's own `reseedFileApplied` notifications in place of `/version`: every
   bundled file reports itself applied, with content.
-- **`import-and-staged-actions/19`** step 1 loses its `/version` read and keeps waiting for health: the
-  first-boot seed is its setup, and whether that seed worked is doc 14's question. Its *Observed effect* row
-  for `/version` goes with it.
+- **New `import-and-staged-actions/32-a-first-boot-seed-reports-what-it-loaded.md`**, smoke, *Fresh*: the
+  fixture in `{dataDir}/imports/` on an empty database; after health, the fixture's `reseedFileApplied`
+  notification, each entity type with the count the fixture gives it. It is in the smoke set because a
+  container that cannot seed on first boot does not fundamentally work.
+- **`import-and-staged-actions/19`** starts its container on an empty database with no file in its imports
+  folder, copies the fixture in after health, and runs its endpoint steps from there. Step 1 loses its
+  `/version` read; its *Observed effect* row for `/version` goes with it, and its reseed reading is measured
+  again from the empty start.
 - **`startup-and-degradation/06`** step 6 loses its `/version` read and `database.quotes=0`; the Reset's result
   notification it already asserts is the primary result.
 - **New `database-lifecycle/05-version-counts-follow-the-content.md`**, not smoke, *Fresh*, owned by #468: the
   secondary check of a seed, an import and a Reset. Doc 03's fixture, seeded in one container and imported
-  through the API in another, each read on the list endpoints and on `/version` before and after a Reset, the
-  two required to agree. It takes step 8's command,
+  through the API in another, `/version` held to the fixture's counts after each and to `0` after a Reset. It takes step 8's command,
   *Expected*, *On failure* and Knowledgebase link, and doc 03's *Observed effect* record of step 8. It stops at
   the import's `/version` read until #468.
 - **`database-lifecycle/03`** loses every `/version` read: in steps 2 and 4 (seeded), step 8 entire, and in step
@@ -508,6 +517,36 @@ and red at that step until its owner lands, and two smoke documents that lose it
 The records that name doc 14 step 5 or doc 03 step 8 as a smoke step (`overview.md`, the set-back plans) are
 corrected by steps 8 and 10, which have not started.
 
+**Decision H's move, done 2026-11-22**, except the edits to #400 and #468, which wait for approval:
+
+- **New documents.** `import-and-staged-actions/31` (not smoke; doc 14's step 5 as it stood, red at its only
+  step, #400). `import-and-staged-actions/32` (smoke; the fixture seeded at first boot, step 2 reading the
+  `reseedFileApplied` notification's ten counts). `database-lifecycle/05` (not smoke; doc 03's fixture seeded in
+  one container and imported in another, `/version` held to the fixture's counts after each and to `0` after a
+  Reset; step 5, the imported counts, fails until #468). Doc 05 compares `/version` with the fixture's counts
+  rather than reading the list endpoints again: the fixture decides them, and `03` already reads the rows.
+- **Doc 14:** step 5 gone, steps renumbered; step 2 holds the seed's `reseedFileApplied` notifications to the
+  number of files the seed preview lists, a count of files that moves with the configuration and never with a
+  source's size; its opening, *Determinism*, *Canary* and *Observed effect* follow.
+- **Doc 19:** the container starts on an empty database with no file; step 1 copies the fixture in after health.
+  Its `/version` read and its row in *Observed effect* are gone.
+- **Doc 03:** every `/version` read gone, step 8 included; steps 9 to 12 are 8 to 11; after each Reset `/health`
+  is read for status; *Determinism*, *Observed effect* and *Canary* follow.
+- **Doc 06:** step 6's `/version` count read gone; its degraded and recovered `/version` reads stay, per the
+  corrected bullet in decision H.
+- **The probe reads a path into text holding JSON**, so doc 32 asserts each count rather than matching text:
+  `JsonPathReader` continues into a string holding a JSON object or array. Red first:
+  `TryRead_PathIntoAStringHoldingJson_ReturnsTheInnerField` failed before the change, and all 218 probe tests pass
+  after it. `--where` cannot narrow an array inside such text, so doc 32 reads the entries by position; the seed
+  writes them ordered by type name.
+- **Guards**, each red on the document change first: `TheResetDocument_CoversEveryContentCategory` no longer
+  requires `/api/v1/version` in doc 03, and `SourceRefreshDocuments_SayTheRefreshIsOffByDefault` names doc 31
+  in place of doc 14. Both files were already in the IDE0008/IDE0090 scoped lists, as were the probe's two.
+- **Index and solution:** the smoke set is twenty-one, with doc 32; the category tables list docs 05, 31 and 32;
+  the bundled-content rule names doc 31; the awaiting-measurement list gains 31 and 32 (37 of 88); all three are
+  in `Quotinator.slnx`.
+- **Result:** every `Solution` test passes (140).
+
 ### 7. Confirm the changed documents read red where they should
 
 **Status:** 🔄 In progress. Still to run: the four documents decision H's move touches, once step 6 has made
@@ -520,7 +559,7 @@ show its reading no longer varies.
 
 This is not this issue's T2. That is step 12, and it cannot pass before the owners land (decision D).
 
-**Still to run, for decision H's move:** `import-and-staged-actions/14` and `19` and `database-lifecycle/03` after the
+**Still to run, for decision H's move:** `import-and-staged-actions/14`, `19` and `32`, and `database-lifecycle/03` after the
 move, expected to pass every step; `import-and-staged-actions/31`, expected to fail at its only step, which
 runs no command (#400); and `database-lifecycle/05`, expected to fail at the imported container's `/version`
 read (#468) and nowhere before it.
@@ -721,5 +760,5 @@ Written at *Waiting for release*, after step 12.
 | 12 | ❌ | T2 passes: the smoke set and every changed document, every step green | Live | Step 12's record |
 | 13 | ✅ | Both rules report a document that breaks them and pass one that does not, independently of today's documents | Unit test | `AutomatedTestingSuiteTests.MentionsOfFullyGreenAfter_*` (4) and `.StepsThatExcuseAFailure_*` (8): 12 pass; red with the rule bodies disabled (step 3) |
 | 14 | ❌ | Every owner from step 8 is a blocker in `overview.md` in both directions, and every row of the order of operations comes after what it depends on or is T2-blocked by, or says why | Live | Reading `overview.md`: (a) for each owner's map line and each row of the outside-owner table, every issue listed names that owner on its map line and in its order row (#505 and #506 block the others through #503, which those rows name); (b) every owner a map line or order row names lists that issue; (c) no order row comes before an issue its map line depends on or is T2-blocked by, nor after one it blocks; the only exceptions are #503 and the #372/#373 pair, and their rows say why |
-| 15 | ❌ | No smoke document checks another feature or reads a secondary source: doc 14 compares no bundled file with its converter, and docs 03, 14, 19 and 06 read no `/version` content count | Unit test + Live | `TheResetDocument_CoversEveryContentCategory` and `SourceRefreshDocuments_SayTheRefreshIsOffByDefault` pass, each red before its change; `Select-String -Path docs/automated-testing/database-lifecycle/03-*.md, docs/automated-testing/import-and-staged-actions/14-*.md, docs/automated-testing/import-and-staged-actions/19-*.md, docs/automated-testing/startup-and-degradation/06-*.md -Pattern 'database\.(quotes|sources)'` returns nothing, and `Select-String -Path docs/automated-testing/import-and-staged-actions/14-*.md -Pattern 'converter produces'` return nothing |
-| 16 | ❌ | `import-and-staged-actions/31` and `database-lifecycle/05` exist, are not smoke, are indexed and in the solution, and each fails only at the step its owner holds | Unit test + Live | `RepositoryStructureTests` passes (index, smoke set, solution); step 7's record shows doc 31 failing at its only step (#400) and doc 05 at the imported `/version` read (#468), and docs 14, 19 and 03 passing every step |
+| 15 | ❌ | No smoke document checks another feature or reads a secondary source: doc 14 compares no bundled file with its converter, and docs 03, 14, 19 and 06 read no `/version` content count | Unit test + Live | `TheResetDocument_CoversEveryContentCategory` and `SourceRefreshDocuments_SayTheRefreshIsOffByDefault` pass, each red before its change; `Select-String -Path docs/automated-testing/database-lifecycle/03-*.md, docs/automated-testing/import-and-staged-actions/14-*.md, docs/automated-testing/import-and-staged-actions/19-*.md, docs/automated-testing/startup-and-degradation/06-*.md -Pattern '^dotnet.*--(equals|greater-than) database\.'` returns nothing, and `Select-String -Path docs/automated-testing/import-and-staged-actions/14-*.md -Pattern 'converter produces'` return nothing |
+| 16 | ❌ | `import-and-staged-actions/31` and `database-lifecycle/05` exist, are not smoke, are indexed and in the solution, and each fails only at the step its owner holds; `import-and-staged-actions/32` exists, is smoke, is indexed and in the solution, and passes | Unit test + Live | `RepositoryStructureTests` passes (index, smoke set, solution); step 7's record shows doc 31 failing at its only step (#400) and doc 05 at the imported `/version` read (#468), and docs 14, 19, 32 and 03 passing every step |
