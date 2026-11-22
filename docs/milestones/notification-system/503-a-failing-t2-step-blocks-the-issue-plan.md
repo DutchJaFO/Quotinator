@@ -9,10 +9,10 @@
 
 ## Next action
 
-**Wait for #505 and #506, then finish steps 6 and 7. No later step is worked on until both are done**
-(developer, 2026-11-22). Steps 6 and 7 are in progress: everything is done except
-`startup-and-degradation/06`'s log counts (step 6) and that document's three runs (step 7), which need #505
-and #506. Steps 1 to 5 are done. Steps 8, 9 and 10 are not started: they should not have been begun while
+**Make decision H's move (step 6) and run its four documents (step 7); then wait for #505 and #506 to finish
+steps 6 and 7. No later step is worked on until both are done** (developer, 2026-11-22). Besides the move,
+what is left is `startup-and-degradation/06`'s log counts (step 6) and that document's three runs (step 7),
+which need #505 and #506. Steps 1 to 5 are done. Steps 8, 9 and 10 are not started: they should not have been begun while
 steps 6 and 7 were open, but changes were made under them on 2026-11-21 and 2026-11-22, and those stay in
 place. Each step, when it starts, reviews them against its requirement and finishes them; step 10 then goes
 to the developer's review. Then step 11, the full build and test run. Step 12, this issue's
@@ -207,6 +207,35 @@ dependencies.
 a realistic wait, and the startup responses report stage progress and the time since startup began, ticking
 in the browser. Not a dependency of this issue.
 
+### H. A smoke document checks one thing; a check of another feature is its own document
+
+**Decided 2026-11-22, by the developer, after step 1.** *Smoke tests should alert us to problems while being
+efficient. The additional tests would be done in a full run.* And: *testing the effect of an import on other
+endpoints should be a distinct test, as that allows us to pinpoint problems while keeping smoke tests
+efficient. The full test would still indicate problems that the smoke test could have missed.*
+
+Two smoke documents carry a check that belongs to another feature, and each makes its owner block every
+issue's T2:
+
+- **`import-and-staged-actions/14` step 5** compares each bundled file with what its converter produces. It is
+  its own test, not part of the zero-pending check: no other step uses its result. Bundled files are used in
+  tests only to verify that they work; they are a moving target, so no repeatable test rests on them. Doc 14
+  exists to warn when upstream content has made the import fail or a rule stale. Step 5 moves to its own
+  document, owned by #400. This supersedes #400's ruling of 2026-09-18 that doc 14 keeps its steps.
+- **`database-lifecycle/03`'s `/version` reads** test what an import and a Reset do to another endpoint, the
+  same mistake. *Reset functioning while version isn't accurately reporting the status is an acceptable
+  result of a smoke test, because we know reset works*: Reset's own response and the list endpoints prove it.
+  The `/version` reads, step 8 included, move to their own document, owned by #468. This replaces the reason
+  step 6 records under *A failing step stops the run* for keeping step 8 in doc 03.
+
+**Raised in the same answer, to be filed as its own issue:** `/version` reports content statistics, which is
+not its primary function; the statistics get their own endpoint. Drafted for approval with a label and a
+milestone; not a dependency of this issue.
+
+**What it does not change:** a full run, at the close of a milestone and at release, runs every document, so
+the two new documents still hold this milestone's release until #400 and #468 land. They stop blocking each
+issue's own T2.
+
 ---
 
 ## Steps
@@ -310,8 +339,8 @@ guards and the rule tests. `EveryAdrIsIndexed` passes.
 
 ### 6. Remove every allowance from the documents
 
-**Status:** 🔄 In progress: every part is done except `startup-and-degradation/06`'s log counts, which wait for
-#505 and #506.
+**Status:** 🔄 In progress. Still to do: decision H's move, which can be done now, and
+`startup-and-degradation/06`'s log counts, which wait for #505 and #506.
 
 **Done 2026-11-21, except that part.**
 
@@ -411,12 +440,46 @@ run until the owner lands. Developer: *steps in a test tend to rely on the outco
 cannot continue such a test past the failing step. If we could continue, those steps can't possibly be relevant
 to the test.* The README's stop rule stands, and each rewritten *On failure* says stop. The old *nothing below
 reads this step* was wrong where it was checked: `database-lifecycle/03` step 8 proves `/version` counted the
-import before the Reset, which is what gives the later `0` after the Reset its meaning.
+import before the Reset, which is what gives the later `0` after the Reset its meaning. Decision H replaces
+this: `/version` is not evidence of the wipe, so its reads leave doc 03.
+
+**Decision H's move, planned 2026-11-22.** Two new documents, each carrying the check it takes over unchanged
+and red at that step until its owner lands, and two smoke documents that lose it:
+
+- **New `import-and-staged-actions/31-bundled-files-match-their-converters.md`**, not smoke, *Fresh*, owned by
+  #400. It takes doc 14's step 5 as it stands: its text, its *Expected* that no command runs and so the step
+  fails, the paragraph saying `Quotinator:AutoUpdateSources` is off by default, and the rule that this is the
+  one place allowed to go red because the outside world changed. Its *Determinism* section says what an
+  upstream change does to it; its `Deterministic:` field is settled when #400 gives the step a command.
+- **`import-and-staged-actions/14`** loses step 5. Steps 6 and 7 become 5 and 6, its *Canary* drops the step 5
+  note, and its opening says it reads the bundled files to warn when upstream content makes the import fail or
+  a rule stale.
+- **New `database-lifecycle/05-version-counts-follow-the-content.md`**, not smoke, *Fresh*, owned by #468. Doc
+  03's fixture, seeded in one container and imported through the API in another, each read on the list
+  endpoints and on `/version` before and after a Reset, the two required to agree. It takes step 8's command,
+  *Expected*, *On failure* and Knowledgebase link, and doc 03's *Observed effect* record of step 8. It stops at
+  the import's `/version` read until #468.
+- **`database-lifecycle/03`** loses every `/version` read: in steps 2 and 4 (seeded), step 8 entire, and in step
+  10 (imported). Steps 9 to 12 become 8 to 11, with every reference to them. Its *Determinism* drops the bullet holding
+  `/version` to the list endpoints; Reset's own response, asserted to `0`, and the list endpoints remain its
+  evidence.
+- **Guards**, each confirmed red by the document change before it is changed:
+  `RepositoryStructureTests.TheResetDocument_CoversEveryContentCategory` stops requiring `/api/v1/version` in
+  doc 03 (`ResetDocumentOtherReads`), and
+  `SourceRefreshDocuments_SayTheRefreshIsOffByDefault` names doc 31 where it names doc 14. Both files join the
+  IDE0008/IDE0090 scoped lists if they are not already in them.
+- **Index and solution**: the README's `import-and-staged-actions/` and `database-lifecycle/` tables list the
+  two documents; its bundled-content rule names doc 31 beside doc 14; both are added to `Quotinator.slnx`.
+- **#400 and #468**: item 6 of #400 and #468's test table point at the new documents. Each edit is drafted,
+  pasted in full and approved before `gh issue edit` runs.
+
+The records that name doc 14 step 5 or doc 03 step 8 as a smoke step (`overview.md`, the set-back plans) are
+corrected by steps 8 and 10, which have not started.
 
 ### 7. Confirm the changed documents read red where they should
 
-**Status:** 🔄 In progress: every document is run except `startup-and-degradation/06`'s three runs, which wait
-for step 6's conversion (#505, #506).
+**Status:** 🔄 In progress. Still to run: the four documents decision H's move touches, once step 6 has made
+it, and `startup-and-degradation/06`'s three runs, which wait for step 6's conversion (#505, #506).
 
 The red-first run of this issue's change (`process.md` → Implementation, step 1): each document from step 6
 against a build of this branch, under `test-env.csx`. Recorded per document: the step it fails at, and that
@@ -424,6 +487,11 @@ no other step fails. A failure anywhere else is reported in its own right. `06` 
 show its reading no longer varies.
 
 This is not this issue's T2. That is step 12, and it cannot pass before the owners land (decision D).
+
+**Still to run, for decision H's move:** `import-and-staged-actions/14` and `database-lifecycle/03` after the
+move, expected to pass every step; `import-and-staged-actions/31`, expected to fail at its only step, which
+runs no command (#400); and `database-lifecycle/05`, expected to fail at the imported container's `/version`
+read (#468) and nowhere before it.
 
 **Run 2026-11-21** against `quotinator:local` built from `4e051906`, every document as written, stopping at its
 first failing step:
@@ -621,3 +689,5 @@ Written at *Waiting for release*, after step 12.
 | 12 | ❌ | T2 passes: the smoke set and every changed document, every step green | Live | Step 12's record |
 | 13 | ✅ | Both rules report a document that breaks them and pass one that does not, independently of today's documents | Unit test | `AutomatedTestingSuiteTests.MentionsOfFullyGreenAfter_*` (4) and `.StepsThatExcuseAFailure_*` (8): 12 pass; red with the rule bodies disabled (step 3) |
 | 14 | ❌ | Every owner from step 8 is a blocker in `overview.md` in both directions, and every row of the order of operations comes after what it depends on or is T2-blocked by, or says why | Live | Reading `overview.md`: (a) for each owner's map line and each row of the outside-owner table, every issue listed names that owner on its map line and in its order row (#505 and #506 block the others through #503, which those rows name); (b) every owner a map line or order row names lists that issue; (c) no order row comes before an issue its map line depends on or is T2-blocked by, nor after one it blocks; the only exceptions are #503 and the #372/#373 pair, and their rows say why |
+| 15 | ❌ | No smoke document checks another feature: doc 14 compares no bundled file with its converter, and doc 03 reads no `/version` | Unit test + Live | `TheResetDocument_CoversEveryContentCategory` and `SourceRefreshDocuments_SayTheRefreshIsOffByDefault` pass, each red before its change; `Select-String -Path docs/automated-testing/database-lifecycle/03-*.md -Pattern '/version'` and `Select-String -Path docs/automated-testing/import-and-staged-actions/14-*.md -Pattern 'converter produces'` return nothing |
+| 16 | ❌ | `import-and-staged-actions/31` and `database-lifecycle/05` exist, are not smoke, are indexed and in the solution, and each fails only at the step its owner holds | Unit test + Live | `RepositoryStructureTests` passes (index, smoke set, solution); step 7's record shows doc 31 failing at its only step (#400) and doc 05 at the imported `/version` read (#468), and docs 14 and 03 passing every step |
